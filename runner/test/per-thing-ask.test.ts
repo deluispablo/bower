@@ -12,7 +12,7 @@ import { REFUSALS, type ClaudeCall, type ClaudeSpawn, type RefusalKind } from '.
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -186,7 +186,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
 
   const good = intentReply((_ctx, id) => filed(id));
 
-  // The name stays the one the harness entries verify; each kind is a test of its own inside it.
+  // The name stays the one earlier checks named; each kind is a test of its own inside it.
   describe('every validation refusal is retried once with its reason', () => {
     it('every refusal kind has a bad reply here', () => {
       expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());

@@ -1,6 +1,0 @@
-{"name":"source","method":"GET","url":"/blocked"}
-{"name":"source","method":"POST","url":"/start"}
-{"name":"source","method":"GET","url":"/allowed"}
-{"name":"source","method":"POST","url":"/start"}
-{"name":"target","method":"GET","url":"/result"}
-{"name":"target","method":"GET","url":"/favicon.ico"}

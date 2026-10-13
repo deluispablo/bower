@@ -14,7 +14,7 @@ import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude, type CaseRun } from './corpus-run';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 afterEach(() => vi.restoreAllMocks());
 
 const KEPT = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';

@@ -1,19 +1,17 @@
 /// <reference types="node" />
-/** Things the repository promises its agents and its pages, checked. */
+/** Things the repository promises its contributors and its pages, checked. */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain JS module, tested in harness-git.test.ts
-import { commitsSince } from '../scripts/harness-git.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
 
 describe('what the repository promises', () => {
-  it('AGENTS.md keeps the copy and brand rules', () => {
-    const map = read('AGENTS.md');
+  it('CLAUDE.md keeps the copy and brand rules', () => {
+    const map = read('CLAUDE.md');
     expect(map).toMatch(/never "the bird" in copy/);
     expect(map).toMatch(/--brand-line/);
     expect(map).toMatch(/do not edit it by hand/);
@@ -34,18 +32,15 @@ describe('what the repository promises', () => {
   });
 
   it('the docs say which writes check what (a content write passes its modifiedTime; a move or rename checks name and place)', () => {
-    for (const doc of ['AGENTS.md', 'docs/superpowers/plans/2026-10-04-phase-2-app-logic.md']) {
-      const text = read(doc);
-      expect(text, doc).not.toMatch(/every write passes the modifiedTime/);
-      expect(text, doc).toMatch(/content write passes the modifiedTime it read/);
-      expect(text, doc).toMatch(/move or rename checks the name and place it read/);
-    }
-    expect(read('docs/superpowers/plans/2026-10-04-phase-2-ledger.md')).toMatch(/Ruling: a move or rename is not a content conflict/);
+    const text = read('CLAUDE.md');
+    expect(text).not.toMatch(/every write passes the modifiedTime/);
+    expect(text).toMatch(/content write passes the modifiedTime it read/);
+    expect(text).toMatch(/move or rename checks the name and place it read/);
   });
 
   it('the code says why the outbox stays at sign-out', () => {
     expect(read('src/data/device.ts')).toMatch(/The journal outbox \(`bower:outbox:<folder>`\) stays at sign-out/);
-    expect(read('AGENTS.md')).toMatch(/outbox stays at sign-out/);
+    expect(read('CLAUDE.md')).toMatch(/outbox stays at sign-out/);
   });
 
   it('the contract says journal records are unique by id', () => {
@@ -56,30 +51,6 @@ describe('what the repository promises', () => {
     const html = read('public/landing/index.html');
     expect(html).not.toMatch(/using PARA unless your rules say otherwise/);
     expect(html).toMatch(/in folders by how soon you need things/);
-  });
-
-  it('a new agent is sent to the handoff, and the handoff has the plan and the traps', () => {
-    expect(read('AGENTS.md')).toMatch(/docs\/harness\/HANDOFF\.md/);
-    expect(read('AGENTS.md')).toMatch(/docs\/PHASES\.md/);
-    const phases = read('docs/PHASES.md');
-    for (const n of [1, 2, 3, 4]) expect(phases, `phase ${n}`).toMatch(new RegExp(`## Phase ${n}:`));
-    const handoff = read('docs/harness/HANDOFF.md');
-    for (const part of ['## Where things stand', '## The plan, in order', '## How to run a round', '## Traps on this machine', '## Decisions taken in phase 2']) expect(handoff, part).toContain(part);
-  });
-
-  it('a compaction re-reads the session state and the output rules (TL-P4-06)', () => {
-    const settings = JSON.parse(read('.claude/settings.json')) as { hooks: Record<string, { matcher: string; hooks: { command: string }[] }[]> };
-    const start = settings.hooks.SessionStart ?? [];
-    expect(start.some((h) => h.matcher.split('|').includes('compact') && h.hooks.some((c) => c.command.includes('harness/after-compact.md')))).toBe(true);
-    const note = read('harness/after-compact.md');
-    for (const part of ['docs/harness/LEAD.md', 'docs/harness/HANDOFF.md', 'never asks the owner', 'under 120 characters']) expect(note, part).toContain(part);
-  });
-
-  it('the quiet output style holds the one-line rule for the coordinator and workers (TL-P4-12)', () => {
-    const style = read('.claude/output-styles/bower-quiet.md');
-    expect(style).toMatch(/^---\nname: Bower quiet\n/);
-    expect(style).toContain('keep-coding-instructions: true');
-    for (const part of ['No text between tool calls', 'exactly one line under 120 characters', 'Never ask the owner']) expect(style, part).toContain(part);
   });
 
   it('the Worker config never targets the original production Worker, and serves the app as a single-page app (TL-P3-08)', () => {
@@ -94,9 +65,9 @@ describe('what the repository promises', () => {
   it('the staging Worker keeps its logs and names its build', () => {
     const config = read('api/wrangler.jsonc');
     expect(config).toMatch(/"observability":\s*\{\s*"enabled":\s*true\s*\}/);
-    const staging = read('docs/harness/STAGING.md');
-    expect(staging).toMatch(/--var APP_VERSION:<main short SHA>/);
-    expect(staging).toMatch(/\/health.*must name that SHA/);
+    const runbook = read('docs/runbook.md');
+    expect(runbook).toMatch(/--var APP_VERSION:<main short SHA>/);
+    expect(runbook).toMatch(/`\/health` \(names the SHA\)/);
   });
 
   it('the runbook names every Worker secret and variable', () => {
@@ -122,32 +93,6 @@ describe('what the repository promises', () => {
     expect(addresses.filter((a) => a !== 'you@example.com')).toEqual([]);
   });
 
-  it('every change since the P2 freeze is listed', () => {
-    const doc = 'docs/harness/2026-10-07-p3-compatibility.md';
-    expect(existsSync(join(ROOT, doc)), `${doc} exists`).toBe(true);
-    const list = read(doc);
-    const commits = commitsSince('00ec9a5', ['src/features', 'src/data/contracts'], ROOT);
-    expect(commits.length).toBeGreaterThan(0);
-    // One row per commit: `| sha | entry | what it changes for the accepted app's files |`, never an empty cell.
-    const rows = new Map([...list.matchAll(/^\|\s*`?([0-9a-f]{7,40})`?\s*\|\s*([^|\s][^|]*?)\s*\|\s*([^|\s][^|]*?)\s*\|\s*$/gm)].map((m) => [m[1] ?? '', m[2] ?? '']));
-    const listed = (sha: string): boolean => [...rows.keys()].some((k) => k.startsWith(sha) || sha.startsWith(k));
-    expect(commits.filter((sha: string) => !listed(sha)), 'commits missing from the list').toEqual([]);
-    for (const entry of rows.values()) expect(entry).toMatch(/^[a-z][a-z0-9-]+$/);
-  });
-  it('the P3 security review is recorded', () => {
-    const doc = 'docs/harness/2026-10-07-p3-security-review.md';
-    expect(existsSync(join(ROOT, doc)), `${doc} exists`).toBe(true);
-    const review = read(doc);
-    const verdict = /^verdict: (PASS|FINDINGS \((\d+)\))$/m.exec(review);
-    expect(verdict, 'verdict line').not.toBeNull();
-    // One finding per line: `- F<n> <Critical|Important|Minor> ...; entry: <fix-entry-id>` or `...; P4 note`.
-    const findings = review.match(/^- F\d+ .*$/gm) ?? [];
-    for (const line of findings) {
-      expect(line).toMatch(/^- F\d+ (Critical|Important|Minor) /);
-      expect(line).toMatch(/(entry: `[a-z][a-z0-9-]+`|P4 note)\s*$/);
-    }
-    expect(findings.length).toBe(verdict?.[1] === 'PASS' ? 0 : Number(verdict?.[2]));
-  });
   it('the built app ships its security headers', () => {
     const file = existsSync(join(ROOT, 'public/_headers')) ? read('public/_headers') : '';
     const block = (path: string): Record<string, string> => {

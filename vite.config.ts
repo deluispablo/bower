@@ -44,7 +44,7 @@ export default defineConfig({
   server: { port: 5190, strictPort: true, warmup: { clientFiles: WARMUP_FILES } },
   test: {
     environment: 'jsdom',
-    setupFiles: ['./src/test-setup.ts', './harness/timer-gate-setup.ts'],
+    setupFiles: ['./src/test-setup.ts', './testing/timer-gate-setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: { modules: { classNameStrategy: 'non-scoped' } },
   },

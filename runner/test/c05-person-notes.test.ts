@@ -39,7 +39,7 @@ const questionsOf = (r: CaseRun): Question[] => (JSON.parse(r.after[SYSTEM.quest
 const idOf = (r: CaseRun, path: string): string | undefined => Object.entries(r.pathsById).find(([, p]) => p === path)?.[0];
 
 async function fixture(): Promise<LoadedCase> {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-note-not-written-by-bower'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-note-not-written-by-bower'));
   delete c.presses;
   c.expected = {};
   return c;
@@ -242,7 +242,7 @@ describe('C05 person notes through runner main', () => {
 
   it('C05 person notes: corpus first append, protected ranges, state question and later non-adoption score per run', async () => {
     await positiveControl();
-    const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-note-not-written-by-bower'));
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-note-not-written-by-bower'));
     const r = await runScripted(c);
     expect(r.runs?.[0]?.requests).toEqual([{ id: 'change-1', text: 'Update the garden plot from this committee letter.' }]);
     expect(scoreCase(c, r)).toEqual({ pass: true, unmet: [] });

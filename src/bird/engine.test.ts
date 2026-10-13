@@ -248,7 +248,7 @@ describe("the engine's named actions", () => {
   });
 
   it('a new member tagged acts without a row fails the meta-test', () => {
-    // The Codex scenario: `stretch()` registered as `acts` reaches no reference row of its own.
+    // The review scenario: `stretch()` registered as `acts` reaches no reference row of its own.
     expect(unreferencedMembers({ ...ENGINE_MEMBERS, stretch: 'acts', curl: 'poses' })).toEqual([
       'stretch: acts, but not the act dispatcher, so no reference row',
       'curl: poses, but not the pose dispatcher, so no reference row',
@@ -315,7 +315,7 @@ describe("the engine's named actions", () => {
   });
 
   it('a gaze return keeps its speed bounds when focus disappears mid-return', () => {
-    // TL-P4-25 addendum 5, the Codex scenario: wake at (200, -100), then focus goes away after 80 frames.
+    // TL-P4-25 addendum 5, the review scenario: wake at (200, -100), then focus goes away after 80 frames.
     const { engine, frames, read } = mount('idle');
     frames.run(61 * FPS);
     let target: { x: number; y: number } | null = { x: 200, y: -100 };

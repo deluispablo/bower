@@ -14,7 +14,7 @@ import type { SectionHashes } from '../src/timing';
 import { RunTiming } from '../src/timing';
 import { RUN_ID, fixedDrive } from './drive-v3';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const AT = Date.UTC(2026, 9, 7, 9);
 
 const bytesOf = (path: string): Uint8Array => new Uint8Array(readFileSync(resolve(ROOT, path)));

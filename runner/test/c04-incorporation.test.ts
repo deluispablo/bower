@@ -21,7 +21,7 @@ import { loadCorpus, score, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
 import { RUN_ID, fixedDrive } from './drive-v3';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const AT = Date.UTC(2026, 9, 7, 9);
 
 /** The bounds the context keeps (characters): each thing's text, all things' text, each note's text, all notes'. */

@@ -1,0 +1,1 @@
+The original's own case, unchanged, so the speed comparison with the original is like for like. Judge the result as for the nearest adapted case of C09: facts from the file only, a sensible place, links that open.

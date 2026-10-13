@@ -1,6 +1,6 @@
 /**
  * Rules of the code's shape, checked by machine so no agent has to remember
- * them (docs/harness/METHOD.md, "Rules machines check"). Each failure says
+ * them. Each failure says
  * what to do instead.
  */
 /// <reference types="node" />

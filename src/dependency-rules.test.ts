@@ -1,6 +1,6 @@
 /**
- * Rules of who may import whom, checked by dependency-cruiser (docs/harness/METHOD.md, "Rules machines check";
- * TL-P4-15 c1-dependency-rules). dependency-cruiser itself runs once, in `pnpm check` (scripts/check-dependencies.mjs);
+ * Rules of who may import whom, checked by dependency-cruiser
+ * (TL-P4-15 c1-dependency-rules). dependency-cruiser itself runs once, in `pnpm check` (scripts/check-dependencies.mjs);
  * these tests read the rule list, so they stay fast (TL-P4-17 entry 3).
  */
 /// <reference types="node" />

@@ -13,7 +13,7 @@ interface Fixture {
   toggle_expected_file?: string; toggle_expected_sha256?: string;
   toggle_request?: { index: number; label: string; previous_done: boolean; requested_done: boolean };
 }
-const base = 'docs/harness/evidence/2026-10-05-local-prerequisites/';
+const base = 'testing/fixtures/';
 const folder = `${base}ownership-fixtures-final/`;
 const manifestBytes = readFileSync(`${folder}manifest.json`);
 const fixtures = (JSON.parse(manifestBytes.toString('utf8')) as { fixtures: Fixture[] }).fixtures;
@@ -82,7 +82,7 @@ it('B6a templates: b6-project-next-steps-owned frames Goal and Next steps outsid
 
 describe('ownership/2 raw byte authority', () => {
   it('pins the adopted grammar and every independent canonical bundle byte', () => {
-    expect(hash(readFileSync(`${base}bower-protected-ownership-final.md`))).toBe('3a55bfe1d1f2b71e6e7bb2ac35f3fe9e95b9f0452f3e9fae672b84be17025120');
+    expect(hash(readFileSync(`${base}bower-protected-ownership-final.md`))).toBe('ddef33a37b440b69a3d402a0df58481147df2ba0e8b656e5f39548ff4256b3a2');
     expect(hash(manifestBytes)).toBe('f673c51e6bb7b0f9e335d2283f5f9203fa1a428d3158799c1df96777354d76fa');
     const sums = readFileSync(`${folder}SHA256SUMS`, 'utf8').trim().split('\n');
     expect(sums).toHaveLength(32);

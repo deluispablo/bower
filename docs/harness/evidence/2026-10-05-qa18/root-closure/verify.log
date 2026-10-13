@@ -1,9 +1,0 @@
-
- RUN  v5.0.3 /Users/deluisp/Projects/bower-app
-
-
- Test Files  1 passed (1)
-      Tests  47 passed (47)
-   Start at  23:40:01
-   Duration  337ms (environment 69%, setup 12%, tests 10%, transform 7%, import 1%, worker 1%)
-

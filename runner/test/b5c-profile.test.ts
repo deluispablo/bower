@@ -186,7 +186,7 @@ async function corpusProfile(slug: string, control = false) {
   const rows = [declaration(kind)];
   await b.drive.update(b.id(PROFILE), { appProperties: { profile: kind } });
   await b.drive.createText(b.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows }));
-  const replies = JSON.parse(readFileSync(new URL(`../../harness/corpus/${slug}/replies.json`, import.meta.url), 'utf8')) as
+  const replies = JSON.parse(readFileSync(new URL(`../../testing/corpus/${slug}/replies.json`, import.meta.url), 'utf8')) as
     Array<{ things: Array<{ profile?: string }> }>;
   if (control) for (const intent of replies) for (const thing of intent.things) delete thing.profile;
   let bound = JSON.stringify(replies[0]);
@@ -220,7 +220,7 @@ it('b5-cv-profile-through-main', async () => {
   const cv = await setup({ fixture: 'c17-b56-cv-profile' });
   await cv.drive.update(cv.id(PROFILE), { appProperties: { profile: 'cv' } });
   await cv.drive.createText(cv.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [declaration()] }));
-  const replies = JSON.parse(readFileSync(new URL('../../harness/corpus/c17-b56-cv-profile/replies.json', import.meta.url), 'utf8')) as
+  const replies = JSON.parse(readFileSync(new URL('../../testing/corpus/c17-b56-cv-profile/replies.json', import.meta.url), 'utf8')) as
     Array<{ things: Array<{ profile: Array<{ source: string; sentence: number }> }> }>;
   const span = 'Achievement: shipped an offline map editor.';
   expect(cv.c.inboxFiles[SOURCE]).toContain(span);

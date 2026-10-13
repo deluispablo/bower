@@ -17,7 +17,7 @@ import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude, type CaseRun } from './corpus-run';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 afterEach(() => vi.restoreAllMocks());
 
 const OFFER = 'Offer_letter_final(2).pdf';

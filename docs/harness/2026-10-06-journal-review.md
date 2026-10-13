@@ -1,7 +1,0 @@
-# Independent review journal-review-1: b-path-journal
-
-Reviewer: fresh Claude session `journal-review-1` (implementer `journal-impl-1`). Target `/private/tmp/bower-p2-b-journal`: base `2792e2f` → tests `1e6c128` → fix `3f2339f` → rework tests `fca3630` → fix `ae18d84`. `3f2339f` alone BLOCKED (I1: >20 requests, bad lines and malformed questions.json routed to legacy, ruled out by TL-P2-23 §3–4); **HEAD `ae18d84` CLEAN — 0 Critical, 0 Important, 6 Minor.** Reviewer ran fake-worker 82, fake-runner 55.
-
-Verified: C2 honoured (readable rule/rename/move → whole plan legacy before effects); capture recordId/sha256/fileIds with identical copies; archive moves into `.bower/changes/archive` with create-folder when missing; archive moves dependsOn requests.json/questions.json writes; guard 9 grounding of request and yourChanges rows; lost replies and Undo before move handled; U2 invariants intact; changed existing assertion legitimate. TL-P2-23 resolves yourChanges, instructions-on-B, unreadable lines and the 20-request cap.
-
-Minor: M1 C2 check only covers capturable lines (a rule with differing copies or two parents goes B, stays unapplied); M2 instructions run refused on an unparseable line (unreadable-runner-files); M3 instructions run with only left-out lines says "Done. Bower read your changes"; M4 repeated done entries for one request id; M5 remaining legacy reasons to map for o5-no-legacy-run-path (`journal` no archive folder, `questions`/`requests` no stored digest, oversize recordId → `manifest`); M6 no lost-reply test on the archive create-folder.

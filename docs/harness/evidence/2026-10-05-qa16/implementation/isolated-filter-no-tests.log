@@ -1,8 +1,0 @@
-$ E2E_SOURCE=fake playwright test e2e/qa5.spec.ts --project=phone --grep '^notifications say why they stay off$'
-[WebServer] (node:66960) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
-Error: No tests found.
-Make sure that arguments are regular expressions matching test files.
-You may need to escape symbols like "$" or "*" and quote the arguments.
-
-[ELIFECYCLE] Command failed with exit code 1.

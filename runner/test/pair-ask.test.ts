@@ -13,7 +13,7 @@ import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude, type CaseRun } from './corpus-run';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 afterEach(() => vi.restoreAllMocks());
 
 const KEPT = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';

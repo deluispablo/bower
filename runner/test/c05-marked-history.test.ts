@@ -4,7 +4,7 @@ import { loadCase } from '../src/corpus';
 import { runScripted } from './corpus-run';
 
 it('the marked state was actually written and its previous lines remain in undo evidence', async () => {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-marked-state-keeps-history'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-marked-state-keeps-history'));
   const run = await runScripted(c);
   expect(run.runs?.[0]?.code).toBe(0);
   expect(run.runs?.[0]?.after['Areas/Home/Garden plot.md']).toContain('bower_state: ad0d49f0788bfc33');

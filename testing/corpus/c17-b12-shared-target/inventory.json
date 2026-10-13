@@ -1,0 +1,16 @@
+{
+  "files": [
+    "testing/corpus/c17-b12-shared-target/case.json",
+    "testing/corpus/c17-b12-shared-target/expected.json",
+    "testing/corpus/c17-b12-shared-target/folder/.bower/type-table.json",
+    "testing/corpus/c17-b12-shared-target/folder/Areas/Career/Alex diary.md",
+    "testing/corpus/c17-b12-shared-target/folder/Areas/Career/Career profile.md",
+    "testing/corpus/c17-b12-shared-target/folder/Projects/Job hunt/Ferrowick offer.md",
+    "testing/corpus/c17-b12-shared-target/folder/Projects/Job hunt/Mallowick offer.md",
+    "testing/corpus/c17-b12-shared-target/folder/Rules.md",
+    "testing/corpus/c17-b12-shared-target/oracle.json",
+    "testing/corpus/c17-b12-shared-target/replies.json",
+    "testing/corpus/c17-b12-shared-target/rubric.md",
+    "testing/corpus/c17-b12-shared-target/inventory.json"
+  ]
+}

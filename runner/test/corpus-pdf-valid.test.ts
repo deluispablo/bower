@@ -8,7 +8,7 @@ import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { extract } from '../src/extract';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 async function pdfsUnder(dir: string): Promise<string[]> {
   const found: string[] = [];

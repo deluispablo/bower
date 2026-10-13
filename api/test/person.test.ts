@@ -18,7 +18,7 @@ const personFor = (sub: string) => people.get(people.idFromName(sub));
 /**
  * The going run's deadline after a migration from before v12. The migration arms it at the wall clock and the object's
  * real alarm may already have moved it to the run's own stale deadline: both are correct, so a test asserts the window
- * [read before the migration, `admittedAt` + the stale time], never one instant (docs/harness/defects/2026-10-08-deadlines-test-flake.md).
+ * [read before the migration, `admittedAt` + the stale time], never one instant (defect deadlines-test-flake, 2026-10-08).
  */
 async function expectRunDeadlineInWindow(alex: ReturnType<typeof personFor>, before: number, admittedAt: number): Promise<void> {
   const rows = await runInDurableObject(alex, (_i, state) => state.storage.sql.exec<{ at: number }>("SELECT at FROM deadlines WHERE kind = 'run'").toArray());

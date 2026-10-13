@@ -1,6 +1,0 @@
-Error: synthetic final report save failure
-    at guard (/private/tmp/bower-o1-report-probe.cjs:21:98)
-    at d.writeText (/private/tmp/bower-o1-report-probe.cjs:23:75)
-    at FakeWorker.writeLastRun (/Users/deluisp/Projects/bower-app/src/data/fake/fake-worker.ts:153:30)
-    at async /Users/deluisp/Projects/bower-app/src/data/fake/fake-worker.ts:141:13
-{"probe":"completion_after_failed_report_save","runId":"run-muv5lv2j-1","observedPhase":"done","failedFinalWrites":1,"persistedPhase":"saving","persistedReport":false,"inboxFiles":0}

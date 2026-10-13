@@ -212,7 +212,7 @@ describe('a withdrawn intended create never leaves a live file', () => {
     });
 
     it('a pile removed while its link create is in flight never leaves a live file', async () => {
-      // Round 2, Codex 2 (TL-P4-24 addendum 11): the removal finds the link's create on its way and waits for it to
+      // Round 2, review 2 (TL-P4-24 addendum 11): the removal finds the link's create on its way and waits for it to
       // settle; it lands with its answer and read-back lost, and the removal bins it rather than letting its id go.
       vi.spyOn(console, 'error').mockImplementation(() => {});
       const { drive, vault } = await vaultOf();

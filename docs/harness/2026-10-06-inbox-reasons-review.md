@@ -1,7 +1,0 @@
-# Independent review inbox-review-1: pile-set-aside-reason-visible
-
-Reviewer: fresh Claude session `inbox-review-1` (implementer `inbox-reasons-impl-1`). Target `/private/tmp/bower-p2-inbox-reasons`, base `e20a05c` → test `1b3e6d4` → fix `785a884`. **Verdict: BLOCKED — 0 Critical, 2 Important, 6 Minor.** Reds genuine; related tests 265 pass; the focus.ts timer ReferenceError in the first check is a pre-existing flake on record in qa16 evidence. Reasons computed like the runner (`setAsideOf` ≡ `captureOf`, guard test pins the copy), persist after a run and clear on retry/removal; uploading piles show no reason; notice global and once; types additive; copy exact against TL-P2-11; "Changed" approved by TL-P2-19 (1); demo pile matches TL-P2-19 (3). The implementer's rewritten red test is legitimate (pinned by the readiness entry's `fake-runner.test.ts:518`).
-
-Important: I1 TL-P2-19 (2) and (4) — committed 50 s after the fix — not yet implemented ("could not check" sentence and Try again button; N1/N2 only while this device has something to send). I2 Inbox remove confirmation likely overflows on phones (62px indent + non-wrapping full-size button row).
-
-Minor: dead export `missingMembers`; uncached journal read can reject the whole listing; no integrated test for the note-rewrite path; accessibility (duplicate button names, focus to body, live region inserted with its text); confirm box without a visible edge and "The note goes to the Bin" wording on an empty pile; e2e flake risks (snapshot edit vs 250 ms save; IndexedDB resume in the lose test).

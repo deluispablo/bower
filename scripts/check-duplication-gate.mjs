@@ -13,7 +13,7 @@ const arg = (name, fallback) => {
   return i >= 0 && args[i + 1] ? path.resolve(args[i + 1]) : fallback;
 };
 const root = arg('--root', process.cwd());
-const baselineFile = arg('--baseline', path.join(root, 'harness/duplication-baseline.json'));
+const baselineFile = arg('--baseline', path.join(root, 'testing/duplication-baseline.json'));
 const jscpd = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../node_modules/.bin/jscpd');
 const targets = ['src', 'api', 'runner'].filter((d) => fs.existsSync(path.join(root, d)));
 const baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8'));

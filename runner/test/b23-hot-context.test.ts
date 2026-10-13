@@ -351,7 +351,7 @@ it('B3b hot: a Home answer removes only its settled Open thread', async () => {
 
 it.each(['unused-baseline.json', 'unused-production-baseline.json'])(
   'B3b hot: %s no longer exempts hot.ts', (name) => {
-    const baseline = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../harness', name), 'utf8')) as {
+    const baseline = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../testing', name), 'utf8')) as {
       findings: string[]; reasons?: Record<string, string>;
     };
     const mentionsHot = (line: string): boolean => line.split(' ').includes('runner/src/hot.ts');

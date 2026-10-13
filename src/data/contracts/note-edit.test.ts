@@ -383,7 +383,7 @@ async function refuses(value: unknown, reason: ManifestV2Refusal | 'number', rul
 }
 
 // Literal digests of the ratified v1 fixtures, copied from run-manifest.test.ts; never computed by the code under test.
-const evidence = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
+const evidence = 'testing/fixtures/run-recovery-contract/';
 const fixture = (file: string): Record<string, unknown> => (JSON.parse(readFileSync(evidence + file, 'utf8')) as { input: Record<string, unknown> }).input;
 const manifest01Hash = '9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088';
 const operation01Id = 'ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da';

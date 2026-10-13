@@ -350,7 +350,7 @@ export function replySequence(replies: unknown[]): ClaudeSpawn {
 export function caseReplies(id: string): ClaudeSpawn {
   let spawn: ClaudeSpawn | undefined;
   return async (call) => {
-    spawn ??= replySequence(JSON.parse(await readFile(join(import.meta.dirname, '../../harness/corpus', id, 'replies.json'), 'utf8')) as unknown[]);
+    spawn ??= replySequence(JSON.parse(await readFile(join(import.meta.dirname, '../../testing/corpus', id, 'replies.json'), 'utf8')) as unknown[]);
     return spawn(call);
   };
 }

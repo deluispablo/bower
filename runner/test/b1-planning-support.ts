@@ -150,7 +150,7 @@ export async function setup(options: {
   fixture?: string; folder?: Record<string, string>; inbox?: Array<{ line: string; files: string[] }>;
   inboxFiles?: Record<string, string>;
 } = {}) {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus', options.fixture ?? 'b1-index-job-offer'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', options.fixture ?? 'b1-index-job-offer'));
   if (!options.fixture) {
     c.folder = options.folder ?? { ...folder }; c.folderBinary = {}; c.expected = {}; c.questions = [];
     c.journal = []; c.scope = 'all'; c.presses = undefined; c.between = undefined;

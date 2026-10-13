@@ -5,7 +5,7 @@ import { loadCorpus } from '../src/corpus';
 import { runScripted, type Before } from './corpus-run';
 import { API, paging } from './drive-v3';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 /** The modelled latency per call (TL-P4-01 addendum): about 150 ms per Drive call, 80 ms per Worker call. */
 export const DRIVE_MS = 150;
 export const WORKER_MS = 80;

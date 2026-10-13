@@ -1,8 +1,0 @@
-{"probe":"remote_changes_without_run","before":"Old text","reopened":"Old text","afterStatusPoll":"Old text","treeContainsRemote":false}
-{"probe":"protected_section_after_paragraph","currentState":[],"bodyContainsProtected":true,"tickedLabel":"protected task","protectedChanged":true}
-Error: synthetic failed upload
-    at d.upload (<probe-or-frozen-target>:19:115)
-    at DriveVault.sendAll (<probe-or-frozen-target>/src/data/vault/drive-vault.ts:699:44)
-    at async DriveVault.send (<probe-or-frozen-target>/src/data/vault/drive-vault.ts:669:13)
-{"probe":"tidy_partial_failed_pile","before":[{"name":"arrived.pdf"},{"name":"missing.pdf","upload":-1}],"phase":"done","filed":["arrived.pdf"],"setAside":[],"after":null}
-{"probe":"status_response_order","lastPhase":"reading","runningPiles":["*"]}

@@ -1,8 +1,0 @@
-[
-  {
-    "level": "error",
-    "message": "BowerError: A name cannot start with a dot.\n    at Mi (http://127.0.0.1:5192/assets/index-BPJicsD1.js:12:42005)\n    at http://127.0.0.1:5192/assets/world-D-nxHyRX.js:2:7316\n    at http://127.0.0.1:5192/assets/world-D-nxHyRX.js:2:6167\n    at r (http://127.0.0.1:5192/assets/world-D-nxHyRX.js:1:4526)",
-    "timestamp": "2026-10-05T17:01:30.434Z",
-    "url": "http://127.0.0.1:5192/assets/index-BPJicsD1.js"
-  }
-]

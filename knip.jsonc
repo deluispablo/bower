@@ -1,13 +1,13 @@
-// Unused code (TL-P4-17 entry 4). Run through scripts/check-unused-gate.mjs against harness/unused-baseline.json.
+// Unused code (TL-P4-17 entry 4). Run through scripts/check-unused-gate.mjs against testing/unused-baseline.json.
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   // A symbol used only inside its own file is not dead code; the gate looks for symbols nothing uses.
   "ignoreExportsUsedInFile": true,
-  // Not source: planning docs and their copied evidence, exported landing, harness records, build output.
-  "ignore": ["docs/**", "public/**", "harness/**", "test-results/**", "dist/**", "runner/dist/**"],
+  // Not source: planning docs and their copied evidence, exported landing, test fixtures and baselines, build output.
+  "ignore": ["docs/**", "public/**", "testing/**", "test-results/**", "dist/**", "runner/dist/**"],
   "workspaces": {
     ".": {
-      // Production starts here: the Vite app (index.html loads src/main.tsx), the scripts that pnpm check and the harness run, the e2e specs.
+      // Production starts here: the Vite app (index.html loads src/main.tsx), the scripts that pnpm check runs, the e2e specs.
       "entry": ["scripts/*.{mjs,cjs}", "e2e/**/*.ts", "src/main.tsx!"],
       // Fixtures and test helpers are not production (same patterns as .dependency-cruiser.cjs NOT_PRODUCTION).
       "project": ["src/**/*.{ts,tsx}!", "!**/*.fixture.ts", "!**/*.fixture.tsx", "!src/testing/**", "scripts/**", "e2e/**"],

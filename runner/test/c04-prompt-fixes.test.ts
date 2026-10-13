@@ -11,7 +11,7 @@ import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
 import { runScripted, runWithClaude } from './corpus-run';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 afterEach(() => vi.restoreAllMocks());
 

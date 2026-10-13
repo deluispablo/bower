@@ -1,7 +1,7 @@
 /**
  * Setup file for every api test (vitest `setupFiles`: https://vitest.dev/config/#setupfiles; its hooks apply to each
  * test file). An api test never reaches the network: a real alarm that escaped into recovery once called GitHub with a
- * fixture token (docs/harness/defects/2026-10-08-deadlines-test-flake.md). The global `fetch` here refuses, and the
+ * fixture token (defect deadlines-test-flake, 2026-10-08). The global `fetch` here refuses, and the
  * `afterEach` fails the test that called it. A test that needs `fetch` stubs it explicitly (`vi.spyOn(globalThis,
  * 'fetch')`), which replaces this guard for that test.
  */

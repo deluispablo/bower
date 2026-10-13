@@ -1,6 +1,0 @@
-red: putting back 1 file(s) as they were before ed5e965ab26bdab7b6eab2b062edf639c6c12088 and running the verify…
-check…
-verify: pnpm vitest run src/data/contracts/pile-declaration.test.ts -t "pile declarations preserve immutable authority"
-6b04526 fix: proof-close immutable pile declaration authority
-218/223 entries pass
-exit=0

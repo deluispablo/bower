@@ -80,7 +80,7 @@ describe('pile declarations preserve immutable authority', () => {
     ['09-declaration-conflict.json', 'original', 'b6e762ef12e0b8a10c0cf6a6d1200252683d0b1f330e28c75d699d8f4230d896', folder()],
     ['09-declaration-conflict.json', 'identicalCopy', 'b6e762ef12e0b8a10c0cf6a6d1200252683d0b1f330e28c75d699d8f4230d896', folder()],
   ] as const)('parses only the declaration portion of %s/%s with independent identity', async (file, key, hash, expected) => {
-    const packet = JSON.parse(readFileSync(`docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/${file}`, 'utf8')) as { input: Record<string, unknown> };
+    const packet = JSON.parse(readFileSync(`testing/fixtures/run-recovery-contract/${file}`, 'utf8')) as { input: Record<string, unknown> };
     const source = utf8(` \r\n${JSON.stringify(packet.input[key], null, 2)}\t`);
     const before = source.slice();
     expect(await parsePileDeclaration(source, 'fake-root')).toEqual({ ok: true, value: expected, sha256: hash });

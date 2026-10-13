@@ -1,5 +1,0 @@
-$ pnpm lint && pnpm typecheck && pnpm test && pnpm build && node scripts/check-harness.mjs && node scripts/check-bundle.mjs && node scripts/fix-landing.mjs --check
-$ eslint .
-sh: eslint: command not found
-[ELIFECYCLE] Command failed with exit code 127.
-[ELIFECYCLE] Command failed with exit code 127.

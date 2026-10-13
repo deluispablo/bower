@@ -55,7 +55,7 @@ const baseline = {
   note: 'Updated by update-duplication-baseline.mjs'
 };
 
-fs.writeFileSync('harness/duplication-baseline.json', JSON.stringify(baseline, null, 2) + '\n');
+fs.writeFileSync('testing/duplication-baseline.json', JSON.stringify(baseline, null, 2) + '\n');
 
 console.log('Updated duplication baseline:');
 console.log(JSON.stringify(baseline, null, 2));

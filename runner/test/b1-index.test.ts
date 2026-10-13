@@ -17,8 +17,8 @@ import { API, TICKET, driveV3, fixedDrive, paging, RUN_ID } from './drive-v3';
 import { RunnerDrive } from '../src/drive';
 import { RunnerToken } from '../src/token';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
-const METHOD = resolve(import.meta.dirname, '../../docs/harness/2026-10-08-p4-method-rubric-changes.md');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+const METHOD = resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubric-changes.md');
 const empty = { kind: 'tidy-intent', v: 1, things: [] };
 const pacing = { sleep: async (): Promise<void> => undefined };
 const oldPaging = paging.size;

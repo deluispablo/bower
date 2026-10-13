@@ -1,9 +1,0 @@
-
- RUN  v5.0.3 /private/tmp/bower-p2-journal-ack
-
-
- Test Files  1 passed (1)
-      Tests  17 passed | 15 skipped (32)
-   Start at  15:40:33
-   Duration  435ms (environment 53%, transform 21%, tests 13%, setup 9%, import 4%)
-

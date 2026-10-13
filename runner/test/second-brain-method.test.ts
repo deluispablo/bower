@@ -12,8 +12,8 @@ import { loadCorpus, score, type LoadedCase } from '../src/corpus';
 import { extract } from '../src/extract';
 import { runWithClaude } from './corpus-run';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
-const LOG = resolve(import.meta.dirname, '../../docs/harness/2026-10-08-p4-method-rubric-changes.md');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+const LOG = resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubric-changes.md');
 
 afterEach(() => vi.restoreAllMocks());
 

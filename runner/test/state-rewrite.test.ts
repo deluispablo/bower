@@ -18,7 +18,7 @@ import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
 import { stateWrittenBefore } from './earlier-runs';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const HUB = 'Projects/Job hunt/Job hunt.md';
 const FLAT = 'Projects/Flat hunt/Flat hunt.md';
 const MADE = 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md';

@@ -17,7 +17,7 @@ it("the scorer counts questions exactly and checks a pair's subject", () => {
 });
 
 it("a case's between step runs between two runs", async () => {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-merge-question-first'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-merge-question-first'));
   const path = 'Projects/Flat hunt/Larkspur Lane flat.md';
   const calls: string[] = [];
   const person = `${c.folder[path]}\nAlex wants an amber kitchen.\n`;
@@ -70,7 +70,7 @@ const PERSONAL = 'Projects/Alex.md';
 const PERSON_TEXT = '---\r\ntitle: Alex\r\n---\r\n\r\n## My thoughts\r\nAlex likes café light.\r\n\r\n## Timeline\r\n';
 
 async function smallCase() {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-merge-question-first'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-merge-question-first'));
   return {
     ...c, id: 'driver-garden', scope: 'all' as const, inbox: [{ line: 'Alex’s garden plot notes describe herbs.', files: [] }], questions: [],
     journal: [{ kind: 'rule' as const, text: 'Alex prefers garden notes together.' }],
@@ -197,7 +197,7 @@ it('checks Drive properties directly, including absence', async () => {
 
 it('replays the original request id separately from a new tidy-up', async () => {
   const { runScripted } = await import('./corpus-run');
-  const seed = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c09-closest-flat'));
+  const seed = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c09-closest-flat'));
   const text = 'Which flat is closest to Ferrowick?';
   const c = { ...seed, presses: [
     { request: { kind: 'replay' as const, id: 'change-1' } },
@@ -272,7 +272,7 @@ it('reports an unselected replay without consuming or writing another request', 
 
 it('reports a same-run replay and a newly written tidy-up separately', async () => {
   const { runScripted } = await import('./corpus-run');
-  const seed = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c09-closest-flat'));
+  const seed = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c09-closest-flat'));
   const text = 'Which flat is closest to Ferrowick?';
   const run = await runScripted({ ...seed, presses: [
     { request: { kind: 'replay', id: 'change-1' } }, { request: { kind: 'tidy', text } },

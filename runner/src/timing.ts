@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { BowerError } from '../../src/data/types';
 
 /**
- * One timing line per run (TL-P4-01 addendum, `docs/harness/p4-speed-baseline.md`), as the original's `agent stats`
+ * One timing line per run (TL-P4-01 addendum), as the original's `agent stats`
  * line and `agent_seconds`: where a tidy-up's time went, phase by phase, with the model's own numbers. Numbers and
  * phase names only: no path, no content, no credential.
  *

@@ -1,9 +1,0 @@
-$ tsc -b --noEmit
-src/data/contracts/pile-declaration.ts(63,90): error TS2339: Property 'inboxId' does not exist on type 'object & Record<"kind", unknown>'.
-src/data/contracts/pile-declaration.ts(65,22): error TS2339: Property 'inboxId' does not exist on type 'object & Record<"kind", unknown>'.
-src/data/contracts/pile-declaration.ts(65,45): error TS2339: Property 'name' does not exist on type 'object & Record<"kind", unknown>'.
-src/data/contracts/pile-declaration.ts(65,63): error TS2339: Property 'createKey' does not exist on type 'object & Record<"kind", unknown>'.
-src/data/contracts/pile-declaration.ts(72,17): error TS2339: Property 'memberKey' does not exist on type 'object & Record<"kind", unknown>'.
-src/data/contracts/pile-declaration.ts(72,42): error TS2339: Property 'originalText' does not exist on type 'object & Record<"kind", unknown>'.
-src/data/contracts/pile-declaration.ts(72,73): error TS2339: Property 'content' does not exist on type 'object & Record<"kind", unknown>'.
-[ELIFECYCLE] Command failed with exit code 2.

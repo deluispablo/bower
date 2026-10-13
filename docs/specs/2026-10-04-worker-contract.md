@@ -29,16 +29,16 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 | Call | Body | Answer | Errors |
 | --- | --- | --- | --- |
 | `GET /me` | | `{ user: { name, email }, folderId: string \| null }` | 401 when signed out (the app shows sign-in) |
-| `GET /auth/login` | | A redirect to Google, then back to the app | A failed or cancelled callback redirects to the app's sign-in with `?signin=failed` or `?signin=cancelled`, never a JSON page ([TL-P3-07](../harness/2026-10-07-tl-p3-07-staging-source-and-callback.md)) |
+| `GET /auth/login` | | A redirect to Google, then back to the app | A failed or cancelled callback redirects to the app's sign-in with `?signin=failed` or `?signin=cancelled`, never a JSON page (TL-P3-07) |
 | `POST /auth/logout` | | 204, the cookie cleared | |
 | `DELETE /me` | | 204: the Worker forgets the person (tokens, settings, runs, the pointer to their folder) and clears the cookie; the Drive folder is never touched, and signing in again starts at the folder step (`POST /vault` finds the folder they had) | 401 |
 | `GET /drive/token` (`?fresh=1` after Drive said 401) | | `{ accessToken, expiresAt }` (epoch ms, at most 1 h) | 401 signed out; 409 `no-folder` |
 | `POST /vault` | `{}` | `{ folderId, found }`: a new Bower folder made from the template (the five main folders, `Rules.md`, `About me.md`, `.bower/`), or the existing one (`found: true`, so the app says welcome back) | 401 |
-| `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean, requestId }` (the person's "Look things up on the web"; the dispatch's `allow_web`). `requestId` is made by the app once per press: lowercase letters, digits and dashes, at most 64 ([TL-P3-15](../harness/2026-10-07-tl-p3-15-admission-and-revision.md)) | `{ run: RunWire, revision }`, the run it started, or the one already going. A repeat with the same `requestId` returns that request's run, and the first request's scope wins | 401; 409 `no-folder` "Choose a folder for Bower first."; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read." / "Nothing in the inbox is ready yet." (only held piles wait, TL-P2-21; admission reads each pile's note by the runner's own rules, transiently, and keeps only its id and version, [TL-P3-25](../harness/2026-10-07-tl-p3-25-pile-notes-and-the-last-p3-e-entries.md)); 409 `stale-session`; 429 over the daily limit |
-| `POST /session` | `{ place, action: "check" \| "take" \| "leave", gen }` (`gen`, the place's leave generation; missing counts as 0, [TL-P3-14](../harness/2026-10-07-tl-p3-14-lease-and-limits.md)) | `{ active, epoch }`: one active session per person (TL-P2-13, TL-P2-14, TL-P2-25) | 401 |
+| `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean, requestId }` (the person's "Look things up on the web"; the dispatch's `allow_web`). `requestId` is made by the app once per press: lowercase letters, digits and dashes, at most 64 (TL-P3-15) | `{ run: RunWire, revision }`, the run it started, or the one already going. A repeat with the same `requestId` returns that request's run, and the first request's scope wins | 401; 409 `no-folder` "Choose a folder for Bower first."; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read." / "Nothing in the inbox is ready yet." (only held piles wait, TL-P2-21; admission reads each pile's note by the runner's own rules, transiently, and keeps only its id and version, TL-P3-25); 409 `stale-session`; 429 over the daily limit |
+| `POST /session` | `{ place, action: "check" \| "take" \| "leave", gen }` (`gen`, the place's leave generation; missing counts as 0, TL-P3-14) | `{ active, epoch }`: one active session per person (TL-P2-13, TL-P2-14, TL-P2-25) | 401 |
 | `GET /status` | | `{ run: RunWire \| null, revision }`, the run going now or the last one. `revision` rises with every change to the person's runs; the app drops an answer older than the last it took | 401 |
 
-**General error codes** ([TL-P3-05](../harness/2026-10-06-tl-p3-05-general-error-codes.md)). Every error answer carries one code from this list or from the calls above. Codes are kebab-case. The app decides by status and code, and shows `message`.
+**General error codes** (TL-P3-05). Every error answer carries one code from this list or from the calls above. Codes are kebab-case. The app decides by status and code, and shows `message`.
 
 | Status | Code | When | Message (one sentence for the person) |
 | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 
 `repository_dispatch` with `{ run_id, vault_id, ticket, scope, allow_web }`. The runner fetches a Drive token with that ticket, reports each phase (`queued` → `reading` with `total` → `writing` → `saving` → `done` or `failed` with `failure`), and writes the run's report to the folder before it reports `done`:
 
-- `.bower/last-run.json`: `{ v: 1, run: <RunWire with report> }`, where `report` is the app's `RunReport` (`filed`, `created`, `updated`, `setAside`, `questions`, `yourChanges`, and `requests` done and `rulesWorded` when there were any; `nothingReady: true` when every admitted pile was held, so the report says "Nothing in the inbox was ready yet", [TL-P3-26](../harness/2026-10-07-tl-p3-26-security-review-and-freeze.md)).
+- `.bower/last-run.json`: `{ v: 1, run: <RunWire with report> }`, where `report` is the app's `RunReport` (`filed`, `created`, `updated`, `setAside`, `questions`, `yourChanges`, and `requests` done and `rulesWorded` when there were any; `nothingReady: true` when every admitted pile was held, so the report says "Nothing in the inbox was ready yet", TL-P3-26).
 - `.bower/questions.json`, `.bower/suggestions.json`, `.bower/requests.json`, `.bower/hashes.json` (shapes in `src/data/vault/layout.ts`).
 - `Rules.md` with the rules typed in the app worded (`src/data/vault/rules-format.ts`), and the rules a `rule` line `removes` (by their wording) taken out.
 - After a `rename` or `move` line (`from` → `path`), every `[[link]]` to the old name written with the new one, in every note (a label after `|` stays). Until then the app finds a note by the names it had (`src/data/links.ts`).
@@ -91,7 +91,7 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 
 A run takes the piles in the inbox when it starts. Piles added during the run wait for the next one.
 
-### Runner wire (P3, [TL-P3-18](../harness/2026-10-07-tl-p3-18-runner-wire.md))
+### Runner wire (P3, TL-P3-18)
 
 This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runner.ts`) to the per-person object and to R3's results.
 
@@ -107,9 +107,9 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
     - 200: a repeat of the last `seq`; a report that reaches or passes the run's phase; and a report from a later attempt whose phase is behind the run's (attempt 2 posting `writing` after attempt 1 reported `saving`). That last one is recorded as the attempt's last `seq` and phase and answers the current run and revision, the run unchanged.
     - 409 `stale-report`: a lower `seq`; a phase behind the same attempt's own last phase; a run already ended.
   - The status revision rises only when the run a person sees changes: its phase, `total` or `failure` (and so its `finishedAt`). A report that shows nothing new, or is only recorded, answers the same revision.
-  - `total` is the number of things (pile members) the run takes, on every report, in `last-run.json` and for a resumed attempt; your changes are not counted in it ([TL-P3-25](../harness/2026-10-07-tl-p3-25-pile-notes-and-the-last-p3-e-entries.md) point 3).
+  - `total` is the number of things (pile members) the run takes, on every report, in `last-run.json` and for a resumed attempt; your changes are not counted in it (TL-P3-25 point 3).
   - A run whose admitted piles are all held when the runner reads them (a pile changed after admission) ends `done` with nothing filed; its report says nothing was ready yet (`nothingReady`) and every admitted item's disposition is `waiting`. It is never `failed` (TL-P3-25 point 2).
-- **Attempt ended** ([TL-P4-16 addendum 4](../harness/DECISIONS.md)): the same route takes `{ attempt, ended: true }` (no `seq`, no phase; `src/data/contracts/attempt-ended.ts`) → `{ run, revision }`, nothing a person sees changed.
+- **Attempt ended** (TL-P4-16 addendum 4): the same route takes `{ attempt, ended: true }` (no `seq`, no phase; `src/data/contracts/attempt-ended.ts`) → `{ run, revision }`, nothing a person sees changed.
   - The runner sends it last when its attempt stops with no `done` or `failed` taken: left in `saving`, its chain unread, a report not taken, or any error nobody caught. Not after `stale-attempt`, a refused ticket, or a run the Worker already holds ended.
   - The Worker looks at the run 60 s later (the run's deadline, through the same early look as a lost dispatch) instead of at its stale deadline; recovery then decides as below. A run already ended answers its state and arms nothing; an older attempt is 409 `stale-attempt`.
   - Additive: a Worker from before it answers 415, and the run waits for its stale deadline as before. A job that Actions kills sends nothing and is caught only by that deadline.

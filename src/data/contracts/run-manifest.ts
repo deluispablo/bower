@@ -184,7 +184,7 @@ const component = (value: string): boolean => value.length > 0 && value !== '.' 
 const name = (value: unknown): value is string => text(value) && component(value);
 const path = (value: unknown): value is string => text(value) && value.split('/').every(component);
 // CapturedJournal.recordId keeps the existing opaque JournalRecord id rule, not the logical-Id grammar;
-// its contract bound is the opaque-identifier one (coordinator ruling): DriveId's 1024 UTF-8 bytes.
+// its contract bound is the opaque-identifier one (lead ruling): DriveId's 1024 UTF-8 bytes.
 const recordId = driveId;
 
 /** Whether a run record can carry this as a file or folder name (contract B's name grammar). */

@@ -4,7 +4,7 @@ import { loadCase } from '../src/corpus';
 import { runScripted } from './corpus-run';
 
 it('a real first state write precedes the personal edit and shown update', async () => {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-person-edited-between-runs'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-person-edited-between-runs'));
   const run = await runScripted(c);
   const path = 'Areas/Home/Garden plot.md';
   expect(run.runs?.[0]?.code).toBe(0);

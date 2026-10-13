@@ -1,3 +1,0 @@
-Synthetic origin fixture listening
-{"event":"synthetic_post","originKind":"null","originMatches":false,"bindingCookiePresent":true,"csrfMatches":true,"accepted":false,"status":400}
-{"event":"synthetic_post","originKind":"expected","originMatches":true,"bindingCookiePresent":true,"csrfMatches":true,"accepted":true,"status":200}

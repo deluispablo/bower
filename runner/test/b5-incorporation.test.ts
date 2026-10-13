@@ -29,7 +29,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(AT); paging.size = 1000;
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); paging.size = oldPaging; });
 
 async function setup(names = ['Garden.txt'], table: string | null = JSON.stringify(readTypeTable(null).table), questions: Question[] = []) {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/b1-index-no-change'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/b1-index-no-change'));
   c.folder = { [HUB]: '---\nsummary: Alex grows mint.\n---\nAlex keeps garden records.\n',
     ...(table === null ? {} : { [TABLE]: table }) };
   c.folderBinary = {}; c.inboxBinary = {}; c.journal = []; c.questions = questions;
@@ -227,7 +227,7 @@ it('b5-document-cannot-teach-schema / b5-explicit-column-replaces-fourth: contro
 });
 
 it('b5-unused-baselines-removed: no handed-off B5b production allowance remains', () => {
-  const baseline = JSON.parse(readFileSync(new URL('../../harness/unused-production-baseline.json', import.meta.url), 'utf8')) as { findings: string[] };
+  const baseline = JSON.parse(readFileSync(new URL('../../testing/unused-production-baseline.json', import.meta.url), 'utf8')) as { findings: string[] };
   expect(baseline.findings.length, 'control: reads the real baseline').toBeGreaterThan(0);
   expect(baseline.findings.filter((line) => /(?:note-format.ts (?:propertyValuesOk|tableProperties)|runner\/src\/type-table.ts)/.test(line))).toEqual([]);
 });

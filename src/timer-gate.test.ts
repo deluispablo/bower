@@ -1,6 +1,6 @@
-/** The timer gate (harness/timer-gate.ts) on fixtures: a fake host stands in for the clock, so no test here waits. */
+/** The timer gate (testing/timer-gate.ts) on fixtures: a fake host stands in for the clock, so no test here waits. */
 import { describe, expect, it, vi } from 'vitest';
-import { createTimerGate, fullName, type TimerHost } from '../harness/timer-gate';
+import { createTimerGate, fullName, type TimerHost } from '../testing/timer-gate';
 
 /** A host whose timers fire when the fixture says, instead of after the time asked for. */
 const fixtureHost = (): { host: TimerHost; fireAll: () => void } => {

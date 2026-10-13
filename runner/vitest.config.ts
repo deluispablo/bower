@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    setupFiles: ['../harness/timer-gate-setup.ts'],
+    setupFiles: ['../testing/timer-gate-setup.ts'],
     include: ['test/**/*.test.ts'],
     reporters: ['default', 'json'],
     outputFile: { json: 'test-results/unit.json' },

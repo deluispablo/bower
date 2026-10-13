@@ -32,7 +32,7 @@ vi.mock('cloudflare:workers', () => ({
   },
 }));
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const KEEP_Q = 'q-merge-flat-3';
 const KEPT = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
 const OTHER = 'Projects/Flat hunt/Flat 3 (second).md';

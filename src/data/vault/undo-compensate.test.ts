@@ -3,7 +3,7 @@
  * the lock, an Undo drops its original line when it was never sent (no reserved id, or refused onto the failed list),
  * and otherwise records the inverse line with `undoes`; the client never deletes a sent line. The outbox sends in order
  * per folder. `pairsOf` hides an original and its inverse in "Since the last tidy-up" and leaves a pair taken in one
- * run out of the report. Each red names the Codex finding it carries (2026-10-09-codex-c4-undo-withdraw-review.md).
+ * run out of the report. Each red names the review finding it carries (c4-undo-withdraw review, 2026-10-09).
  * Everything goes through the vault API on a pretend Drive, with a stub of the Web Locks API (jsdom has none).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

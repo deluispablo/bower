@@ -4,7 +4,7 @@ import { parsePileDisposition, type Disposition } from './pile-disposition';
 
 const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
 const bytes = (value: unknown): Uint8Array => utf8(JSON.stringify(value));
-const fixtureRoot = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
+const fixtureRoot = 'testing/fixtures/run-recovery-contract/';
 // Only record bytes and literal expected hashes are read. No fixture event runs.
 const fixture = JSON.parse(readFileSync(fixtureRoot + '04-report-publication-retry.json', 'utf8')) as {
   input: { confirmedDispositions: { record: Disposition; sha256: string }[] };

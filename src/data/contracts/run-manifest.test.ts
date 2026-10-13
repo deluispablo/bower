@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseRunManifest, parseRunManifestV2, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
 import { parseRunCheckpoint } from './run-checkpoint';
 
-const dir = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
+const dir = 'testing/fixtures/run-recovery-contract/';
 const fixture = (file: string): Record<string, unknown> => JSON.parse(readFileSync(dir + file, 'utf8')) as Record<string, unknown>;
 const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
 const bytes = (value: unknown): Uint8Array => utf8(JSON.stringify(value));

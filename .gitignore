@@ -9,16 +9,5 @@ test-results
 .playwright-mcp
 e2e/_explore-*
 .superpowers
-# Keep local Claude configuration private; share only the project skill links, the
-# project agents and the shared hook settings (TL-P2-44). settings.local.json stays private.
-.claude/*
-!.claude/settings.json
-!.claude/agents/
-!.claude/output-styles/
-!.claude/skills/
-.claude/skills/*
-!.claude/skills/bower-session
-!.claude/skills/bower-implement
-!.claude/skills/bower-review
-!.claude/skills/bower-evaluate
-!.claude/skills/bower-design
+# Local agent configuration
+.claude/

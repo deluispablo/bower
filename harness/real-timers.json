@@ -1,4 +1,0 @@
-{
-  "note": "Unit tests allowed to schedule a real timer of 100 ms or more (harness/timer-gate.ts). The list may only shrink, with an empty target (REAL_TIMER_CEILING in scripts/harness-rules.mjs is its size).",
-  "tests": []
-}

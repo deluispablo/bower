@@ -1,5 +1,5 @@
 /**
- * The synthetic capability corpus (`harness/corpus/`, P4-A) and its structural scorer.
+ * The synthetic capability corpus (`testing/corpus/`, P4-A) and its structural scorer.
  *
  * Why here: the runner is where a run's resulting folder and `last-run.json` are produced and where the scripted
  * provider already runs over a pretend Drive, so the scorer and its loader sit beside them. The scorer is pure (no
@@ -61,7 +61,7 @@ export interface CorpusCase {
   covers: 'scripted' | 'model';
   /** `bench:<case>`, `p2-journey:<C0x>` or `new`, and how it was adapted. */
   source: string;
-  /** One of the original app's five bench cases, kept unchanged for the speed comparison (docs/harness/p4-speed-baseline.md). */
+  /** One of the original app's five bench cases, kept unchanged for the speed comparison (TL-P4-01). */
   speedBaseline?: boolean;
   /** A shared starting folder under the corpus root (the original's bench folder), used instead of the case's `folder/`. */
   folderFrom?: string;

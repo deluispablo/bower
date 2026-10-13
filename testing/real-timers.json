@@ -1,0 +1,4 @@
+{
+  "note": "Unit tests allowed to schedule a real timer of 100 ms or more (testing/timer-gate.ts). The list may only shrink, and its target is empty.",
+  "tests": []
+}

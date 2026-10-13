@@ -1,9 +1,0 @@
-# Owner authorization: autonomous completion and conditional P3
-
-Root verified the direct human message in Planificador through read_thread, thread01a10b2a-e851-7bc2-b49f-8845262acfdb, user turn01a10e13-963e-7870-8111-9a2bb59a3f45. Ambient browser context was not treated as permission. English translation of the owner's operative instruction: the owner will be away for hours; agents should work autonomously, may continue to P3 if P2 is finished, and should make periodic GitHub backups of progress.
-
-This directly sourced authorization replaces a further human phase vote only AFTER complete objective P2 acceptance is demonstrated. It does not resolve open findings, certify an unperformed evaluation, narrow second-brain capabilities or authorize P4. Current P2 is still open. Routine local implementation and independent delegation continue within exclusive reservations and gates. No automatic early transition.
-
-The existing private backup policy remains main-integrator owned: accepted and validated local main only, exact existing backup remote, privacy/access verification, secret/personal-data inspection, explicit main ref, no force/mirror/implicit branch push or deployment. Never merge unfinished implementation merely for backup. The technical lead is recording the durable planning update and main backup; root will adopt its actual commit at a clean checkpoint without overwriting implementation evidence. Candidate branches, private credentials/provider manifests and uncommitted work remain local. No additional real R1 variant follows from autonomy; the ETag line is ended.
-
-The direct human evidence and source turn above distinguish this authorization from an inferred permission or an assistant's unsupported relay. Root preserves current objective blockers and will report actual backups by verified SHA only.

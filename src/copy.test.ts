@@ -1,6 +1,6 @@
 /// <reference types="node" />
 /**
- * Rules for the words people read, checked by machine (AGENTS.md, "UI
+ * Rules for the words people read, checked by machine (CLAUDE.md, "UI
  * copy"). It reads every sentence-like string and JSX text in the screens.
  * A failure names the file, the line and what to write instead.
  */

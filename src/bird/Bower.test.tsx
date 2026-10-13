@@ -395,7 +395,7 @@ it('Bower is aria-hidden and out of the tab order', () => {
   expect(b.box.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
 });
 
-// ---------- d-v2-07 fix round (P4-58 and the Codex pass) ----------
+// ---------- d-v2-07 fix round (P4-58 and the review pass) ----------
 
 it('a keydown with nothing focused wakes a dozing bird and postpones sleep', () => {
   const b = perched('idle');

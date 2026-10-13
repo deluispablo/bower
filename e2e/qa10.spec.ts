@@ -1,7 +1,7 @@
 import { resize } from './viewport';
 /**
  * Round ten: what the evaluator found after round eight. Each test pins one
- * entry of harness/features.json with "task": "qa-10", on demo and on fake.
+ * entry of the QA list with "task": "qa-10", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';

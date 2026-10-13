@@ -5,7 +5,7 @@ import { parseRunManifestV2, type ManifestV2 } from './run-manifest';
 import { hashRecordJson } from './record-json';
 import { RUNNER_WRITES } from '../vault/layout';
 
-const fixture = JSON.parse(readFileSync('docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/04-report-publication-retry.json', 'utf8')) as {
+const fixture = JSON.parse(readFileSync('testing/fixtures/run-recovery-contract/04-report-publication-retry.json', 'utf8')) as {
   input: { reportRecord: ReportRecord; pendingCheckpoint: Checkpoint; manifest: ManifestV2 };
 };
 const old = () => structuredClone(fixture.input.reportRecord);
@@ -57,12 +57,12 @@ it('C05 person notes: fix 1 finding 9: completion guards require applied binding
   const prior = structuredClone(fixture.input.manifest);
   expect(await parseRunManifestV2(bytes(prior), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
   const lost = JSON.parse(readFileSync(
-    'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/02-lost-reply.json', 'utf8')) as {
+    'testing/fixtures/run-recovery-contract/02-lost-reply.json', 'utf8')) as {
     input: { checkpoint1: Checkpoint }; expected: { checkpoint2: Checkpoint };
   };
   // Fixture 02 supplies literal possible-effect -> applied evidence; hashes are recomputed after each change.
   const start = JSON.parse(readFileSync(
-    'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/01-admission-reopen.json', 'utf8')) as {
+    'testing/fixtures/run-recovery-contract/01-admission-reopen.json', 'utf8')) as {
     input: { checkpoint0: Checkpoint };
   };
   const chain = [start.input.checkpoint0, lost.input.checkpoint1, lost.expected.checkpoint2];
@@ -103,11 +103,11 @@ it('C05 person notes: round 3 4: a forged inherited move checkpoint cannot compl
   const prior = structuredClone(fixture.input.manifest);
   expect(await parseRunManifestV2(bytes(prior), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
   const start = JSON.parse(readFileSync(
-    'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/01-admission-reopen.json', 'utf8')) as {
+    'testing/fixtures/run-recovery-contract/01-admission-reopen.json', 'utf8')) as {
     input: { manifest: ManifestV2; checkpoint0: Checkpoint };
   };
   const lost = JSON.parse(readFileSync(
-    'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/02-lost-reply.json', 'utf8')) as {
+    'testing/fixtures/run-recovery-contract/02-lost-reply.json', 'utf8')) as {
     input: { checkpoint1: Checkpoint }; expected: { checkpoint2: Checkpoint };
   };
   const chain = [start.input.checkpoint0, lost.input.checkpoint1, lost.expected.checkpoint2];

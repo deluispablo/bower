@@ -1,9 +1,0 @@
-
- RUN  v5.0.3 /private/tmp/bower-p2-declaration-guards
-
-
- Test Files  1 passed (1)
-      Tests  330 passed (330)
-   Start at  08:30:29
-   Duration  533ms (tests 46%, environment 41%, setup 7%, transform 5%, import 1%)
-

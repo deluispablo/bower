@@ -1,9 +1,0 @@
-
- RUN  v5.0.3 /private/tmp/bower-p2-record-json
-
-
- Test Files  1 passed (1)
-      Tests  81 passed (81)
-   Start at  23:56:05
-   Duration  310ms (environment 74%, setup 13%, transform 8%, tests 4%, import 1%, worker 1%)
-

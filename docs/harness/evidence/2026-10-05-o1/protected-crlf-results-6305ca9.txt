@@ -1,1 +1,0 @@
-{"target":"6305ca9dfa126fd08ef9fe819a4ba2000cb78437","probe":"legacy_protected_crlf_task_toggle","label":"Personal task.","done":true,"changesOnlyCheckbox":false,"protectedPrefixUnchanged":false,"protectedSuffixUnchanged":false,"originalCRLF":12,"resultCRLF":0}

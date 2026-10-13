@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploys one clean local `main` SHA to the staging Worker, app and Worker on
-# one origin (TL-P3-06, TL-P3-24). docs/harness/STAGING.md is the procedure;
+# one origin (TL-P3-06, TL-P3-24). docs/runbook.md ("Deploys") is the procedure;
 # this script is that procedure with its guards.
 #
 #   scripts/deploy-staging.sh <sha> <staging origin>

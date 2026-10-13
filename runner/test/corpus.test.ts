@@ -6,7 +6,7 @@ import { CORPUS_CAPABILITIES, loadCase, loadCorpus, score, timelineOf, type Expe
 import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
-const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
+const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
   for (const c of scripted) {

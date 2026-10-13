@@ -8,7 +8,7 @@
  *   folder at most: https://developers.google.com/workspace/drive/api/guides/ref-single-parent).
  * - modifiedTime is compared only when the expectation carries it: a content write carries what it read, while a
  *   move, a rename or a Bin checks only the name and place it read, since a text change elsewhere does not clash with
- *   it (AGENTS.md).
+ *   it (CLAUDE.md).
  */
 import { BowerError, type ErrorCode } from './types';
 

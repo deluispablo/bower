@@ -1,9 +1,0 @@
-# Exact schema review correction
-
-Coordinator record, contracts-2/main3136adc/P2 O3/O4, original exactcontractaede6ef2/tenfilemanifest3b954ed6/initialreview6535422d preserved. No v2 contract or fixture was authored.
-
-The author refused to invent the requested pattern correction because actual JSON decoding already yielded one U+005C before each Unicode escape. Root independently decoded the exact frozen JSON block and ran ONLY standard-library JavaScript RegExp against synthetic IDs/control characters. The six literal positive samples (fake-root, receipt-file, inbox-folder, f, u, FOLDER_ID) were accepted; NUL/U001F/DEL/empty samples refused. The decoded pattern has25codepoints and3backslashes total. Supplemental drive-id-discriminator.json records exact codepoints, booleans and contracthash; its own SHA is 5d27e6886d2c1a8b037244f5bfb70b05431e9e66e8614bfd9122decaa694297e. This discriminator is coordinator execution of the literal schema pattern, not a product/fixture runner or full schema-runtime test.
-
-The fresh independent reviewer directly withdrew the ONE Important finding after re-reading exact bytes/codepoints. It had mistaken additional tool JSON escaping of Python repr for actual regex characters. Its corrected factual verdict is zero C/I/M and its other inspection checks remain valid. Initial report653 remains intact as provenance; independent corrected immutable report is separately assigned. There is no actual schema defect or fixture change to repair. Root records this correction candidly and does not present the rejected finding as pending product work.
-
-Exact field ratification by Planificador and subsequent test-first implementation/independent review/proof remain required. This correction neither adopts the proposal nor certifies runtime recovery/fullcapability/P2.

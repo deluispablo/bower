@@ -1,7 +1,0 @@
-{
-  "status": "not-run",
-  "rootAliases": { "ROOT_A": "OWNER_APPROVED_SYNTHETIC_ROOT_ID" },
-  "allowedIds": { "ROOT_A": "OWNER_APPROVED_SYNTHETIC_ROOT_ID" },
-  "limits": { "requests": 60, "minutes": 10, "responseBytes": 1048576 },
-  "notes": "Explicit IDs only; no personal root or broad search. Add synthetic descendant IDs after approved fixture preparation. This scaffold transport permits only bounded GETs."
-}

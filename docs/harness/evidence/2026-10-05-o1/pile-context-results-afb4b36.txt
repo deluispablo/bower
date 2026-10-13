@@ -1,2 +1,0 @@
-{"probe":"pile_context_version","input":"","error":null,"remoteText":"Remote context to preserve","afterTrashed":true,"parentBefore":"2026-10-05 Original context","parentAfter":"2026-10-05 Original context"}
-{"probe":"pile_context_version","input":"Different context","error":{"code":"conflict","message":"This note changed somewhere else. Open it again to see the new version."},"remoteText":"Remote context to preserve","afterTrashed":false,"parentBefore":"2026-10-05 Original context","parentAfter":"2026-10-05 Different context"}

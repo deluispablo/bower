@@ -23,7 +23,7 @@ const row = (id: string, table = ['e', 'd', 'c', 'a']): TypeRow => ({
 });
 
 async function setup(table: string, names = ['Garden.txt'], request?: string) {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/b1-index-no-change'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/b1-index-no-change'));
   c.folder = { [`${HOME}/Garden.md`]: '---\nsummary: Alex grows mint.\n---\nAlex keeps garden records.\n', [TABLE]: table };
   c.folderBinary = {}; c.inboxBinary = {}; c.questions = []; c.bowerOwned = [];
   c.journal = request ? [{ kind: 'request', text: request }] : [];

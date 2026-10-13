@@ -171,7 +171,7 @@ describe('record JSON preserves canonical authority', () => {
     ['declaration', '6f4d484c644dd6b541967ea60ad56ed508d8ec520ac2c99a1b3a075afa00aca1'],
     ['manifest', '9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088'],
   ])('reopens the ratified literal %s with its independent digest', async (key, golden) => {
-    const path = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/01-admission-reopen.json';
+    const path = 'testing/fixtures/run-recovery-contract/01-admission-reopen.json';
     const packet = JSON.parse(readFileSync(path, 'utf8')) as { input: Record<string, unknown> };
     const record = packet.input[key];
     expect(await hashRecordJson(record)).toEqual(success(golden));

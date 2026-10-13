@@ -18,7 +18,7 @@ import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
-const CASE = resolve(import.meta.dirname, '../../harness/corpus/b1-maintenance-crash-resume');
+const CASE = resolve(import.meta.dirname, '../../testing/corpus/b1-maintenance-crash-resume');
 const pacing = { sleep: async (): Promise<void> => undefined };
 const emptyReply = { kind: 'tidy-intent', v: 1, things: [] };
 const derived = ['.bower/index.md', '.bower/retrieval.json', '.bower/hot.md', '.bower/log.md'];
@@ -435,7 +435,7 @@ it('B1a contract: TL-P4-45 addendum: root index is an ordinary indexed note and 
   expect.soft(run.after['.bower/index.md'] ?? '', 'projection includes the ordinary root note').toContain('[[index]]');
   const state = JSON.parse(run.after['.bower/retrieval.json'] ?? 'null') as { files?: Record<string, { path: string }> } | null;
   expect.soft(state?.files?.[ownIndex.id]).toMatchObject({ path: 'index.md' });
-  const row = readFileSync(resolve(import.meta.dirname, '../../docs/harness/2026-10-08-p4-method-rubric-changes.md'), 'utf8').split('\n').find((l) => l.startsWith('| b1-maintenance-crash-resume |'));
+  const row = readFileSync(resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubric-changes.md'), 'utf8').split('\n').find((l) => l.startsWith('| b1-maintenance-crash-resume |'));
   expect(row).toMatch(/^\| b1-maintenance-crash-resume \| agrees \| .{10,}/);
 });
 

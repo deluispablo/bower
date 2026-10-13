@@ -209,7 +209,7 @@ it('B1a contract: 6: old notes manifests and checkpoint chains retain meaning be
   }
   expect(parseOwnership(enc(oldNote)).status).toBe('v2');
   expect(parseOwnership(enc('Alex wrote a plain note.\n')).status).toBe('plain');
-  const directory = 'docs/harness/evidence/2026-10-05-local-prerequisites/ownership-fixtures-final/';
+  const directory = 'testing/fixtures/ownership-fixtures-final/';
   for (const [file, status] of [
     ['legacy-canonical.md', 'legacy'], ['legacy-rich-ambiguous.md', 'legacy'],
     ['v2-crlf.md', 'v2'], ['v2-empty-personal.md', 'v2'], ['v2-fence-escape.md', 'v2'],

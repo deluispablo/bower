@@ -10,7 +10,7 @@ import {
 
 // Positive records are the ratified literal fixtures. Their expected digests are
 // copied from those fixtures; the module under test never supplies them.
-const dir = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
+const dir = 'testing/fixtures/run-recovery-contract/';
 const load = (file: string): unknown => JSON.parse(readFileSync(`${dir}${file}`, 'utf8')) as unknown;
 type Path = (string | number)[];
 const at = (value: unknown, path: Path): unknown => path.reduce<unknown>((node, key) => (node as Record<string | number, unknown>)[key], value);

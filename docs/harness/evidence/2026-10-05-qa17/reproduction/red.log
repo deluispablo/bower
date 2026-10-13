@@ -1,6 +1,0 @@
-{"event":"source_loaded","hashesMatched":true,"productionModules":2,"runtime":"v26.10.0","typescript":"6.0.3"}
-{"event":"same_visit_positive","passed":true,"repeatedIdentityMatch":true,"bytes":27,"sha256":"85df4b2e93fa359dd71769085a36f4a1880ab05ee3131cc0325d3beddbb745fd","explicitForgetControlPassed":true}
-{"event":"cleanup_preconditions","passed":true,"personLocalKeys":6,"personSessionKeys":4,"outboxAlias":"FOLDER_A","outboxSha256":"7bc4e581fecb531c76016268b7e37d910f1fe188c326137fac06f70b63e97ba2"}
-{"event":"after_actual_forgetThisPerson","metadataForgotten":true,"originalOutboxExactBytesPreserved":true,"outboxSha256":"7bc4e581fecb531c76016268b7e37d910f1fe188c326137fac06f70b63e97ba2","bOutboxAbsent":true,"deviceSettingPreserved":true,"diagnostics":0,"blobPresent":true,"sameBlobIdentity":true,"retainedBytesHash":"85df4b2e93fa359dd71769085a36f4a1880ab05ee3131cc0325d3beddbb745fd"}
-{"event":"expected_cleanup_assertion","result":"genuine-assertion-red","code":"ERR_ASSERTION","expected":"undefined","actual":"same synthetic Blob retained","message":"Sign-out device cleanup must forget unsent selected Blob bytes"}
-{"event":"explicit_forget_recovery_control","passed":true,"oldKeyAbsent":true,"originalOutboxPreserved":true,"newKeepGetWorks":true,"productionRepair":false}

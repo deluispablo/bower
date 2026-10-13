@@ -50,7 +50,7 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); paging.size = 2; });
 
 async function fixture(pile = false): Promise<LoadedCase> {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c05-note-not-written-by-bower'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-note-not-written-by-bower'));
   delete c.presses;
   c.expected = {};
   c.journal = [];
@@ -261,7 +261,7 @@ async function completionRecovery() {
 }
 
 async function pileBaseline() {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/c04-offer-and-flat'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c04-offer-and-flat'));
   const drive = new FakeDrive({ clock: () => AT - 5000 });
   const root = await seedCase(drive, c);
   const baseline = await traced(c, drive, root);

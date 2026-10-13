@@ -1,6 +1,6 @@
 /**
  * Round five: what testing phase 2 found. Each test pins one entry of
- * harness/features.json (category bug or polish), on demo and on fake.
+ * the QA list (category bug or polish), on demo and on fake.
  */
 import type { Page } from '@playwright/test';
 import { animationsEnd, expectAxeClean } from './axe';

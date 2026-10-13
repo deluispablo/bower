@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Unused-code gate (TL-P4-17 entry 4). Runs knip (https://knip.dev, config knip.jsonc) and compares its findings with
-// harness/unused-baseline.json. A finding not in the baseline fails; a baseline line that is no longer a finding fails
+// testing/unused-baseline.json. A finding not in the baseline fails; a baseline line that is no longer a finding fails
 // too, so the baseline can only shrink.
 // A second pass runs `knip --production` (tests are not entries, so a helper only tests call is found) against
-// harness/unused-production-baseline.json, with the same rules. With --baseline alone only the first pass runs.
+// testing/unused-production-baseline.json, with the same rules. With --baseline alone only the first pass runs.
 // Usage: check-unused-gate.mjs [--root <dir>] [--baseline <file>] [--production-baseline <file>]
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -17,7 +17,7 @@ const arg = (name, fallback) => {
   return i >= 0 && args[i + 1] ? path.resolve(args[i + 1]) : fallback;
 };
 const root = arg('--root', process.cwd());
-const baselineFile = arg('--baseline', path.join(root, 'harness/unused-baseline.json'));
+const baselineFile = arg('--baseline', path.join(root, 'testing/unused-baseline.json'));
 const knip = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../node_modules/.bin/knip');
 
 const givenBaseline = args.includes('--baseline');
@@ -28,7 +28,7 @@ if (args.includes('--production-baseline') || !givenBaseline) {
   passes.push({
     label: 'Unused-production-code',
     flags: ['--production'],
-    file: arg('--production-baseline', path.join(root, 'harness/unused-production-baseline.json')),
+    file: arg('--production-baseline', path.join(root, 'testing/unused-production-baseline.json')),
     fresh: 'New unused production code detected! Use it or remove it:',
     stale: 'Production baseline lists code that is no longer unused. Remove these lines from',
   });

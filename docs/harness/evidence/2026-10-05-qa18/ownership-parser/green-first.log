@@ -1,9 +1,0 @@
-
- RUN  v5.0.3 /private/tmp/bower-p2-ownership-parser
-
-
- Test Files  1 passed (1)
-      Tests  46 passed (46)
-   Start at  23:28:00
-   Duration  325ms (environment 69%, setup 12%, tests 10%, transform 7%, import 1%, worker 1%)
-

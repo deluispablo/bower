@@ -27,7 +27,7 @@ const questionsOf = (result: CaseRun): Question[] =>
 const artifactsOf = (result: CaseRun): string[] => Object.keys(result.after).filter((path) => path.startsWith('.bower/proposals/'));
 
 async function run(names: string[], proposals: Proposal[] = [], prior: Question[] = []) {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/b1-index-no-change'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/b1-index-no-change'));
   const table = JSON.stringify(readTypeTable(null).table);
   c.folder = { [HUB]: '---\nsummary: Alex grows mint.\n---\nAlex keeps garden records.\n', [TABLE]: table };
   c.folderBinary = {}; c.inboxBinary = {}; c.journal = []; c.questions = prior; c.bowerOwned = [];

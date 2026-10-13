@@ -20,7 +20,7 @@ export const runOnDrive = requiredFunction<typeof driver.runOnDrive>(driver, 'ru
 export const redispatchCase = requiredFunction<typeof driver.redispatchCase>(driver, 'redispatchCase');
 
 export async function setup(id = 'b1-maintenance-crash-resume') {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus', id));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', id));
   const drive = fixedDrive();
   const root = await driver.seedCase(drive, c);
   return { c, drive, root };

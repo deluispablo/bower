@@ -1,7 +1,0 @@
-{"event":"listening","identityAlias":"A"}
-{"event":"local_request","method":"GET","route":"/","hostMatches":true,"originMatches":false,"bindingCookiePresent":true}
-{"event":"local_response","method":"GET","route":"/","status":200,"redirectsToGoogle":false}
-{"event":"local_request","method":"POST","route":"/start","hostMatches":true,"originMatches":false,"bindingCookiePresent":true}
-{"event":"refused","identityAlias":"A"}
-{"event":"local_response","method":"POST","route":"/start","status":400,"redirectsToGoogle":false}
-{"event":"stopped","identityAlias":"A"}

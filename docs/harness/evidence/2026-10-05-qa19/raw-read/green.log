@@ -1,9 +1,0 @@
-
- RUN  v5.0.3 /private/tmp/bower-p2-raw-read
-
-
- Test Files  1 passed (1)
-      Tests  24 passed (24)
-   Start at  23:50:28
-   Duration  316ms (environment 72%, setup 13%, transform 10%, tests 4%, import 2%, worker 1%)
-

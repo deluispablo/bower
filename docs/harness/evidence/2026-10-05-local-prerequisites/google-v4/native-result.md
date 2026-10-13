@@ -1,7 +1,0 @@
-# Actual Google v4 authorization result
-
-Plancontracts-2/P2 O2 R1/R2/R4 prerequisite, sourcecbf4e9f. Root actual native v4 landing reached Google account chooser, designatedA selected. Unverified-app warning blocked by automatic review when root attempted its bypass; owner then explicitly authorized continuing to review consent. Root reached identity consent and paused; owner reported completing it personally. Callbackactually emitted authorization_saved and /complete visibly confirms private grant saved. No simulated consent or automatic-review workaround.
-
-Root read-only saved-session validation through unchanged tokenProvider, with dispatch forbidden, succeeds: aliasA/full-drive/exact scopes validated, signature/nonce subject verified during exchange, access+refresh present, unexpired, mode600, networkcalls0 in saved validation. No token/subject/client/project/email/config copied here. Native screenshot contains only generic local completion. Owner bindings and unverified-warning screenshot remain restricted outside repo.
-
-This proves existing-client authorization setup; no Drive list/read/write/bootstrap/upload/revoke case or R1/R2/R4 outcome. Listener stopped/own tab closed; user-created Bower tab preserved. No live grant revoked/client rotated. Need prepared synthetic resource allowlist and separately reviewed bounded write/bootstrap/upload adapters before provider risk probes. R3 remains NOT RUN.
