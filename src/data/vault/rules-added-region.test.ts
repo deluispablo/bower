@@ -370,4 +370,19 @@ describe('rules-added-region', () => {
     expect(parseOwnership(encode(v2)).status).toBe('v2');
     expect(applyChanges(encode(v2), [word()])).toEqual({ ok: false, reason: 'unsupported' });
   });
+  it('R20 red: a Drive read failure while listing rules is never hidden as an empty list', async () => {
+    const { drive, vault } = await fixture(`${original}\n${region}`);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const worded = (await vault.rules()).filter((rule) => !rule.pending);
+      expect(worded.length, 'the region rule is listed while online').toBeGreaterThan(0);
+      drive.failNext('offline');
+      const second = await vault.rules().then((rules) => ({ rules }), (error: unknown) => ({ error }));
+      if ('error' in second) expect(second.error, 'the failure reaches the screen').toBeInstanceOf(BowerError);
+      else expect(second.rules.filter((rule) => !rule.pending), 'or the last known rules stay listed').toEqual(worded);
+    } finally {
+      errors.mockRestore();
+      vault.dispose();
+    }
+  });
 });
