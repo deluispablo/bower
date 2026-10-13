@@ -25,6 +25,7 @@ import { ABOUT_REGIONS, fenceAfter, parseOwnership, togglePersonalTask, type Byt
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
 import { renderLink } from './links';
+import { normalizeTag, NOTE_TAGS_MAX, tagListOk } from './tag-format';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template'] as const;
@@ -34,8 +35,14 @@ const CURRENT = '## Current state';
 const TIMELINE = '## Timeline';
 const BOWER_NOTE = "## Bower's note";
 
-export type ParsedNote = Omit<Note, 'backlinks'>;
-export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & { template?: NoteTemplate; typeRow?: TypeRow };
+/**
+ * The tags a Bower note held when read (B7 R6): a person may add any tag, so only tags beyond these are checked as
+ * generated. A symbol key, so spreads keep it while JSON and structured clones drop it (then the stricter check applies).
+ */
+const STORED_TAGS = Symbol('storedTags');
+type StoredTags = { readonly [STORED_TAGS]?: readonly string[] };
+export type ParsedNote = Omit<Note, 'backlinks'> & StoredTags;
+export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & StoredTags & { template?: NoteTemplate; typeRow?: TypeRow };
 
 // Retain source bytes for an untouched parsed personal note, outside its display model.
 const personalSources = new WeakMap<NoteFile, { raw: string; serialized: string }>();
@@ -111,9 +118,9 @@ const SUMMARY_TYPES = [
   /^\d{4}-\d{1,2}-\d{1,2}$/,
 ];
 
-/** One physical line, without trimming or folding the summary's text. */
-function summaryScalar(value: string): string {
-  const quote = value !== value.trim() ||
+/** One physical line, without trimming or folding the summary's text; in a flow list (`flow`), flow indicators quote too. */
+function summaryScalar(value: string, flow = false): string {
+  const quote = value !== value.trim() || (flow && /[,[\]{}]/.test(value)) ||
     /^[-?:,[\]{}#&*!|>'"%@`]/.test(value) || /:[ \t]|:$|[ \t]#|['"\\]/.test(value) ||
     /[\p{Cc}\p{Cs}\u2028\u2029\ufeff\ufffe\uffff]/u.test(value) || SUMMARY_TYPES.some((type) => type.test(value));
   // JSON escapes are YAML escapes; also escape characters YAML cannot keep literal.
@@ -348,6 +355,8 @@ export function parseNote(path: string, raw: string, fetched?: FetchedOwnership)
     links: linksIn(text),
     ...(original ? { original } : {}),
     byBower: f.get('by') === 'bower',
+    // Only a list Bower could not have generated needs it: for any other, the plain check gives the same answer.
+    ...(tags.length > NOTE_TAGS_MAX || !tagListOk(tags) ? { [STORED_TAGS]: [...tags] } : {}),
   }, raw, f.get('bower_template'));
 }
 
@@ -357,6 +366,13 @@ function retainPersonalSource(note: ParsedNote, raw: string, template?: string):
 }
 
 export function serializeNote(n: NoteFile): string {
+  // Tags beyond the stored ones (by value and count) are generated: canonical, distinct, at most three in all.
+  const generated = [...n.tags];
+  for (const tag of n[STORED_TAGS] ?? []) if (generated.includes(tag)) generated.splice(generated.indexOf(tag), 1);
+  if (n.byBower && generated.length && (n.tags.length > NOTE_TAGS_MAX
+    || generated.some((t) => normalizeTag(t) !== t || n.tags.indexOf(t) !== n.tags.lastIndexOf(t)))) {
+    throw new BowerError('unknown', 'Bower could not write this note safely.');
+  }
   if (n.template) {
     const property = (key: string): Property | undefined => n.properties.find((p) => p.key === key);
     const related = property('related');
@@ -364,7 +380,7 @@ export function serializeNote(n: NoteFile): string {
     const links = linksIn(relatedText);
     // Creation is strict for every caller; stored notes without template intent retain their legacy path.
     if (!n.byBower || !Object.hasOwn(NOTE_TEMPLATES, n.template) || !validSummary(n.summary)
-      || n.tags.length > 3 || n.tags.some((tag) => !validSummary(tag))
+      || generated.some((tag) => !validSummary(tag))
       || new Set(n.properties.map((p) => p.key)).size !== n.properties.length
       || n.properties.some((p) => !/^[a-z][a-z0-9_]*$/.test(p.key) || p.key === 'bower_format'
         || (BOWER_KEYS as readonly string[]).includes(p.key))
@@ -382,7 +398,7 @@ export function serializeNote(n: NoteFile): string {
   const front: string[] = [];
   if (n.summary) front.push(`summary: ${summaryScalar(n.summary)}`);
   if (n.status || n.template && n.byBower) front.push(`status: ${summaryScalar(n.status ?? (n.template === 'moc' ? 'evergreen' : 'active'))}`);
-  if (n.tags.length || n.template) front.push(`tags: [${n.tags.map((tag) => n.template ? summaryScalar(tag) : oneLine(tag)).join(', ')}]`);
+  if (n.tags.length || n.template) front.push(`tags: [${n.tags.map((tag) => !tag ? '""' : n.template || n.byBower ? summaryScalar(tag, true) : oneLine(tag)).join(', ')}]`);
   if (n.byBower) front.push('by: bower');
   if (n.original) front.push(`original: ${summaryScalar(oneLine(n.original))}`);
   if (n.bowerNote) front.push(`bower_source: ${n.bowerNote.source}`);

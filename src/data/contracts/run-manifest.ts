@@ -41,14 +41,14 @@ export type Effect =
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
     path: RunnerWrite; text: string; content: Content }
-  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json' | '.bower/observations.jsonl';
+  | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json' | '.bower/tags.json' | '.bower/observations.jsonl';
     parent: Target; createKey: string; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
 /**
  * The type of a runner-writable file (TL-P4-14 addendum 20): `RUNNER_WRITES` in `vault/layout.ts` is the one list and
  * is typed by it; the contracts cannot import the layout (architecture.test.ts), so the path's type lives here.
  */
-export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md' | '.bower/type-table.json' | '.bower/observations.jsonl';
+export type RunnerWrite = '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json' | '.bower/retrieval.json' | '.bower/index.md' | '.bower/hot.md' | '.bower/log.md' | '.bower/type-table.json' | '.bower/tags.json' | '.bower/observations.jsonl';
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
 /** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
 export type EditEntry = { date: string; text: string; source: string | null };
@@ -322,7 +322,7 @@ function effect(value: unknown): value is Effect {
       && oneOf(value.purpose, ['generated', 'runner-json', 'about-archive']);
     case 'write-runner-json': return text(value.text) && content(value.content) && (value.before === null
       ? closed(value, ['kind', 'before', 'beforeContent', 'path', 'parent', 'createKey', 'text', 'content'])
-        && value.beforeContent === null && oneOf(value.path, ['.bower/type-table.json', '.bower/observations.jsonl']) && target(value.parent) && id(value.createKey)
+        && value.beforeContent === null && oneOf(value.path, ['.bower/type-table.json', '.bower/tags.json', '.bower/observations.jsonl']) && target(value.parent) && id(value.createKey)
       : closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
         && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path));
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])

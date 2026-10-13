@@ -64,11 +64,11 @@ it('B6a fix 1: quoted tags and Original filenames round-trip and resolve for tem
   const path = `Resources/Gardening/${filename}`;
   const resolve = resolverFor([{ type: 'file', name: filename, path, created: 0, modified: 0 }], []);
   expect(resolve(filename), 'The real Original resolver accepts the actual filename').toBe(path);
-  const source = { ...b6Note('source'), tags: ['2026', 'on'], original: filename };
+  const source = { ...b6Note('source'), tags: ['yes', 'null'], original: filename };
   const legacy: NoteFile = { ...source, template: undefined };
   for (const [kind, input] of [['template', source], ['legacy', legacy]] as const) {
     const note = parseNote('Garden source.md', serializeNote(input));
-    expect.soft(note.tags, `${kind}: tags preserve their exact string values`).toEqual(['2026', 'on']);
+    expect.soft(note.tags, `${kind}: tags preserve their exact string values`).toEqual(['yes', 'null']);
     expect.soft(note.original, `${kind}: the filename decodes escaped quotes`).toBe(filename);
     // NoteScreen passes note.original directly to this resolver for its Original property link.
     expect.soft(resolve(note.original ?? ''), `${kind}: Original still opens the filed file`).toBe(path);
@@ -748,4 +748,65 @@ it('b5-folder-table-approved-states: declared kind and folder stay excluded with
   expect(note.properties).toEqual(before);
   expect(summaryFormat.scalarList('["Writing, editing", "Design"]')).toEqual(['Writing, editing', 'Design']);
   expect(summaryFormat.scalarList('[Writing, Design]')).toEqual(['Writing', 'Design']);
+});
+
+it('b7-stored-tags-survive-rewrite: tags a person added to a Bower note pass through rewrites', () => {
+  const generated = serializeNote({ ...b6Note('concept'), tags: ['gardening'] });
+  const stored = generated.replace(/^tags:.*$/m, 'tags: [Garden/Private, gardening, gardening, fourth]');
+  expect(stored, 'fixture edits the stored tags line').not.toBe(generated);
+  const note = parseNote('Gardening.md', stored);
+  expect(note.byBower, 'still a Bower note').toBe(true);
+  const kept = ['Garden/Private', 'gardening', 'gardening', 'fourth'];
+  expect(note.tags).toEqual(kept);
+  expect(parseNote('Gardening.md', serializeNote(note)).tags, 'unchanged rewrite keeps stored tags').toEqual(kept);
+  const edited = { ...note, body: `${note.body}\n\nAlex adds a line.` };
+  expect(parseNote('Gardening.md', serializeNote(edited)).tags, 'a body rewrite keeps stored tags').toEqual(kept);
+  expect(() => serializeNote({ ...edited, tags: [...kept, 'new/unsafe'] }), 'a generated unsafe tag still refuses')
+    .toThrow(BowerError);
+});
+
+it('b7-stored-tags-by-value: copies pass, appended generated tags refuse', () => {
+  const generated = serializeNote({ ...b6Note('concept'), tags: ['gardening'] });
+  const stored = generated.replace(/^tags:.*$/m, 'tags: [Garden/Private, gardening, compost]');
+  const note = parseNote('Gardening.md', stored);
+  expect(note.tags).toEqual(['Garden/Private', 'gardening', 'compost']);
+  expect(parseNote('Gardening.md', serializeNote({ ...note, tags: [...note.tags] })).tags, 'a copy of the stored tags passes')
+    .toEqual(['Garden/Private', 'gardening', 'compost']);
+  for (const extra of ['Other/Private', 'gardening', 'rainwater']) {
+    const appended = { ...note, tags: note.tags };
+    appended.tags.push(extra);
+    expect(() => serializeNote(appended), `appending ${extra} refuses`).toThrow(BowerError);
+    appended.tags.pop();
+  }
+});
+
+it('b7-stored-tags-lossless: stored tag values survive a rewrite byte for byte', () => {
+  const odd = ['Writing, editing', ' padded ', 'say "hi"', 'x: y', '#hash', '[bracket]', "it's", ''];
+  const flow = `tags: [${odd.map((tag) => JSON.stringify(tag)).join(', ')}]`;
+  for (const template of [b6Note('concept'), { ...b6Note('concept'), template: undefined }]) {
+    const stored = serializeNote({ ...template, tags: ['gardening'] }).replace(/^tags:.*$/m, flow);
+    const note = parseNote('Gardening.md', stored);
+    expect(note.tags, `${template.template ?? 'legacy'}: the fixture parses to the stored values`).toEqual(odd);
+    for (const rewrite of [note, { ...note, tags: [...note.tags] }, { ...note, body: `${note.body}\n\nAlex adds a line.` }]) {
+      expect(parseNote('Gardening.md', serializeNote(rewrite)).tags, `${template.template ?? 'legacy'}: rewrite keeps every value`)
+        .toEqual(odd);
+    }
+  }
+});
+
+it('b7-stored-tags-quoted-flow: a stored value YAML cannot read plain is written quoted', () => {
+  const stored = serializeNote({ ...b6Note('concept'), tags: ['gardening'] }).replace(/^tags:.*$/m, 'tags: ["topic[private]", "a, b"]');
+  const note = parseNote('Gardening.md', stored);
+  expect(note.tags).toEqual(['topic[private]', 'a, b']);
+  for (const rewrite of [note, { ...note, tags: [...note.tags] }]) {
+    const line = serializeNote(rewrite).split(/\r?\n/).find((l) => l.startsWith('tags:')) ?? '';
+    expect(line, 'interior brackets and commas are quoted flow scalars').toMatch(/^tags: \[(["'])topic\[private\]\1, (["'])a, b\2\]$/);
+  }
+});
+
+it.each(b6Shapes)('b7-five-template-serializer: $template refuses generated unsafe tags and keeps three safe ones', ({ template }) => {
+  const safe = ['gardening', 'remote-work', 'learning'];
+  expect(parseNote('T.md', serializeNote({ ...b6Note(template), tags: safe })).tags).toEqual(safe);
+  expect(() => serializeNote({ ...b6Note(template), tags: ['unsafe/tag'] }), `${template}: unsafe generated tag`).toThrow(BowerError);
+  expect(() => serializeNote({ ...b6Note(template), tags: [...safe, 'compost'] }), `${template}: fourth generated tag`).toThrow(BowerError);
 });

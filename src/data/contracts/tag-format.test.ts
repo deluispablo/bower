@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BowerError } from '../types';
 import { isRunnerFile, SYSTEM } from '../vault/layout';
 import { parseNote, serializeNote, type NoteFile } from './note-format';
@@ -55,5 +55,40 @@ describe('B7 shared stored and generated tag contracts', () => {
     expect(serializeNote(parseNote('Block.md', block))).toBe(block);
     expect(parseNote('Generated.md', serializeNote(note(['a', 'a'.repeat(40)]))).tags).toEqual(['a', 'a'.repeat(40)]);
     expect(() => serializeNote(note(['Garden/Private'])), 'lenient reads do not permit unsafe generated tags').toThrow(BowerError);
+  });
+});
+
+describe('B7 tag list reader', () => {
+  it('b7-reader: missing, invalid and over-30 lists', async () => {
+    const { readTagList } = await import('./tag-format');
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(readTagList(null)).toEqual({ tags: [], growth: true });
+    expect(readTagList('{"v":1,"tags":["a","b"]}')).toEqual({ tags: ['a', 'b'], growth: true });
+    const thirty = Array.from({ length: 30 }, (_, i) => `t${i}`);
+    expect(readTagList(JSON.stringify({ v: 1, tags: thirty })).growth).toBe(true);
+    const over = readTagList(JSON.stringify({ v: 1, tags: [...thirty, 'extra'] }));
+    expect(over.tags).toHaveLength(31);
+    expect(over.growth, 'over 30 is frozen').toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    for (const bad of ['{', '[]', '{"v":2,"tags":[]}', '{"v":1,"tags":["ok","Bad/Tag"]}', '{"v":1,"tags":["a","a"]}']) {
+      const r = readTagList(bad);
+      expect(r, bad).toMatchObject({ tags: [], growth: false });
+      expect(r.error).toBeInstanceOf(BowerError);
+    }
+    expect(spy).toHaveBeenCalledTimes(5);
+    spy.mockRestore();
+  });
+});
+
+describe('b7a tag list reader logs the BowerError it returns', () => {
+  it('b7-reader-logs-its-bower-error', async () => {
+    const { readTagList } = await import('./tag-format');
+    for (const bytes of ['{not json}', '{"v":2,"tags":[]}', '{"v":1,"tags":"gardening"}', '{"v":1,"tags":["bad/tag"]}']) {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const read = readTagList(bytes);
+      expect(read.error, bytes).toBeInstanceOf(BowerError);
+      expect(spy.mock.calls.flat(), `${bytes}: the logged error is the returned BowerError`).toContain(read.error);
+      spy.mockRestore();
+    }
   });
 });

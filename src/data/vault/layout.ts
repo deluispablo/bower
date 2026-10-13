@@ -14,6 +14,7 @@
  * one immutable declaration per pile, written before any of its things.
  */
 import { typeTableOk } from '../contracts/note-format';
+import { tagListOk } from '../contracts/tag-format';
 import type { TypeTable } from '../contracts/types';
 import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
@@ -36,6 +37,7 @@ export const SYSTEM = {
   hot: '.bower/hot.md',
   log: '.bower/log.md',
   typeTable: '.bower/type-table.json',
+  tags: '.bower/tags.json',
   observations: '.bower/observations.jsonl',
   proposals: '.bower/proposals',
   /** Immutable pile declarations: `declaration-<declarationId>-<sha256>.json`. */
@@ -47,7 +49,7 @@ export const SYSTEM = {
  * the manifest contract (`parseRunManifestV2`, given it by every caller) and the runner's admitted check both judge by
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
-export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable, SYSTEM.observations] as const satisfies readonly RunnerWrite[];
+export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable, SYSTEM.tags, SYSTEM.observations] as const satisfies readonly RunnerWrite[];
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */
 export function isHidden(path: string): boolean {
@@ -133,6 +135,7 @@ export interface RetrievalFile {
 }
 export interface RunnerFiles {
   '.bower/type-table.json': TypeTable;
+  '.bower/tags.json': { v: 1; tags: string[] };
   '.bower/retrieval.json': RetrievalFile;
   '.bower/questions.json': QuestionsFile;
   '.bower/suggestions.json': SuggestionsFile;
@@ -145,6 +148,7 @@ export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): 
   if (!object(v) || v.v !== 1) return false;
   switch (path) {
     case SYSTEM.typeTable: return typeTableOk(v);
+    case SYSTEM.tags: return tagListOk(v.tags);
     case SYSTEM.retrieval: return text(v.folderId) && v.folderId.length > 0 && text(v.account) && v.account.length > 0 && text(v.cursor) && v.cursor.length > 0
       && object(v.files) && Object.values(v.files).every((f) => object(f) && text(f.path) && text(f.version) && text(f.summary)
         && object(f.coverage) && f.coverage.kind === 'prefix' && count(f.coverage.bytes));
