@@ -2,7 +2,6 @@ import { LoadError } from '@/ui/LoadError';
 import { useRef, useState } from 'react';
 import { shortDay } from '@/app/words';
 import { report, undoToast } from '@/ui/report';
-import { focusMain } from '@/ui/focus';
 import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { PoseBower, type Pose } from '@/bird/Bower';
@@ -68,9 +67,13 @@ export function BowerScreen() {
   };
 
   const removeRule = async (id: string): Promise<void> => {
+    const pressed = document.activeElement;
     try {
       const undo = await vault.removeRule(id);
-      focusMain();
+      // The pressed row is leaving: the keyboard goes to the page now, not after a render that may land later.
+      // Only if the person has not moved on while the removal waited.
+      const now = document.activeElement;
+      if (!now || now === document.body || now === pressed) document.getElementById('main')?.focus();
       undoToast('Rule removed. Bower stops following it from the next tidy-up.', undo, () => 'The rule is back.');
     } catch (e) {
       report(e, 'That did not work. Try again.');

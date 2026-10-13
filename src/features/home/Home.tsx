@@ -309,16 +309,17 @@ export function Questions({ run }: { run?: RunState }) {
   const shown = run ? qs.slice(0, 1) : qs;
   const host = useRef<HTMLElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  const after = useRef<number | null>(null);
-  const settle = (): void => {
+  // Where the answered question stood: kept until it has left the list, then focus goes to its neighbour.
+  const [after, setAfter] = useState<{ index: number; key: string } | null>(null);
+  useEffect(() => {
     const at = document.activeElement;
     const dialog = host.current?.closest('[role="dialog"]');
     // Radix focuses the dialog when a focused answer control is removed. That fallback
     // still needs our next-card/title focus; a person focusing another control keeps it.
-    if (after.current === null || (at && at !== document.body && at !== dialog && at.isConnected)) return;
+    if (!after || shown.some((q) => askingKey(q) === after.key) || (at && at !== document.body && at !== dialog && at.isConnected)) return;
     const rows = list.current?.querySelectorAll<HTMLElement>(':scope > li') ?? [];
-    const next = rows[Math.min(after.current, rows.length - 1)]?.querySelector('button');
-    after.current = null;
+    const next = rows[Math.min(after.index, rows.length - 1)]?.querySelector('button');
+    setAfter(null);
     if (next) next.focus();
     else if (run) {
       const title = document.getElementById(dialog?.getAttribute('aria-labelledby') ?? '');
@@ -327,8 +328,7 @@ export function Questions({ run }: { run?: RunState }) {
         title.focus({ preventScroll: true });
       }
     } else focusHeading();
-  };
-  useEffect(settle, [qs, run]);
+  }, [after, shown, run]);
   // A [[note]] opens as it does in a note; one not found reads as plain words.
   const link: LinkFn = (target, label, key) => {
     const path = resolve(target);
@@ -339,9 +339,7 @@ export function Questions({ run }: { run?: RunState }) {
     try {
       const done = await answerQuestion(vault, runs, q.id, value, { allowWeb: usePrefs.getState().lookUpWeb });
       toast(done ? answerToast(done.outcome, label) : answered(label));
-      after.current = Math.max(index, 0);
-      // The subscription may have landed already, or it will settle focus in the effect.
-      settle();
+      setAfter({ index: Math.max(index, 0), key: askingKey(q) });
     } catch (e) {
       report(e, 'That answer did not save. Try again.');
     }
