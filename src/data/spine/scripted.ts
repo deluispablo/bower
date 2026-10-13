@@ -43,6 +43,7 @@ import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
 
 import { aboutContext, hasVerbatimQuote, normalizedText, observationOf, parseObservations } from '../contracts/observations';
+import { normalizeTag, NOTE_TAGS_MAX, readTagList } from '../contracts/tag-format';
 
 export { SET_ASIDE, listedPiles };
 
@@ -84,6 +85,7 @@ export type RunPlan = {
 
 export interface PlanOptions {
   context?: OwnershipContext;
+  tagList?: ReturnType<typeof readTagList>;
   scope: 'all' | 'instructions';
   allowWeb: boolean;
   runId: string;
@@ -408,6 +410,16 @@ export interface AuthoredNote {
   template?: NoteTemplate;
   typeRow?: string;
   properties?: Record<string, unknown>;
+  tags?: string[];
+}
+
+/** Generated assignments use only the installed list; an invalid list disables assignments for this run. */
+export function assignedTags(candidates: unknown, list: ReturnType<typeof readTagList>): string[] | null {
+  if (list.error || candidates === undefined) return [];
+  if (!Array.isArray(candidates) || candidates.length > NOTE_TAGS_MAX) return null;
+  const tags = candidates.map((tag) => typeof tag === 'string' ? normalizeTag(tag) : null);
+  if (!tags.every((tag): tag is string => tag !== null && list.tags.includes(tag)) || new Set(tags).size !== tags.length) return null;
+  return tags;
 }
 
 /** A Timeline line a model wrote for a note it was shown (P4-3), citing a thing this run files, or none. */
@@ -676,6 +688,8 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const typeFile = ix.file(SYSTEM.typeTable);
   const typeText = typeFile ? await ownText(drive, typeFile) : null;
   const types = readTypeTable(typeText);
+  const tagFile = ix.file(SYSTEM.tags);
+  const tagList = opts.tagList ?? readTagList(tagFile ? await ownText(drive, tagFile) : null);
   const proposals = new Map<string, Proposal>();
   const proposalIds = new Set<string>();
   for (const file of listing) {
@@ -717,7 +731,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
+  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -2024,7 +2038,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       if (properties.some((property) => property.key === key)) return refused('a declared fact replacing a template property');
       properties.push({ key, label: key, value: typeof value === 'string' ? value : JSON.stringify(value) });
     }
-    const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags: [], currentState: [], body: authored.body,
+    const tags = assignedTags(authored.tags, snapshot.tagList);
+    if (tags === null) return refused('invalid note tags');
+    const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags, currentState: [], body: authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: [thing.file.id], pileId: null, aside: thing.file.name });

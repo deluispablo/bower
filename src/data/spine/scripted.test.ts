@@ -21,8 +21,13 @@ const fix3Fields = (Object.keys(NOTE_TEMPLATES) as NoteTemplate[]).flatMap((temp
   ['summary', ...NOTE_TEMPLATES[template].sections].map((field) => ({ template, field })),
 );
 
-async function fix3Plan(template: NoteTemplate, field: string, target: 'missing' | 'note' | 'source') {
+async function fix3Plan(template: NoteTemplate, field: string, target: 'missing' | 'note' | 'source', tags?: string[]) {
   const { drive, root, admitted } = await seeded();
+  if (tags) {
+    const sys = (await drive.listAll(root)).find((file) => file.folder && file.name === '.bower');
+    if (!sys) throw new Error('Expected .bower in the seeded folder');
+    await drive.createText(sys.id, 'tags.json', JSON.stringify({ v: 1, tags: ['gardening', 'remote-work', 'learning', 'fourth'] }));
+  }
   const resources = (await drive.listAll(root)).find((file) => file.folder && file.name === 'Resources');
   if (!resources) throw new Error('Expected Resources in the seeded folder');
   const gardening = await drive.createFolder(resources.id, 'Gardening');
@@ -38,7 +43,7 @@ async function fix3Plan(template: NoteTemplate, field: string, target: 'missing'
   const decisions: Decisions = { ...scriptedDecisions([], []), ownNote: () => null,
     thing: (seen) => ({ to: 'Resources/Gardening', name: seen.fileName }),
     pileAsk: () => null, thingAsk: () => null, merge: () => null,
-    note: (fileId) => fileId === item.fileId ? { name: 'Garden source.md', summary, template, body } : null,
+    note: (fileId) => fileId === item.fileId ? { name: 'Garden source.md', summary, template, body, tags } : null,
   };
   const before = await drive.snapshot();
   let plan: RunPlan | undefined;
@@ -49,6 +54,27 @@ async function fix3Plan(template: NoteTemplate, field: string, target: 'missing'
   } catch (error) { failure = error; }
   return { drive, before, plan, failure, name, item };
 }
+
+it.each([
+  ['unknown-topic'], ['unsafe/tag'], ['gardening', 'Remote_work', 'remote-work'],
+  ['gardening', 'remote-work', 'learning', 'fourth'],
+].map((tags) => ({ tags })))('B7 planner refuses invalid assignments $tags without effects', async ({ tags }) => {
+  const { failure, plan, drive, before } = await fix3Plan('source', 'summary', 'note', tags);
+  expect(failure).toBeInstanceOf(BowerError);
+  expect(plan).toBeUndefined();
+  expect(await drive.snapshot()).toBe(before);
+});
+
+it('B7 planner normalizes installed assignments in the authored create without vocabulary writes', async () => {
+  const { failure, plan, drive, before } = await fix3Plan('source', 'summary', 'note', ['gardening', 'Remote_work', 'learning']);
+  expect(failure).toBeUndefined();
+  const source = plan?.manifest.operations.map((op) => op.effect)
+    .find((effect) => effect.kind === 'create-text' && effect.name === 'Garden source.md');
+  if (source?.kind !== 'create-text') throw new Error('Expected the planned Source');
+  expect(parseNote('Garden source.md', source.text).tags).toEqual(['gardening', 'remote-work', 'learning']);
+  expect(plan?.manifest.operations.some((op) => op.effect.kind === 'write-runner-json' && op.effect.path === '.bower/tags.json')).toBe(false);
+  expect(await drive.snapshot()).toBe(before);
+});
 
 it.each(fix3Fields)('B6a fix 3: refuses a missing link in $template $field before effects with no manifest', async ({ template, field }) => {
   const { drive, before, plan, failure } = await fix3Plan(template, field, 'missing');
