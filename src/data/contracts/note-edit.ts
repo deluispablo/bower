@@ -16,7 +16,7 @@ import { sha256 } from './hashes';
 import { dateOk, bowerNoteRole, parseNote, timelineEntries } from './note-format';
 import { ABOUT_REGIONS, MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
-import { parseRules } from './rules-format';
+import { managedRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
 import { BowerError } from './types';
@@ -760,10 +760,15 @@ function wordRules(text: string, change: Extract<Change, { kind: 'rules-wording'
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
   if (own.status === 'v2') return { refused: 'unsupported' };
-  if (own.status === 'plain' || !byBower(text, fetched)) return { refused: 'not-bower' };
+  const span = own.payloads?.['rules-added'];
+  const owned = byBower(text, fetched);
+  const rulesBefore = managedRules(text, owned);
   const eol = eolOf(text);
-  const { removed, accepted } = ruleSequence(parseRules(text), change.add, change.remove);
-  let next = [...removed].reduce(removeRule, text);
+  const { removed, accepted } = ruleSequence(rulesBefore, change.add, change.remove);
+  if (!span && !owned && !accepted.length) return { text, added: [], rules: [] };
+  const at = span ? spanOf(bytes, span) : null;
+  const body = at ? text.slice(at.start, at.end) : owned ? text : `## Rules${eol}${eol}`;
+  let next = [...removed].reduce(removeRule, body);
   // Each new rule goes to the top in turn, so the newest by since ends first.
   const newest = [...accepted].reverse();
   if (newest.length) {
@@ -778,10 +783,13 @@ function wordRules(text: string, change: Extract<Change, { kind: 'rules-wording'
     }
   }
   // A summary line in the generated pattern is updated to the new count; any other summary stays.
-  const count = parseRules(next).length;
-  const summary = frontmatterLines(next).find((line) => SUMMARY_LINE.test(line.text));
+  const count = newest.length + rulesBefore.filter((item) => !removed.has(item.text)).length;
+  const summary = !span && owned ? frontmatterLines(next).find((line) => SUMMARY_LINE.test(line.text)) : undefined;
   if (summary) next = `${next.slice(0, summary.start)}summary: ${count} ${count === 1 ? 'rule' : 'rules'} Bower follows in every tidy-up.${next.slice(summary.end)}`;
-  const kept = parseRules(text).filter((item) => !removed.has(item.text)).map((item) => ({ text: item.text, yourWords: item.yourWords, since: item.since }));
+  if (at) next = text.slice(0, at.start) + next + text.slice(at.end);
+  else if (!owned) next = authors.splice(text, text.length, `${eol}## Rules added in Bower${eol}<!-- bower:ownership/2 begin rules-added -->${eol}${next}<!-- bower:ownership/2 end rules-added -->${eol}`);
+  if (encoder.encode(next).byteLength > EDIT_FILE_LIMIT) return { refused: 'too-large' };
+  const kept = rulesBefore.filter((item) => !removed.has(item.text)).map((item) => ({ text: item.text, yourWords: item.yourWords, since: item.since }));
   const rules = [...newest.map((add) => ({ text: add.text, yourWords: add.yourWords || undefined, since: Date.parse(`${sinceDate(add.since)}T00:00:00Z`) })), ...kept];
   return { text: next, added: [], rules };
 }
@@ -829,12 +837,26 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
   if (a.status === 'invalid' || b.status === 'invalid' || b.status !== a.status) return false;
   if (before.startsWith('\ufeff') !== after.startsWith('\ufeff')) return false;
   if (change.kind === 'rules-wording') {
+    const wasSpan = a.payloads?.['rules-added'];
+    const nowSpan = b.payloads?.['rules-added'];
+    if (nowSpan) {
+      const now = spanOf(encoder.encode(after), nowSpan);
+      const was = wasSpan ? spanOf(encoder.encode(before), wasSpan) : null;
+      const eol = eolOf(before);
+      const outside = was ? before.slice(0, was.start) === after.slice(0, now.start) && before.slice(was.end) === after.slice(now.end)
+        : after.startsWith(before)
+          && after.slice(before.length, now.start) === `${eol}## Rules added in Bower${eol}<!-- bower:ownership/2 begin rules-added -->${eol}`
+          && after.slice(now.end) === `<!-- bower:ownership/2 end rules-added -->${eol}`;
+      const read = managedRules(after, false).map((rule) => ({ text: rule.text, yourWords: rule.yourWords, since: rule.since }));
+      return outside && JSON.stringify(read) === JSON.stringify(step.rules);
+    }
+    if (wasSpan || !byBower(before)) return false;
     const was = outsideRules(before);
     const now = outsideRules(after);
     const outside = was.found
       ? now.found && now.before === was.before && now.after === was.after
       : now.found && now.after === '' && now.before.startsWith(was.before) && /^[\r\n]*$/.test(now.before.slice(was.before.length));
-    const read = parseRules(after).map((rule) => ({ text: rule.text, yourWords: rule.yourWords, since: rule.since }));
+    const read = managedRules(after, true).map((rule) => ({ text: rule.text, yourWords: rule.yourWords, since: rule.since }));
     return outside && JSON.stringify(read) === JSON.stringify(step.rules);
   }
   const links = change.kind === 'link-rewrite';

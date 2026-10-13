@@ -6,7 +6,7 @@ export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
 export const ABOUT_REGIONS = ['about-you', 'about-working-on', 'about-preferences'] as const;
 export type AboutRegion = typeof ABOUT_REGIONS[number];
-export type BowerRegion = MocRegion | 'profile' | TemplateRegion | AboutRegion;
+export type BowerRegion = MocRegion | 'profile' | TemplateRegion | AboutRegion | 'rules-added';
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -241,7 +241,7 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
   const prefix = raw.startsWith('\ufeff') ? 3 : 0;
   const sourceLines = lines(bytes, { start: prefix, end: bytes.length });
   const first = sourceLines[0];
-  // An unterminated front matter keeps the old interpretation. A note with no front matter at all may still carry About me regions.
+  // An unterminated front matter keeps the old interpretation. Plain notes may still carry additive regions.
   if (first?.text === '---' && first.after === bytes.length) {
     if (mode === 'prefix') return refuse();
     return finish(legacyNote(bytes, raw));
@@ -261,20 +261,20 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
       fence = fenceAfter(line.text, fence);
       if (previous || fence || !line.text.trimStart().startsWith('<!-- bower:ownership')) return false;
       // Complete older markers without a format declaration remain ordinary personal text.
-      // About me marks and damaged boundaries still enter the framing check and cannot grant a fresh append.
+      // Additive marks and damaged boundaries enter the framing check and cannot grant a fresh append.
       return ![...OWNERS, ...MOC_REGIONS, 'profile', ...TEMPLATE_REGIONS].some((region) =>
         line.text === `<!-- bower:ownership/2 begin ${region} -->`
         || line.text === `<!-- bower:ownership/2 end ${region} -->`);
     });
     if (marker < 0) return finish(legacyNote(bytes, raw));
     const heading = sourceLines[marker - 1];
-    if (!heading || heading.text !== '## What Bower has learned') return refuse();
+    if (!heading || heading.text !== '## What Bower has learned' && heading.text !== '## Rules added in Bower') return refuse();
     const prefixBytes = bytes.subarray(0, heading.start);
     const parsed = legacyNote(prefixBytes, decoder.decode(prefixBytes));
     if (parsed.status !== 'plain' && parsed.status !== 'legacy') return refuse();
     prefixNote = parsed;
     body = sourceLines.slice(marker);
-    owners = [...ABOUT_REGIONS];
+    owners = heading.text === '## Rules added in Bower' ? ['rules-added'] : [...ABOUT_REGIONS];
   } else {
     if (declarations.length !== 1) return refuse();
     const declaration = declarations[0]?.text ?? '';
@@ -319,7 +319,8 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
       const owner = owners[next];
       if (owner && line.text === `<!-- bower:ownership/2 begin ${owner} -->`) {
         active = owner; start = line.after;
-      } else if (line.text.trimStart().startsWith('<!-- bower:ownership') || prefixNote && line.text.trim() !== '') return refuse();
+      } else if (line.text.trimStart().startsWith('<!-- bower:ownership')
+        || prefixNote && line.text.trim() !== '' && !(spans['rules-added'] && next === owners.length)) return refuse();
       // Outside bytes are opaque and grant no payload or task authority. Never interpret their Markdown.
     }
   }

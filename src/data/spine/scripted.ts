@@ -29,7 +29,7 @@ import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
 import { parseTimelineLine, timelineLine } from '../contracts/timeline-line';
-import { parseRules, serializeRules } from '../vault/rules-format';
+import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
 import { RunRecords, RUNS_NAME, canonical, isManifestName } from './records';
@@ -1491,7 +1491,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const rulesNote = ix.file(RULES_PATH);
     if (!rulesNote || rulesNote.folder) return false;
     try {
-      return ruleLike(parseRules(await ownText(drive, rulesNote)), ADOPT_STATES_RULE) !== undefined;
+      const text = await ownText(drive, rulesNote);
+      return ruleLike(managedRules(text, rulesNote.appProperties?.[PROP.by] === 'bower' || parseNote(RULES_PATH, text).byBower), ADOPT_STATES_RULE) !== undefined;
     } catch (e) {
       // An unreadable Rules.md grants nothing: the sections stay the person's, and the run goes on.
       console.error('Your rules could not be read for the summaries rule:', e);
@@ -1570,8 +1571,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
   }
   // Rules.md takes its rules-wording change in its one edit (TL-P2-20 rule 3), within the edit cap.
-  const rulesFile = ix.file(RULES_PATH);
-  if (ruleWords.change && rulesFile && !rulesFile.folder) want(rulesFile, RULES_PATH).rules = ruleWords.change;
+  const rulesFiles = ix.filesIn('').filter((f) => !f.folder && f.name === RULES_PATH);
+  const rulesFile = rulesFiles[0] ?? ix.file(RULES_PATH);
+  if (rulesFiles.length <= 1 && ruleWords.change && rulesFile && !rulesFile.folder) want(rulesFile, RULES_PATH).rules = ruleWords.change;
   /** Where the rules ended up: worded in Rules.md's edit, already there (nothing to write), or left pending. */
   let rulesState: 'planned' | 'present' | 'left' = 'left';
   let rulesWorded: ReadonlySet<string> = new Set();
@@ -1746,7 +1748,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // of one there is not written (TL-P2-20 I10). Nothing to write when every one is there already, and a refusal
     // (not Bower's, damaged, too big) leaves them pending (rule 7).
     let rules: RulesWording | null = null;
-    if (w.rules) {
+    if (w.rules && !(personal && f.appProperties?.[PROP.by] === 'bower' && !ownership.payloads?.['rules-added'])) {
       // A rule taken out is matched as it reads after this edit's link rewrite (TL-P2-38); still no match, it is gone.
       const change = rewrite && w.renames ? relinkedRemovals(w.rules, w.renames) : w.rules;
       const result = applyChanges(rewritten, [change], rewritten === bytes ? fetched(f.id) : undefined);
@@ -1755,7 +1757,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         rules = change;
         rulesWorded = worded;
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
-      else console.error(`${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
+      // Refusals are logged once, with their pending lines, by rulesPlanOf.
     }
     for (const l of lines) if (l.record !== null) need(l.record).lines.push(l);
     if (rewrite || lines.length || rules || state) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules, state, stateAfter: state ? (w.state?.thing ?? null) : null });
@@ -3032,11 +3034,11 @@ function relinkedRemovals(change: RulesWording, renames: Rename[]): RulesWording
  * exactly those rules (R3-4: what is counted is what the written text holds).
  */
 function wordedBy(before: string, change: RulesWording, after: string): ReadonlySet<string> | null {
-  const rules = parseRules(before);
+  const rules = managedRules(before, parseNote(RULES_PATH, before).byBower);
   const { removed, accepted } = ruleSequence(rules, change.add, change.remove);
   const kept = rules.filter((r) => !removed.has(r.text)).length;
   const worded = new Set(accepted.map((a) => a.recordId));
-  return parseRules(after).length === kept + worded.size ? worded : null;
+  return managedRules(after, parseNote(RULES_PATH, after).byBower).length === kept + worded.size ? worded : null;
 }
 
 /**

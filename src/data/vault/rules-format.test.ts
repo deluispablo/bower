@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { seedRules } from '../demo/fixture';
-import { parseRules, serializeRules } from './rules-format';
+import { managedRules, parseRules, serializeRules } from './rules-format';
 
 const NOW = Date.parse('2026-10-04T12:00:00Z');
 const day = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
@@ -35,5 +35,16 @@ describe('Rules.md', () => {
 
   it('a file with no Rules heading has no rules', () => {
     expect(parseRules('# Something else\n\n- not a rule')).toEqual([]);
+  });
+
+  it('reads region rules before whole-file ownership and refuses damaged framing', () => {
+    const prefix = '\ufeff---\r\nby: bower\r\n---\r\n## Rules\r\n- Personal rule.\r\n';
+    const region = '## Rules added in Bower\r\n<!-- bower:ownership/2 begin rules-added -->\r\n## Rules\r\n- App rule.\r\n<!-- bower:ownership/2 end rules-added -->\r\n';
+    const suffix = '## Rules\r\n- Another personal rule.';
+    for (const owned of [false, true]) {
+      expect(managedRules(prefix + region + suffix, owned)).toEqual([{ id: 'rule-1', text: 'App rule.', since: 0 }]);
+      expect(managedRules(prefix, owned)).toEqual(owned ? [{ id: 'rule-1', text: 'Personal rule.', since: 0 }] : []);
+      expect(() => managedRules(prefix + region.replace('end rules-added -->', 'end rules-added'), owned)).toThrow(/damaged-boundary/);
+    }
   });
 });

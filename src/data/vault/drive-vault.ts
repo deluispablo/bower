@@ -43,7 +43,7 @@ import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { readTypeTable } from '../contracts/note-format';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
-import { parseRules } from './rules-format';
+import { managedRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
@@ -1436,8 +1436,24 @@ export class DriveVault implements VaultSource {
 
   async rules(): Promise<Rule[]> {
     const ix = await this.index();
-    const file = ix.file('Rules.md');
-    const worded = file ? parseRules(await this.text(file)) : [];
+    let file = ix.file('Rules.md');
+    let worded: Rule[] = [];
+    if (file && !file.folder) {
+      // A tidy-up may have worded the pending lines since this view's last listing.
+      file = await this.drive.get(file.id);
+      ix.put(file);
+      const text = await this.text(file);
+      try {
+        worded = managedRules(text, file.appProperties?.[PROP.by] === 'bower' || parseNote('Rules.md', text).byBower);
+      } catch (error) {
+        if (noteRefusal(error) !== 'damaged' || !this.current()) throw error;
+        const seen = `${file.id}@${file.modifiedTime}`;
+        if (!this.refusalsLogged.has(seen)) {
+          this.refusalsLogged.add(seen);
+          console.error(error, 'Rules.md could not be read; only pending rules are listed.');
+        }
+      }
+    }
     const lines = (await this.journal.list()).filter((r) => r.kind === 'rule');
     // Your rule lines in line order, as the next tidy-up words them (`ruleSequence`, the one home): an add taken out
     // by a later line is not listed.

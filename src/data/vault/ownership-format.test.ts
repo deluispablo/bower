@@ -315,3 +315,22 @@ it('b4a-composite-byte-append: parser exposes only the trailing marked regions',
   expect(headingOnly).not.toHaveProperty('payloads.about-you');
   expect(bytes.subarray(0, encode(prefix).length)).toEqual(encode(prefix));
 });
+
+it('frames rules-added with exact byte spans while retaining opaque trailing bytes', () => {
+  const prefix = '\ufeffCafé and e\u0301.\r\n- [ ] Personal task\r\n';
+  const payload = '## Rules\r\n- [ ] App rule\r\n';
+  const region = `## Rules added in Bower\r\n<!-- bower:ownership/2 begin rules-added -->\r\n${payload}<!-- bower:ownership/2 end rules-added -->\r\n`;
+  const suffix = '## Rules\r\n- [ ] Trailing task';
+  const bytes = encode(prefix + region + suffix);
+  const own = parseOwnership(bytes);
+  expect(own.status).toBe('plain');
+  if (own.status === 'invalid') return;
+  const span = own.payloads?.['rules-added'];
+  expect(span).toBeDefined();
+  if (span) expect(decode(bytes.subarray(span.start, span.end))).toBe(payload);
+  expect(own.tasks.map((task) => task.label)).toEqual(['Personal task']);
+  for (const bad of [region + region, region.replace('end rules-added', 'end about-you'), region + '```\r\nunfinished']) {
+    expect(parseOwnership(encode(prefix + bad))).toEqual({ status: 'invalid', reason: 'damaged-boundary' });
+  }
+  expect(parseOwnership(encode(`${prefix}\`\`\`md\r\n${region}\`\`\`\r\n`))).not.toHaveProperty('payloads.rules-added');
+});

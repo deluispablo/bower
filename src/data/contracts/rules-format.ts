@@ -9,7 +9,8 @@
  *   - <wording> <!-- since 2026-10-03 -->
  *     *You wrote: "<your words>"*
  */
-import type { Rule } from './types';
+import { BowerError, type Rule } from './types';
+import { parseOwnership } from './ownership-format';
 
 export const RULES_HEADING = '## Rules';
 
@@ -31,6 +32,17 @@ export function parseRules(text: string): Rule[] {
     if (words && last) last.yourWords = words[1] ?? '';
   }
   return out;
+}
+
+/** A region takes precedence over whole-file ownership; personal prose never becomes app rules. */
+export function managedRules(text: string, byBower: boolean): Rule[] {
+  const bytes = new TextEncoder().encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'invalid') throw new BowerError('unknown', `Rules.md could not be read (${own.reason}).`, undefined,
+    { cause: { kind: 'note-refused', refusal: own.reason === 'unsupported-version' ? 'newer' : 'damaged', reason: own.reason } });
+  const span = own.payloads?.['rules-added'];
+  return span ? parseRules(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes.subarray(span.start, span.end)))
+    : byBower ? parseRules(text) : [];
 }
 
 export function serializeRules(rules: readonly Rule[]): string {
