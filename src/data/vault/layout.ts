@@ -13,6 +13,7 @@
  * the runner moves them to `changes/archive/` after reading them; `piles/`,
  * one immutable declaration per pile, written before any of its things.
  */
+import { isMonthlyLogPath } from '../contracts/log-format';
 import { typeTableOk } from '../contracts/note-format';
 import { tagListOk } from '../contracts/tag-format';
 import type { TypeTable } from '../contracts/types';
@@ -50,6 +51,8 @@ export const SYSTEM = {
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
 export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable, SYSTEM.tags, SYSTEM.observations] as const satisfies readonly RunnerWrite[];
+
+export const isRunnerPath = (path: string): boolean => (RUNNER_WRITES as readonly string[]).includes(path) || isMonthlyLogPath(path);
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */
 export function isHidden(path: string): boolean {

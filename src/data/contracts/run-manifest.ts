@@ -1,4 +1,5 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
+import { isMonthlyLogPath } from './log-format';
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
@@ -616,6 +617,16 @@ async function admit<M extends Manifest | ManifestV2>(
           return { ok: false, reason: 'shape' };
         continue;
       }
+      if (target.kind === 'log' || target.kind === 'log-folder') {
+        if (!maintenanceTargetOk(value, target)) return { ok: false, reason: 'shape' };
+        const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
+        if (target.kind === 'log-folder' ? before !== undefined || target.beforeContent !== undefined
+          : before ? !target.beforeContent || target.beforeContent.encoding !== 'utf8'
+            || target.beforeContent.observedModifiedTime !== before.modifiedTime
+            || !sameSeen(before, value.capture.places.find((p) => p.file.fileId === target.fileId)?.file ?? before)
+          : target.beforeContent !== undefined) return { ok: false, reason: 'shape' };
+        continue;
+      }
       if ((writes as readonly string[]).includes(target.path)) continue;
       const input = e.inputs.snapshot?.[target.fileId];
       const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
@@ -961,6 +972,26 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
 /** Maintenance names must agree with captured identity and cannot alias protected memory. */
 export function maintenanceTargetOk(value: { capture: Capture; operations: readonly OperationV2[] }, target: NonNullable<Maintain['inputs']['targets']>[number]): boolean {
   const resolved = targetPath(value, { fileId: target.fileId });
+  if (target.kind === 'log' || isMonthlyLogPath(target.path) || isMonthlyLogPath(resolved ?? '')) {
+    const place = value.capture.places.find((p) => p.file.fileId === target.fileId);
+    return target.kind === 'log' && resolved === target.path && isMonthlyLogPath(target.path)
+      && place?.file.folder === false && place.file.name === target.path.split('/').at(-1)
+      && place.file.parents.length === 1 && place.file.parents[0] === target.parentId
+      && targetPath(value, { fileId: target.parentId }) === '.bower/log'
+      && target.declaration !== undefined && target.declaration.at.slice(0, 7) === target.path.slice(11, 18)
+      && new Set(target.declaration.sources.map((source) => source.file.fileId)).size === target.declaration.sources.length
+      && target.declaration.sources.every((source) => {
+        const captured = value.capture.places.find((p) => p.file.fileId === source.file.fileId);
+        return (source.path === '.bower/tags.json' || source.path.startsWith('.bower/changes/') && !source.path.startsWith('.bower/changes/archive/'))
+          && captured?.path === source.path && sameSeen(captured.file, source.file);
+      });
+  }
+  if (target.kind === 'log-folder' || resolved === '.bower/log' || target.path === '.bower/log') {
+    const place = value.capture.places.find((p) => p.file.fileId === target.fileId);
+    return target.kind === 'log-folder' && resolved === '.bower/log' && target.path === resolved
+      && place?.file.folder === true && place.file.name === 'log' && place.file.parents.length === 1
+      && place.file.parents[0] === target.parentId && targetPath(value, { fileId: target.parentId }) === '.bower';
+  }
   if (resolved === 'About me.md' && target.path === resolved) return target.kind === 'about'
     && target.declaration !== undefined
     && new Set(target.declaration.sources.map((s) => s.path)).size === target.declaration.sources.length

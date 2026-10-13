@@ -46,6 +46,28 @@ describe('B8a readable log contracts', () => {
     expect(opKey(event.rootId, event.runId, event.operationId)).toMatch(/^[0-9a-f]{12}$/);
     expect(opKey('ab', 'c', 'd')).not.toBe(opKey('a', 'bc', 'd'));
   });
+  it('AC1 ruling 3: literal JSON wording stays plain text', async () => {
+    const { formatLogEvent } = await logFormat();
+    const detail = '{"a": 1, "path": "C:\\notes"}';
+    expect(formatLogEvent({ ...event, detail }).line.split(' | ')[3])
+      .toBe(`${detail} · op:${opKey(event.rootId, event.runId, event.operationId)}`);
+  });
+  it.each([
+    ['a | | b', 'a / / b'],
+    ['a |\nb', 'a / b'],
+  ])('AC1 ruling 4: sanitizes %j to a delimiter fixpoint', async (field, cleaned) => {
+    const { formatLogEvent } = await logFormat();
+    const input = { ...event, note: field, detail: field };
+    const { line } = formatLogEvent(input);
+    expect(line.split(' | ')).toEqual(['2026-10-31', 'create', cleaned,
+      `${cleaned} · op:${opKey(input.rootId, input.runId, input.operationId)}`]);
+    expect(formatLogEvent({ ...input, note: cleaned, detail: cleaned }).line).toBe(line);
+  });
+  it('AC3 ruling 5: recognizes a keyed CRLF line without changing its bytes', async () => {
+    const { formatLogEvent, readLog } = await logFormat();
+    const text = `# Log\r\n${formatLogEvent(event).line}\r\n`;
+    expect(readLog(text)).toEqual({ text, keys: [opKey(event.rootId, event.runId, event.operationId)] });
+  });
 
   it('AC2 b8-log-monthly-detail-bound', async () => {
     const { formatLogEvent } = await logFormat();

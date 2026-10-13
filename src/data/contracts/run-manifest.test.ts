@@ -1147,3 +1147,19 @@ for (const source of ['declared', 'observed'] as const) {
     });
   }
 }
+
+it('b8 monthly maintain permission is one captured month and parent, never another dot path', async () => {
+  const value = rich();
+  const month = seen('month-id', '2026-10.md', 'log-folder');
+  value.capture.places.push({ file: seen('log-folder', 'log', 'bower-system', true), path: '.bower/log' },
+    { file: month, path: '.bower/log/2026-10.md' });
+  const make = (target: object) => b4Seal({ ...value, v: 2, reportPlan: [], operations: [{ operationId: 'maintain', ordinal: 0, dependsOn: [],
+    effect: { kind: 'maintain', inputs: { folderId: 'fake-root', account: 'ACCOUNT_ID', cursor: 'cursor', changes: [], operationIds: [], targets: [target] } } }] });
+  const target = { path: '.bower/log/2026-10.md', kind: 'log', fileId: month.fileId, parentId: 'log-folder', declaration: { at: time, sources: [] } };
+  const parse = (t: object) => parseRunManifestV2(bytes(make(t)), 'fake-root', RUNNER_WRITES);
+  expect((await parse(target)).ok).toBe(true);
+  for (const change of [{ path: '.bower/unrelated.md' }, { path: '.bower/log/2026-11.md' }, { parentId: 'bower-system' },
+    { kind: 'hot' }, { fileId: 'child-a' }, { declaration: { at: time, sources: [{ path: target.path, file: month, text: '# Log\n', content: verifiedText('# Log\n') }] } }]) {
+    expect((await parse({ ...target, ...change })).ok).toBe(false);
+  }
+});

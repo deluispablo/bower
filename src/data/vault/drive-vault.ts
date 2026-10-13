@@ -38,7 +38,7 @@ import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
 import { pairsOf } from '../contracts/journal-record';
-import { RUNNER_WRITES, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
+import { isRunnerPath, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { readTypeTable } from '../contracts/note-format';
@@ -511,7 +511,7 @@ export class DriveVault implements VaultSource {
   }
 
   async toggleTask(path: string, index: number): Promise<void> {
-    if ((RUNNER_WRITES as readonly string[]).includes(path)) throw new BowerError('conflict', 'Bower keeps this file up to date.');
+    if (isRunnerPath(path)) throw new BowerError('conflict', 'Bower keeps this file up to date.');
     const ix = await this.index();
     const f = this.mustFile(ix, path);
     // The text of the version toggled, so a retry of the same toggle is the same write (`once`).

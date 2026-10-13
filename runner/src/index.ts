@@ -10,7 +10,7 @@ import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
-import { RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, type RetrievalFile } from '../../src/data/vault/layout';
+import { isRunnerPath, SYSTEM, isHidden, isRunnerFile, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
 import { applyChanges, isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
@@ -24,6 +24,8 @@ import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
 import { parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
 import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
+import { appendLog, logEvents } from './log';
+import { formatLogEvent } from '../../src/data/contracts/log-format';
 import { FOLDER_TEMPLATE } from '../../src/data/contracts/folder-template';
 
 /** Every derived kind joins this slot; declarations persist inside maintain, never in a separate store. */
@@ -506,36 +508,53 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   listing = [...files.values()];
   const own = ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();
+  const logDeclaration: MaintenanceDeclaration = { at: new Date(manifest.requestedAt).toISOString(), sources: [] };
+  const tags = ix.file(SYSTEM.tags);
+  for (const f of [...ix.journalFiles(), ...(tags && manifest.operations.some((op) => op.effect.kind === 'write-runner-json' && op.effect.path === SYSTEM.tags) ? [tags] : [])]) {
+    const path = ix.pathOf(f.id);
+    if (path) logDeclaration.sources.push(await readSource(drive, path, f));
+  }
+  const plannedEvents = logEvents(manifest, logDeclaration);
+  const firstEvent = plannedEvents[0];
+  const logPath = firstEvent ? formatLogEvent(firstEvent).path : undefined;
+  const logFolder = '.bower/log';
+  const missingLogFolder = logPath && !ix.file(logFolder);
   const kinds = [indexTarget, ...declared, ...(needsAbout ? [aboutTarget] : [])];
   if (new Set(kinds.map((kind) => kind.path)).size !== kinds.length) throw unavailable();
-  const paths = [...kinds.map((kind) => kind.path), SYSTEM.retrieval];
+  const paths = [...kinds.map((kind) => kind.path), SYSTEM.retrieval, ...(missingLogFolder ? [logFolder] : []), ...(logPath ? [logPath] : [])];
   const missing = paths.filter((path) => !ix.file(path));
   const holders: Holder[] = missing.map(() => ({}));
   await reserveFor(drive.fencedWrites(), holders);
   const targets: NonNullable<Maintain['inputs']['targets']> = [];
   const places = new Map(manifest.capture.places.map((place) => [place.file.fileId, place]));
+  if (logPath) places.set(own.id, { path: SYSTEM.dir, file: seen(own) });
+  const logFolderId = missingLogFolder ? holders[missing.indexOf(logFolder)]?.reserved : ix.idOf(logFolder);
+  const existingLogFolder = ix.file(logFolder);
+  if (logPath && existingLogFolder) places.set(existingLogFolder.id, { path: logFolder, file: seen(existingLogFolder) });
+  if (missingLogFolder && logFolderId) places.set(logFolderId, { path: logFolder, file: { fileId: logFolderId,
+    name: 'log', parents: [own.id], folder: true, modifiedTime: new Date(manifest.requestedAt).toISOString() } });
   for (const path of paths) {
     const before = ix.file(path);
     const text = before ? await drive.readListedText(before) : undefined;
     const bytes = text === undefined ? undefined : new TextEncoder().encode(text);
     const kind = kinds.find((kind) => kind.path === path);
-    const declaration = kind === aboutTarget ? aboutDeclaration : await kind?.declare?.(drive, manifest, ix, snapshot);
-    if (kind === aboutTarget) for (const source of declaration?.sources ?? []) {
+    const declaration = path === logPath ? logDeclaration : kind === aboutTarget ? aboutDeclaration : await kind?.declare?.(drive, manifest, ix, snapshot);
+    if (kind === aboutTarget || path === logPath) for (const source of declaration?.sources ?? []) {
       const resolved = ix.pathOf(source.file.fileId);
       if (resolved === undefined) throw unavailable();
       places.set(source.file.fileId, { file: source.file, path: resolved });
     }
     const parentPath = path.split('/').slice(0, -1).join('/');
-    const parentId = ix.idOf(parentPath);
-    if (!parentId || (parentPath && !ix.byId(parentId)?.folder)) throw unavailable();
+    const parentId = parentPath === logFolder ? logFolderId : ix.idOf(parentPath);
+    if (!parentId || (parentPath && !ix.byId(parentId)?.folder && !(missingLogFolder && parentPath === logFolder))) throw unavailable();
     const fileId = before?.id ?? holders[missing.indexOf(path)]?.reserved;
-    const resolvedParent = ix.pathOf(parentId);
+    const resolvedParent = places.get(parentId)?.path ?? ix.pathOf(parentId);
     const name = path.split('/').at(-1);
     const resolvedPath = before ? ix.pathOf(before.id) : resolvedParent === undefined ? undefined : [resolvedParent, name].filter(Boolean).join('/');
     if (!fileId || !name || resolvedPath === undefined) throw unavailable();
-    places.set(fileId, { file: before ? seen(before) : { fileId, name, parents: [parentId], folder: false,
+    places.set(fileId, { file: before ? seen(before) : { fileId, name, parents: [parentId], folder: path === logFolder,
       modifiedTime: new Date(manifest.requestedAt).toISOString() }, path: resolvedPath });
-    targets.push({ path, ...(kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId, parentId,
+    targets.push({ path, ...(path === logPath ? { kind: 'log' } : path === logFolder ? { kind: 'log-folder' } : kind ? { kind: kind.kind } : {}), ...(declaration ? { declaration } : {}), fileId, parentId,
       ...(before && bytes ? { beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } } : {}) });
   }
   // MOC inputs contain the exact original bytes and every owned region; no whole-note permission is inferred.
@@ -546,7 +565,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     if (path === undefined) throw unavailable();
     places.set(id, { file: seen(before), path });
     const bytes = new TextEncoder().encode(note.moc.text);
-    targets.splice(targets.length - 1, 0, { path: note.path, fileId: id, parentId: before.parents[0] ?? '',
+    targets.splice(targets.findIndex((target) => target.path === SYSTEM.retrieval), 0, { path: note.path, fileId: id, parentId: before.parents[0] ?? '',
       beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } });
   }
   const capture = { ...manifest.capture, places: [...places.values()] };
@@ -631,7 +650,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         catch (error) {
           if (!(error instanceof LedgerExhausted)) throw error;
           console.error(error);
-          // Primary effects and already sent projections stand. No later target or cursor is sent.
+          // shortcut: exhaustion may leave the monthly log absent, revisit if normal runs reach the maintain budget.
           return { state: 'rejected', failure: { code: 'unknown', message: 'Bower will finish updating its notes next time.' } };
         }
       },
@@ -654,10 +673,12 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
   // The engine always calls readBack before replay; fresh reserved creates need no existence probe.
   const replaying = new Set<string>();
   return {
-    async readBack(op, head) {
+    async readBack(op, head, manifest) {
       if (op.effect.kind !== 'maintain') throw unavailable();
       replaying.add(op.operationId);
-      const target = op.effect.inputs.targets?.find((t) => t.path === SYSTEM.retrieval);
+      const log = op.effect.inputs.targets?.find((t) => t.kind === 'log');
+      const target = log && logEvents(manifest, log.declaration, head.outcomes).length ? log
+        : op.effect.inputs.targets?.find((t) => t.path === SYSTEM.retrieval);
       if (!target) throw unavailable();
       try {
         const ev = await drive.evidence(target.fileId);
@@ -666,7 +687,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           content: ev.content ? { encoding: 'utf8', ...ev.content, provenance: drive.provenance, observedModifiedTime: ev.file.modifiedTime } : null, provenance: drive.provenance } };
       } catch (error) {
         console.error(error);
-        return { state: 'unreadable', why: 'The retrieval commit could not be read.' };
+        return { state: 'unreadable', why: 'The maintenance target could not be read.' };
       }
     },
     async apply(op, head, w, manifest, sending) {
@@ -679,8 +700,10 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       }
       const index = projectIndex(state.files);
       let last: Settled | undefined;
-      // Retrieval is the commit record: every MOC and projection must settle before it is sent.
-      const targets = [...(op.effect.inputs.targets ?? [])].sort((a, b) => Number(a.path === SYSTEM.retrieval) - Number(b.path === SYSTEM.retrieval));
+      // Person-facing projections and retrieval precede the log under the shared maintain budget.
+      const rank = (target: NonNullable<Maintain['inputs']['targets']>[number]): number =>
+        target.kind === 'log' || target.kind === 'log-folder' ? 2 : Number(target.path === SYSTEM.retrieval);
+      const targets = [...(op.effect.inputs.targets ?? [])].sort((a, b) => rank(a) - rank(b));
       for (const target of targets) {
         const frozen = op.effect.inputs.listing?.find((f) => f.fileId === target.fileId);
         const settled = state.listing?.find((f) => f.id === target.fileId);
@@ -702,8 +725,31 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
             return { state: 'rejected', failure: { code: 'unknown' as const, message: error.message } };
           }
         }
-        const owned = !(RUNNER_WRITES as readonly string[]).includes(target.path);
-        const rendered = kind ? kind.render(target.declaration, state, head.outcomes, manifest)
+        const log = target.kind === 'log';
+        const logFolder = target.kind === 'log-folder';
+        const events = log || logFolder ? logEvents(manifest,
+          targets.find((t) => t.kind === 'log')?.declaration, head.outcomes) : [];
+        if ((log || logFolder) && !events.length) continue;
+        if (logFolder) {
+          const effect: EffectV2 = { kind: 'create-folder', parent: { fileId: target.parentId }, name: 'log', createKey: op.operationId };
+          const sub = { ...op, effect };
+          const subHead = { ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? {
+            operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId: target.fileId } : o) };
+          if (replaying.has(op.operationId)) {
+            const back = await ordinary.readBack(sub, subHead, manifest);
+            if (back.state === 'landed') { last = { state: 'applied', evidence: back.evidence }; continue; }
+            if (back.state !== 'not-landed') throw unavailable();
+          }
+          await sending();
+          const written = await w.createFolder(target.parentId, 'log', { bowerItem: op.operationId,
+            bowerOp: stampOf(head.runId, op.operationId) }, target.fileId);
+          last = { state: 'applied', evidence: { file: seen(written), trashed: false, content: null, provenance: drive.provenance } };
+          continue;
+        }
+        const owned = !isRunnerPath(target.path);
+        const logEvidence = log && (before || replaying.has(op.operationId)) ? await drive.evidence(target.fileId) : null;
+        const logBefore = logEvidence ? await drive.readListedText(logEvidence.file) : '# Log\n';
+        const rendered = log ? appendLog(logBefore, events) : kind ? kind.render(target.declaration, state, head.outcomes, manifest)
           : owned ? mocEdit(target.fileId, state.files, members)
           : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
         if (!kind && owned && !rendered) continue;
@@ -720,7 +766,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           if (previous === index.trim() || (previous === legacy && projectIndex(snapshot) === index)) continue;
         }
         if (before && kind?.unchanged && kind.unchanged(await drive.readListedText(file(before)), text)) continue;
-        const ev = (before && !kind?.cachedCheck) || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
+        const ev = log ? logEvidence : (before && !kind?.cachedCheck) || replaying.has(op.operationId) ? await drive.evidence(target.fileId) : null;
         const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
         const beforeText = kind === aboutTarget ? target.declaration?.sources.find((s) => s.path === 'About me.md')?.text
           : state.files[target.fileId]?.moc?.text;

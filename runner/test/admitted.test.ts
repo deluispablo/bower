@@ -152,3 +152,22 @@ it('b4a-artifact-scope-and-order: runner admission scopes artifacts and note edi
   expect.soft(outsideAdmitted(memoryPlan({ ...edit, path: 'Resources/Other.md' }), took, 'own-id'), 'About me permission cannot escape its target').not.toBeNull();
   expect.soft(outsideAdmitted(memoryPlan({ ...edit, changes: [{ ...edit.changes[0], region: 'personal' }] }), took, 'own-id')).not.toBeNull();
 });
+
+it('b8 admission grants only the exact captured monthly maintain target', async () => {
+  const { outsideAdmitted } = await import('../src/spine/admitted');
+  const { manifest, adapter } = await admittedFolder();
+  const took = await takeAdmitted(manifest, adapter);
+  const time = '2026-10-11T09:00:00.000Z';
+  const file = (fileId: string, name: string, parent: string, folder = false) => ({ fileId, name, parents: [parent], folder, modifiedTime: time });
+  const target = { path: '.bower/log/2026-10.md', fileId: 'month-id', parentId: 'log-id', kind: 'log', declaration: { at: time, sources: [] } };
+  const plan = (t: object) => ({ capture: { piles: [], members: [], journal: [], places: [
+    { path: '.bower', file: file('own-id', '.bower', manifest.rootId, true) },
+    { path: '.bower/log', file: file('log-id', 'log', 'own-id', true) },
+    { path: target.path, file: file('month-id', '2026-10.md', 'log-id') },
+    { path: 'Resources/Personal.md', file: file('person-id', 'Personal.md', manifest.rootId) },
+  ] }, operations: [{ effect: { kind: 'maintain', inputs: { targets: [t] } } }] } as unknown as Parameters<typeof outsideAdmitted>[0]);
+  expect(outsideAdmitted(plan(target), took, 'own-id')).toBeNull();
+  for (const change of [{ fileId: 'person-id' }, { path: '.bower/anything.md' }, { parentId: 'own-id' }]) {
+    expect(outsideAdmitted(plan({ ...target, ...change }), took, 'own-id')).not.toBeNull();
+  }
+});

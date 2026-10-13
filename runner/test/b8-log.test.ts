@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
 import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, seedCase, type CaseRun } from './corpus-run';
-import { fixedDrive } from './drive-v3';
+import { fixedDrive, paging } from './drive-v3';
+import { setup as planningSetup, run as planningRun, select, fileIntent, folder, note, report } from './b1-planning-support';
 import { observe, writes, type Observation } from './b23-hot-observe';
 import { opKey } from '../../src/data/contracts/op-key';
 import type { ManifestV2 } from '../../src/data/contracts/run-manifest';
@@ -11,6 +12,8 @@ import { MANIFEST_V2_LIMIT, parseRunManifestV2 } from '../../src/data/contracts/
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
+import { formatLogEvent } from '../../src/data/contracts/log-format';
+import { appendLog } from '../src/log';
 
 const MONTH = '.bower/log/2026-10.md';
 const HUB = 'Resources/Gardening/Gardening.md';
@@ -49,12 +52,13 @@ async function setup(name = 'settled-recovery', extra: Record<string, string> = 
   return { c, drive, root, traffic, around: observe(drive, root, traffic) };
 }
 type Base = Awaited<ReturnType<typeof setup>>;
-const blocked = (path: string, base: Base, status = 403) => (fetch: typeof globalThis.fetch) => {
+const blocked = (path: string | readonly string[], base: Base, status = 403) => (fetch: typeof globalThis.fetch) => {
+  const paths = typeof path === 'string' ? [path] : path;
   let seen = base.traffic.length;
   return observe(base.drive, base.root, base.traffic)(async (input, init = {}) => {
     const last = base.traffic.length > seen ? base.traffic.at(-1) : undefined;
     seen = base.traffic.length;
-    if (last?.path === path && ['POST', 'PATCH'].includes(init.method ?? 'GET')) {
+    if (paths.includes(last?.path ?? '') && ['POST', 'PATCH'].includes(init.method ?? 'GET')) {
       return new Response(JSON.stringify({ error: { code: status, message: 'Made-up target refusal', errors: [{ reason: status === 409 ? 'conflict' : 'forbidden' }] } }), { status });
     }
     return fetch(input, init);
@@ -140,6 +144,24 @@ describe('B8a monthly log through main', () => {
     expect(run.after['Resources/Gardening/Mulch notice.txt']).toContain('Mulch');
     expect(run.after[NOTICE]).toContain('Mulch collection');
   });
+  it('AC4 ruling 2: a folder-backed pile logs its things, not folder plumbing', async () => {
+    const base = await planningSetup({ inbox: [{ line: 'Alex has remote developer offers.', files: ['Offer.txt', 'Second.txt'] }] });
+    expect(base.admission.piles[0]?.anchor).toBeDefined();
+    const to = 'Projects/Remote search/Offers';
+    const selection = select(base, [base.id('Projects/Remote search/Remote search.md')]);
+    for (const item of selection.items) item.destination = { parentId: base.id('Projects/Remote search'), name: 'Offers' };
+    const run = await planningRun(base, [selection, fileIntent(base, to)]);
+    expect(run.code).toBe(0);
+    expect(report(run).filed).toHaveLength(2);
+    const m = manifest(run);
+    expect(m.operations.some((op) => op.effect.kind === 'create-folder' && op.effect.name === 'Offers')).toBe(true);
+    expect(m.operations.some((op) => op.effect.kind === 'bin' && op.effect.before.folder)).toBe(true);
+    const primary = m.operations.filter((op) => op.effect.kind === 'move' && ['Offer.txt', 'Second.txt'].includes(op.effect.before.name)
+      || op.effect.kind === 'create-text' && op.effect.purpose === 'generated');
+    expect(primary).toHaveLength(4);
+    expect(events(run).map((line) => line.slice(-12))).toEqual(primary.map((op) => opKey(base.root, m.runId, op.operationId)));
+    expect(events(run).map((line) => line.split(' | ')[1]).sort()).toEqual(['create', 'create', 'ingest', 'ingest']);
+  });
 
   it('AC5 b8-runner-path-exact-scope', async () => {
     const run = await runScripted(await fixture('bounded-encoding'));
@@ -186,6 +208,25 @@ describe('B8a monthly log through main', () => {
     expect(run.wire?.statuses.some((status) => status.phase === 'done'), 'the log has no proof, so main must remain unfinished').toBe(false);
     expect(run.code).not.toBe(0);
   });
+  it('AC6 ruling: maintenance exhaustion keeps the report and leaves unreached log targets absent', async () => {
+    const pageSize = paging.size;
+    paging.size = 1000;
+    try {
+      const archive = Object.fromEntries(Array.from({ length: 139 }, (_, i) =>
+        [`Archive/Record ${i}.md`, note('Unrelated background.', 'Archive evidence.\n')]));
+      const base = await planningSetup({ folder: { ...folder, ...archive } });
+      const run = await planningRun(base, [select(base, [base.id('Projects/Remote search/Remote search.md')]), fileIntent(base)]);
+      expect(run.code).toBe(0);
+      expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+      expect(report(run).filed).toHaveLength(1);
+      expect(run.after['.bower/retrieval.json']).toBeDefined();
+      expect(run.errors).toContain('Bower will finish updating its notes next time.');
+      expect(run.after[MONTH]).toBeUndefined();
+      expect((await base.drive.listAll(base.root)).some((f) => base.drive.pathOf(f.id, base.root) === '.bower/log')).toBe(false);
+      expect(run.events.filter((e) => e.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(e.method))).toEqual([]);
+    } finally { paging.size = pageSize; }
+  });
+
   it('AC6 control: all existing required targets settle', async () => {
     const base = await setup('report-only-grammar');
     const run = await runOnDrive(base.c, base.drive, base.root, { claude: replySequence([empty]), around: base.around, pacing }, 1);
@@ -208,6 +249,24 @@ describe('B8a monthly log through main', () => {
     expect(second.after[MONTH]).toBe(first.after[MONTH]);
     expect(base.traffic.filter((e) => e.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(e.method))).toEqual([]);
   });
+  it('R12 ruling: all refused primary events leave the declared log unwritten', async () => {
+    const base = await setup();
+    const source = (await base.drive.listAll(base.root)).find((f) => f.name === 'Mulch notice.txt');
+    const sourcePath = base.drive.pathOf(source?.id ?? '', base.root) ?? '';
+    expect(sourcePath).toMatch(/^Inbox\//);
+    const run = await runOnDrive(base.c, base.drive, base.root, { around: blocked([NOTICE, sourcePath], base, 503),
+      claude: replySequence([filing()]), pacing }, 1);
+    expect(run.code).toBe(0);
+    expect(writes(base.traffic, sourcePath)).not.toEqual([]);
+    expect(run.after[NOTICE]).toBeUndefined();
+    expect(run.after[sourcePath]).toBe(base.c.inboxFiles['Mulch notice.txt']);
+    expect(manifest(run).operations.some((op) => op.effect.kind === 'maintain'
+      && op.effect.inputs.targets?.some((target) => target.path === MONTH))).toBe(true);
+    expect(run.after[MONTH]).toBeUndefined();
+    expect((await base.drive.listAll(base.root)).some((f) => base.drive.pathOf(f.id, base.root) === '.bower/log')).toBe(false);
+    expect(base.traffic.filter((e) => e.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(e.method))).toEqual([]);
+  });
+
   it('AC6 guard: an eventless first run creates no log folder or month file', async () => {
     const base = await setup('report-only-grammar');
     const run = await runOnDrive(base.c, base.drive, base.root, { claude: replySequence([empty]), around: base.around, pacing }, 1);
@@ -276,6 +335,16 @@ describe('B8a monthly log through main', () => {
     expect(text.startsWith(`${SEEDED}\n`), 'every existing byte is kept, with one separating newline').toBe(true);
     expect(text.slice(SEEDED.length + 1).split('\n').filter(Boolean).map((line) => line.slice(-12))).toEqual(forwardKeys(base, manifest(recovered)));
     expect(writes(base.traffic, MONTH)).toHaveLength(1);
+  });
+  it('AC7 ruling 5: replay skips a keyed CRLF line and preserves every byte', () => {
+    const event = { rootId: 'made-up-root', runId: 'made-up-run', operationId: 'made-up-op', requestedAt: AT,
+      action: 'create', note: NOTICE, detail: 'Alex saved a mulch notice.' };
+    const before = `# Log\r\n${formatLogEvent(event).line}\r\n`;
+    expect(appendLog(before, [event])).toBe(before);
+    const next = { ...event, operationId: 'made-up-next' };
+    const appended = appendLog(before, [event, next]);
+    expect(appended).toBe(`${before}${formatLogEvent(next).line}\n`);
+    expect(appendLog(appended, [event, next])).toBe(appended);
   });
   it('AC7 b8-log-folder-lost-create', async () => {
     const base = await setup();
