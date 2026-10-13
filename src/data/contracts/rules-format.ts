@@ -9,8 +9,9 @@
  *   - <wording> <!-- since 2026-10-03 -->
  *     *You wrote: "<your words>"*
  */
-import { BowerError, type Rule } from './types';
+import type { Rule } from './types';
 import { parseOwnership } from './ownership-format';
+import { ownershipError } from './note-format';
 
 export const RULES_HEADING = '## Rules';
 
@@ -38,8 +39,7 @@ export function parseRules(text: string): Rule[] {
 export function managedRules(text: string, byBower: boolean): Rule[] {
   const bytes = new TextEncoder().encode(text);
   const own = parseOwnership(bytes);
-  if (own.status === 'invalid') throw new BowerError('unknown', `Rules.md could not be read (${own.reason}).`, undefined,
-    { cause: { kind: 'note-refused', refusal: own.reason === 'unsupported-version' ? 'newer' : 'damaged', reason: own.reason } });
+  if (own.status === 'invalid') throw ownershipError(own.reason);
   const span = own.payloads?.['rules-added'];
   return span ? parseRules(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes.subarray(span.start, span.end)))
     : byBower ? parseRules(text) : [];

@@ -144,7 +144,7 @@ export function noteRefusal(e: unknown): keyof typeof NOTE_REFUSED | null {
 }
 
 /** A refusal to parse a note, logged by whoever catches it, once. */
-function ownershipError(reason: string): BowerError {
+export function ownershipError(reason: string): BowerError {
   const refusal = reason === 'unsupported-version' ? 'newer' : 'damaged';
   const cause: NoteRefusedCause = { kind: 'note-refused', refusal, reason };
   return new BowerError('unknown', NOTE_REFUSED[refusal], undefined, { cause });

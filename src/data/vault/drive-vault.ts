@@ -1450,7 +1450,7 @@ export class DriveVault implements VaultSource {
         const seen = `${file.id}@${file.modifiedTime}`;
         if (!this.refusalsLogged.has(seen)) {
           this.refusalsLogged.add(seen);
-          console.error(error, 'Rules.md could not be read; only pending rules are listed.');
+          console.error(error, 'The rules note could not be read; only pending rules are listed.');
         }
       }
     }

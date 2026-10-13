@@ -1757,7 +1757,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         rules = change;
         rulesWorded = worded;
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
-      // Refusals are logged once, with their pending lines, by rulesPlanOf.
+      // The wait is logged once, with the pending lines, by rulesPlanOf; the reason for this file is logged here.
+      else if (!result.ok) console.error(`${w.path} was refused for its rules (${result.reason})`);
     }
     for (const l of lines) if (l.record !== null) need(l.record).lines.push(l);
     if (rewrite || lines.length || rules || state) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules, state, stateAfter: state ? (w.state?.thing ?? null) : null });

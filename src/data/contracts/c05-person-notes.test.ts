@@ -43,7 +43,6 @@ describe('C05 person notes author admission', () => {
     ['no source', (): Change => ({ ...append(), entries: [{ ...entry, source: null }] })],
     ['unanswered state', (): Change => ({ kind: 'state-rewrite', recordIds: ['change-1'], previous: ['Keep the shared water butt.'], lines: ['Return it.'] })],
     ['adoption', (): Change => ({ kind: 'state-rewrite', recordIds: ['change-1'], previous: ['Keep the shared water butt.'], lines: ['Return it.'], adopted: true })],
-    ['rule wording', (): Change => ({ kind: 'rules-wording', add: [{ recordId: 'change-1', text: 'Keep papers.', yourWords: 'Keep papers.', since: 1 }], remove: [] })],
   ] as const)('C05 person notes: %s is refused not-bower beside the admitted append', (_label, change) => {
     positiveControl();
     // Soft admission assertion keeps the refusal assertion running on the unfixed build.

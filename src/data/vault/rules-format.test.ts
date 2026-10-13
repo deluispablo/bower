@@ -44,7 +44,7 @@ describe('Rules.md', () => {
     for (const owned of [false, true]) {
       expect(managedRules(prefix + region + suffix, owned)).toEqual([{ id: 'rule-1', text: 'App rule.', since: 0 }]);
       expect(managedRules(prefix, owned)).toEqual(owned ? [{ id: 'rule-1', text: 'Personal rule.', since: 0 }] : []);
-      expect(() => managedRules(prefix + region.replace('end rules-added -->', 'end rules-added'), owned)).toThrow(/damaged-boundary/);
+      expect(() => managedRules(prefix + region.replace('end rules-added -->', 'end rules-added'), owned)).toThrow(expect.objectContaining({ cause: expect.objectContaining({ reason: 'damaged-boundary' }) }));
     }
   });
 });
