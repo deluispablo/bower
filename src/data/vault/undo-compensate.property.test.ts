@@ -592,6 +592,53 @@ it('undo-fifo-seed: seed -1937975690 path 40 settles the retired inverse without
   await fc.assert(property, { seed: -1937975690, path: '40', numRuns: 1, endOnFailure: true });
 });
 
+it('undo-inverse-after-refused: seed -993178573 path 48 keeps the original in force when its inverse is refused', async () => {
+  await fc.assert(property, { seed: -993178573, path: '48', numRuns: 1, endOnFailure: true });
+});
+
+// Addendum 7: a kept inverse is not an Undo; refused for good, it leaves the original in force and on the failed list.
+it.each([{ tab: 0, place: 'same tab' }, { tab: 1, place: 'cross tab' }])(
+  'undo-inverse-after-refused: a kept inverse refused at a later flush leaves the original in force ($place)', async ({ tab }) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  let r: Real | undefined;
+  try {
+    r = await setup();
+    const m: Model = { changes: [] };
+    await change(m, r, 'add', 0, false);
+    const c = m.changes[0];
+    if (!c) throw new Error('Missing original');
+    expect(r.confirmed.has(c.line.id)).toBe(true);
+    r.outcome = 'offline';
+    await undo(m, r, 0, tab, false);
+    const inverse = c.inverses[0];
+    if (!inverse) throw new Error('Missing kept inverse');
+    expect(c.inverses).toEqual([{ id: inverse.id, outcome: 'pending' }]);
+    const waiting = JSON.parse(localStorage.getItem(outboxKey(r.root)) ?? '[]') as Array<{ line: JournalRecord }>;
+    expect(waiting.map(({ line }) => line.id)).toEqual([inverse.id]);
+    expect(undone(c)).toBe(false);
+    await invariants(r);
+    await oracle(m, r);
+    r.refuseId = inverse.id;
+    r.outcome = 'landed';
+    try { await tabAt(r, tab).port().flush(); }
+    finally { delete r.refuseId; }
+    await observe(r);
+    await inverseOutcomes(m, r);
+    expect(r.refused.has(inverse.id)).toBe(true);
+    expect(inverse.outcome).toBe('refused');
+    expect(undone(c)).toBe(false);
+    expect((await tabAt(r, 1 - tab).port().failed()).map((line) => line.id)).toEqual([inverse.id]);
+    expect(r.arrivals.map((line) => line.id)).toEqual([c.line.id]);
+    expect(localStorage.getItem(outboxKey(r.root))).toBeNull();
+    await invariants(r);
+    await oracle(m, r);
+  } finally {
+    r?.tabs.forEach((client) => client.dispose());
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
 const refusalClasses = (['inverse admission', 'later flush'] as const).flatMap((when) =>
   [0, 1].map((tab) => ({ when, tab, place: tab === 0 ? 'same tab' : 'cross tab' })));
 
