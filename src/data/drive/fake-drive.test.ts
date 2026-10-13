@@ -45,6 +45,46 @@ describe('keeping the pretend Drive across reloads', () => {
     await expect(restored.listChanges(token)).resolves.toEqual(expected);
   });
 
+  it.each([
+    { media: 'legacy text', content: { text: 'é🙂' }, size: 3, expected: 6 },
+    { media: 'legacy blob', content: { b64: 'w6nwn5mC', type: 'text/plain' }, size: 3, expected: 6 },
+    { media: 'empty text', content: { text: '' }, size: 3, expected: 0 },
+    { media: 'text without a recorded size', content: { text: 'é🙂' }, size: undefined, expected: undefined },
+    { media: 'absent', content: null, size: 3, expected: 3 },
+    { media: 'big placeholder', content: { big: true, type: 'text/plain' }, size: 262145, expected: 262145 },
+    { media: 'old placeholder without big marker', content: { b64: 'QSBiaWcgZmlsZSwga2VwdCBieSBuYW1lIG9ubHkgb24gdGhlIHByZXRlbmQgRHJpdmUu', type: 'text/plain' }, size: 262145, expected: 262145 },
+  ])('restores size from $media and preserves it through rename and listChanges', async ({ content, size, expected }) => {
+    const drive = FakeDrive.restore(JSON.stringify({ v: 1, seq: 1, last: 0, files: [
+      { meta: { id: 'root', name: 'My Drive', folder: true, parents: [], modifiedTime: new Date(0).toISOString() }, trashed: false, content: null },
+      { meta: { id: 'f1', name: 'a.md', folder: false, parents: ['root'], modifiedTime: new Date(0).toISOString(), size }, trashed: false, content },
+    ] }));
+    expect((await drive.get('root')).size).toBeUndefined();
+    expect((await drive.get('f1')).size).toBe(expected);
+    const token = await drive.getStartPageToken();
+    const renamed = await drive.update('f1', { name: 'b.md' });
+    expect(renamed.name).toBe('b.md');
+    expect(renamed.size).toBe(expected);
+    const feed = await drive.listChanges(token);
+    expect(feed.changes).toEqual([
+      { fileId: 'f1', removed: false, file: expect.objectContaining({ name: 'b.md' }) },
+    ]);
+    expect(feed.changes[0]?.file?.size).toBe(expected);
+    expect((await FakeDrive.restore(await drive.snapshot()).get('f1')).size).toBe(expected);
+  });
+
+  it('preserves contemporary byte sizes and media across reloads', async () => {
+    const drive = new FakeDrive();
+    const text = await drive.createText('root', 'a.md', 'é🙂');
+    const blob = await drive.upload('root', 'b.txt', new Blob(['é🙂'], { type: 'text/plain' }));
+    expect(text.size).toBe(6);
+    expect(blob.size).toBe(6);
+    const snapshot = await drive.snapshot();
+    const restored = FakeDrive.restore(snapshot);
+    expect(await restored.snapshot()).toBe(snapshot);
+    expect(await restored.readText(text.id)).toBe('é🙂');
+    expect(Array.from(await restored.readBytes(blob.id))).toEqual([195, 169, 240, 159, 153, 130]);
+  });
+
   it('tells a listener after each change', async () => {
     const d = new FakeDrive();
     let n = 0;

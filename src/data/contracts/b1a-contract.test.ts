@@ -190,14 +190,14 @@ it('B1a contract: 6: old notes manifests and checkpoint chains retain meaning be
   const updateCursor = await drive.getStartPageToken();
   await drive.writeText(unicode.id, 'é🙂é🙂', unicode.modifiedTime);
   expect((await drive.listChanges(updateCursor)).changes.find((c) => c.fileId === unicode.id)?.file?.size).toBe(12);
-  // Addendum 2 explicitly defers repairing old snapshot metadata. It remains readable as stored.
+  // Restore repairs legacy character-count sizes from the original media.
   const snapshot = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string; size: number } }> };
   const old = snapshot.files.find((f) => f.meta.id === unicode.id);
   expect(old).toBeDefined();
   if (old) old.meta.size = 6; // Historical UTF-16 character count, not today's byte size.
   const restored = FakeDrive.restore(JSON.stringify(snapshot), { clock: () => 0 });
   expect(await restored.readText(unicode.id)).toBe('é🙂é🙂');
-  expect((await restored.get(unicode.id)).size).toBe(6);
+  expect((await restored.get(unicode.id)).size).toBe(12);
   const manifests = JSON.parse(readFileSync('src/data/contracts/fixtures/p2/run-manifest.json', 'utf8')) as { files: Array<{ content: Manifest }> };
   const checkpoints = JSON.parse(readFileSync('src/data/contracts/fixtures/p2/run-checkpoint.json', 'utf8')) as { files: Array<{ content: Checkpoint }> };
   for (const { content } of manifests.files) {

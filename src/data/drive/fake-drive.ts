@@ -119,6 +119,8 @@ export class FakeDrive implements DriveApi {
       const content = c === null ? null : 'text' in c ? c.text : 'big' in c ? new Blob([`A big file, kept by name only on the pretend Drive.`], { type: c.type }) : new Blob([fromBase64(c.b64)], { type: c.type });
       // Old restore→snapshot could lose `big` and base64-encode the small placeholder.
       const unavailable = c && ('big' in c || ('b64' in c && (f.meta.size ?? 0) > KEEP_BYTES && content instanceof Blob && content.size <= KEEP_BYTES));
+      // Legacy snapshots counted text characters; only original media can supply the byte size.
+      if (f.meta.size !== undefined && content !== null && !unavailable) f.meta = { ...f.meta, size: typeof content === 'string' ? new TextEncoder().encode(content).byteLength : content.size };
       const kept = typeof f.sha256 === 'string' && /^[0-9a-f]{64}$/.test(f.sha256) ? { sha256: f.sha256 } : {};
       d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content, ...(unavailable ? { bytesUnavailable: true as const, ...kept } : {}) });
     }
