@@ -29,5 +29,7 @@ export default defineConfig({
     // reset as an unhandled rejection (test/person.test.ts). Only that one is let through.
     onUnhandledError: (error) => !/newer than this build/.test(String((error as Error).message ?? error)),
     reporters: ['default', 'json'], outputFile: { json: 'test-results/unit.json' },
+    // Half the cores, so a full run leaves the machine usable (https://vitest.dev/config/#maxworkers).
+    maxWorkers: '50%',
   },
 });
