@@ -2,16 +2,16 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseNote, serializeNote, type NoteFile } from '../../src/data/contracts/note-format';
+import { parseNote, readTypeTable, serializeNote, type NoteFile } from '../../src/data/contracts/note-format';
 import type { RunManifest } from '../../src/data/spine/records';
 import { sha256Sync } from '../../src/data/contracts/hashes';
 import { isRunnerFile, RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import { outsideAdmitted } from '../src/spine/admitted';
 import { loadCase } from '../src/corpus';
-import { AT, redispatchCase, runOnDrive, type CaseRun } from './corpus-run';
+import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { manifests, observe, writes, type Observation } from './b23-hot-observe';
 import { completed, failedReply, reply, report, run, select, setup, type Base } from './b1-planning-support';
-import { paging } from './drive-v3';
+import { fixedDrive, paging } from './drive-v3';
 
 const TAGS = '.bower/tags.json';
 const DEST = 'Resources/Gardening';
@@ -75,6 +75,142 @@ function noProposals(r: CaseRun) {
 }
 
 describe('B7 through production main', () => {
+  it.each([{ tags: ['gardening', 'remote-work', 'learning', 'fourth'] }, { tags: ['unsafe/tag'] }])(
+    'b7-r9 fourth installed or unsafe tag $tags refuses before effects and retries', async ({ tags }) => {
+      const b = await fixture('reuse-known', { vocabulary: [...KNOWN, 'fourth'] });
+      const exhausted = await run(b, [select(b, [], DEST), intent(b, tags)]);
+      failedReply(exhausted);
+      expect(exhausted.frames).toHaveLength(3);
+      expect(exhausted.frames[2]?.call.input).toContain('Your reply was refused:');
+      expect(mutations(exhausted)).toEqual([]);
+      const retry = await fixture('reuse-known', { vocabulary: [...KNOWN, 'fourth'] });
+      const r = await run(retry, [select(retry, [], DEST), intent(retry, tags), intent(retry, ['gardening'])]);
+      expect(r.frames[2]?.events.filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method)
+        && (!e.path.startsWith('.bower/') || /manifest-|\/changes\//.test(e.path)))).toEqual([]);
+      expect(r.code, 'R9 the installed-tag retry is accepted after refusing the invalid assignment').toBe(0);
+      expect(tagged(r, pathOfNote(retry)), 'R9 valid tagged retry files after the invalid assignment').toEqual(['gardening']);
+      expect(r.events.filter((e) => e.path === pathOfNote(retry) && e.method === 'POST')).toHaveLength(1);
+    });
+
+  it('b7-r10 assignment normalization precedes membership and duplicate refusal', async () => {
+    const duplicate = await fixture();
+    const refused = await run(duplicate, [select(duplicate, [], DEST), intent(duplicate, ['remote-work', 'Remote_work'])]);
+    failedReply(refused); expect(refused.frames).toHaveLength(3);
+    const b = await fixture(); const r = await withTags(b, ['Remote_work']);
+    expect(tagged(r, pathOfNote(b)), 'R10 alternative spelling files as the installed canonical slug').toEqual(['remote-work']);
+    completed(r); expect(mutations(r)).toEqual([]);
+  });
+
+  it('b7-r11 execution provider shows installed vocabulary', async () => {
+    const b = await fixture(); const r = await control(b);
+    for (const tag of KNOWN) expect.soft(r.frames[1]?.call.input, `R11 execution model sees installed ${tag}`).toContain(tag);
+  });
+
+  it.each([
+    ...(['source', 'concept', 'project', 'area', 'moc'] as const).map((template) => ({ template })),
+    ...readTypeTable(null).table.rows.map((row) => ({ typeRow: row.id, template: row.template })),
+  ])('b7-r12 main generation route $template declared $typeRow', async (route) => {
+    const b = await fixture(); const selection = select(b, [], DEST);
+    if ('typeRow' in route) for (const item of selection.items) item.kind = route.typeRow;
+    const authored = (tags?: string[]) => {
+      const value = intent(b, tags);
+      return { ...value, things: value.things.map((thing) => ({ ...thing, note: { ...thing.note,
+        ...('typeRow' in route ? { typeRow: route.typeRow } : { template: route.template }) } })) };
+    };
+    const r = await run(b, [selection, authored(['gardening']), authored()]);
+    expect(r.code, r.errors).toBe(0);
+    expect(parseNote(pathOfNote(b), r.after[pathOfNote(b)] ?? '').properties.find((p) => p.key === 'type')?.value)
+      .toBe('typeRow' in route ? route.typeRow : route.template);
+    expect(r.after[pathOfNote(b)]).toContain(`bower_template: ${route.template}`);
+    expect(tagged(r, pathOfNote(b)), 'R12 the actual main-created route carries its assignment').toEqual(['gardening']);
+    completed(r);
+  });
+
+  it('b7-r12 words link and comparison main outputs keep empty tags', async () => {
+    const source = await fixture();
+    const words = await setup({ folder: source.c.folder, inbox: [{ line: 'Alex grows herbs.', files: [] }] });
+    const wordNote = DEST + '/Herb reminder.md';
+    const wordRun = await run(words, [select(words, [], DEST), { kind: 'tidy-intent', v: 1, things: [],
+      notes: [{ pileId: words.sources[0]?.pileId, to: DEST, name: 'Herb reminder.md' }] }]);
+    completed(wordRun);
+    expect(wordRun.after[wordNote], 'R12 words route creates a real note').toBeDefined();
+    expect(tagged(wordRun, wordNote)).toEqual([]);
+    const link = await setup({ folder: source.c.folder, inbox: [{ line: '', files: ['Herbs.url'] }],
+      inboxFiles: { 'Herbs.url': 'https://herbs.example/reference\n' } });
+    const linkRun = await run(link, [select(link, [], DEST), { kind: 'tidy-intent', v: 1,
+      things: [{ fileId: link.sources[0]?.itemId, to: DEST, name: 'Herbs.md' }] }]);
+    completed(linkRun);
+    expect(linkRun.after[DEST + '/Herbs.md'], 'R12 link route creates a real note').toBeDefined();
+    expect(tagged(linkRun, DEST + '/Herbs.md')).toEqual([]);
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c08-compare-flats'));
+    c.folder[TAGS] = JSON.stringify({ v: 1, tags: KNOWN });
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const comparison = await runOnDrive(c, drive, root, { pacing: { sleep: async () => {} } }, 1);
+    expect(comparison.code).toBe(0);
+    const created = Object.keys(comparison.after).filter((path) => path.endsWith('.md')
+      && !path.startsWith('.bower/') && !Object.hasOwn(c.folder, path));
+    expect(created, 'R12 comparison route actually creates its table note').toHaveLength(1);
+    expect(tagged(comparison, created[0] ?? '')).toEqual([]);
+  });
+
+  it('b7-r13 invalid vocabulary ignores assignments and logs once', async () => {
+    const raw = '{"v":1,"tags":["gardening","unsafe/tag"]}\n';
+    const b = await fixture('reuse-known', { raw });
+    const r = await run(b, [select(b, [], DEST), intent(b, ['gardening', 'unsafe/tag', 'gardening', 'fourth'])]);
+    expect.soft(r.code, 'R13 disabled tags do not refuse the reply').toBe(0);
+    expect.soft(r.frames, 'R13 ignored assignments need no validation retry').toHaveLength(2);
+    expect.soft(r.after[pathOfNote(b)], 'R13 invalid list still files the authored note').toBeDefined();
+    expect(tagged(r, pathOfNote(b))).toEqual([]);
+    expect(r.after[TAGS]).toBe(raw); expect(mutations(r)).toEqual([]);
+    expect.soft(r.errors, 'R13 logged BowerError identifies the invalid vocabulary').toContain('Bower could not read your tag list');
+    expect.soft(r.errors.match(/BowerError/g) ?? [], 'R13 exactly one logged vocabulary error per run').toHaveLength(1);
+  });
+
+  it('b7-r14 vocabulary is read once per version across execution and retry never discovery', async () => {
+    const b = await fixture();
+    const r = await run(b, [select(b, [], DEST), intent(b, ['unknown-topic']), intent(b)]);
+    expect(r.code).toBe(0); expect(r.frames).toHaveLength(3);
+    expect(r.frames[0]?.events.filter((e) => e.path === TAGS && e.method === 'GET' && e.media),
+      'R14 discovery does not read vocabulary media').toEqual([]);
+    expect(r.events.filter((e) => e.path === TAGS && e.method === 'GET' && e.media),
+      'R14 provider planner and retry share one vocabulary version read').toHaveLength(1);
+    expect(mutations(r)).toEqual([]);
+  });
+
+  it('b7-r15 tagging preserves authorized personal append and link rewrite with legacy tags', async () => {
+    const source = await fixture();
+    const personal = 'Resources/Alex plans.md';
+    const legacy = 'tags: ["My Topic", "Writing, editing", "unsafe/tag", "My Topic"]\n';
+    const before = '---\nsummary: Alex grows herbs.\n' + legacy + '---\n\nAlex follows [[Old seed]].\n\n## Timeline\n';
+    const b = await setup({ folder: { ...source.c.folder, [personal]: before }, inbox: source.c.inbox,
+      inboxFiles: source.c.inboxFiles });
+    const request = await b.drive.createText(b.id(SYSTEM.changes), 'r15-request.json', JSON.stringify({
+      v: 1, id: 'r15-request', device: 'device-1', at: AT - 1, kind: 'request',
+      what: 'Update Alex plans', text: 'Update [[Alex plans]] from the gardening reference.' }));
+    const rename = await b.drive.createText(b.id(SYSTEM.changes), 'r15-rename.json', JSON.stringify({
+      v: 1, id: 'r15-rename', device: 'device-1', at: AT - 1, kind: 'rename', what: 'Renamed Old seed to Seed packet',
+      from: DEST + '/Old seed.md', path: DEST + '/Seed packet.md' }));
+    b.admission.journal = [request, rename].map((f) => ({ fileId: f.id, name: f.name,
+      parents: f.parents, modifiedTime: f.modifiedTime }));
+    const selection = select(b, [], DEST);
+    selection.items.push({ itemId: request.id, kind: 'unknown', destination: b.id('Resources'), wants: [b.id(personal)] });
+    const line = 'Alex grows herbs.';
+    const authored = (tags?: string[]) => ({ ...intent(b, tags),
+      lines: [{ note: personal, text: line, cites: b.sources[0]?.itemId }] });
+    const r = await run(b, [selection, authored(['gardening']), authored()]);
+    expect(r.code, r.errors).toBe(0);
+    expect(r.after[personal], 'R15 authorized C05 append survives tagging').toContain(' · ' + line);
+    expect(r.after[personal], 'R15 authorized link rewrite survives tagging').toContain('[[Seed packet]]');
+    expect(r.after[personal]).not.toContain('[[Old seed]]');
+    expect(r.after[personal]?.split('---')[1]).toBe(before.split('---')[1]);
+    expect(tagged(r, personal)).toEqual(parseNote(personal, before).tags);
+    expect(frozen(r).operations.filter((op) => op.effect.kind === 'edit-text').map((op) =>
+      op.effect.kind === 'edit-text' ? op.effect.path : '')).toEqual([personal]);
+    expect(r.after[DEST + '/Seed packet.md']).toBe(b.c.folder[DEST + '/Seed packet.md']);
+    expect(tagged(r, pathOfNote(b)), 'R15 new companion is tagged in the same authorized-edit run').toEqual(['gardening']);
+    expect(mutations(r)).toEqual([]);
+  });
+
   it.each(['reuse-known', 'proposal-yes', 'proposal-budget', 'authority-full-cap'])('%s untagged positive control', async (slug) => {
     await control(await fixture(slug));
   });
