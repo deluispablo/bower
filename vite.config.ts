@@ -47,5 +47,7 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts', './testing/timer-gate-setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: { modules: { classNameStrategy: 'non-scoped' } },
+    // Half the cores, so a full run leaves the machine usable (https://vitest.dev/config/#maxworkers).
+    maxWorkers: '50%',
   },
 });
