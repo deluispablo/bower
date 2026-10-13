@@ -40,7 +40,7 @@ function note(summary: string, type = 'concept'): string {
 
 async function setup(folder: Record<string, string> = { [WATER]: note(ARTICLE) },
   inbox = [{ line: ARTICLE, files: ['Article.txt'] }], inboxFiles: Record<string, string> = { 'Article.txt': ARTICLE }) {
-  const c = await loadCase(resolve(import.meta.dirname, '../../harness/corpus/b1-index-job-offer'));
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/b1-index-job-offer'));
   Object.assign(c, { folder, folderBinary: {}, inbox, inboxFiles, inboxBinary: {}, journal: [], questions: [],
     expected: {}, scope: 'all', presses: undefined, between: undefined,
     bowerOwned: Object.keys(folder) });
