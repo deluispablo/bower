@@ -15,12 +15,14 @@ pnpm dev            # http://localhost:5190, the demo
 
 ```bash
 pnpm check          # lint, types, unit tests (app, api, runner), builds and code gates
-pnpm e2e            # Playwright on the demo, phone and desktop, with axe
-pnpm e2e:fake       # the same suite on the real logic over a pretend Google Drive
+pnpm e2e            # the merge gate: pretend Drive on phone and desktop, then the demo on desktop, with axe
+pnpm e2e:fake       # the suite on the real logic over a pretend Google Drive
+pnpm e2e:demo       # the suite on the demo, phone and desktop
+pnpm e2e:full       # all four (fake and demo, phone and desktop), before a backup or deployment
 pnpm e2e:pwa        # the built app: manifest, service worker, offline start
 ```
 
-Heavy runs share one lock (`testing/with-lock.sh`). Test fixtures, the synthetic corpus and the gate baselines live in `testing/`.
+Every change runs `pnpm check` plus the touched screens' e2e (`pnpm e2e:fake <specs>`); `pnpm e2e` before merging to `main`; `pnpm e2e:full` before a backup or deployment. After a failure, rerun the failing suite with `--last-failed` before the whole gate. Heavy runs share one lock (`testing/with-lock.sh`). Test fixtures, the synthetic corpus and the gate baselines live in `testing/`.
 
 ## Where the data comes from
 

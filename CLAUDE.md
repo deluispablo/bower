@@ -8,11 +8,13 @@ Bower: a PWA that tidies a person's Google Drive folder into a second brain. Pro
 pnpm install
 pnpm dev          # the demo at http://localhost:5190
 pnpm check        # lint, types, unit tests (app, api, runner), builds, duplication, unused code, dependencies, bundle, landing
-pnpm e2e          # Playwright on the demo, phone and desktop, with axe
-pnpm e2e:fake     # the same suite over the pretend Drive and Worker
+pnpm e2e          # the merge gate: pretend Drive and Worker on phone and desktop, then the demo on desktop, with axe
+pnpm e2e:fake     # the suite over the pretend Drive and Worker
+pnpm e2e:demo     # the suite on the demo, phone and desktop
+pnpm e2e:full     # all four (fake and demo, phone and desktop)
 ```
 
-Gates: `pnpm check` plus the touched screens' e2e for every change; the full e2e suites before merging to `main`. Heavy runs share one lock (`testing/with-lock.sh`). Test output goes to a file; read only the failures.
+Gates: `pnpm check` plus the touched screens' e2e (`pnpm e2e:fake <specs>`) for every change; `pnpm e2e` before merging to `main`; `pnpm e2e:full` before a backup or deployment. After a failure, rerun the failing suite with `--last-failed` before the whole gate. Heavy runs share one lock (`testing/with-lock.sh`). Test output goes to a file; read only the failures.
 
 ## Where things are
 
