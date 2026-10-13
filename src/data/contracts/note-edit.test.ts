@@ -956,9 +956,13 @@ describe('note edits change only what the contract allows', () => {
       expectEdit(custom, [word([scans])], `---\nsummary: My own rules.\nby: bower\n---\n\n## Rules\n\n${NEW.join('\n')}\n## Mine\n- Not a rule of Bower's [[Old]]\n`);
     });
 
-    it('refuses a Rules.md without by: bower', () => {
-      expectRefusal('---\nsummary: 1 rule Bower follows in every tidy-up.\nkind: Rules\n---\n\n## Rules\n\n', [word([scans])], 'not-bower');
-      expectRefusal('## Rules\n\n- Keep PDFs whole.\n', [word([scans])], 'not-bower');
+    it('appends a region without by: bower, preserving the summary; v2 stays unsupported', () => {
+      const region = '\n## Rules added in Bower\n<!-- bower:ownership/2 begin rules-added -->\n## Rules\n\n'
+        + NEW.join('\n') + '\n<!-- bower:ownership/2 end rules-added -->\n';
+      for (const before of ['---\nsummary: 1 rule Bower follows in every tidy-up.\nkind: Rules\n---\n\n## Rules\n\n', '## Rules\n\n- Keep PDFs whole.\n']) {
+        const after = before + region;
+        expect.soft(applyChanges(enc(before), [word([scans])])).toEqual({ ok: true, text: after, bytes: enc(after) });
+      }
       expectRefusal(v2('\n', []), [word([scans])], 'unsupported');
     });
 

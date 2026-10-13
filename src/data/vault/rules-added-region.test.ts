@@ -1,0 +1,189 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { applyChanges, EDIT_FILE_LIMIT } from '../contracts/note-edit';
+import type { Change, RuleAdd } from '../contracts/run-manifest';
+import { FakeDrive } from '../drive/fake-drive';
+import { seedFakeDrive } from '../fake/seed';
+import { tidyUp } from '@/testing/tidy-up';
+import { DriveVault } from './drive-vault';
+import { parseOwnership } from './ownership-format';
+import { parseRules, RULES_TEMPLATE } from './rules-format';
+
+const withoutStamp = (props?: Record<string, string>): Record<string, string> =>
+  Object.fromEntries(Object.entries(props ?? {}).filter(([key]) => key !== 'bowerOp'));
+
+const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
+const decode = (bytes: Uint8Array): string => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
+const BEGIN = '<!-- bower:ownership/2 begin rules-added -->';
+const END = '<!-- bower:ownership/2 end rules-added -->';
+const text = 'Keep receipts together.';
+const added: RuleAdd = { recordId: 'rule-alex-1', text, yourWords: 'receipts together', since: Date.UTC(2026, 9, 13) };
+const word = (add: RuleAdd[] = [added], remove: string[] = []): Change => ({
+  kind: 'rules-wording', add, remove: remove.map((text) => ({ recordId: 'remove-alex-1', text })),
+});
+const payload = `## Rules\n\n- ${text} <!-- since 2026-10-13 -->\n  *You wrote: "receipts together"*\n`;
+const region = `## Rules added in Bower\n${BEGIN}\n${payload}${END}\n`;
+const original = '---\nsummary: 1 rule Bower follows in every tidy-up.\ncontact: you@example.com\n---\nAlex keeps café and e\u0301.\n## Rules\n- Keep receipts together.\n';
+const variants = ['\n', '\r\n'].flatMap((eol) => [false, true].flatMap((bom) => [false, true].map((final) => ({
+  label: `${eol === '\n' ? 'LF' : 'CRLF'}, ${bom ? 'BOM' : 'no BOM'}, ${final ? 'final newline' : 'no final newline'}`,
+  eol, prefix: `${bom ? '\ufeff' : ''}${(final ? original : original.slice(0, -1)).replace(/\n/g, eol)}`,
+}))));
+
+async function fixture(contents: string, managed = false) {
+  const drive = new FakeDrive();
+  const root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+  const file = (await drive.listAll(root)).find((f) => f.name === 'Rules.md' && f.parents.includes(root));
+  if (!file) throw new Error('Missing seeded Rules.md');
+  await drive.writeText(file.id, contents, file.modifiedTime);
+  if (!managed) await drive.update(file.id, { appProperties: Object.fromEntries(Object.keys(file.appProperties ?? {}).map((key) => [key, null])) });
+  const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+  return { drive, root, vault, id: file.id };
+}
+
+// Read the public ownership payload, so these tests do not invent a second marker parser.
+function regionRules(contents: string) {
+  const bytes = encode(contents);
+  const own = parseOwnership(bytes);
+  const payloads = 'payloads' in own ? own.payloads as Readonly<Record<string, { start: number; end: number }>> | undefined : undefined;
+  const span = payloads?.['rules-added'];
+  expect.soft(own.status).not.toBe('invalid');
+  expect.soft(span, 'rules-added ownership payload').toBeDefined();
+  return span ? parseRules(decode(bytes.subarray(span.start, span.end))) : [];
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.setSystemTime(new Date('2026-10-13T12:00:00Z'));
+});
+afterEach(() => vi.useRealTimers());
+
+describe('rules-added-region', () => {
+  it('AC1 red: a consenting add byte-appends a region, keeping summary and app properties', async () => {
+    for (const { label, prefix } of variants) {
+      const { drive, root, vault, id } = await fixture(prefix);
+      const before = await drive.get(id);
+      await vault.addRule('scans by date');
+      const run = await tidyUp(drive, root);
+      expect(run.phase).toBe('done');
+      const after = await drive.readBytes(id);
+      expect.soft(after.subarray(0, encode(prefix).length), label).toEqual(encode(prefix));
+      expect.soft(decode(after), label).toContain('## Rules added in Bower');
+      expect.soft(regionRules(decode(after)), label).toEqual([expect.objectContaining({ yourWords: 'scans by date' })]);
+      // The bowerOp write stamp every update carries is exempt (spec R6).
+      expect.soft(withoutStamp((await drive.get(id)).appProperties), label).toEqual(withoutStamp(before.appProperties));
+      vault.dispose();
+    }
+  });
+
+  it('AC2 red: second adds and pending removes touch only the region, never original bullets', () => {
+    for (const { label, prefix, eol } of variants) {
+      const before = prefix + eol + region.replace(/\n/g, eol);
+      const second = { ...added, recordId: 'rule-alex-2', text: 'Name scans by date.', yourWords: 'scans by date', since: added.since + 1 };
+      const out = applyChanges(encode(before), [word([second], [text])]);
+      expect.soft(out.ok, label).toBe(true);
+      if (!out.ok) continue;
+      expect(out.bytes.subarray(0, encode(prefix).length)).toEqual(encode(prefix));
+      expect(regionRules(out.text).map((r) => r.text)).toEqual([second.text]);
+      const again = applyChanges(out.bytes, [word([], [text])]);
+      expect(again).toEqual({ ok: false, reason: 'unchanged' });
+    }
+  });
+
+  it('AC3 red: rules lists and dedupes only managed and pending rules, never original bullets', async () => {
+    for (const { label, prefix, eol } of variants) {
+      const plain = await fixture(prefix);
+      expect.soft(await plain.vault.rules(), label).toEqual([]);
+      const pending = await plain.vault.addRule(text).catch((error: unknown) => error);
+      expect.soft(pending, label).toMatchObject({ text, pending: true });
+      expect.soft(await plain.vault.rules(), label).toEqual([expect.objectContaining({ text, pending: true })]);
+      plain.vault.dispose();
+      const managed = await fixture(prefix + eol + region.replace(/\n/g, eol));
+      await managed.vault.addRule('scans by date');
+      expect.soft(await managed.vault.rules(), label).toEqual([
+        expect.objectContaining({ text: 'scans by date', pending: true }),
+        expect.objectContaining({ text, yourWords: 'receipts together' }),
+      ]);
+      managed.vault.dispose();
+    }
+  });
+
+  it('AC4 red: a positive single-file add succeeds; eligible twins keep every byte and RULES_LEFT pending', async () => {
+    const single = await fixture(original);
+    await single.vault.addRule('scans by date');
+    expect((await tidyUp(single.drive, single.root)).phase).toBe('done');
+    expect.soft(await single.drive.readText(single.id), 'positive add excludes a not-bower false positive').toContain('## Rules added in Bower');
+    expect.soft((await single.vault.rules()).filter((r) => r.pending), 'positive add is worded').toEqual([]);
+    single.vault.dispose();
+
+    const { drive, root, vault, id } = await fixture(original);
+    const twin = await drive.createText(root, 'Rules.md', original);
+    const before = await Promise.all([drive.get(id), drive.get(twin.id)]);
+    const pending = await vault.addRule('scans by date');
+    const errors = vi.spyOn(console, 'error');
+    try {
+      expect((await tidyUp(drive, root)).phase).toBe('done');
+      for (const file of before) {
+        expect(await drive.readText(file.id)).toBe(original);
+        expect(await drive.get(file.id)).toEqual(file);
+      }
+      expect(await vault.rules()).toContainEqual(expect.objectContaining({ id: pending.id, pending: true }));
+      expect(errors).toHaveBeenCalledWith(expect.objectContaining({ message: 'Bower could not word some of your rules; they wait for the next tidy-up.' }), expect.any(String));
+    } finally {
+      errors.mockRestore();
+      vault.dispose();
+    }
+  });
+
+  it('AC5 red: output over 1 MiB and invalid UTF-8 are refused; duplicate region and rule are unchanged', () => {
+    expect(applyChanges(new Uint8Array([0xc3, 0x28]), [word()])).toEqual({ ok: false, reason: 'invalid-encoding' });
+    const full = original + 'x'.repeat(EDIT_FILE_LIMIT - encode(original).length);
+    expect.soft(applyChanges(encode(full), [word()]), 'input fits, appended output exceeds cap').toEqual({ ok: false, reason: 'too-large' });
+    for (const { label, prefix, eol } of variants) {
+      const before = prefix + eol + region.replace(/\n/g, eol);
+      const bytes = encode(before);
+      const copy = bytes.slice();
+      expect.soft(applyChanges(bytes, [word()]), label).toEqual({ ok: false, reason: 'unchanged' });
+      expect.soft(applyChanges(bytes, [word([])]), `no second region: ${label}`).toEqual({ ok: false, reason: 'unchanged' });
+      expect(bytes).toEqual(copy);
+    }
+  });
+
+  it('AC6 red: trailing personal bytes remain untouchable while rules stay listed and later adds edit the region', async () => {
+    for (const { label, prefix, eol } of variants) {
+      const tail = `${eol}Alex typed café after the region.${eol}## Rules${eol}- Personal trailing bullet.`;
+      const before = prefix + eol + region.replace(/\n/g, eol) + tail;
+      expect.soft(regionRules(before).map((r) => r.text), label).toEqual([text]);
+      const out = applyChanges(encode(before), [word([{ ...added, text: 'Name scans by date.', yourWords: 'scans by date' }])]);
+      expect.soft(out.ok, label).toBe(true);
+      if (out.ok) {
+        expect(out.bytes.subarray(0, encode(prefix).length)).toEqual(encode(prefix));
+        expect(out.bytes.subarray(-encode(tail).length)).toEqual(encode(tail));
+        expect(regionRules(out.text).map((r) => r.text)).toEqual(['Name scans by date.', text]);
+      }
+      const { vault } = await fixture(before);
+      expect.soft(await vault.rules(), label).toEqual([expect.objectContaining({ text, yourWords: 'receipts together' })]);
+      vault.dispose();
+    }
+  });
+
+  it('AC7 control: Bower-owned and legacy managed Rules.md retain their grammar and summary update', async () => {
+    for (const byProperty of [false, true]) {
+      const { drive, root, vault, id } = await fixture(RULES_TEMPLATE.text, true);
+      if (!byProperty) await drive.update(id, { appProperties: { by: null } });
+      const before = (await drive.get(id)).appProperties;
+      await vault.addRule('scans by date');
+      expect((await tidyUp(drive, root)).phase).toBe('done');
+      expect(parseRules(await drive.readText(id))).toEqual([expect.objectContaining({ yourWords: 'scans by date' })]);
+      expect(await drive.readText(id)).toContain('summary: 1 rule Bower follows in every tidy-up.');
+      expect(await drive.readText(id)).not.toContain('## Rules added in Bower');
+      expect((await drive.get(id)).appProperties?.by).toBe(before?.by);
+      vault.dispose();
+    }
+  });
+
+  it('AC7 control: ownership/2 Rules.md stays unsupported', () => {
+    const v2 = '---\nbower_format: ownership/2\nby: bower\n---\n' + ['current', 'personal', 'timeline', 'bower-note'].map((owner) =>
+      `<!-- bower:ownership/2 begin ${owner} -->\n<!-- bower:ownership/2 end ${owner} -->\n`).join('');
+    expect(parseOwnership(encode(v2)).status).toBe('v2');
+    expect(applyChanges(encode(v2), [word()])).toEqual({ ok: false, reason: 'unsupported' });
+  });
+});

@@ -71,16 +71,19 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
     expect(parseRules(await w.drive.readText(rulesId))[0]?.yourWords).toBe('receipts go to money');
   });
 
-  it('a Rules.md that is not the old template is never touched by the runner', async () => {
+  it('a person-edited Rules.md gets a region without repair; concurrent edits and twins stay untouched', async () => {
     // Edited by the person: the old text with one more line.
     {
       const edited = `${OLD_RULES_TEMPLATE}\n- Receipts go to Money.\n`;
       const { w, rulesId } = await folderWith(edited);
-      const before = await w.drive.get(rulesId);
       expect(await runOnce(w)).toBe(0);
       const after = await w.drive.get(rulesId);
-      expect(await w.drive.readText(rulesId)).toBe(edited);
-      expect(after.modifiedTime).toBe(before.modifiedTime);
+      const text = await w.drive.readText(rulesId);
+      expect(text.slice(0, edited.length)).toBe(edited);
+      expect.soft(text.slice(edited.length)).toContain('## Rules added in Bower');
+      expect.soft(text).toContain('<!-- bower:ownership/2 begin rules-added -->');
+      expect.soft(text).toContain('<!-- bower:ownership/2 end rules-added -->');
+      expect.soft(text.slice(edited.length)).toContain('*You wrote: "receipts go to money"*');
       expect(after.appProperties).toBeUndefined();
     }
     // Changed by the person between the runner's read of the old text and its write.
