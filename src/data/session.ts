@@ -462,42 +462,50 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
   function begin(): Promise<PlaceState> {
     if (disposed) return Promise.reject(new BowerError('unknown', 'Bower is no longer open on this page.'));
     if (state !== 'starting') return Promise.resolve(state);
-    starting ??= (async (): Promise<PlaceState> => {
-      try {
-        const s = await join();
-        if (disposed) return state;
-        if (!(await hold(s, false))) {
-          if (!disposed) block();
-          return state;
-        }
-        let reply: LeaseReply | null = null;
-        const gen = leaveGen;
-        try {
-          reply = await ask('check');
-        } catch (e) {
-          // Offline: work goes on into the outbox; every write and the flush ask again when they can.
-          if (!(e instanceof BowerError && e.code === 'offline')) {
-            letGo();
-            throw e;
-          }
-        }
-        // Disposed meanwhile, another start/reset decided, or a leave since: this answer activates nothing.
-        if (disposed || state !== 'starting' || gen !== leaveGen) {
-          if (disposed) letGo();
-          return state;
-        }
-        if (reply && !reply.active) {
-          block();
-          return state;
-        }
-        // Offline, the epoch this tab last confirmed is the one it holds: a newer one blocks it once it can ask.
-        await activate(reply ? reply.epoch : remembered(s), reply !== null, 'start');
+    if (starting) return starting;
+    const p = (async (): Promise<PlaceState> => {
+      const s = await join();
+      if (disposed) return state;
+      if (!(await hold(s, false))) {
+        if (!disposed) block();
         return state;
-      } finally {
-        starting = null;
       }
+      let reply: LeaseReply | null = null;
+      // shortcut: resets during join/hold need a reload; harden if they become normal use.
+      const gen = leaveGen;
+      try {
+        reply = await ask('check');
+      } catch (e) {
+        // Offline: work goes on into the outbox; every write and the flush ask again when they can.
+        if (!(e instanceof BowerError && e.code === 'offline')) {
+          if (gen !== leaveGen) {
+            console.error(e);
+            return state;
+          }
+          letGo();
+          throw e;
+        }
+      }
+      // Disposed meanwhile, another start/reset decided, or a leave since: this answer activates nothing.
+      if (disposed || state !== 'starting' || gen !== leaveGen) {
+        if (disposed) letGo();
+        return state;
+      }
+      if (reply && !reply.active) {
+        block();
+        return state;
+      }
+      // Offline, the epoch this tab last confirmed is the one it holds: a newer one blocks it once it can ask.
+      await activate(reply ? reply.epoch : remembered(s), reply !== null, 'start');
+      return state;
     })();
-    return starting;
+    starting = p;
+    const clear = (): void => {
+      if (starting === p) starting = null;
+    };
+    // expected: only forgets this start; its caller hears any fresh failure.
+    p.then(clear, clear);
+    return p;
   }
 
   const onPageHide = (): void => {
@@ -629,6 +637,7 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     reset(): void {
       nextLeave();
       checking = null;
+      starting = null;
       letGo();
       const changed = state !== 'starting';
       state = 'starting';
