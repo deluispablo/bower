@@ -3,8 +3,8 @@
     "present": [
       "Resources/Gardening/Mulch notice.txt",
       "Resources/Gardening/Mulch notice.md",
-      ".bower/log.md",
-      "Bower health.md"
+      "Bower health.md",
+      ".bower/log/2026-10.md"
     ],
     "absent": [
       "Inbox/*",
@@ -17,7 +17,7 @@
   ],
   "notes": [
     {
-      "path": ".bower/log.md",
+      "path": ".bower/log/2026-10.md",
       "contains": [
         "# Log",
         " | create | ",
@@ -44,11 +44,10 @@
   "report": {
     "filed": 1,
     "created": [
-      "Resources/Gardening/Mulch notice.md"
-    ],
-    "updated": [
+      "Resources/Gardening/Mulch notice.md",
       "Bower health.md"
     ],
+    "updated": [],
     "questionsExactly": 0
   },
   "linksResolve": true

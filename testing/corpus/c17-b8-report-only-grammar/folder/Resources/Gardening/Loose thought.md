@@ -1,6 +1,7 @@
 ---
-summary: Alex has an unlinked thought.
+by: bower
+tags: [home, garden, career, unlisted]
 ---
 
 ## My thoughts
-Alex is thinking about herbs.
+Alex is thinking about herbs. [[Loose thought]]
