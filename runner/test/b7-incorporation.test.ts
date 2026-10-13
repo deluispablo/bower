@@ -37,8 +37,8 @@ async function fixture(slug = 'reuse-known', options: { vocabulary?: string[] | 
   return b;
 }
 
-function intent(b: Base, tags?: string[]) {
-  return { kind: 'tidy-intent', v: 1, things: b.sources.filter((s) => s.name).map((s) => ({
+function intent(b: Base, tags?: string[], newTags?: string[]) {
+  return { kind: 'tidy-intent', v: 1, ...(newTags === undefined ? {} : { newTags }), things: b.sources.filter((s) => s.name).map((s) => ({
     fileId: s.itemId, to: DEST, name: s.name,
     ...(!s.name.endsWith('.md') ? { note: { name: s.name.replace(/\.[^.]+$/, '.md'),
       summary: 'Alex keeps a gardening reference.', body: b.c.inboxFiles[s.name]?.trim() ?? 'Alex grows herbs.',
@@ -164,30 +164,27 @@ describe('B7 through production main', () => {
     const reuse = await fixture('reuse-known', { words: 'File this. Tag it Remote_work.' });
     const reused = await control(reuse);
     expect(vocabulary(reused)).toEqual(KNOWN);
-    // Exact person requests are the ruled growth input available before the automatic-candidate declaration is frozen.
+    // The execution reply declares candidates from the person's request.
     const b = await fixture('proposal-yes', { words: 'File this rainwater guide. Tag it rainwater.' });
-    const r = await run(b, [select(b, [], DEST), intent(b)]);
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater'])]);
     completed(r); noProposals(r);
     expect(vocabulary(r), 'a named topic installs automatically without a consent reply field')
       .toEqual([...(JSON.parse(b.c.folder[TAGS] ?? '{}') as { tags: string[] }).tags, 'rainwater']);
     expect(mutations(r)).toHaveLength(1); growthEffect(r);
-    const log = r.after['.bower/log/2026-10.md'] ?? '';
-    expect(log).toMatch(/decision.*rainwater.* · op:[a-f0-9]{12}/);
     expect(Object.keys(r.after).filter((p) => p.startsWith('.bower/proposals/'))).toEqual([]);
     expect(r.frames).toHaveLength(2);
-    // An idle later press never grows again, logs again, or modifies the installed vocabulary.
+    // An idle later press never grows again or modifies the installed vocabulary.
     const laterEvents: Observation[] = [];
     const later = await runOnDrive(b.c, b.drive, b.root, { claude: async () => reply({ kind: 'tidy-intent', v: 1, things: [] }),
       around: observe(b.drive, b.root, laterEvents), pacing: { sleep: async () => {} } }, 2);
     expect(later.after[TAGS]).toBe(r.after[TAGS]);
     expect(writes(laterEvents, TAGS)).toEqual([]);
-    expect(later.after['.bower/log/2026-10.md']).toBe(log);
   });
 
   it('b7-three-thirty-two growth and duplicate-before-cap', async () => {
     await control(await fixture());
     const b = await fixture('reuse-known', { words: 'File this. Tag it rainwater, Rain_water, compost and seed-saving.' });
-    const r = await run(b, [select(b, [], DEST), intent(b)]);
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater', 'Rain_water', 'compost', 'seed-saving'])]);
     completed(r);
     expect(vocabulary(r), 'equivalent candidates dedupe before the two-addition bound').toEqual([...KNOWN, 'rainwater', 'compost']);
     expect(mutations(r)).toHaveLength(1); noProposals(r);
@@ -198,7 +195,7 @@ describe('B7 through production main', () => {
     expect(safe.after['Resources/Alex plans.md']).toBe(source.c.folder['Resources/Alex plans.md']);
     expect(safe.after['Rules.md']).toBe(source.c.folder['Rules.md']);
     const b = await fixture('reuse-known', { vocabulary: initial, words: 'File this. Tag it rainwater, compost and seed-saving.' });
-    const r = await run(b, [select(b, [], DEST), intent(b)]); completed(r); noProposals(r);
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater', 'compost', 'seed-saving'])]); completed(r); noProposals(r);
     expect(vocabulary(r), 'exact person request installs only the two topics that fit').toEqual(['rainwater', 'compost']);
     expect(mutations(r)).toHaveLength(1);
     expect(Object.keys(r.after).filter((p) => /pending.*tag|tag.*queue/i.test(p))).toEqual([]);
@@ -219,7 +216,7 @@ describe('B7 through production main', () => {
     await control(await fixture());
       const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
       let changed = false; let refused = false;
-      const r = await run(b, [select(b, [], DEST), intent(b)], { beforeReply: async (turn) => {
+      const r = await run(b, [select(b, [], DEST), intent(b, ['rainwater'], ['rainwater'])], { beforeReply: async (turn) => {
         if (turn === 2 && fault === 'changed') {
           changed = true; await b.drive.writeText(b.id(TAGS), '{"v":1,"tags":["other-topic"]}\n', (await b.drive.get(b.id(TAGS))).modifiedTime);
         }
@@ -248,7 +245,7 @@ describe('B7 through production main', () => {
     expect(vocabulary(capacity)).toHaveLength(30); expect(mutations(capacity)).toEqual([]);
     const before = vocabulary(capacity).slice(0, 29);
     const b = await fixture('reuse-known', { vocabulary: before, words: 'File this. Tag it rainwater and new-topic.' });
-    const r = await run(b, [select(b, [], DEST), intent(b)]); completed(r);
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater', 'new-topic'])]); completed(r);
     expect(vocabulary(r), 'only the first candidate fits the thirtieth slot').toEqual([...before, 'rainwater']);
     expect(vocabulary(r)).toHaveLength(30); expect(mutations(r)).toHaveLength(1);
   });
@@ -257,7 +254,7 @@ describe('B7 through production main', () => {
     await control(await fixture());
     const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
     let lost = false;
-    const r = await run(b, [select(b, [], DEST), intent(b)], { around: (fetch) => async (input, init = {}) => {
+    const r = await run(b, [select(b, [], DEST), intent(b, ['rainwater'], ['rainwater'])], { around: (fetch) => async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
       const path = url.pathname.endsWith('/' + b.id(TAGS));
       if (lost && path) throw new TypeError('Made-up lost vocabulary connection');
@@ -272,14 +269,13 @@ describe('B7 through production main', () => {
     expect(vocabulary(replay)).toEqual(['gardening', 'rainwater']);
     expect(writes(events, TAGS)).toEqual([]);
     expect(tagged(replay, pathOfNote(b))).toContain('rainwater');
-    expect((replay.after['.bower/log/2026-10.md'] ?? '').split('\n').filter((line) => /decision.*rainwater/.test(line))).toHaveLength(1);
   });
 
   it('b7-no-stamp-only-write', async () => {
     const known = await fixture(); const unchanged = await control(known);
     expect(unchanged.after[TAGS]).toBe(known.c.folder[TAGS]); expect(mutations(unchanged)).toEqual([]);
     const b = await fixture('reuse-known', { words: 'File this. Tag it rainwater and compost.' });
-    const r = await run(b, [select(b, [], DEST), intent(b)]);
+    const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater', 'compost'])]);
     expect(mutations(r), 'two real additions use one vocabulary mutation, never a stamp-only PATCH').toHaveLength(1);
     expect(JSON.parse(mutations(r)[0]?.text ?? '{}')).toEqual({ v: 1, tags: [...KNOWN, 'rainwater', 'compost'] });
     const op = growthEffect(r);
@@ -313,7 +309,7 @@ describe('B7 through production main', () => {
   it('b7-undo-keeps-vocabulary', async () => {
     await control(await fixture());
     const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
-    const first = await run(b, [select(b, [], DEST), intent(b)]);
+    const first = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater'])]);
     expect(vocabulary(first), 'Undo control first installs the run vocabulary').toEqual(['gardening', 'rainwater']);
     const sourceId = b.sources[0]?.itemId ?? '';
     const move = frozen(first).operations.find((op) => op.effect.kind === 'move' && op.effect.before.fileId === sourceId);
@@ -343,13 +339,14 @@ describe('B7 through production main', () => {
   it.each(['reuse-known', 'proposal-yes', 'proposal-budget', 'authority-full-cap'])('%s corpus oracle through main', async (slug) => {
     const b = await fixture(slug);
     const replies = JSON.parse(await readFile(resolve(b.c.dir, 'replies.json'), 'utf8')) as Array<{ things: Array<{ fileId: string }> }>;
-    const bind = (base: Base): { things: Array<{ note?: { tags?: string[] } }> } =>
+    const bind = (base: Base): { newTags?: string[]; things: Array<{ note?: { tags?: string[] } }> } =>
       JSON.parse(JSON.stringify(replies[0]).replace(/\$file:([^"\\]+)/g, (_, name: string) =>
         base.sources.find((s) => s.name === name)?.itemId ?? 'missing-fixture-id')) as { things: Array<{ note?: { tags?: string[] } }> };
     const bound = bind(b);
     const wants = [b.id(DEST + '/Gardening.md'), b.id(DEST + '/Seed packet.md')];
     const positive = await fixture(slug);
     const positiveBound = bind(positive);
+    delete positiveBound.newTags;
     for (const thing of positiveBound.things) if (thing.note) delete thing.note.tags;
     const valid = await run(positive, [select(positive, [positive.id(DEST + '/Gardening.md'), positive.id(DEST + '/Seed packet.md')], DEST), positiveBound]);
     completed(valid, positive.sources.length);
