@@ -2,32 +2,12 @@
   "files": {
     "present": [
       "About me.md",
-      ".bower/observations.jsonl",
-      ".bower/archive/about-me/*/how-you-like-things/2026-10-07-*.md"
+      ".bower/observations.jsonl"
     ],
     "absent": [
-      "About me - archive.md"
+      "Inbox/*"
     ]
   },
-  "notes": [
-    {
-      "path": "About me.md",
-      "contains": [
-        "Prefers remote roles except when regular mentoring is offered in Saltmere.",
-        "Prefers keeping the amber gate clear when planning garden work in Saltmere."
-      ]
-    },
-    {
-      "path": ".bower/observations.jsonl",
-      "contains": [
-        "\"kind\":\"consolidated\""
-      ]
-    }
-  ],
-  "unchanged": [
-    "Resources/Personal/Preference statements.md",
-    ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-06-old.md"
-  ],
   "protectedRanges": [
     {
       "path": "About me.md",
@@ -42,34 +22,45 @@
       }
     }
   ],
-  "linksResolve": true,
   "runs": [
     {
-      "unchanged": [
-        "About me.md",
-        ".bower/observations.jsonl",
-        "Resources/Personal/Preference statements.md",
-        ".bower/archive/about-me/about-fixture/how-you-like-things/2026-10-06-old.md"
-      ],
       "files": {
         "absent": [
-          ".bower/archive/about-me/*/how-you-like-things/2026-10-07-*.md"
+          ".bower/archive/about-me/*",
+          "Inbox/*"
         ]
       },
+      "notes": [
+        {
+          "path": "About me.md",
+          "contains": [
+            "I want comparisons that say what is missing and keep each source apart, so a choice that is not sure stays not sure until I add the words that settle it."
+          ]
+        }
+      ],
       "report": {
         "filed": 0,
-        "created": [],
-        "updated": [],
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "About me.md"
+        ],
         "questionsExactly": 0
       }
     },
     {
+      "notes": [
+        {
+          "path": ".bower/observations.jsonl",
+          "contains": [
+            "I prefer to keep the amber gate clear when I plan garden work in Saltmere, and I do not want tools left on the path by the beds at any time of day."
+          ]
+        }
+      ],
       "report": {
         "filed": 0,
         "created": [],
-        "updated": [
-          "About me.md"
-        ],
         "questionsExactly": 0
       }
     }

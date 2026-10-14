@@ -1,26 +1,28 @@
-{
-  "kind": "tidy-intent",
-  "v": 1,
-  "things": [
-    {
-      "fileId": "$file:Ferrowick offer.txt",
-      "to": "Projects/Job hunt",
-      "name": "Ferrowick offer.txt",
-      "note": {
-        "name": "Ferrowick offer.md",
-        "summary": "Ferrowick offers Alex a developer role.",
-        "body": "Ferrowick offers Alex a developer role on 2 November 2026. Its office is in Briarhaven.\n\nRelated: [[Job hunt]]."
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Ferrowick offer.txt",
+        "to": "Projects/Job hunt",
+        "name": "Ferrowick offer.txt",
+        "note": {
+          "name": "Ferrowick offer.md",
+          "summary": "Ferrowick offers Alex a developer role.",
+          "body": "Ferrowick offers Alex a developer role on 2 November 2026. Its office is in Briarhaven.\n\nRelated: [[Job hunt]]."
+        }
       }
-    }
-  ],
-  "observations": [
-    {
-      "source": {
-        "fileId": "$file:Ferrowick offer.txt"
-      },
-      "section": "how-you-like-things",
-      "category": "preference",
-      "text": "Prefers office roles."
-    }
-  ]
-}
+    ],
+    "observations": [
+      {
+        "source": {
+          "fileId": "$file:Ferrowick offer.txt"
+        },
+        "section": "about-preferences",
+        "category": "preference",
+        "text": "I prefer remote roles, except when a role offers regular mentoring in Saltmere."
+      }
+    ]
+  }
+]

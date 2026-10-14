@@ -36,6 +36,8 @@ export interface CorpusJournalLine {
 }
 
 export type CorpusBetween =
+  /** A words pile the person adds before the press: `p-<press>-<n>`, `n` counting only that press's words steps. */
+  | { kind: 'words'; line: string }
   | { kind: 'edit'; path: string; text: string }
   | { kind: 'move'; path: string; to: string }
   | { kind: 'answer'; question: { id: string } | QuestionSubjectExpectation; yes: boolean };

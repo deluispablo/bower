@@ -15,22 +15,30 @@
     {
       "path": "About me.md",
       "contains": [
-        "Prefers remote roles except when regular mentoring is offered in Saltmere."
+        "I prefer remote roles, except when a role offers regular mentoring in Saltmere."
       ],
       "excludes": [
-        "Prefers office roles",
-        "sensitive health fact",
-        "always file future offers in Archive"
+        "office roles",
+        "health",
+        "Archive"
       ]
     },
     {
       "path": ".bower/observations.jsonl",
       "contains": [
-        "\"kind\":\"words\""
+        "\"kind\":\"words\"",
+        "I prefer remote roles, except when a role offers regular mentoring in Saltmere."
       ],
       "excludes": [
-        "Prefers office roles",
-        "sensitive health fact"
+        "office roles",
+        "health",
+        "Archive"
+      ]
+    },
+    {
+      "path": "Projects/Job hunt/Ferrowick offer.md",
+      "contains": [
+        "[[Job hunt]]"
       ]
     }
   ],
@@ -51,11 +59,11 @@
       }
     }
   ],
-  "linksResolve": true,
   "report": {
     "filed": 1,
     "created": [
-      "Projects/Job hunt/Ferrowick offer.md"
+      "Projects/Job hunt/Ferrowick offer.md",
+      "Bower health.md"
     ],
     "updated": [
       "About me.md"

@@ -166,8 +166,10 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   if (c.presses && c.between) throw new Error('Use between or presses, not both.');
   for (const [i, press] of presses.entries()) {
     let answerStart: CaseOptions['answerStart'];
+    let words = 0;
     for (const step of press.between ?? []) {
-      if (step.kind === 'answer') {
+      if (step.kind === 'words') await addWords(drive, root, step.line, `p-${i + 2}-${++words}`);
+      else if (step.kind === 'answer') {
         const scheduled = await submitAnswer(c, runs.at(-1) ?? first, step);
         if (scheduled) {
           if (answerStart) throw new Error('A press can start only one answer run.');
@@ -183,7 +185,15 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   return { ...result, score: scoreCase(c, result) };
 }
 
-async function changeBetween(drive: FakeDrive, root: string, step: Exclude<CorpusBetween, { kind: 'answer' }>): Promise<void> {
+/** A words pile added to the Inbox between presses, as `seedCase` adds the case's piles. */
+async function addWords(drive: FakeDrive, root: string, line: string, pile: string): Promise<void> {
+  const inbox = Object.entries((await snapshot(drive, root)).pathsById).find(([, path]) => path === 'Inbox')?.[0];
+  if (!inbox) throw new Error('between: missing Inbox');
+  const folder = (await drive.createFolder(inbox, line.slice(0, 40).trim(), { pile })).id;
+  await drive.createText(folder, PILE_NOTE, `${line}\n`);
+}
+
+async function changeBetween(drive: FakeDrive, root: string, step: Exclude<CorpusBetween, { kind: 'answer' | 'words' }>): Promise<void> {
   const seen = await snapshot(drive, root);
   const id = Object.entries(seen.pathsById).find(([, path]) => path === step.path)?.[0];
   if (!id) throw new Error(`between: missing ${step.path}`);

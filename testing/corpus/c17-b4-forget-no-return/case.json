@@ -3,23 +3,23 @@
   "capability": "C17",
   "title": "Forget a remote preference without restoring it from the same source or archive",
   "covers": "model",
-  "source": "new: TL-P4-39 B4/F4/F7; proposed contracts and scripted proof pending",
-  "scope": "instructions",
+  "source": "new: TL-P4-39 B4/F4/F7; TL-P4-48 landed ledger grammar (b4c-fixtures)",
+  "scope": "all",
   "allowWeb": false,
-  "inbox": [],
-  "journal": [
+  "inbox": [
     {
-      "kind": "request",
-      "text": "Forget my preference for remote roles, including the mentoring exception."
+      "line": "Forget that I prefer remote roles, except when a role offers regular mentoring in Saltmere.",
+      "files": []
     }
   ],
+  "journal": [],
   "questions": [],
   "bowerOwned": [],
   "presses": [
     {
       "request": {
         "kind": "tidy",
-        "text": "Refresh About me from existing observations; do not remember anything new from old sources."
+        "text": "Update these notes."
       }
     }
   ]
