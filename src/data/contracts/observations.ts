@@ -3,7 +3,7 @@ import { BowerError } from './types';
 import { dateOk, validSummary } from './note-format';
 import { ABOUT_REGIONS, parseOwnership, type AboutRegion } from './ownership-format';
 import { parseRecordJson, canonicalRecordJson } from './record-json';
-import { parseTimelineLine } from './timeline-line';
+import { parseTimelineLine, timelineLine } from './timeline-line';
 import { FOLDER_TEMPLATE } from './folder-template';
 import { recordableRecordId } from './run-manifest';
 
@@ -27,8 +27,10 @@ type Observation = { v: 1; kind: 'observation'; eventId: string; factId: string;
   source: Source; origin: ObservationOrigin; remembers?: string };
 type Tombstone = { v: 1; kind: 'tombstone'; eventId: string; date: string; at?: number; factId: string;
   sourceId: string; reason: 'forget' | 'bin'; runId: string };
+/** A consolidated About me line: the person's facts reworded, citing their ids (R9). */
+type ConsolidatedLine = { text: string; factIds: string[]; form: 'current' | 'past' };
 type Consolidation = { v: 1; kind: 'consolidation'; eventId: string; section: AboutRegion; date: string;
-  factIds: string[]; runId: string; operationId: string; successful: boolean };
+  factIds: string[]; runId: string; operationId: string; successful: boolean; lines?: ConsolidatedLine[]; dropped?: string[] };
 /** The fact stopped being true on `date`, on the person's words `quote` in `source` (R33). */
 type Ended = { v: 1; kind: 'ended'; eventId: string; date: string; at?: number; factId: string; quote: string;
   source: Source; runId: string };
@@ -47,6 +49,18 @@ function originOk(v: unknown): v is ObservationOrigin {
   }
 }
 const sourceOk = (v: unknown): v is Source => closed(v, ['fileId', 'sha256']) && id(v.fileId) && hash(v.sha256);
+/** Lines and dropped come together; every fact they name is the event's, once across both (R9). */
+function linesOk(lines: unknown, dropped: unknown, members: readonly string[]): boolean {
+  if (!Array.isArray(lines) || !lines.length || !ids(dropped)) return false;
+  const named = [...dropped];
+  for (const line of lines) {
+    if (!closed(line, ['text', 'factIds', 'form']) || typeof line.text !== 'string' || !validSummary(line.text)
+      || /\[\[|\]\]| · /.test(line.text) || !ids(line.factIds) || !line.factIds.length
+      || line.form !== 'current' && line.form !== 'past') return false;
+    named.push(...line.factIds);
+  }
+  return new Set(named).size === named.length && named.every((factId) => members.includes(factId));
+}
 function eventOk(v: unknown): v is Event {
   if (!object(v) || v.v !== 1 || !id(v.eventId) || !date(v.date)) return false;
   const base = ['v', 'kind', 'eventId', 'date'];
@@ -61,8 +75,9 @@ function eventOk(v: unknown): v is Event {
     && id(v.factId) && id(v.sourceId) && id(v.runId) && (v.reason === 'forget' || v.reason === 'bin');
   if (v.kind === 'ended') return closed(v, [...base, 'factId', 'quote', 'source', 'runId'], ['at'])
     && id(v.factId) && typeof v.quote === 'string' && validSummary(v.quote) && sourceOk(v.source) && id(v.runId);
-  return v.kind === 'consolidation' && closed(v, [...base, 'section', 'factIds', 'runId', 'operationId', 'successful'])
-    && section(v.section) && ids(v.factIds) && id(v.runId) && id(v.operationId) && typeof v.successful === 'boolean';
+  return v.kind === 'consolidation' && closed(v, [...base, 'section', 'factIds', 'runId', 'operationId', 'successful'], ['lines', 'dropped'])
+    && section(v.section) && ids(v.factIds) && id(v.runId) && id(v.operationId) && typeof v.successful === 'boolean'
+    && (!Object.hasOwn(v, 'lines') && !Object.hasOwn(v, 'dropped') || linesOk(v.lines, v.dropped, v.factIds));
 }
 function corrupt(detail: unknown): never {
   const error = new BowerError('conflict', 'Bower could not read its learned facts.');
@@ -166,15 +181,105 @@ export function observationOf(candidate: unknown, context: {
 /** Authored payload words only; framing and Timeline date/citation syntax are excluded by their existing grammar. */
 export function canRebuildAboutSection(input: { ledger: Ledger; section: AboutRegion; text: string; reason: 'consolidate' | 'forget' | 'undo' }): boolean {
   if (input.reason === 'forget' || input.reason === 'undo') return true;
-  const budget = input.section === 'about-preferences' ? 200 : 400;
-  const words = input.text.split(/\r?\n/).filter((line) => !/^\s*(?:#{1,6}\s|<!-- bower:ownership)/.test(line))
-    .flatMap((line) => (parseTimelineLine(line)?.text ?? line).trim().split(/\s+/).filter(Boolean)).length;
-  let frontier = -1;
-  input.ledger.events.forEach((e, index) => {
-    if (e.kind === 'consolidation' && e.section === input.section && e.successful) frontier = index;
+  return wordsOf(input.text) > (input.section === 'about-preferences' ? 200 : 400) && newerLive(input.ledger, input.section).length >= 5;
+}
+const wordsOf = (text: string): number => text.split(/\r?\n/).filter((line) => !/^\s*(?:#{1,6}\s|<!-- bower:ownership)/.test(line))
+  .flatMap((line) => (parseTimelineLine(line)?.text ?? line).trim().split(/\s+/).filter(Boolean)).length;
+/** The index of the section's latest successful consolidation, or -1. */
+const frontierOf = (ledger: Ledger, region: AboutRegion): number =>
+  ledger.events.findLastIndex((e) => e.kind === 'consolidation' && e.section === region && e.successful);
+function newerLive(ledger: Ledger, region: AboutRegion): Observation[] {
+  const newer = new Set(ledger.events.slice(frontierOf(ledger, region) + 1).flatMap((e) => e.kind === 'observation' ? [e.factId] : []));
+  return ledger.live.filter((e) => e.section === region && newer.has(e.factId));
+}
+/** Addendum 6 (c): a tombstoned fact's normalized text that no live fact has. */
+const forgottenTexts = (ledger: Ledger): Set<string> => new Set(ledger.events.flatMap((event) => event.kind === 'observation'
+  && ledger.tombstones.some((t) => t.factId === event.factId || t.reason === 'bin' && t.sourceId === event.source.fileId)
+  && !ledger.live.some((fact) => normalizedText(fact.text) === normalizedText(event.text)) ? [normalizedText(event.text)] : []));
+
+type LearnedLine = { date: string; text: string; factIds: string[] };
+/**
+ * About me's learned lines for a region, the one projection of the ledger (R10): the latest successful consolidation's
+ * lines whose members keep the status they had before it, each failed line replaced in place by its live members, then
+ * the region's live facts that no shown line cites, in ledger order. An ended fact no shown line cites is hidden.
+ */
+export function learnedLines(ledger: Ledger, region: AboutRegion): LearnedLine[] {
+  const at = frontierOf(ledger, region);
+  const event = ledger.events[at];
+  const before = ledger.events.slice(0, Math.max(at, 0));
+  const live = ledger.live.filter((fact) => fact.section === region);
+  const forgotten = forgottenTexts(ledger);
+  const own = (fact: Observation): LearnedLine => ({ date: fact.date, text: fact.text, factIds: [fact.factId] });
+  const kept = (factId: string): boolean => before.some((e) => e.kind === 'observation' && e.factId === factId && e.section === region)
+    && (before.some((e) => e.kind === 'ended' && e.factId === factId) ? ledger.ended.some((e) => e.fact.factId === factId)
+      : live.some((fact) => fact.factId === factId));
+  const shown = (event?.kind === 'consolidation' && event.lines || []).flatMap((line) => event && line.factIds.every(kept)
+    && !forgotten.has(normalizedText(line.text)) ? [{ date: event.date, text: line.text, factIds: [...line.factIds] }]
+    : live.filter((fact) => line.factIds.includes(fact.factId)).map(own));
+  const placed = new Set(shown.flatMap((line) => line.factIds));
+  return [...shown, ...live.filter((fact) => !placed.has(fact.factId)).map(own)];
+}
+/** A learned line as About me shows it, dated and labelled as one fact is (R11). */
+export const learnedTimeline = (ledger: Ledger, line: LearnedLine): string => timelineLine({ date: line.date, text: line.text,
+  source: line.factIds.some((factId) => ledger.events.some((e) => e.kind === 'observation' && e.factId === factId
+    && e.origin.kind === 'document')) ? 'Source' : 'Your words' });
+
+/** The gate (R16): over budget on the projection, five live facts newer than the frontier, one of them this run's. */
+export function consolidationDue(ledger: Ledger, region: AboutRegion, runId: string): boolean {
+  return canRebuildAboutSection({ ledger, section: region, text: learnedLines(ledger, region).map((line) => line.text).join('\n'), reason: 'consolidate' })
+    && newerLive(ledger, region).some((fact) => fact.origin.runId === runId);
+}
+type InputFact = { factId: string; date: string; text: string; status: 'live' | 'ended'; ended?: { date: string; quote: string } };
+/** What a consolidation may rewrite (R17): live facts, then ended facts its latest lines cite or that ended since; at most 100. */
+export function consolidationInput(ledger: Ledger, region: AboutRegion): InputFact[] | null {
+  const at = frontierOf(ledger, region);
+  const event = ledger.events[at];
+  const cited = new Set(event?.kind === 'consolidation' ? (event.lines ?? []).flatMap((line) => line.factIds) : []);
+  const facts: InputFact[] = [
+    ...ledger.live.filter((fact) => fact.section === region).map((fact) => ({ factId: fact.factId, date: fact.date, text: fact.text, status: 'live' as const })),
+    ...ledger.ended.filter(({ fact, event: end }) => fact.section === region && (cited.has(fact.factId) || ledger.events.indexOf(end) > at))
+      .map(({ fact, event: end }) => ({ factId: fact.factId, date: fact.date, text: fact.text, status: 'ended' as const, ended: { date: end.date, quote: end.quote } })),
+  ];
+  // Lossless limit (R26): more facts wait as their own lines.
+  return facts.length > 100 ? null : facts;
+}
+const TOKEN = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
+const tokensOf = (text: string): RegExpMatchArray[] => [...text.normalize('NFKC').matchAll(TOKEN)];
+const markersOf = (text: string): number => {
+  const words = tokensOf(text).map(([word]) => word.toLowerCase());
+  return words.filter((word, i) => /^(?:no|not|never|cannot|stopped)$|n['’]t$/u.test(word) || word === 'used' && words[i + 1] === 'to').length;
+};
+/** Each line's fault against only its cited facts, or null (R17 F1–F6); the ledger is the one before the event. */
+export function lineFaults(ledger: Ledger, event: { lines: readonly ConsolidatedLine[] }): Array<string | null> {
+  const forgotten = forgottenTexts(ledger);
+  const ended = new Map(ledger.ended.map((e) => [e.fact.factId, e.fact]));
+  return event.lines.map((line) => {
+    const facts = line.factIds.flatMap((factId) => ledger.live.find((fact) => fact.factId === factId) ?? ended.get(factId) ?? []);
+    if (facts.length !== line.factIds.length) return 'a fact that is neither live nor ended';
+    const known = new Set(facts.flatMap((fact) => tokensOf(fact.text).map(([word]) => word.toLowerCase())));
+    const text = line.text.normalize('NFKC');
+    const risky = tokensOf(text).filter(([word], i, all) => /\p{N}/u.test(word) || /^\p{Lu}/u.test(word) && !/^I(?:['’]\p{L}+)?$/u.test(word)
+      && !/(?:^|[.!?])\s*$/u.test(text.slice(0, all[i]?.index ?? 0)));
+    if (risky.some(([word]) => !known.has(word.toLowerCase()))) return 'a number, date or name no cited fact holds';
+    if (line.form === 'current' && markersOf(text) < Math.max(...facts.map((fact) => markersOf(fact.text)))) return 'a lost negation';
+    if (line.form === 'past' && !line.factIds.some((factId) => ended.has(factId))) return 'a past line that cites no ended fact';
+    if (tokensOf(text).length > facts.reduce((sum, fact) => sum + tokensOf(fact.text).length, 0)) return 'a line longer than its facts';
+    if (forgotten.has(normalizedText(text))) return 'a line that reads as a forgotten fact';
+    if (line.form === 'current' && line.factIds.some((factId) => normalizedText(ended.get(factId)?.text ?? '') === normalizedText(text)))
+      return 'an ended fact kept in the present';
+    return null;
   });
-  const newer = new Set(input.ledger.events.slice(frontier + 1).flatMap((e) => e.kind === 'observation' ? [e.factId] : []));
-  return words > budget && input.ledger.live.filter((e) => e.section === input.section && newer.has(e.factId)).length >= 5;
+}
+/** A stored consolidation is acceptable on the ledger before it (R17); never throws. */
+export function consolidationOk(ledger: Ledger, event: unknown, runId: string): boolean {
+  if (!eventOk(event) || event.kind !== 'consolidation' || !event.lines || !event.dropped || !event.successful || event.runId !== runId) return false;
+  const { lines, dropped, section: region } = event;
+  const input = consolidationInput(ledger, region);
+  const words = (view: Ledger): number => wordsOf(learnedLines(view, region).map((line) => line.text).join('\n'));
+  return !!input && consolidationDue(ledger, region, runId) && event.factIds.join() === input.map((fact) => fact.factId).join()
+    && dropped.every((factId) => input.some((fact) => fact.factId === factId && fact.status === 'ended'))
+    && lineFaults(ledger, { lines }).every((fault) => fault === null)
+    && words({ ...ledger, events: [...ledger.events, event] }) < words(ledger);
 }
 
 type AboutContext = { personal: { kind: 'person-input'; text: string };
@@ -187,6 +292,19 @@ export function aboutContext(input: { personal: string; learned: string; factIds
       cut, factIds: [...input.factIds] } };
   if (!isAboutContext(value)) return corrupt('Invalid About me context');
   return value;
+}
+/**
+ * Position 4 (R14): the learned lines in About me's order through the 4,000 cut, with the facts behind the lines shown in
+ * full, counted by position and never by equal text; an ended member of a shown line is listed with it.
+ */
+export function learnedContext(ledger: Ledger, personal: string): { about: AboutContext; facts: Observation[] } {
+  const lines = ABOUT_REGIONS.flatMap((region) => learnedLines(ledger, region)).map((line) => ({ line, text: learnedTimeline(ledger, line) }));
+  const learned = lines.map(({ text }) => text).join('\n');
+  const limit = learned.length > 4000 ? 4000 - CUT.length : learned.length;
+  let end = -1;
+  const factIds = lines.filter(({ text }) => (end += 1 + text.length) <= limit).flatMap(({ line }) => line.factIds);
+  const facts = factIds.flatMap((factId) => ledger.events.flatMap((e) => e.kind === 'observation' && e.factId === factId ? [e] : []));
+  return { about: aboutContext({ personal, learned, factIds }), facts };
 }
 export function isAboutContext(v: unknown): v is AboutContext {
   return closed(v, ['personal', 'learned']) && closed(v.personal, ['kind', 'text'])
@@ -235,16 +353,14 @@ export function validLearnedBlock(text: string, ledger?: Ledger, creating = fals
     if (creating && payload !== label + '\n') return false;
     block += begin(region) + payload + `<!-- bower:ownership/2 end ${region} -->\n`;
     if (!ledger) continue;
+    // R13: each line is a live fact of its region or a line the projection shows there. Neither can read as a forgotten
+    // text (the set excludes live texts; the projection drops such lines), so no whole-block scan is needed.
+    const allowed = new Set([...ledger.live.filter((fact) => fact.section === region), ...learnedLines(ledger, region)]
+      .map((line) => normalizedText(line.text)));
     if (!payload.split('\n').every((line) => !line.trim() || line.trim() === label
-      || ledger.live.some((fact) => fact.section === region
-        && normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, '')) === normalizedText(fact.text)))) return false;
+      || allowed.has(normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, ''))))) return false;
   }
   const start = prefix.length - heading.length - begin('about-you').length;
   if (creating && text !== template + block) return false;
-  if (text.replace(/\r\n/g, '\n').slice(start).trimEnd() !== block.trimEnd()) return false;
-  if (!ledger) return true;
-  return !ledger.events.some((event) => event.kind === 'observation'
-    && ledger.tombstones.some((t) => t.factId === event.factId || t.reason === 'bin' && t.sourceId === event.source.fileId)
-    && !ledger.live.some((fact) => normalizedText(fact.text) === normalizedText(event.text))
-    && normalizedText(block).includes(normalizedText(event.text)));
+  return text.replace(/\r\n/g, '\n').slice(start).trimEnd() === block.trimEnd();
 }

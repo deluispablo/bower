@@ -24,10 +24,10 @@ import { leafCount, mocEdit, mocMembership, mocSnapshot, noteLinks, type Notes }
 import type { Outcome } from '../../src/data/contracts/run-checkpoint';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/contracts/journal-record';
 import { subjectOf } from '../../src/data/contracts/questions';
-import { parseTimelineLine, timelineLine } from '../../src/data/contracts/timeline-line';
+import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
-import { parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
+import { learnedLines, learnedTimeline, parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
 import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { appendLog, logEvents } from './log';
 import { formatLogEvent } from '../../src/data/contracts/log-format';
@@ -80,9 +80,9 @@ const aboutTarget: DeclaredTarget = {
       const label = { 'about-you': 'About you', 'about-working-on': "What you're working on", 'about-preferences': 'How you like things' }[region];
       const span = ownership.payloads?.[region];
       const previous = span ? new TextDecoder().decode(bytes.subarray(span.start, span.end)).split(/\r?\n/) : [];
-      return `### ${label}\n` + ledger.live.filter((f) => f.section === region).map((f) => {
-        const stored = previous.find((line) => { const entry = parseTimelineLine(line); return entry?.text === f.text && entry.date === f.date; });
-        return (stored ?? timelineLine({ date: f.date, text: f.text, source: f.origin.kind === 'document' ? 'Source' : 'Your words' })) + '\n';
+      return `### ${label}\n` + learnedLines(ledger, region).map((l) => {
+        const stored = previous.find((line) => { const entry = parseTimelineLine(line); return entry?.text === l.text && entry.date === l.date; });
+        return (stored ?? learnedTimeline(ledger, l)) + '\n';
       }).join('');
     });
     if (!ownership.payloads?.['about-you']) {

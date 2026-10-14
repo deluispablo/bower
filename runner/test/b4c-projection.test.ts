@@ -330,8 +330,11 @@ describe('B4c-b through production main', () => {
       text: 'Which fact should Bower forget?', yes: 'Use this', no: 'Keep it', options: [
         { id: 'fact-1', label: POT.text, action: { kind: 'forget-fact', factId: 'pot' } },
         { id: 'fact-2', label: CELLAR.text, action: { kind: 'forget-fact', factId: 'cellar' } }] };
-    const f = await folder([G1, POT, CELLAR, POT_END, P4], about({ 'about-you': [own(G1), own(CELLAR)], 'about-preferences': [own(P4)] }),
-      { [SYSTEM.questions]: JSON.stringify({ v: 1, questions: [asked] }) });
+    const f = await folder([G1, POT, CELLAR, POT_END, P4], about({ 'about-you': [own(G1), own(CELLAR)], 'about-preferences': [own(P4)] }));
+    // The seeded folder already holds the questions file: the asked question is written into it, never beside it.
+    const file = (await f.drive.listAll(f.root)).find((x) => f.drive.pathOf(x.id, f.root) === SYSTEM.questions);
+    if (!file) throw new Error('The made-up folder has no questions file');
+    await f.drive.writeText(file.id, JSON.stringify({ v: 1, questions: [asked] }), file.modifiedTime);
     const pile = await f.drive.createFolder(await f.id('Inbox'), 'Forget the potatoes.', { pile: 'forget-pile' });
     await f.drive.createText(pile.id, PILE_NOTE, 'Forget the potatoes.\n');
     await choose(f, asked, 'pot');

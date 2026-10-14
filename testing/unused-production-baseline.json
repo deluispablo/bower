@@ -31,6 +31,6 @@
   ],
   "reasons": {
     "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line",
-    "exports src/data/contracts/observations.ts rebuildObservations": "B4c rebuilds learned sections after Undo; B4c removes this row."
+    "exports src/data/contracts/observations.ts rebuildObservations": "Undo rebuilds learned sections; c4-undo-withdraw (C13's Undo) wires it and removes this row."
   }
 }
