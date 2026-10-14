@@ -152,7 +152,7 @@ it('AC3 AC6 c17-b4-gate-archive-first: press 1 appends the seventh fact plainly;
   expect(ledger.live.map((f) => f.text).at(-1)).toBe(SEVENTH);
   const lines = region(first.after[ABOUT] ?? '', 'about-preferences');
   expect(lines, 'seven ordinary learned lines').toHaveLength(7);
-  expect(lines.every((line) => parseTimelineLine(line)?.source === 'Your words')).toBe(true);
+  expect(lines.filter((line) => parseTimelineLine(line)?.source !== null), 'no learned line cites a note (learned-lines-no-link)').toEqual([]);
   const text = lines.map((line) => parseTimelineLine(line)?.text ?? '').join('\n');
   expect(text.split(/\s+/).filter(Boolean).length, 'over the 200-word budget').toBeGreaterThan(200);
   expect(canRebuildAboutSection({ ledger, section: 'about-preferences', text, reason: 'consolidate' }), 'four new facts do not open the gate').toBe(false);

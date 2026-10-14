@@ -59,6 +59,7 @@
       }
     }
   ],
+  "linksResolve": true,
   "report": {
     "filed": 1,
     "created": [
