@@ -4,7 +4,7 @@ Reply with one JSON object and nothing else, of exactly this shape:
 {"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing's fileId>","to":"<folder path>","name":"<new name>",
   "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],
  "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
- "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId, or a pileId of words only>"}],
+ "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId, or a pileId of words only>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],
  "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing's fileId>"}],
  "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],
   (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})
@@ -45,6 +45,7 @@ What to write:
   thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.
   When a thing disagrees with a note, never change it silently: the line gives both figures, the note's and the
   thing's, and cites the thing.
+  Bower writes a marker's label; inferred has no figures; contradiction needs both cites.
 - "states" (optional): a note's whole "## Current state" as it should read now, at most 8 lines of at most
   200 characters with no link, only for a note below whose state the thing changes (a status, a count, a date),
   at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the

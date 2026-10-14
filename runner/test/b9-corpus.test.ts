@@ -96,7 +96,6 @@ it('AC12 b9-fresh-press-dedup: the same marked line on a fresh press is a no-op,
 it.each([
   ['one source', (line: Record<string, unknown>) => { delete line.alsoCites; }],
   ['a basename', (line: Record<string, unknown>) => { line.alsoCites = ['Earlier listing.txt']; }],
-  ['the new source itself', (line: Record<string, unknown>) => { line.alsoCites = ['Inbox/Later listing.txt']; }],
 ])('AC12 c17-b9-contradiction-two-sources refuses %s before any write', async (_name, mutate) => {
   const c = await load('c17-b9-contradiction-two-sources');
   const [first] = await replies(c.id);
@@ -110,6 +109,25 @@ it.each([
   const retry = inputs.find((input) => /^Your reply was refused:/m.test(input)) ?? '';
   expect(retry, 'refused through the retry, by the marker rules').toMatch(/^Your reply was refused:/m);
   expect(retry).not.toContain('a line with keys outside the intent');
+});
+
+it('AC12 c17-b9-contradiction-two-sources refuses the new source itself, linked and filed, on a fresh press (round 2)', async () => {
+  const c = await load('c17-b9-contradiction-two-sources');
+  const [first, second] = await replies(c.id);
+  const ordinary = { ...first, lines: first?.lines?.map(({ marker: _m, alsoCites: _a, ...line }) => line) };
+  const final = await runWithClaude(c, replySequence([ordinary, second]));
+  const filed = Object.entries(final.pathsById).find(([, path]) => path === 'Projects/Flat hunt/Later listing.txt')?.[0];
+  expect(filed, 'the later listing was filed').toBeDefined();
+  expect(final.after[FLAT], 'and the flat note links it').toContain('[[Later listing.txt]]');
+  const inputs: string[] = [];
+  const spawn = replySequence([{ ...first, things: [], lines: first?.lines?.map((l) => ({ ...l, cites: filed, alsoCites: ['Projects/Flat hunt/Later listing.txt'] })) }]);
+  const again = await runOnDrive(c, final.drive, final.root, { claude: async (call) => { inputs.push(call.input); return spawn(call); },
+    request: { kind: 'tidy', text: 'Record the same disagreement only if it is not already in the flat note.' }, pacing: { baseMs: 0, sleep: async () => {} } }, 3);
+  expect(again.code).toBe(1);
+  expect(again.after[FLAT]).toBe(final.after[FLAT]);
+  const retry = inputs.find((input) => /^Your reply was refused:/m.test(input)) ?? '';
+  expect(retry, 'refused through the retry, by the marker rules').toMatch(/^Your reply was refused:/m);
+  expect(/^Your reply was refused: (.*)$/m.exec(retry)?.[1], 'refused for its identity only').toContain('naming the thing the line cites');
 });
 
 it('AC13 control: the visit case with ordinary lines is one edit and keeps the booking and Alex\'s words', async () => {
