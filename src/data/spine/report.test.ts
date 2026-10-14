@@ -237,7 +237,8 @@ describe('a change the person made after a landed op (report-kept-your-change)',
     const planned = await demoPlan();
     const bin = planned.operations.find((o) => o.effect.kind === 'bin');
     if (bin?.effect.kind !== 'bin') throw new Error('a Bin is planned');
-    // The Bin of a thing already saved, as duplicates plan it: its row requires that one Bin.
+    // The same pile folder's Bin, now reported as already saved (a pile of words whose lines its notes held, as the
+    // scripted plan reports it): a reported Bin is judged, even of a folder (R2).
     const saved = { requires: [bin.operationId], when: 'applied' as const, value: { filed: [], created: [], updated: [], setAside: [], questions: [], alreadySaved: [{ name: bin.effect.before.name, as: 'Offer letter.pdf' }] } };
     const manifest: RunManifest = { ...planned, reportPlan: [...planned.reportPlan, saved] };
     expect(reportFor(manifest, asPlanned(manifest))).not.toHaveProperty('kept');
@@ -250,7 +251,7 @@ describe('a change the person made after a landed op (report-kept-your-change)',
     const filing = planned.operations.find((o) => o.effect.kind === 'move' && o.effect.before.name === 'Payslip_Aug.pdf');
     const unnamed = planned.operations.find((o) => o.effect.kind === 'bin');
     if (filing?.effect.kind !== 'move' || !unnamed) throw new Error('the payslip filing and a Bin are planned');
-    // A Bin no row names (a pile folder emptied by the run), taken out of the Bin: not a thing the report names.
+    // The same pile folder's Bin with no row reporting it (an emptied pile folder), taken out of the Bin: not judged (R2).
     expect(reportFor(planned, asPlanned(planned, { [unnamed.operationId]: (file) => ({ file, trashed: false }) }))).not.toHaveProperty('kept');
     // A refused filing says why on its own row, never as kept.
     const refused = settle(planned, new Set([filing.operationId])).map((o, i) => (o.state === 'applied' ? asPlanned(planned)[i] ?? o : o));

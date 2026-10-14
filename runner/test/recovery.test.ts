@@ -940,6 +940,31 @@ describe('a change the person made after a landed op (report-kept-your-change)',
     expect(report).not.toHaveProperty('kept');
   });
 
+  it('a change the person made after a landed op is reported as kept: a folder Bower made, renamed in the app', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    const w = await world();
+    // Killed right after Bower made the payslips folder (its create is `possible-effect` in the open batch).
+    await tidy(w, 1, {
+      applied: (call, process) => {
+        if (call.op === 'create-folder' && call.name === 'Payslips') process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    const made = (await w.wire.drive.listAll(w.root)).find((f) => f.folder && f.name === 'Payslips');
+    const key = made?.appProperties?.bowerItem;
+    expect(key).toBeDefined();
+    // Alex renames it in the app, which stamps it with the app's own write. A create is read back by the id Bower
+    // reserved for it, whatever the stamp says (R9): it landed, and the person's name is kept.
+    await w.wire.drive.update(made?.id ?? '', { name: 'Pay slips', appProperties: { [STAMP]: 'a'.repeat(32) } });
+    expect((await tidy(w, 2)).phase).toBe('done');
+    const all = (await w.wire.drive.listAll(w.root)).filter((f) => f.folder && f.appProperties?.bowerItem === key);
+    expect(all.map((f) => [f.id, f.name])).toEqual([[made?.id, 'Pay slips']]);
+    const { kept, ...rest } = reportOf((await endOf(w)).view);
+    expect(kept).toEqual([{ name: 'Pay slips', why: KEPT_YOUR_CHANGE }]);
+    expect(rest).toEqual(reportOf(expected.view));
+    expect(rest).not.toHaveProperty('unconfirmed');
+  });
+
   it('a run with no later change reports no kept line: uninterrupted', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { end } = await uninterrupted();
