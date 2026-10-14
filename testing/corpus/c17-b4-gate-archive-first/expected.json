@@ -22,6 +22,7 @@
       }
     }
   ],
+  "linksResolve": true,
   "runs": [
     {
       "files": {

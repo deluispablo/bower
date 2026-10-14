@@ -88,7 +88,7 @@ function learned(facts: readonly Fact[], personal = PERSONAL): string {
   const labels = ['About you', "What you're working on", 'How you like things'];
   return personal + '\n## What Bower has learned\n' + ABOUT_REGIONS.map((region, i) =>
     `<!-- bower:ownership/2 begin ${region} -->\n### ${labels[i]}\n`
-    + facts.filter((f) => f.section === region).map((f) => timelineLine({ date: f.date, text: f.text, source: 'Source' }) + '\n').join('')
+    + facts.filter((f) => f.section === region).map((f) => timelineLine({ date: f.date, text: f.text }) + '\n').join('')
     + `<!-- bower:ownership/2 end ${region} -->\n`).join('');
 }
 
@@ -328,8 +328,7 @@ describe('B4b through production entry points', () => {
     expect(report(run).created.filter((r) => r.path !== ABOUT && r.path !== 'Bower health.md')).toEqual([]);
     const fact = ledger(run).live[0];
     const line = run.after[ABOUT]?.split('\n').map(parseTimelineLine).find((l) => l?.text === REMOTE);
-    expect(line).toMatchObject({ date: fact?.date, text: REMOTE, source: expect.any(String) });
-    expect(line?.source?.length).toBeGreaterThan(0);
+    expect(line, 'a learned line cites no note (learned-lines-no-link)').toEqual({ date: fact?.date, text: REMOTE, source: null });
     expect(fact).toMatchObject({ source: { sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }, origin: { kind: 'words' } });
     expect(replay.after[LEDGER]).toBe(run.after[LEDGER]);
     expect(replay.after[ABOUT]).toBe(run.after[ABOUT]);

@@ -254,8 +254,8 @@ describe('B4c-b through production main', () => {
 
   it('AC13 b4c-cut-boundary: the facts listed are those behind the lines shown in full, by position, never by equal text', async () => {
     // Two shown fillers read exactly as lines past the cut, which falls inside L1: P4, a fact, and L2, a consolidated line.
-    const filler = Array.from({ length: 24 }, (_, i) => fact(`z${i}`, 'about-you', '2026-10-05', i === 2 ? P4.text : i === 4 ? L2.text
-      : `I keep a long note number ${i + 1} about the garden, the beans on the north plot, the shed and the paths, so the list of my own words grows long.`));
+    const filler = Array.from({ length: 26 }, (_, i) => fact(`z${i}`, 'about-you', '2026-10-05', i === 2 ? P4.text : i === 4 ? L2.text
+      : `I keep a long note number ${i + 1} about the garden, the beans on the north plot, the shed and the paths, so the list of my own words grows long now.`));
     const f = await folder([...filler, ...BASE.filter((e) => e !== G1)], about({ 'about-you': filler.map(own), 'about-preferences': [line(L1), line(L2), own(P4)] }));
     const NO_TEA = 'I no longer prefer tea to coffee in the morning.';
     const run = await press(f, NO_TEA, () => ({ ...nothing(), ends: [{ factId: 'p4', quote: NO_TEA }] }));
@@ -264,7 +264,8 @@ describe('B4c-b through production main', () => {
     const order = [...filler.map((x) => ({ ...own(x), factIds: [x.factId] })), { ...line(L1), factIds: L1.factIds },
       { ...line(L2), factIds: L2.factIds }, { ...own(P4), factIds: ['p4'] }];
     const raw = (learned?.text ?? '').split('\n');
-    const full = order.findIndex((l, i) => raw[i] !== timelineLine({ date: l.date, text: l.text, source: 'Your words' }));
+    expect(raw[0], 'position 4 shows a learned line with no citation (learned-lines-no-link)').toBe(timelineLine(own(filler[0] ?? P4)));
+    const full = order.findIndex((l, i) => raw[i] !== timelineLine({ date: l.date, text: l.text }));
     expect(learned?.cut).toBe(true);
     expect(full, 'the fillers that read as P4 and L2 are shown in full; L2 and P4 themselves are not').toBeGreaterThan(4);
     expect(full).toBeLessThanOrEqual(order.length - 2);
