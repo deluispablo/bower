@@ -2,9 +2,9 @@
  * B11 (TL-P4-38 addendum 3, TL-P4-48 Q2): the one evaluator of declared views. Pure and zero-token: it never runs
  * model code. Each evaluator first checks the declaration as a stored read against its one row (R21).
  */
-import { propertyDeclaration, propertyValue, type Money, type PropertyValue } from '../../src/data/contracts/note-format';
-import { viewFault, type AggregateView, type Expression, type FormulaView, type Predicate } from '../../src/data/contracts/view-format';
-import { BowerError, type TypeRow } from '../../src/data/contracts/types';
+import { amountText, labelOf, propertyDeclaration, propertyValue, type Money, type PropertyValue } from '../../src/data/contracts/note-format';
+import { VIEW_LIMITS, viewFault, type AggregateView, type Expression, type FormulaView, type Predicate } from '../../src/data/contracts/view-format';
+import { BowerError, type TypeRow, type TypeTable } from '../../src/data/contracts/types';
 
 export const EVALUATOR_VERSION = 1;
 
@@ -196,6 +196,76 @@ export function evaluateAggregate(view: unknown, row: TypeRow, notes: Note[]) {
   return result([...rows.values()]
     .sort((a, b) => compare(a.group, b.group) || byCodePoint(a.currency ?? '', b.currency ?? ''))
     .map(({ notes: members, ...row }) => ({ ...row, values: Object.fromEntries(v.measures.map((m) => [m.id, measureOf(m, members)])) })));
+}
+
+/**
+ * A Bower map's stored `bower_views` line, read leniently (R21, R33): its aggregates in order. A line that is not a
+ * JSON list computes none; inside it each non-object, refused view, formula, duplicate id or entry past the tenth is
+ * skipped alone. Every skip is logged.
+ */
+export function storedViews(line: string, table: TypeTable): AggregateView[] {
+  const skip = (why: string): void => console.error(new BowerError('unknown', 'Bower skipped a figure it could not read.', undefined, { cause: why }));
+  let list: unknown;
+  try {
+    list = JSON.parse(line);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    skip(error.message);
+    return [];
+  }
+  if (!Array.isArray(list)) {
+    skip('The figures declaration is not a list.');
+    return [];
+  }
+  const views: AggregateView[] = [];
+  list.forEach((entry: unknown, i) => {
+    const fault = i >= VIEW_LIMITS.perHome ? 'A map holds at most ten figures.' : viewFault(entry, table, 'read')
+      ?? ((entry as AggregateView).kind !== 'aggregate' ? 'A map holds aggregates only.'
+        : views.some((v) => v.id === (entry as AggregateView).id) ? 'Two figures have one id.' : null);
+    if (fault) skip(fault);
+    else views.push(entry as AggregateView);
+  });
+  return views;
+}
+
+/** One figure cell (R30): a stored value never breaks the table, makes a link or forms ownership-marker text. */
+const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '\\': '\\\\', '|': '\\|', '[': '\\[' };
+const cellText = (text: string): string => text.replace(/[&<\\|[]|\r\n|\r|\n/g, (c) => ESCAPES[c] ?? ' ');
+function cell(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'object' && 'min' in value && 'max' in value) return `${cell(value.min)} to ${cell(value.max)}`;
+  if (typeof value === 'number' || isMoney(value)) return amountText(value);
+  return cellText(String(value));
+}
+const notes = (n: number): string => `${n} ${n === 1 ? 'note' : 'notes'}`;
+
+/**
+ * B11 AC11: a map's Figures block for one aggregate. The 200 bound counts the members before `where` and wins over
+ * an unreadable member; never a partial total.
+ */
+export function viewBlock(view: unknown, row: TypeRow, members: Note[] | 'unreadable'): string {
+  checked(view, row, 'aggregate');
+  const v = view as AggregateView;
+  const head = `### ${v.title}\n\n`;
+  if (members !== 'unreadable' && members.length > VIEW_LIMITS.notes) return `${head}Not computed: more than ${VIEW_LIMITS.notes} notes.\n`;
+  if (members === 'unreadable') return `${head}Not computed: a note could not be read.\n`;
+  const result = evaluateAggregate(v, row, members);
+  const lines = v.measures.flatMap((m) => {
+    const counts = result.unavailable[m.id];
+    const name = labelOf(m.property ?? '').toLowerCase();
+    const parts = [...counts?.missing ? [`${notes(counts.missing)} with no ${name}`] : [], ...counts?.invalid ? [`${notes(counts.invalid)} with an unreadable ${name}`] : []];
+    return parts.length ? [`Not counted in ${m.label}: ${parts.join(', ')}.`] : [];
+  });
+  for (const id of result.overflow ?? []) lines.push(`Not computed in ${v.measures.find((m) => m.id === id)?.label ?? id}: too large to show.`);
+  if (result.unknown) lines.push(`Left out: ${notes(result.unknown)} whose details could not be checked.`);
+  const money = result.rows.some((r) => r.currency !== undefined);
+  const labels = [...v.measures[0]?.op === 'top' ? [labelOf(v.measures[0].property ?? '')] : v.groupBy.map((g) => labelOf(g.property)),
+    ...money ? ['Currency'] : [], ...v.measures.map((m) => m.label)];
+  const line = (cells: string[]): string => `| ${cells.join(' | ')} |\n`;
+  const table = result.rows.length ? line(labels) + line(labels.map(() => '---'))
+    + result.rows.map((r) => line([...r.group.map(cell), ...money ? [cell(r.currency)] : [], ...v.measures.map((m) => cell(r.values[m.id]))])).join('')
+    : 'Nothing to show yet.\n';
+  return head + table + (lines.length ? `\n${lines.map((l) => `${l}\n`).join('')}` : '');
 }
 
 type Computed = { value: number | Money | string } | Reason;

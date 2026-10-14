@@ -5,6 +5,7 @@
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/env.ts OPTIONAL_SECRETS",
     "exports api/src/github.ts dispatchTidy",
+    "exports runner/src/views.ts evaluateFormula",
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",
@@ -20,20 +21,17 @@
     "exports src/data/spine/read.ts driveRead",
     "exports src/features/piles/add-words.ts leftOut",
     "files runner/src/corpus.ts runner/src/corpus.ts",
-    "files runner/src/views.ts runner/src/views.ts",
     "files src/copy-rules.ts src/copy-rules.ts",
     "files src/data/compat-p2-fixtures.ts src/data/compat-p2-fixtures.ts",
     "files src/data/contract/vault-contract.ts src/data/contract/vault-contract.ts",
     "files src/data/contracts/lease-cases.ts src/data/contracts/lease-cases.ts",
-    "files src/data/contracts/view-format.ts src/data/contracts/view-format.ts",
     "files src/data/drive/drive-contract.ts src/data/drive/drive-contract.ts",
     "files src/data/vault/ownership-format.ts src/data/vault/ownership-format.ts",
     "files src/test-setup.ts src/test-setup.ts",
     "types src/data/drive/fake-drive.ts FaultAction"
   ],
   "reasons": {
-    "files runner/src/views.ts runner/src/views.ts": "B11a lands the evaluator before maintain uses it (R17); b11-figures wires it and removes this line.",
-    "files src/data/contracts/view-format.ts src/data/contracts/view-format.ts": "Reached only through runner/src/views.ts until b11-figures (R17); b11-figures removes this line.",
+    "exports runner/src/views.ts evaluateFormula": "Maintain computes map aggregates from b11-figures; formulas reach it with b11-formula-values, which removes this line (R17).",
     "exports src/data/contracts/note-format.ts validSummary": "B2b wires it (TL-P4-42 addendum 1); B2b removes this line",
     "exports src/data/contracts/observations.ts rebuildObservations": "Undo rebuilds learned sections; c4-undo-withdraw (C13's Undo) wires it and removes this row."
   }

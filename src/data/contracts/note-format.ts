@@ -28,7 +28,7 @@ import { renderLink } from './links';
 import { normalizeTag, NOTE_TAGS_MAX, tagListOk } from './tag-format';
 
 /** Frontmatter keys that are not properties. */
-export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template'] as const;
+export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template', 'bower_views'] as const;
 
 const LABELS: Record<string, string> = { next: 'Next due' };
 const CURRENT = '## Current state';
@@ -47,7 +47,7 @@ export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'> & St
 // Retain source bytes for an untouched parsed personal note, outside its display model.
 const personalSources = new WeakMap<NoteFile, { raw: string; serialized: string }>();
 
-const labelOf = (key: string): string => {
+export const labelOf = (key: string): string => {
   const words = key.replace(/_/g, ' ');
   return LABELS[key] ?? words.charAt(0).toUpperCase() + words.slice(1);
 };
@@ -239,6 +239,14 @@ function frontOf(block: string): Map<string, string> {
     front.set(key, key === 'tags' ? value : scalarOf(value));
   }
   return front;
+}
+
+/** B11 (R29): a note's raw front-matter values from its text or read prefix; `null` when its front matter is not all there. */
+export function frontValues(raw: string): Record<string, string> | null {
+  const text = raw.replace(/\r\n/g, '\n');
+  if (!text.startsWith('---\n')) return {};
+  const close = text.indexOf('\n---', 3);
+  return close < 0 ? null : Object.fromEntries(frontOf(text.slice(4, close)));
 }
 
 export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null; links?: string[]; incomplete?: boolean };

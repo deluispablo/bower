@@ -1,6 +1,9 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { indexedFront, lintFacts, noteRefusal, timelineBullets } from '../../src/data/contracts/note-format';
+import { frontValues, indexedFront, lintFacts, noteRefusal, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
+import type { TypeTable } from '../../src/data/contracts/types';
+import { VIEW_LIMITS } from '../../src/data/contracts/view-format';
+import { evaluateAggregate, EVALUATOR_VERSION, storedViews, viewBlock } from './views';
 import { lintEvidenceOk } from '../../src/data/contracts/run-manifest';
 import { failureKind } from '../../src/data/drive/transport';
 import { PREFIX_BYTES } from '../../src/data/drive/drive-api';
@@ -15,7 +18,7 @@ import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
-import { isRunnerPath, SYSTEM, isHidden, isRunnerFile, type RetrievalFile } from '../../src/data/vault/layout';
+import { isRunnerPath, SYSTEM, isHidden, isRunnerFile, type RetrievalFile, type ViewRecord } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
 import { applyChanges, isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
@@ -402,6 +405,113 @@ function unreadable(error: unknown): void {
   console.error(error);
 }
 
+const textValues = (v: unknown): v is Record<string, string> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every((x) => typeof x === 'string');
+
+/**
+ * B11 (AC9-AC14): Bower maps' declared figures, computed after settled effects. A set is its declared folder and type
+ * (R36); member properties come from retrieval's evidence for the same id and version, else one prefix read (R28,
+ * R29). Nothing is read for a folder whose maps declare no views.
+ */
+function mapFigures(drive: RunnerDrive, inputs: Maintain['inputs'], state: RetrievalState, asOf: string) {
+  const frozen = VaultIndex.build(inputs.folderId, (inputs.listing ?? []).map(file));
+  const places = VaultIndex.build(inputs.folderId, state.listing ?? []);
+  const readJson = async (path: string): Promise<string | null> => {
+    const f = frozen.file(path);
+    return f ? drive.readListedText(f) : null;
+  };
+  let kept: Promise<Record<string, { version?: unknown; properties?: unknown }>> | undefined;
+  let table: Promise<TypeTable> | undefined;
+  const reads = new Map<string, Promise<Record<string, string> | null>>();
+  const evidence = new Map<string, Record<string, string>>();
+  const records = new Map<string, ViewRecord>();
+  const read = async (id: string, note: MaintenanceNote): Promise<Record<string, string> | null> => {
+    kept ??= readJson(SYSTEM.retrieval).then((text) => {
+      try {
+        const value: unknown = text === null ? null : JSON.parse(text);
+        const files: unknown = value && typeof value === 'object' ? (value as { files?: unknown }).files : null;
+        return files && typeof files === 'object' ? files as Record<string, { version?: unknown; properties?: unknown }> : {};
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        return {};
+      }
+    });
+    const stored = (await kept)[id];
+    // Malformed evidence, or evidence for another version, is rebuilt from a fresh read (AC12).
+    if (stored?.version === note.version && textValues(stored.properties)) return stored.properties;
+    const f = places.byId(id);
+    try {
+      const text = f ? await drive.readPrefix(f) : null;
+      return text === null ? null : frontValues(text);
+    } catch (error) {
+      if (error instanceof BowerError && error.code === 'not-found') console.error(error);
+      else unreadable(error);
+      return null;
+    }
+  };
+  const propertiesOf = (id: string, note: MaintenanceNote): Promise<Record<string, string> | null> => {
+    const once = reads.get(id) ?? read(id, note);
+    reads.set(id, once);
+    return once;
+  };
+  /** Drops a map's records; true when it had any. */
+  const forget = (mapId: string): boolean => {
+    const keys = [...records.keys()].filter((key) => key.startsWith(`${mapId}/`));
+    for (const key of keys) records.delete(key);
+    return keys.length > 0;
+  };
+  return {
+    forget,
+    /** The blocks after the map's count line; '' when it declares none. */
+    async render(mapId: string): Promise<string> {
+      forget(mapId);
+      const line = frontValues(state.files[mapId]?.moc?.text ?? '')?.bower_views;
+      if (line === undefined) return '';
+      table ??= readJson(SYSTEM.typeTable).then((text) => readTypeTable(text).table);
+      const types = await table;
+      const blocks: string[] = [];
+      for (const view of storedViews(line, types)) {
+        const row = types.rows.find((r) => r.id === view.set.type);
+        const folder = places.pathOf(view.set.folderId);
+        // A binned folder takes its figure and record with it (R35).
+        if (!row || folder === undefined || view.set.folderId !== inputs.folderId && !places.byId(view.set.folderId)?.folder) continue;
+        // A map is never a member, even one whose indexed prefix could not tell its type.
+        const inFolder = Object.entries(state.files).filter(([, n]) => !n.moc && (folder === '' ? view.set.recursive || !n.path.includes('/')
+          : n.path.startsWith(`${folder}/`) && (view.set.recursive || !n.path.slice(folder.length + 1).includes('/'))));
+        const members = inFolder.filter(([, n]) => n.type === view.set.type);
+        // Counted from the listing before any read (R31); a note whose type cannot be told may be a member (R29).
+        const over = members.length > VIEW_LIMITS.notes;
+        let notes: Array<{ id: string; properties: Record<string, string> }> | 'unreadable' = [];
+        if (!over) for (const [id, n] of inFolder) {
+          // No type at all: its read was refused, so it may be a member (R29); null is a readable note without one.
+          if (n.type === undefined) notes = 'unreadable';
+          if (n.type !== view.set.type && (typeof n.type === 'string' || n.type === undefined || !n.incomplete)) continue;
+          const properties = await propertiesOf(id, n);
+          if (properties === null) notes = 'unreadable';
+          else if (properties.type === view.set.type) {
+            evidence.set(id, properties);
+            if (notes !== 'unreadable') notes.push({ id, properties });
+          }
+        }
+        blocks.push(viewBlock(view, row, over ? members.map(([id]) => ({ id, properties: {} })) : notes));
+        records.set(`${mapId}/${view.id}`, { hash: (await canonical(view)).hash, evaluator: EVALUATOR_VERSION, asOf,
+          inputs: members.map(([id, n]): [string, string] => [id, n.version]).sort(([a], [b]) => a < b ? -1 : 1),
+          result: over ? 'over' : notes === 'unreadable' ? 'unreadable' : evaluateAggregate(view, row, notes) });
+      }
+      return blocks.join('\n');
+    },
+    /** Retrieval with the figures' evidence and records; exactly the state when no map declares views (R2). */
+    retrieval(s: RetrievalState): RetrievalState {
+      // The ancestry keeps the table the figures read, so the next run knows its previous path (R35).
+      const chain = table ? SYSTEM.typeTable.split('/').flatMap((_, i, parts) => frozen.file(parts.slice(0, i + 1).join('/')) ?? []) : [];
+      const ancestry = s.listing;
+      if (ancestry) s = { ...s, listing: [...ancestry, ...chain.filter((f) => !ancestry.some((k) => k.id === f.id))] };
+      if (!records.size) return s;
+      return { ...s, files: Object.fromEntries(Object.entries(s.files).map(([id, n]) => [id, evidence.has(id) ? { ...n, properties: evidence.get(id) } : n])),
+        views: Object.fromEntries(records) };
+    },
+  };
+}
+
 /** The index's ordinary prefix supplies summary and per-version owner/type, without a discovery read. */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false,
   lints: Record<string, LintEvidence> = {}): Promise<Notes> {
@@ -500,9 +610,12 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
     const path = pathOfChange(c);
     return path !== undefined && !isHidden(path) && c.fileId !== state?.health;
   }).map((c) => c.fileId);
+  // A type-table edit is hidden, yet it can change or invalidate any map's declared figures (R35).
+  // Its current and its previous path each count, so a rename away, a Bin, a create or an edit all refresh.
+  const tableChanged = !!feed?.changes.some((c) => ix.pathOf(c.fileId) === SYSTEM.typeTable || previous.pathOf(c.fileId) === SYSTEM.typeTable);
   const lints: Record<string, LintEvidence> = {};
   const snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index), lints);
-  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, snapshot, lints, drop };
+  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, tableChanged, snapshot, lints, drop };
 }
 
 export async function planningIndex(drive: RunnerDrive, rootId: string,
@@ -551,7 +664,9 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   };
   const healthKept = async (): Promise<boolean> => !state?.health || !Object.entries(snapshot).some(([id, note]) => owed(id, note))
     && await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }) !== undefined;
-  if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !manifest.operations.length && await healthKept()) {
+  // Maps that declare views owe their figures again after any type-table edit, even on an idle run (R35).
+  const figuresOwed = refreshed.tableChanged && Object.values(state?.files ?? {}).some((n) => n.moc && frontValues(n.moc.text)?.bower_views !== undefined);
+  if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && await healthKept()) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
   // Evidence absent, malformed or unreadable before is rebuilt from one read of this version (R26).
@@ -570,9 +685,21 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
-    if (note.owner !== 'bower' || note.type !== 'moc' || note.moc || !before) continue;
+    if (note.moc || !before) continue;
+    // Declared figures need the map's full text, even when the declaration runs past the indexed prefix (R37); the
+    // whole read is then validated by the same ownership parser.
+    const prefix = note.incomplete ? await drive.keptPrefix(before) ?? '' : '';
+    const front = frontValues(prefix);
+    // Front matter cut by the prefix: its complete lines, closed here, say whether it could still be a Bower map.
+    const lines = front ?? frontValues(`${prefix.slice(0, prefix.lastIndexOf('\n') + 1)}---\n`) ?? {};
+    // Figures computed before may need cleanup (declaration removed, view invalid, folder binned, R35), which the
+    // prefix cannot show: a recorded map is read whole too.
+    const recorded = !!state?.views && typeof state.views === 'object' && Object.keys(state.views).some((key) => key.startsWith(`${id}/`));
+    const figures = note.incomplete === true && (recorded || (front ? front.bower_views !== undefined
+      : (lines.by ?? 'bower') === 'bower' && (lines.type ?? 'moc') === 'moc'));
+    if (!figures && (note.owner !== 'bower' || note.type !== 'moc')) continue;
     // Advisory incomplete regions cannot authorize an unrelated map edit.
-    if (note.incomplete) {
+    if (note.incomplete && !figures) {
       console.log(`Skipped ${note.path}: its prefix has incomplete regions and this run does not need its full text.`);
       continue;
     }
@@ -806,6 +933,9 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         if (note) note.members = ids;
       }
       const index = projectIndex(state.files);
+      const asOf = timelineDate(manifest.requestedAt);
+      if (!asOf) throw unavailable();
+      const figures = mapFigures(drive, op.effect.inputs, state, asOf);
       let last: Settled | undefined;
       // Person-facing projections, then retrieval (holding the health id), health and the log (R20).
       const rank = (target: NonNullable<Maintain['inputs']['targets']>[number]): number =>
@@ -859,8 +989,8 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         const logEvidence = log && (before || replaying.has(op.operationId)) ? await drive.evidence(target.fileId) : null;
         const logBefore = logEvidence ? await drive.readListedText(logEvidence.file) : '# Log\n';
         const rendered = log ? appendLog(logBefore, events) : health ? healthOf(op.effect.inputs, state.files) : kind ? kind.render(target.declaration, state, head.outcomes, manifest)
-          : owned ? mocEdit(target.fileId, state.files, members)
-          : target.path === SYSTEM.retrieval ? JSON.stringify(state) : undefined;
+          : owned ? mocEdit(target.fileId, state.files, members, await figures.render(target.fileId))
+          : target.path === SYSTEM.retrieval ? JSON.stringify(figures.retrieval(state)) : undefined;
         if (!kind && owned && !rendered) continue;
         const edit = typeof rendered === 'object' && rendered !== null ? rendered : null;
         const text = typeof rendered === 'string' ? rendered : edit?.text;
@@ -895,8 +1025,11 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           last = { state: 'applied' as const, evidence: back.evidence };
           if (health) reached.health = last;
           if (owned && state.files[target.fileId]) {
-            state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
-              version: back.evidence.file.modifiedTime, moc: mocSnapshot(text) ?? undefined, lint: lintFacts(target.path, text) ?? undefined };
+            // R39: the landed write counts as applied; figures recomputed now from newer evidence claim nothing about
+            // it (no record, no snapshot), and the next run reads the map whole and catches up.
+            const stale = back.evidence.content?.sha256 !== content.sha256 && figures.forget(target.fileId);
+            state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote, version: back.evidence.file.modifiedTime,
+              moc: stale ? undefined : mocSnapshot(text) ?? undefined, lint: stale ? undefined : lintFacts(target.path, text) ?? undefined };
             state.listing = state.listing?.map((f) => f.id === target.fileId ? file(back.evidence.file) : f);
           }
           continue;
