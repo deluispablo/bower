@@ -31,7 +31,9 @@
   ],
   "report": {
     "filed": 0,
-    "created": [],
+    "created": [
+      "Bower health.md"
+    ],
     "updated": [],
     "questionsExactly": 0
   }

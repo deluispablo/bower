@@ -39,17 +39,18 @@ import { normalizeModelInput } from './model-input';
 import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
-import { AUTHORED_LINE_MAX, STATE_WRITE, newsLineCited } from '../../src/data/contracts/note-edit';
-import { timelineBullets } from '../../src/data/contracts/note-format';
+import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited } from '../../src/data/contracts/note-edit';
+import { lintFacts, timelineBullets } from '../../src/data/contracts/note-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../../src/data/contracts/note-templates';
-import { parseTimelineLine, timelineLine } from '../../src/data/contracts/timeline-line';
+import { markerText, parseTimelineLine, timelineLine } from '../../src/data/contracts/timeline-line';
+import { formerNames, linkTarget } from '../../src/data/contracts/links';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
-import type { Proposal, Question, TypeRow } from '../../src/data/contracts/types';
+import type { ChangeEntry, Proposal, Question, TypeRow } from '../../src/data/contracts/types';
 import { assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
@@ -200,6 +201,8 @@ interface Shown {
   /** Script-resolved read pins, keyed by the admitted request file; the scripted planner owns consent. */
   requestNotes?: Readonly<Record<string, readonly string[]>>;
   presentLines?: ReadonlySet<string>;
+  /** The renames and moves this run takes, for a line's extra source named by its former path or name; not shown. */
+  moves?: ChangeEntry[];
   /** The person's `Rules.md`, bounded, when the folder has one. */
   rules?: string;
   aboutMe?: ReturnType<typeof aboutContext>;
@@ -270,7 +273,7 @@ function promptInstructions(options = false): string {
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
     '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
     ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
-    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, or a pileId of words only>"}],',
+    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, or a pileId of words only>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],',
     ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>"}],',
     ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],',
     '  (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})',
@@ -311,6 +314,7 @@ function promptInstructions(options = false): string {
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  When a thing disagrees with a note, never change it silently: the line gives both figures, the note\'s and the',
     '  thing\'s, and cites the thing.',
+    '  Bower writes a marker\'s label; inferred has no figures; contradiction needs both cites.',
     `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_WRITE.lines} lines of at most`,
     `  ${STATE_WRITE.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
     '  at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the',
@@ -512,8 +516,10 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const suppressed = new Set<string>();
   const waiting: Array<{ rec: JournalRecord; files: DriveFile[] }> = [];
   const requestNotes: Record<string, string[]> = {};
+  const moves: ChangeEntry[] = [];
   for (const line of took.taken.journal) {
     const rec: unknown = JSON.parse(await read.readText(line.fileId));
+    if (isJournalRecord(rec) && (rec.kind === 'rename' || rec.kind === 'move') && rec.from && rec.path) moves.push({ id: rec.id, at: rec.at, kind: rec.kind, what: rec.what, from: rec.from, path: rec.path });
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
     const file = listing.find((f) => f.id === line.fileId);
     if (file && ix.waitingRun(file.id)) {
@@ -546,7 +552,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const presentLines = presentLinesOf(notes, listing, ix, run);
   const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
     return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
-  return { ...(aboutMe ? { aboutMe, learnedFacts } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, requestNotes, presentLines, personalNotes: new Set(listing.flatMap((f) => {
+  return { ...(aboutMe ? { aboutMe, learnedFacts } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, requestNotes, presentLines, moves, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
   })), ...(rules ? { rules } : {}) };
@@ -799,6 +805,8 @@ export const REFUSALS = {
   lineText: 'a Timeline line that is not one short line',
   lineCites: 'a line citing a thing it does not file, or a pile that is not words only or is also made a note',
   lineUncited: 'a news line that cites nothing: every Timeline line cites the thing or pile it is from',
+  lineMarker: 'a "marker" that is not "contradiction", "uncertain" or "inferred", or a label Bower adds written in the text',
+  lineAlsoCites: 'an "alsoCites" that is not one exact path of another file the line\'s note links, given with a "marker"',
   noNote: 'a thing with text and no note',
   stateKeys: 'a state with keys outside the intent',
   stateNote: 'a state for a note it was not shown',
@@ -845,6 +853,15 @@ export interface Seen {
   retrySources?: ReadonlySet<string>;
   presentLines?: ReadonlySet<string>;
   notes: ReadonlySet<string>;
+  /** Each shown note's text as shown (cut where it was cut), and the folder's files by path, for a line's extra source. */
+  noteTexts?: ReadonlyMap<string, string>;
+  files?: ReadonlyMap<string, string>;
+  /** The renames and moves this run takes: a file may be named by its former path or name. */
+  moves?: readonly ChangeEntry[];
+  /** The folder's files' real names by id (a path may show a sibling twin as "(2)"). */
+  fileNames?: ReadonlyMap<string, string>;
+  /** Shown notes whose whole text says they are Bower's (a marker goes only there). */
+  bowerNotes?: ReadonlySet<string>;
   /** Folders whose shown Bower MOC lists what is filed there: a thing filed into one needs no note of its own (TL-P4-47 Q5). */
   mocFolders?: ReadonlySet<string>;
   names?: ReadonlySet<string>;
@@ -1036,6 +1053,7 @@ const WordsShape = z.strictObject({
 }, named('noteKeys'));
 const LineShape = z.strictObject({
   note: z.string(named('lineNote', 'lineKeys')), text: z.string(named('lineText', 'lineKeys')), cites: z.string(named('lineCites')).optional(),
+  marker: z.unknown().optional(), alsoCites: z.unknown().optional(),
 }, named('lineKeys'));
 const StateShape = z.strictObject({
   note: z.string(named('stateNote', 'stateKeys')),
@@ -1058,6 +1076,56 @@ type NoteIn = z.output<typeof NoteShape>;
 
 /** No link, middle dot or web address: a Timeline or Current state line Bower links itself. */
 const unlinked = (text: string): boolean => !/\[\[|\]\]|·|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
+
+/** A Timeline line's marker (TL-P4-50 B9 Q1); its label or qualifier comes only from `markerText`, never from the model (R5). */
+const MARKERS = ['contradiction', 'uncertain', 'inferred'] as const;
+const markerOf = (value: unknown): AuthoredLine['marker'] => MARKERS.find((m) => m === value);
+const MODEL_LABEL = /^(?:contradiction|uncertain)\s*:|\(inferred\)$/i;
+/** A file's path in the folder, by its id. */
+const pathIn = (seen: Seen, id: string): string => [...seen.files ?? []].find(([, f]) => f === id)?.[0] ?? '';
+/** A file's real name, as a citation writes it: never the "(2)" its path may take beside a sibling of the same name. */
+const nameIn = (seen: Seen, id: string): string => seen.fileNames?.get(id) ?? pathIn(seen, id).split('/').at(-1) ?? '';
+/** A line as the note will show it: its label or qualifier and its one extra source (the stored, decorated text). */
+const decorated = (line: AuthoredLine, seen: Seen): string => (line.marker
+  ? markerText(line.marker, line.text, line.alsoCites ? nameIn(seen, line.alsoCites) : null) : line.text);
+
+/**
+ * The one file a line's `alsoCites` names (TL-P4-50 B9 Q3; R2, R3, R3a, R21), else why not: an exact folder path (or
+ * the path it had before a rename this run takes), of a file the line's own note links in its text as shown, by the one
+ * link grammar (an alias, heading or block link binds to its file; a fenced one is no link), by that path or by a name
+ * no other file in the folder has; never the cited thing or another thing this run takes, and a name a citation can hold.
+ */
+function alsoCited(note: string, ref: unknown, seen: Seen, taken: (id: string) => boolean): string | { id: string } {
+  if (!Array.isArray(ref) || ref.length !== 1 || typeof ref[0] !== 'string') return 'an "alsoCites" that is not a list of exactly one path';
+  const files = new Map([...seen.files ?? []].map(([path, id]) => [path.toLowerCase(), id]));
+  const moves = [...seen.moves ?? []].sort((a, b) => a.at - b.at).map((c) => ({ from: c.from?.toLowerCase() ?? '', to: c.path?.toLowerCase() ?? '' }));
+  const now = (path: string): string => moves.reduce((p, c) => (p === c.from ? c.to : p.startsWith(`${c.from}/`) ? c.to + p.slice(c.from.length) : p), path.toLowerCase());
+  const at = (path: string): string | undefined => files.get(path.toLowerCase()) ?? files.get(now(path));
+  const id = /[[\]|#^\r\n]/.test(ref[0]) ? undefined : at(ref[0]);
+  if (!id) return 'an "alsoCites" that is not the exact path of a file in the folder: give its whole path, as the note\'s link names it';
+  if (taken(id)) return 'an "alsoCites" naming the thing the line cites or another thing this tidy-up takes: give another file the note already links';
+  const name = nameIn(seen, id);
+  let writable = false;
+  try { writable = entryOk({ date: '2000-01-01', text: markerText('uncertain', 'x', name), source: null }); } catch (e) { console.error(e); }
+  if (!writable) return 'an "alsoCites" naming a file whose name cannot be written as a link: leave the extra source out';
+  const former = formerNames([...seen.moves ?? []]);
+  const resolve = (target: string): string | undefined => {
+    const exact = at(target) ?? at(`${target}.md`);
+    if (exact) return exact;
+    // A name is unique by the files' real names folder-wide (R3a), whatever their paths show.
+    const named = [...files.values()].filter((f) => { const n = nameIn(seen, f).toLowerCase(); return n === target || n === `${target}.md`; });
+    if (named.length) return named.length === 1 ? named[0] : undefined;
+    const moved = former.get(target);
+    return moved === undefined ? undefined : at(moved);
+  };
+  // A framed note cut where shown no longer parses as framed: its shown words, front matter included, still hold links
+  // by the same grammar once read without the frame mark, so the evidence stays the shown prefix (round 2 ruling 2).
+  const shownText = seen.noteTexts?.get(note) ?? '';
+  const unframed = shownText.replace(/^(---\r?\n[\s\S]*?)^bower_format:[^\r\n]*\r?\n/m, '$1');
+  const links = (lintFacts(note, shownText) ?? lintFacts(note, unframed))?.links ?? [];
+  return links.some((link) => resolve(linkTarget(link)) === id) ? { id }
+    : 'an "alsoCites" naming a file the line\'s note does not link where it is shown: give a file that note links';
+}
 /** A note body as written, its line breaks made `\n`. */
 const bodyOf = (n: NoteIn): string => n.body.replace(/\r\n?/g, '\n');
 
@@ -1093,6 +1161,9 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const sentences = new Map([...seen.texts ?? []].map(([id, text]) => [id, profileSentences(text, admitted.get(id)?.name ?? '')]));
   const words = new Map<string, Placement>();
   const timeline: AuthoredLine[] = [];
+  /** Each reply line as authored once its marker and extra source are checked. */
+  const authoredLines = new WeakMap<z.output<typeof LineShape>, AuthoredLine>();
+  const authoredOf = (l: z.output<typeof LineShape>): AuthoredLine => authoredLines.get(l) ?? { path: l.note, text: l.text.trim(), cites: l.cites ?? null };
   const current: AuthoredState[] = [];
   const asked = new Map<string, Ask>();
   const askedThings = new Map<string, Ask>();
@@ -1173,14 +1244,35 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   ], (n) => words.set(n.pileId, { to: n.to, name: n.name })));
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
-    rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text)),
+    // One physical line (R6): the two Unicode line breaks too, in a Timeline line only (R23).
+    rule('lineText', (l) => lineOk(l.text, AUTHORED.line) && unlinked(l.text) && !/\p{Zl}|\p{Zp}/u.test(l.text)),
+    rule('lineMarker', (l) => l.marker === undefined || markerOf(l.marker) !== undefined),
+    rule('lineMarker', (l) => !MODEL_LABEL.test(l.text.trim()) || 'a Timeline line that writes its own "Contradiction:", "Uncertain:" or "(inferred)": give "marker" and Bower adds it'),
+    // Whose note it is comes from its whole text (C05's own test), never from Drive properties the person cannot see.
+    rule('lineMarker', (l) => l.marker === undefined || !!seen.bowerNotes?.has(l.note) || "a marker on a note of the person's own: it takes only an ordinary line"),
+    rule('lineMarker', (l) => l.marker !== 'inferred' || !/\p{Nd}/u.test(l.text) || 'an inferred line with a figure: an inference states no number'),
+    rule('lineAlsoCites', (l) => l.alsoCites === undefined || l.marker !== undefined || 'an "alsoCites" with no "marker"'),
+    rule('lineAlsoCites', (l) => l.marker !== 'contradiction' || (l.cites !== undefined && l.alsoCites !== undefined)
+      || 'a contradiction that does not cite its thing and one other file in "alsoCites"'),
+    rule('lineAlsoCites', (l) => {
+      const got = l.alsoCites === undefined ? undefined : alsoCited(l.note, l.alsoCites, seen, (id) => id === l.cites || admitted.has(id));
+      if (typeof got === 'string') return got;
+      authoredLines.set(l, { path: l.note, text: l.text.trim(), cites: l.cites ?? null,
+        ...(markerOf(l.marker) ? { marker: markerOf(l.marker) } : {}), ...(got ? { alsoCites: got.id } : {}) });
+      return true;
+    }),
+    // The bound is the decorated text's (R7): refused and asked again, never clipped.
+    rule('lineText', (l) => decorated(authoredOf(l), seen).length <= AUTHORED.line
+      || `a Timeline line past ${AUTHORED.line} characters with the label and source Bower adds: shorten its words`),
+    // A line already in the note is valid input; it is found by its final text (R20).
     rule('lineCites', (l) => l.cites === undefined || placed.has(l.cites) || wordsPile(l.cites) || !!seen.retrySources?.has(l.cites)
-      || !!seen.presentLines?.has(JSON.stringify([l.note, l.text.trim(), l.cites]))),
+      || !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))),
+    // The news rule reads the line's own words, before any label (round 2).
     rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
   ], (l) => {
     if (l.cites !== undefined && !placed.has(l.cites)) cited.add(l.cites);
-    timeline.push({ path: l.note, text: l.text.trim(), cites: l.cites ?? null });
+    timeline.push(authoredOf(l));
   }));
   // A note's Current state as it should read now (C05): only on a note it was shown, one per note, within note-edit's
   // limits; Bower decides whether it may rewrite it (only while the person has not edited it), never the model.
@@ -1255,6 +1347,12 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     return [target, `${target}.md`].some((t) => made.has(t) || (seen.names?.has(t) ?? false));
   };
   const whole: Array<Rule<unknown>> = [
+    // The bound holds as the note will show the line: a cited note this reply keeps into another is named as the kept one (R7, R18).
+    rule('lineText', () => timeline.every((l) => {
+      if (!l.marker || !l.alsoCites) return true;
+      const path = pathIn(seen, l.alsoCites);
+      return markerText(l.marker, l.text, kept.find((k) => k.other === path)?.kept.split('/').at(-1) ?? nameIn(seen, l.alsoCites)).length <= AUTHORED.line;
+    }) || `a Timeline line past ${AUTHORED.line} characters with the label and source Bower adds, named as kept: shorten its words`),
     // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
     rule('noNote', () => {
       const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
@@ -1667,8 +1765,20 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
       const input = prepared(run, shownTook, shown);
       const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
+      // Whose note it is reads the whole note (one read per version, already cached), never the cut shown to the model.
+      const bowerNotes = new Set<string>();
+      for (const n of shown.notes) {
+        const file = ix.file(n.path);
+        if (!file || file.folder) continue;
+        try {
+          if (parseNote(n.path, await read.readText(file.id), run.context ? { context: run.context, fileId: file.id } : undefined).byBower) bowerNotes.add(n.path);
+        } catch (e) { console.error(e); }
+      }
       const seen: Seen = { types: shown.types, tagList, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
         suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
+        noteTexts: new Map(shown.notes.map((n) => [n.path, n.text])), moves: shown.moves ?? [], bowerNotes,
+        fileNames: new Map(listing.flatMap((f) => (f.folder ? [] : [[f.id, f.name] as const]))),
+        files: new Map(listing.flatMap((f) => { const path = f.folder ? undefined : ix.pathOf(f.id); return path === undefined ? [] : [[path, f.id] as const]; })),
         names: shown.names ?? new Set(), texts, folders: new Set(shown.folders),
         mocFolders: new Set(shown.notes.filter((n) => indexed[ix.idOf(n.path) ?? '']?.type === 'moc' && indexed[ix.idOf(n.path) ?? '']?.owner === 'bower').map((n) => n.path.slice(0, n.path.lastIndexOf('/')))),
         folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'),
@@ -1711,12 +1821,13 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
             .find((f) => indexed[f.id]?.owner === 'bower' && nearName(f.name) === nearName(named))?.name;
           if (same !== undefined) return no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`);
         }
-        const canEdit = (row: Record<string, unknown>): boolean => {
+        const canEdit = (row: Record<string, unknown>, line?: AuthoredLine): boolean => {
           const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
           // The scripted request verdict keeps these notes untouched and records why; no edit is granted.
           if (typeof row.note === 'string' && shown.suppressed?.has(row.note)) return true;
-          if (id && Object.values(selection.allowedTargets).some((targets) => targets.includes(id))
-            && typeof row.text === 'string' && seen.presentLines?.has(JSON.stringify([row.note, row.text.trim(), row.cites]))) return true;
+          // A line already there is found by its final text (R20).
+          if (id && line && Object.values(selection.allowedTargets).some((targets) => targets.includes(id))
+            && seen.presentLines?.has(JSON.stringify([row.note, decorated(line, seen), row.cites]))) return true;
           return !!id && (chosen(row.cites) ? selection.allowedTargets[String(row.cites)]?.includes(id) === true
             || Object.keys(shown.requestNotes ?? {}).some((requestId) => selection.allowedTargets[requestId]?.includes(id))
             : wanted.has(id) && (row.cites === undefined || shown.retrySources?.has(String(row.cites))) && shownTook.taken.journal.length > 0
@@ -1736,7 +1847,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const targets = selection.allowedTargets[item.itemId] ?? [];
           return [row.kept, row.other].every((path) => typeof path === 'string' && targets.includes(ix.idOf(path) ?? ''));
         }))) return null;
-        if ([...rows('lines'), ...rows('states')].some((row) => !canEdit(row))) return null;
+        // Every reply line passed its rules, so the authored lines are the reply's, in order.
+        if (rows('lines').some((row, i) => !canEdit(row, got.filing.lines?.[i])) || rows('states').some((row) => !canEdit(row))) return null;
         got.filing.kinds = new Map(selection.value.items.map((item) => [item.itemId, rowFor(item)?.id ?? item.kind]));
         for (const row of rows('things')) {
           const item = chosen(row.fileId);

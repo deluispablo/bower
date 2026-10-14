@@ -28,7 +28,7 @@ import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAn
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
-import { parseTimelineLine, timelineLine } from '../contracts/timeline-line';
+import { markerText, parseTimelineLine, splitCitation, timelineLine } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
@@ -438,6 +438,9 @@ export interface AuthoredLine {
   path: string;
   text: string;
   cites: string | null;
+  /** Its marker (TL-P4-50 B9), written by `markerText` once names are final, with the file id of its one extra source. */
+  marker?: Parameters<typeof markerText>[0];
+  alsoCites?: string;
 }
 
 /**
@@ -1396,6 +1399,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // A model's Timeline lines (P4-3): each cites the note its thing gets, or the thing as filed, and waits for its move.
   // The cite is the name asked for until the filing below fixes the name each one gets; then it is that name.
   const modelLines: Array<{ line: WantedLine; cites: string }> = [];
+  /** Model lines with an extra source: their citation follows this run's renames, as a carried line's does (R18). */
+  const citing: WantedLine[] = [];
   /** A captured thing as a decision about it reads it (its link text is read only where it is filed). */
   const seenOf = (t: (typeof things)[number], linkText: string | null = null): ThingSeen => ({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText });
   const pileIds = new Set(piles.map((p) => p.id));
@@ -1409,8 +1414,13 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (l.cites !== null && !thing && !words && pileIds.has(l.cites)) continue;
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
     const consent = settlement.consent(f.id, l.cites, !!thing && asked !== undefined);
-    const line: WantedLine = { entry: { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: consent?.requestId ?? null, what: l.text, after: asked === undefined ? null : (thing?.file.id ?? null), ...(consent ? { consent } : {}) };
+    // A marked line is written as the note shows it (TL-P4-50 B9): its one extra source by the file's identity, named now.
+    const also = l.alsoCites === undefined ? undefined : ix.byId(l.alsoCites);
+    if (l.alsoCites !== undefined && (!also || also.folder)) continue;
+    const text = l.marker ? markerText(l.marker, l.text, also?.name ?? null) : l.text;
+    const line: WantedLine = { entry: { date: date ?? '', text, source: asked === undefined ? null : citeName(asked) }, record: consent?.requestId ?? null, what: citedAsWords(text), after: asked === undefined ? null : (thing?.file.id ?? null), ...(consent ? { consent } : {}) };
     want(f, l.path).lines.push(line);
+    if (also) citing.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
     if (words) {
       words.lines.push(line);
@@ -1590,6 +1600,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   const keepRenames = keeping.map((x) => x.rename);
   const renames = [...journalRenames, ...keepRenames.filter((r) => !journalRenames.some((j) => j.from.toLowerCase() === r.from.toLowerCase()))];
+  // Carried lines append after the note's rewrite, so their preserved citations must follow it too.
+  // So must a model line's citation, named before the renames (R18).
+  if (renames.length) for (const line of [...keeping.flatMap((x) => x.lines), ...citing]) {
+    const rewritten = applyChanges(new TextEncoder().encode(line.entry.text), [{ kind: 'link-rewrite', recordIds: [], renames }]);
+    if (!rewritten.ok) continue;
+    line.entry.text = asLineText(rewritten.text);
+    if (line.what !== null) line.what = citedAsWords(line.entry.text);
+  }
   const binned = new Set(keeping.map((x) => x.other.id));
   if (renames.length) {
     for (const [path, entry] of ix.entries()) {
@@ -3307,9 +3325,17 @@ function tookLines(lines: readonly JournalLine[], taken: AdmissionManifest): Jou
  * same run plans the same keys again, and no two runs share one (never derived from a name or a time alone).
  */
 /** A note's text made one Timeline field: links as their shown words, no Timeline separator, one line. */
-const asLineText = (text: string): string => text
-  .replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_m, target: string, alias?: string) => (alias ?? target).trim())
-  .replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' ? ' ' : c)).join('').replace(/^#+\s*|^[-*+]\s+/, '').trim();
+/** A line as a run's report row says it: its canonical citation as its words, since a row shows no link (R8). */
+const citedAsWords = (text: string): string => {
+  const { text: words, citation } = splitCitation(text);
+  return words + citation.replace(/\[\[|\]\]/g, '');
+};
+const asLineText = (text: string): string => {
+  const clean = text.replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' || c === '\u2028' || c === '\u2029' ? ' ' : c)).join('');
+  const { text: words, citation } = splitCitation(clean);
+  return words.replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_m, target: string, alias?: string) => (alias ?? target).trim())
+    .replace(/^#+\s*|^[-*+]\s+/, '').trim() + citation;
+};
 
 /**
  * What the other note of a keep brings to the kept one (C05): its properties the kept note lacks or says otherwise
@@ -3327,7 +3353,7 @@ function carriedLines(other: ParsedNote, kept: ParsedNote): EditEntry[] {
   const out: EditEntry[] = [];
   const add = (text: string, source: string | null): void => {
     const line = asLineText(text);
-    const src = source !== null && /^[^\]|#^\r\n]+$/.test(source) ? source : null;
+    const src = source !== null && /^[^\]|#^\r\n\u2028\u2029]+$/.test(source) ? source : null;
     if (line && !said.has(same(line)) && !out.some((e) => same(e.text) === same(line))) out.push({ date: '', text: line, source: src });
   };
   for (const p of other.properties) add(`${p.label}: ${p.value}`, null);

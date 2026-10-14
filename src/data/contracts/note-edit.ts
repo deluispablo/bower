@@ -15,7 +15,7 @@ import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
 import { dateOk, bowerNoteRole, parseNote, timelineEntries } from './note-format';
 import { ABOUT_REGIONS, MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
-import { parseTimelineLine, timelineLine, type TimelineMarker } from './timeline-line';
+import { parseTimelineLine, splitCitation, timelineLine, type TimelineMarker } from './timeline-line';
 import { managedRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove, TimelineConsent, MaintenanceNote } from './run-manifest';
 import { isHub } from './hub';
@@ -57,7 +57,10 @@ const HEADING = /^#{1,6}\s/;
 
 const controls = (value: string): boolean => [...value].some((char) => char.charCodeAt(0) <= 0x1f || char.charCodeAt(0) === 0x7f);
 
-const lineFieldOk = (value: string): boolean => !controls(value) && !value.includes(' · ') && !value.includes('[[') && !value.includes(']]');
+const lineFieldOk = (value: string): boolean => {
+  const { text } = splitCitation(value);
+  return !controls(value) && !value.includes(' · ') && !text.includes('[[') && !text.includes(']]');
+};
 /** A display name as a Timeline source: no `]`, `|`, `#`, `^` or line break. */
 const displayNameOk = (value: string): boolean => value.length > 0 && !/[\]|#^\r\n]/.test(value);
 
@@ -81,7 +84,8 @@ export const newsLineCited = (entry: Pick<EditEntry, 'text' | 'source'>): boolea
  * 22); a write or a plan (the default) also refuses a news line with no source.
  */
 export function entryOk(entry: EditEntry, mode: 'write' | 'read' = 'write'): boolean {
-  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source)) && (mode === 'read' || newsLineCited(entry));
+  return dateOk(entry.date) && lineFieldOk(entry.text) && (entry.source === null || displayNameOk(entry.source))
+    && (mode === 'read' || newsLineCited(entry) && !/[\u2028\u2029]/.test(entry.text + (entry.source ?? '')));
 }
 /** Display names only: path forms and `.md` forms are never rewritten. */
 export function renameOk(rename: Rename): boolean {
@@ -266,7 +270,7 @@ export function personalTimelineRefusal(bytes: Uint8Array, fetched?: FetchedOwne
   return typeof appendable === 'string' ? appendable : null;
 }
 
-type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null } | { refused: EditRefusal };
+type Step = { text: string; added: EditEntry[]; rules: Pick<Rule, 'text' | 'yourWords' | 'since'>[] | null; linkComparison?: string } | { refused: EditRefusal };
 
 function appendLines(text: string, change: Extract<Change, { kind: 'timeline-append' }>, authors: Authors, fetched?: EditFetched): Step {
   const bytes = encoder.encode(text);
@@ -623,14 +627,19 @@ function blankCode(line: string): string {
   return out.join('');
 }
 
-interface Replacement { at: number; length: number; to: string }
-/** Tokens on one line in [start, end): the trimmed target before `|`, `#` or `^` is replaced, nothing else. */
+interface Replacement { at: number; length: number; to: string; unlinked?: boolean }
+/** Tokens on one line in [start, end): replace the trimmed target; an unwritable citation carries words. */
 function tokens(text: string, start: number, end: number, renames: ReadonlyMap<string, string>, out: Replacement[]): void {
   const line = blankCode(text.slice(start, end));
+  const { citation } = splitCitation(parseTimelineLine(line)?.text ?? line);
   for (const match of line.matchAll(/\[\[([^\]\r\n]*)\]\]/g)) {
     const name = (match[1] ?? '').split('|')[0] ?? '';
     const to = renames.get(linkTarget(name));
     if (to === undefined) continue;
+    if (to.includes(' · ') && citation && match.index === line.lastIndexOf(citation) + ' (also from '.length) {
+      out.push({ at: start + match.index, length: match[0].length, to: to.replace(/\s+·\s+/g, ', '), unlinked: true });
+      continue;
+    }
     const head = name.split(/[#^]/)[0] ?? '';
     const lead = head.length - head.trimStart().length;
     out.push({ at: start + match.index + 2 + lead, length: head.trim().length, to });
@@ -676,6 +685,7 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
   }
   // One simultaneous pass: each target is replaced once, right to left so earlier offsets hold.
   let next = text;
+  let linkComparison = text;
   for (const item of [...out].sort((a, b) => b.at - a.at)) {
     // Learned links refresh from evidence at rebuild, never through generic renames.
     if (ABOUT_REGIONS.some((region) => {
@@ -685,8 +695,9 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
       return item.at >= span.start && item.at < span.end;
     })) continue;
     next = next.slice(0, item.at) + item.to + next.slice(item.at + item.length);
+    if (item.unlinked) linkComparison = linkComparison.slice(0, item.at) + item.to + linkComparison.slice(item.at + item.length);
   }
-  return { text: next, added: [], rules: null };
+  return { text: next, added: [], rules: null, linkComparison };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -832,6 +843,8 @@ function outsideRules(text: string): { before: string; after: string; found: boo
  * by the byte-exact fixtures, not by this invariant.
  */
 function holds(before: string, after: string, change: Change, step: Exclude<Step, { refused: EditRefusal }>): boolean {
+  // Compare after the exact citation fallbacks; every other byte still passes the existing masks.
+  before = step.linkComparison ?? before;
   const a = parseOwnership(encoder.encode(before));
   const b = parseOwnership(encoder.encode(after));
   if (a.status === 'invalid' || b.status === 'invalid' || b.status !== a.status) return false;
