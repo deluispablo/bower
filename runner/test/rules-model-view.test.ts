@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { empty, folder, run, select, setup } from './b1-planning-support';
+import { applyChanges } from '../../src/data/contracts/note-edit';
 
 // rules-added-region-model (TL-P4-53 Q7): the model sees the person's rules prose first, then the rules added in
 // Bower, as one projection bounded at today's 4,000 units with the rules' marked cut. No region: today's input.
@@ -16,7 +17,8 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 const PROSE = 'My rules for Bower.\n\n## Rules\n\n- Garden club papers go to Projects / Garden club.\n';
-const RULE = '- Receipts go to Areas / Money / Receipts. <!-- since 2026-10-03 -->\n  *You wrote: "receipts in money"*\n';
+/** A region's payload as the writer leaves it (`note-edit.ts` wordRules): its `## Rules` heading, a blank line, the rules. */
+const RULE = '## Rules\n\n- Receipts go to Areas / Money / Receipts. <!-- since 2026-10-03 -->\n  *You wrote: "receipts in money"*\n';
 /** Rules.md as the app writes it (`note-edit.ts` wordRules): the original bytes, then the marked region at the end. */
 const withRegion = (prose: string, payload: string, eol = '\n', after = '') =>
   `${prose}${eol}## Rules added in Bower${eol}<!-- bower:ownership/2 begin rules-added -->${eol}${payload}<!-- bower:ownership/2 end rules-added -->${eol}${after}`;
@@ -61,6 +63,27 @@ it('AC3 rules-model-empty-region: an empty region leaves the input byte-identica
   const alone = (await shown(PROSE)).result.frames[1]?.call.input;
   const region = (await shown(withRegion(PROSE, ''))).result.frames[1]?.call.input;
   expect(region, 'the whole execution input is byte-identical').toBe(alone);
+});
+
+it('AC3 rules-model-heading-only-region: a region holding only its `## Rules` heading counts as empty (R11)', async () => {
+  const alone = (await shown(PROSE)).result.frames[1]?.call.input;
+  for (const payload of ['## Rules\n\n', '## Rules\n', '\n']) {
+    expect((await shown(withRegion(PROSE, payload))).result.frames[1]?.call.input, JSON.stringify(payload)).toBe(alone);
+  }
+});
+
+it('AC3 rules-model-add-then-remove: the writer\'s add then remove of the last rule restores the input byte for byte (R11)', async () => {
+  const enc = (text: string) => new TextEncoder().encode(text);
+  const added = applyChanges(enc(PROSE), [{ kind: 'rules-wording', add: [{ recordId: 'add-1', text: 'Receipts go to Areas / Money / Receipts.', yourWords: 'receipts in money', since: Date.UTC(2026, 9, 3) }], remove: [] }]);
+  expect(added.ok, 'the writer adds the region').toBe(true);
+  if (!added.ok) return;
+  const removed = applyChanges(added.bytes, [{ kind: 'rules-wording', add: [], remove: [{ recordId: 'remove-1', text: 'Receipts go to Areas / Money / Receipts.', since: Date.UTC(2026, 9, 4) }] }]);
+  expect(removed.ok, 'the writer removes the last rule').toBe(true);
+  if (!removed.ok) return;
+  expect(removed.text, 'the region stays, holding only its heading').toContain('<!-- bower:ownership/2 begin rules-added -->');
+  const alone = (await shown(PROSE)).result.frames[1]?.call.input;
+  expect((await shown(added.text)).rules, 'with the rule: prose, then the region').toBe(shownAs(PROSE, added.text.slice(added.text.indexOf('-->\n') + 4, added.text.lastIndexOf('<!-- bower:ownership/2 end'))));
+  expect((await shown(removed.text)).result.frames[1]?.call.input, 'after the last remove: byte-identical to the prose alone').toBe(alone);
 });
 
 it('AC3 rules-model-both-empty: empty prose and an empty region show what an empty Rules.md shows', async () => {
@@ -123,14 +146,35 @@ it('AC6 guard rules-model-units: 4,000 two-byte characters are 4,000 units, show
   expect((await shown(prose)).rules).toBe(prose);
 });
 
-it('AC6 rules-model-code-point-cut: the cut never splits a character made of two units', async () => {
-  const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-  for (let lead = 3_940; lead < 3_950; lead++) {
-    const prose = `${'a'.repeat(lead)}${'\u{1F331}'.repeat(100)}\n`;
-    const { rules } = await shown(prose);
-    expect(rules, `lead ${lead}: a marked cut`).toMatch(/\[cut here: \d+ more characters of the rules not shown; the list may go on\]$/);
-    expect(lone.test(rules ?? ''), `lead ${lead}: no half character before the marker`).toBe(false);
+const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+const SPROUT = '\u{1F331}';
+/**
+ * One two-unit character at every offset across the window where a 4,000- or 12,000-unit cut can fall, both parities:
+ * whatever slack the marker leaves, one offset puts the cut between its two units (R12).
+ */
+async function sweep(window: [number, number], shownPart: (lead: number) => Promise<string | undefined>) {
+  let straddled = 0;
+  for (let lead = window[0]; lead <= window[1]; lead++) {
+    const value = await shownPart(lead) ?? '';
+    const kept = value.slice(0, value.indexOf('\n[cut here:'));
+    expect(value, `lead ${lead}: a marked cut`).toContain('\n[cut here:');
+    expect(LONE.test(value), `lead ${lead}: no half character`).toBe(false);
+    if (kept.length === lead) straddled++;
   }
+  expect(straddled, 'some offset put the cut inside the character, and the cut moved back before it').toBeGreaterThan(0);
+}
+
+it('AC6 rules-model-code-point-cut: the rules cut never splits a character made of two units (R5, R12)', async () => {
+  await sweep([3_880, 3_960], async (lead) => (await shown(`${'a'.repeat(lead)}${SPROUT}${'b'.repeat(400)}\n`)).rules);
+});
+
+it('AC6 rules-model-code-point-cut-default-marker: a field with the generic marker never splits one either (R5, R12)', async () => {
+  await sweep([11_880, 11_960], async (lead) => {
+    const base = await setup({ folder: { ...folder }, inboxFiles: { 'Offer.txt': `${'a'.repeat(lead)}${SPROUT}${'b'.repeat(400)}\n` } });
+    const result = await run(base, [select(base, []), empty]);
+    const piles = result.frames[1]?.value.piles as Array<{ things: Array<{ text: string | null }> }> | undefined;
+    return piles?.[0]?.things[0]?.text ?? undefined;
+  });
 });
 
 function newProject(base: Awaited<ReturnType<typeof setup>>, basis: string) {
