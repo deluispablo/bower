@@ -135,6 +135,7 @@ export function fixedReport(r: RunReport): RunReport {
   if (r.nothingReady) out.nothingReady = true;
   if (r.alreadySaved?.length) out.alreadySaved = r.alreadySaved.map((a) => ({ name: a.name, as: a.as, ...(a.notes !== undefined ? { notes: a.notes } : {}) }));
   if (r.unconfirmed?.length) out.unconfirmed = r.unconfirmed.map((a) => ({ name: a.name, why: a.why }));
+  if (r.kept?.length) out.kept = r.kept.map((a) => ({ name: a.name, why: a.why }));
   if (r.answered?.length) out.answered = r.answered.map((a) => ({ questionId: a.questionId, kind: a.kind, outcome: a.outcome, why: a.why, ...(a.note !== undefined ? { note: a.note } : {}) }));
   return out;
 }

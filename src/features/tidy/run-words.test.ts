@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunState } from '@/data/types';
-import { landedSummary, runClock, runDetail, runLinkRows, runShort, runTitle, stepState } from './run-words';
+import { landedSummary, reportWaiting, runClock, runDetail, runLinkRows, runShort, runTitle, stepState } from './run-words';
 
 const base: RunState = { id: 'r', scope: 'all', phase: 'writing', requestedAt: Date.UTC(2026, 9, 4, 15, 0), phaseAt: 0, seen: false, total: 6 };
 
@@ -92,6 +92,26 @@ describe('how long a run takes', () => {
     expect(runTitle(done)).toBe('Done. 1 thing already saved');
     expect(runShort(done)).toBe('1 thing already saved');
     expect(runTitle({ ...done, report: empty })).toBe('Done. 0 things filed');
+  });
+  // report-kept-your-change: a thing the person changed after Bower's change landed, kept as they left it.
+  it('a change the person made after a landed op is reported as kept, by its name as it is now', () => {
+    const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    const why = 'You changed it after Bower did; Bower kept your change.';
+    const filed = [{ name: 'Payslip_Aug.pdf', title: 'Payslip August (2)', kind: 'pdf' as const, to: 'Areas/Money/Payslips' }];
+    const one = { ...base, phase: 'done' as const, report: { ...empty, filed, kept: [{ name: 'August pay.pdf', why }] } };
+    expect(runDetail(one)).toBe('August pay kept as you left it.');
+    // The title still says what Bower did.
+    expect(runTitle(one)).toBe('Done. 1 thing filed');
+    const two = [{ name: 'August pay.pdf', why }, { name: 'Flat 9.md', why }];
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, setAside: [{ name: 'a.pdf', why: 'x' }], kept: two, yourChanges: 2 } }))
+      .toBe('1 thing set aside, 2 things kept as you left them and 2 changes of yours read.');
+    // A name with a comma of its own stays one part.
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, setAside: [{ name: 'a.pdf', why: 'x' }], kept: [{ name: 'Flat 9, Wrenfield Road.md', why }] } }))
+      .toBe('1 thing set aside and Flat 9, Wrenfield Road kept as you left it.');
+    // A report with only kept rows waits to be seen, and not once seen.
+    const only = { ...base, phase: 'done' as const, report: { ...empty, kept: [{ name: 'August pay.pdf', why }] } };
+    expect(reportWaiting(only)).toBe(true);
+    expect(reportWaiting({ ...only, seen: true })).toBe(false);
   });
 });
 

@@ -35,6 +35,7 @@ export const UNCONFIRMED_GONE = "Bower couldn't confirm this; the file is gone."
  * before Bower read it back: its stamp is that writer's, so nothing tells whether Bower's change landed.
  */
 export const UNCONFIRMED_CHANGED = "Bower couldn't confirm this; it was changed while Bower was filing it.";
+export const KEPT_YOUR_CHANGE = 'You changed it after Bower did; Bower kept your change.';
 const UNCONFIRMED = [UNCONFIRMED_GONE, UNCONFIRMED_CHANGED];
 /** The failure a move's own precondition gives when its source is not as captured; the service is its only author. */
 export const SOURCE_NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
@@ -123,12 +124,39 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     const rows = health?.beforeContent ? report.updated : report.created;
     if (health && !rows.some((row) => row.path === health.path)) rows.push({ path: health.path, what: 'Checked your notes for broken links.' });
   }
+  const kept = keptChanges(manifest, byId);
+  if (kept.length) report.kept = kept;
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;
   // A full run that captured nothing (every pile it was admitted to take was held when it read them, TL-P3-25):
   // its report says nothing was ready yet, rather than that everything has its place.
   if (manifest.runScope === 'all' && !manifest.capture.piles.length && !manifest.capture.journal.length) report.nothingReady = true;
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
+}
+
+/** Only effects behind applied rows are judged; later applied writes supersede an earlier effect on the same thing. */
+function keptChanges(manifest: RunManifest, byId: ReadonlyMap<string, Outcome>): NonNullable<RunReport['kept']> {
+  const named = new Set(manifest.reportPlan.flatMap((c) => c.when === 'applied'
+    && c.requires.every((id) => byId.get(id)?.state === 'applied')
+    && (c.value.filed.length || c.value.created.length || c.value.alreadySaved?.length) ? c.requires : []));
+  const kept: NonNullable<RunReport['kept']> = [];
+  for (const op of manifest.operations) {
+    const outcome = byId.get(op.operationId);
+    const e = op.effect;
+    if (!named.has(op.operationId) || outcome?.state !== 'applied'
+      || (e.kind !== 'move' && e.kind !== 'create-folder' && e.kind !== 'create-text' && e.kind !== 'bin')) continue;
+    const { file, trashed } = outcome.evidence;
+    if (manifest.operations.some((later) => later.ordinal > op.ordinal && byId.get(later.operationId)?.state === 'applied'
+      && 'before' in later.effect && later.effect.before?.fileId === file.fileId)) continue;
+    let changed = !trashed;
+    if (e.kind !== 'bin') {
+      const made = 'createdBy' in e.parent ? byId.get(e.parent.createdBy) : undefined;
+      const parentId = 'fileId' in e.parent ? e.parent.fileId : made?.state === 'applied' ? made.evidence.file.fileId : undefined;
+      changed = trashed || file.name !== e.name || file.parents.length !== 1 || file.parents[0] !== parentId;
+    }
+    if (changed) kept.push({ name: file.name, why: KEPT_YOUR_CHANGE });
+  }
+  return kept;
 }
 
 /**

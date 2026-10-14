@@ -53,7 +53,7 @@ export function reportWaiting(r: RunState | null | undefined): boolean {
   if (!r || r.phase !== 'done' || r.seen || !r.report) return false;
   const rep = r.report;
   return [rep.filed, rep.created, rep.updated, rep.setAside, rep.questions, rep.leftAsWritten,
-    rep.answered, rep.alreadySaved, rep.unconfirmed].some((rows) => !!rows?.length);
+    rep.answered, rep.alreadySaved, rep.unconfirmed, rep.kept].some((rows) => !!rows?.length);
 }
 
 /** A finished tidy-up whose replay has not been watched. */
@@ -122,6 +122,8 @@ export function runDetail(r: RunState): string {
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
       // Never counted as set aside: possibly changed, then gone before Bower read it back.
       if (rep.unconfirmed?.length) parts.push(`Bower couldn't confirm ${plural(rep.unconfirmed.length, 'thing')}`);
+      if (rep.kept?.length === 1) parts.push(`${thingName(rep.kept[0]?.name ?? '')} kept as you left it`);
+      else if (rep.kept?.length) parts.push(`${plural(rep.kept.length, 'thing')} kept as you left them`);
       // Things already saved went to the Bin: one alone names the file already saved, without its extension. A pile of
       // words whose lines were in its notes already (`notes`) says so, apart.
       const lines = (rep.alreadySaved ?? []).filter((s) => s.notes !== undefined);

@@ -275,6 +275,8 @@ export interface RunReport {
    * back. Never counted as set aside. Left out when there are none.
    */
   unconfirmed?: Array<{ name: string; why: string }>;
+  /** Later changes kept as the person left them, named as they are now. Left out when there are none. */
+  kept?: Array<{ name: string; why: string }>;
   /**
    * Answers that settled with no effect (TL-P4-19 addendum 10): their subject had gone before the run. Never counted
    * as set aside; a pair's row also shows on the note that stays. Left out when there are none; a report from before

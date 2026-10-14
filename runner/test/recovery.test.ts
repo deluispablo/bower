@@ -7,13 +7,14 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Checkpoint, Outcome } from '../../src/data/contracts/run-checkpoint';
 import type { OperationV2 } from '../../src/data/contracts/run-manifest';
+import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FakeDrive, FencedCall } from '../../src/data/drive/fake-drive';
 import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords } from '../../src/data/spine/records';
 import { MOVED_AWAY } from '../../src/data/spine/report';
-import { SYSTEM } from '../../src/data/vault/layout';
+import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
 import { driveEffects, type Effects } from '../../src/data/spine/engine';
@@ -850,5 +851,141 @@ describe('recovery without the browser', () => {
     expect(w.sends.get(move?.operationId ?? '') ?? 0).toBe(0);
     expect(outcome?.state === 'rejected' ? outcome.failure : outcome?.state).toEqual({ code: 'unknown', message: UNCONFIRMED_GONE });
     expect(JSON.stringify((await endOf(w)).view)).toContain(UNCONFIRMED_GONE);
+  });
+});
+
+/** The kept line's reason (report-kept-your-change): the person changed a thing after Bower's change landed. */
+const KEPT_YOUR_CHANGE = 'You changed it after Bower did; Bower kept your change.';
+
+type ShownReport = { filed: unknown[]; setAside: unknown[]; kept?: Array<{ name: string; why: string }>; unconfirmed?: Array<{ name: string; why: string }> } & Record<string, unknown>;
+const reportOf = (view: unknown): ShownReport => (view as { run: { report: ShownReport } }).run.report;
+
+describe('a change the person made after a landed op (report-kept-your-change)', () => {
+  /**
+   * Attempt 1 is killed right after Bower filed the payslip (its move is still `possible-effect` in the chain); `change`
+   * is what someone does to it before attempt 2 takes over. Attempt 2 reads the move back by its stamp.
+   */
+  async function killedThenChanged(change: (w: World, filed: DriveFile, inbox: string) => Promise<void>): Promise<{ w: World; move: OperationV2 | undefined; payslip: string }> {
+    const w = await world();
+    const files = await w.wire.drive.listAll(w.root);
+    const payslip = files.find((f) => f.name === 'Payslip_Aug.pdf')?.id ?? '';
+    const inbox = files.find((f) => f.folder && f.name === 'Inbox')?.id ?? '';
+    await tidy(w, 1, {
+      applied: (call, process) => {
+        if (call.op === 'update' && call.id === payslip) process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip) : undefined;
+    expect((await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId)?.state).toBe('possible-effect');
+    await change(w, await w.wire.drive.get(payslip), inbox);
+    expect((await tidy(w, 2)).phase).toBe('done');
+    return { w, move, payslip };
+  }
+
+  it('a change the person made after a landed op is reported as kept: a rename', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    // Renamed in Drive, which keeps Bower's stamp on it.
+    const { w, move, payslip } = await killedThenChanged(async (w, filed) => {
+      await w.wire.drive.update(filed.id, { name: 'August pay.pdf' });
+    });
+    // Sent once and never again: the person's name stays.
+    expect(w.sends.get(move?.operationId ?? '')).toBe(1);
+    expect((await w.wire.drive.get(payslip)).name).toBe('August pay.pdf');
+    const { kept, ...rest } = reportOf((await endOf(w)).view);
+    // One line naming it as the person sees it now; every other row as in a run nobody touched (the filed row stays).
+    expect(kept).toEqual([{ name: 'August pay.pdf', why: KEPT_YOUR_CHANGE }]);
+    expect(rest).toEqual(reportOf(expected.view));
+    // The app reads the kept rows as it reads the unconfirmed ones: well formed, or the file is not taken.
+    const view = (await endOf(w)).view as { run: { report: Record<string, unknown> } };
+    expect(isRunnerFile(SYSTEM.lastRun, view)).toBe(true);
+    for (const bad of ['August pay.pdf', [{ name: 'August pay.pdf' }], [{ name: 1, why: KEPT_YOUR_CHANGE }]]) {
+      expect(isRunnerFile(SYSTEM.lastRun, { ...view, run: { ...view.run, report: { ...view.run.report, kept: bad } } }), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('a change the person made after a landed op is reported as kept: a move back to the inbox', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    const { w, payslip } = await killedThenChanged(async (w, filed, inbox) => {
+      await w.wire.drive.update(filed.id, { addParent: inbox, removeParent: filed.parents[0] ?? '' });
+    });
+    const now = await w.wire.drive.get(payslip);
+    const { kept, ...rest } = reportOf((await endOf(w)).view);
+    // Named as it is now: Bower's name, in the inbox where the person put it back.
+    expect(kept).toEqual([{ name: now.name, why: KEPT_YOUR_CHANGE }]);
+    expect(now.name).toBe('Payslip August (2).pdf');
+    expect(rest).toEqual(reportOf(expected.view));
+  });
+
+  it('a change the person made after a landed op is reported as kept: put in the Bin', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { w, payslip } = await killedThenChanged(async (w, filed) => {
+      // Binned in Drive, which keeps Bower's stamp: not the app's Bin.
+      await w.wire.drive.trash(filed.id);
+    });
+    expect((await w.wire.drive.evidence(payslip))?.trashed).toBe(true);
+    expect(reportOf((await endOf(w)).view).kept).toEqual([{ name: 'Payslip August (2).pdf', why: KEPT_YOUR_CHANGE }]);
+  });
+
+  it('a change the app made after a landed op stays unconfirmed, never kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The app's rename stamps the thing with its own write: nothing tells whether Bower's move landed first.
+    const { w } = await killedThenChanged(async (w, filed) => {
+      await w.wire.drive.update(filed.id, { name: 'August pay.pdf', appProperties: { [STAMP]: 'a'.repeat(32) } });
+    });
+    const report = reportOf((await endOf(w)).view);
+    expect(report.unconfirmed).toEqual([{ name: 'Payslip_Aug.pdf', why: "Bower couldn't confirm this; it was changed while Bower was filing it." }]);
+    expect(report).not.toHaveProperty('kept');
+  });
+
+  it('a change the person made after a landed op is reported as kept: a folder Bower made, renamed in the app', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    const w = await world();
+    // Killed right after Bower made the payslips folder (its create is `possible-effect` in the open batch).
+    await tidy(w, 1, {
+      applied: (call, process) => {
+        if (call.op === 'create-folder' && call.name === 'Payslips') process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    const made = (await w.wire.drive.listAll(w.root)).find((f) => f.folder && f.name === 'Payslips');
+    const key = made?.appProperties?.bowerItem;
+    expect(key).toBeDefined();
+    // Alex renames it in the app, which stamps it with the app's own write. A create is read back by the id Bower
+    // reserved for it, whatever the stamp says (R9): it landed, and the person's name is kept.
+    await w.wire.drive.update(made?.id ?? '', { name: 'Pay slips', appProperties: { [STAMP]: 'a'.repeat(32) } });
+    expect((await tidy(w, 2)).phase).toBe('done');
+    const all = (await w.wire.drive.listAll(w.root)).filter((f) => f.folder && f.appProperties?.bowerItem === key);
+    expect(all.map((f) => [f.id, f.name])).toEqual([[made?.id, 'Pay slips']]);
+    const { kept, ...rest } = reportOf((await endOf(w)).view);
+    expect(kept).toEqual([{ name: 'Pay slips', why: KEPT_YOUR_CHANGE }]);
+    expect(rest).toEqual(reportOf(expected.view));
+    expect(rest).not.toHaveProperty('unconfirmed');
+  });
+
+  it('a run with no later change reports no kept line: uninterrupted', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end } = await uninterrupted();
+    expect(reportOf(end.view)).not.toHaveProperty('kept');
+  });
+
+  it('a run with no later change reports no kept line: killed after the move landed and resumed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    const { w } = await killedThenChanged(async () => {});
+    expect(reportOf((await endOf(w)).view)).toEqual(reportOf(expected.view));
+  });
+
+  it('a run with no later change reports no kept line: renamed and named back before the takeover', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    // The thing ends as Bower left it: nothing of the person's to keep or say.
+    const { w } = await killedThenChanged(async (w, filed) => {
+      await w.wire.drive.update(filed.id, { name: 'August pay.pdf' });
+      await w.wire.drive.update(filed.id, { name: filed.name });
+    });
+    expect(reportOf((await endOf(w)).view)).toEqual(reportOf(expected.view));
   });
 });
