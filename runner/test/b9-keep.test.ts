@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { empty, note, setup } from './b1-planning-support';
+import { empty, note, report, setup } from './b1-planning-support';
 import { replySequence, runWithClaude } from './corpus-run';
 import { undoEdit } from '../../src/data/contracts/note-edit';
 import { parseRunManifestV2, type EditText } from '../../src/data/contracts/run-manifest';
@@ -23,33 +23,34 @@ const TARGET = 'Projects/Garden visit/Visit.md';
 const OTHER = 'Projects/Garden visit/Second visit.md';
 const BODY = '## My thoughts\nAlex keeps the sketchbook.\n\n## Timeline\n';
 
-async function keep(history: string, { words = '', source = 'Later notice.txt' } = {}) {
+async function keep(history: string, { words = '', source = 'Later notice.txt', target = TARGET } = {}) {
   const other = `## My thoughts\nAlex keeps the sketchbook.${words}\n\n## Timeline\n- 2026-10-02 · ${history} · [[${source}]]\n`;
   const base = await setup({ folder: {
-    [TARGET]: note('Alex records one visit.', BODY, true),
+    [target]: note('Alex records one visit.', BODY, true),
     [OTHER]: note('Alex records the same visit.', other, true),
     'Projects/Garden visit/Earlier notice.txt': 'The garden may close.',
     'Projects/Garden visit/Later notice.txt': 'The booking is still open.',
     'Projects/Garden visit/Ordinary reference.md': note('Alex keeps an ordinary reference.'),
   }, inbox: [{ line: 'Alex wants the two garden visit notes together.', files: [] }] });
-  const ask = { ...empty, asks: [{ notes: [TARGET, OTHER], text: 'Keep one visit note?', yes: 'Write it', no: 'Keep mine' }] };
-  base.c.presses = [{ between: [{ kind: 'answer', question: { kind: 'pair', notes: [TARGET, OTHER] }, yes: true }] }];
-  const result = await runWithClaude(base.c, replySequence([ask, { ...empty, keep: [{ kept: TARGET, other: OTHER }] }]));
+  const ask = { ...empty, asks: [{ notes: [target, OTHER], text: 'Keep one visit note?', yes: 'Write it', no: 'Keep mine' }] };
+  base.c.presses = [{ between: [{ kind: 'answer', question: { kind: 'pair', notes: [target, OTHER] }, yes: true }] }];
+  const result = await runWithClaude(base.c, replySequence([ask, { ...empty, keep: [{ kept: target, other: OTHER }] }]));
   expect(result.code).toBe(0);
+  expect(report(result).setAside, 'the keep holds nothing').toEqual([]);
   expect(result.after[OTHER], 'the other note went to the Bin').toBeUndefined();
   const manifests = Object.entries(result.after).filter(([path]) => /\/manifest-[^/]+\.json$/.test(path));
   for (const [, text] of manifests) expect((await parseRunManifestV2(new TextEncoder().encode(text), result.root, RUNNER_WRITES)).ok).toBe(true);
   const merged = manifests.flatMap(([, text]) => (JSON.parse(text) as { operations: Array<{ effect: EditText }> }).operations)
     .map((operation) => operation.effect)
-    .find((effect) => effect.kind === 'edit-text' && effect.path === TARGET && effect.beforeText !== undefined);
+    .find((effect) => effect.kind === 'edit-text' && effect.path === target && effect.beforeText !== undefined);
   expect(merged, 'the keep keeps its C13 inverse before-image').toBeDefined();
   if (merged) {
-    const inverse = await undoEdit(merged, new TextEncoder().encode(result.after[TARGET]));
+    const inverse = await undoEdit(merged, new TextEncoder().encode(result.after[target]));
     expect(inverse.ok).toBe(true);
-    if (inverse.ok) expect(inverse.text).toBe(base.c.folder[TARGET]);
-    expect(await undoEdit(merged, new TextEncoder().encode(`${result.after[TARGET]}\nAlex changed it.`))).toEqual({ ok: false, reason: 'person-edited' });
+    if (inverse.ok) expect(inverse.text).toBe(base.c.folder[target]);
+    expect(await undoEdit(merged, new TextEncoder().encode(`${result.after[target]}\nAlex changed it.`))).toEqual({ ok: false, reason: 'person-edited' });
   }
-  return parseNote(TARGET, result.after[TARGET] ?? '').timeline;
+  return parseNote(target, result.after[target] ?? '').timeline;
 }
 
 it('AC6 control: an ordinary link in a carried line becomes its words', async () => {
@@ -83,6 +84,14 @@ it('AC6 b9-keep-citation-follows-kept-name: a carried citation of the binned not
   const carried = await keep('Uncertain: The two notes may be one visit. (also from [[Second visit]])');
   expect(carried.map((e) => [e.text, e.source]), 'the citation follows the keep rename, as every other link does')
     .toContainEqual(['From 2026-10-02: Uncertain: The two notes may be one visit. (also from [[Visit]])', 'Later notice.txt']);
+});
+
+it('AC6 b9-keep-unwritable-citation: a same-run rename to One · Two carries words and holds nothing (round 2)', async () => {
+  const carried = await keep('The two notes may be one visit. (inferred) (also from [[Second visit]])', {
+    target: 'Projects/Garden visit/One · Two.md',
+  });
+  expect(carried.map((e) => [e.text, e.source]))
+    .toContainEqual(['From 2026-10-02: The two notes may be one visit. (inferred) (also from One, Two)', 'Later notice.txt']);
 });
 
 it('AC6 b9-keep-stored-separators: stored line and paragraph separators carry as spaces, so keep never stalls (R16)', async () => {

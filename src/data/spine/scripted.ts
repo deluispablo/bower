@@ -28,7 +28,7 @@ import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAn
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
-import { parseTimelineLine, timelineLine } from '../contracts/timeline-line';
+import { parseTimelineLine, splitCitation, timelineLine } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
@@ -1590,6 +1590,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   const keepRenames = keeping.map((x) => x.rename);
   const renames = [...journalRenames, ...keepRenames.filter((r) => !journalRenames.some((j) => j.from.toLowerCase() === r.from.toLowerCase()))];
+  // Carried lines append after the note's rewrite, so their preserved citations must follow it too.
+  if (renames.length) for (const { lines } of keeping) for (const line of lines) {
+    const rewritten = applyChanges(new TextEncoder().encode(line.entry.text), [{ kind: 'link-rewrite', recordIds: [], renames }]);
+    if (rewritten.ok) line.entry.text = asLineText(rewritten.text);
+  }
   const binned = new Set(keeping.map((x) => x.other.id));
   if (renames.length) {
     for (const [path, entry] of ix.entries()) {
@@ -3307,9 +3312,12 @@ function tookLines(lines: readonly JournalLine[], taken: AdmissionManifest): Jou
  * same run plans the same keys again, and no two runs share one (never derived from a name or a time alone).
  */
 /** A note's text made one Timeline field: links as their shown words, no Timeline separator, one line. */
-const asLineText = (text: string): string => text
-  .replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_m, target: string, alias?: string) => (alias ?? target).trim())
-  .replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' ? ' ' : c)).join('').replace(/^#+\s*|^[-*+]\s+/, '').trim();
+const asLineText = (text: string): string => {
+  const clean = text.replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' || c === '\u2028' || c === '\u2029' ? ' ' : c)).join('');
+  const { text: words, citation } = splitCitation(clean);
+  return words.replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_m, target: string, alias?: string) => (alias ?? target).trim())
+    .replace(/^#+\s*|^[-*+]\s+/, '').trim() + citation;
+};
 
 /**
  * What the other note of a keep brings to the kept one (C05): its properties the kept note lacks or says otherwise
@@ -3327,7 +3335,7 @@ function carriedLines(other: ParsedNote, kept: ParsedNote): EditEntry[] {
   const out: EditEntry[] = [];
   const add = (text: string, source: string | null): void => {
     const line = asLineText(text);
-    const src = source !== null && /^[^\]|#^\r\n]+$/.test(source) ? source : null;
+    const src = source !== null && /^[^\]|#^\r\n\u2028\u2029]+$/.test(source) ? source : null;
     if (line && !said.has(same(line)) && !out.some((e) => same(e.text) === same(line))) out.push({ date: '', text: line, source: src });
   };
   for (const p of other.properties) add(`${p.label}: ${p.value}`, null);
