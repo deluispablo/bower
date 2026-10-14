@@ -187,7 +187,7 @@ const wordsOf = (text: string): number => text.split(/\r?\n/).filter((line) => !
   .flatMap((line) => (parseTimelineLine(line)?.text ?? line).trim().split(/\s+/).filter(Boolean)).length;
 /** The index of the section's latest successful consolidation, or -1. */
 const frontierOf = (ledger: Ledger, region: AboutRegion): number =>
-  ledger.events.findLastIndex((e) => e.kind === 'consolidation' && e.section === region && e.successful);
+  ledger.events.reduce((last, e, i) => e.kind === 'consolidation' && e.section === region && e.successful ? i : last, -1);
 function newerLive(ledger: Ledger, region: AboutRegion): Observation[] {
   const newer = new Set(ledger.events.slice(frontierOf(ledger, region) + 1).flatMap((e) => e.kind === 'observation' ? [e.factId] : []));
   return ledger.live.filter((e) => e.section === region && newer.has(e.factId));
