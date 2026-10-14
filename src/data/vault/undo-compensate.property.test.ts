@@ -82,13 +82,15 @@ function undone(c: Change): boolean {
   return c.cancelled || c.inverses.some((inverse) => inverse.outcome === 'sent');
 }
 
-function observeSettledInverses(r: Real): void {
+function observeSettledInverses(r: Real, beforeAt?: number): void {
   const waiting = JSON.parse(localStorage.getItem(outboxKey(r.root)) ?? '[]') as Array<{ line: JournalRecord }>;
   const queued = new Set(waiting.map(({ line }) => line.id));
   const attempted = new Set(r.attempts.map((line) => line.id));
   for (const line of r.observed.values()) {
     // Addendum 9(2): absence alone is not completion, and retirement is never delivery.
-    if (line.undoes && r.refused.has(line.undoes) && !queued.has(line.id) && !attempted.has(line.id)) {
+    // A later attempt witnesses retirement before batch-end outbox cleanup.
+    if (line.undoes && r.refused.has(line.undoes) && !attempted.has(line.id) &&
+        (!queued.has(line.id) || (beforeAt !== undefined && line.at < beforeAt))) {
       r.settledWithoutSending.add(line.id);
     }
   }
@@ -474,7 +476,7 @@ async function setup(): Promise<Real> {
     const line = JSON.parse(args[2]) as JournalRecord;
     // TL-P4-27 addendum 4(5): even a refused later line must not be attempted past a blocked head.
     // A physically landed unknown is still unresolved until the reserved-id read acknowledges it.
-    observeSettledInverses(r);
+    observeSettledInverses(r, line.at);
     const blockers = [...r.observed.values()].filter((earlier) => earlier.at < line.at &&
       !r.confirmed.has(earlier.id) && !r.dropped.has(earlier.id) && !r.refused.has(earlier.id) &&
       !r.settledWithoutSending.has(earlier.id));
@@ -732,6 +734,106 @@ it.each([0, 1])('a genuinely unresolved head blocks later attempts (later tab %s
     vi.unstubAllGlobals();
   }
 });
+
+it.each([0, 1])('recognises retirement before a later attempt in the same flush (flush tab %s)', async (tab) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  let r: Real | undefined;
+  try {
+    r = await setup();
+    const real = r;
+    const m: Model = { changes: [] };
+    r.outcome = 'offline';
+    r.reserveWhileOffline = true;
+    await change(m, r, 'add', 0, false);
+    delete r.reserveWhileOffline;
+    await undo(m, r, 0, 0, false);
+    await change(m, r, 'add', 0, false);
+    const original = m.changes[0];
+    const inverse = original?.inverses[0];
+    const later = m.changes[1];
+    if (!original || !inverse || !later) throw new Error('Missing queued retirement sequence');
+    expect(inverse.outcome).toBe('pending');
+    expect(r.settledWithoutSending.size).toBe(0);
+    const create = vi.mocked(r.drive.createText).getMockImplementation();
+    if (!create) throw new Error('Missing transport observer');
+    let during: { queued: string[]; refused: boolean; settled: boolean; confirmed: boolean } | undefined;
+    vi.spyOn(r.drive, 'createText').mockImplementation(async (...args) => {
+      const file = await create(...args);
+      if (args[1] === `${later.line.id}.json`) during = {
+        queued: (JSON.parse(localStorage.getItem(outboxKey(real.root)) ?? '[]') as Array<{ line: JournalRecord }>)
+          .map(({ line }) => line.id),
+        refused: real.refused.has(original.line.id),
+        settled: real.settledWithoutSending.has(inverse.id),
+        confirmed: real.confirmed.has(inverse.id),
+      };
+      return file;
+    });
+    r.refuseId = original.line.id;
+    r.outcome = 'landed';
+    await tabAt(r, tab).port().flush();
+    delete r.refuseId;
+    expect(during).toEqual({ queued: [original.line.id, inverse.id, later.line.id],
+      refused: true, settled: true, confirmed: false });
+    expect(r.attempts.some((line) => line.id === inverse.id)).toBe(false);
+    expect(r.arrivals.map((line) => line.id)).toEqual([later.line.id]);
+    expect((await tabAt(r, tab).port().failed()).map((line) => line.id)).toEqual([original.line.id]);
+    expect(localStorage.getItem(outboxKey(r.root))).toBeNull();
+    await inverseOutcomes(m, r);
+    expect(inverse.outcome).toBe('settled-without-sending');
+    expect(undone(original)).toBe(false);
+    original.cancelled = true;
+    await invariants(r);
+    await oracle(m, r);
+  } finally {
+    r?.tabs.forEach((client) => client.dispose());
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it.each(['unresolved inverse', 'original before inverse', 'refused original', 'Drive-only person-state'] as const)(
+  'the strict model rejects a broken %s observation', async (broken) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let r: Real | undefined;
+    try {
+      r = await setup();
+      const m: Model = { changes: [] };
+      await change(m, r, 'add', 0, false);
+      const c = m.changes[0];
+      if (!c) throw new Error('Missing original');
+      if (broken === 'unresolved inverse') {
+        r.outcome = 'offline';
+        await undo(m, r, 0, 1, false);
+        const inverse = c.inverses[0];
+        if (!inverse) throw new Error('Missing unresolved inverse');
+        const later = { ...c.line, id: 'illegal-later', at: c.line.at + 100 };
+        r.outcome = 'refused';
+        const { drive, root } = r;
+        // Force an illegal transport attempt without weakening the Journal's FIFO.
+        await transport(() => drive.createText(root, `${later.id}.json`, JSON.stringify(later)));
+        expect(r.settledWithoutSending.has(inverse.id)).toBe(false);
+        expect(r.fifoViolations).toEqual([`${later.id} passed ${inverse.id}`]);
+        await expect(invariants(r)).rejects.toThrow();
+      } else if (broken === 'Drive-only person-state') {
+        vi.spyOn(r.drive, 'dump').mockReturnValue(new Map());
+        await expect(oracle(m, r)).rejects.toThrow();
+      } else {
+        const inverse: JournalRecord = { v: 1, id: 'illegal-inverse', at: c.line.at + 1,
+          kind: 'rule', what: 'Undid the change', device: 'tab-1', removes: c.line.text, undoes: c.line.id };
+        if (broken === 'original before inverse') r.arrivals = [inverse];
+        else {
+          r.refused.add(c.line.id);
+          r.arrivals.push(inverse);
+        }
+        await expect(invariants(r)).rejects.toThrow();
+      }
+    } finally {
+      r?.tabs.forEach((client) => client.dispose());
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  },
+);
 
 async function assertPart<Ts>(property: fc.IAsyncProperty<Ts>, seed: number, part: { from: number; to: number }): Promise<void> {
   // A root-only path resumes generation at that run index, including its original bias.
