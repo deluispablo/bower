@@ -27,7 +27,7 @@ import { subjectOf } from '../../src/data/contracts/questions';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
-import { learnedLines, learnedTimeline, parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
+import { ABOUT_SECTIONS, learnedLines, learnedTimeline, parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
 import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { appendLog, logEvents } from './log';
 import { formatLogEvent } from '../../src/data/contracts/log-format';
@@ -77,10 +77,9 @@ const aboutTarget: DeclaredTarget = {
     if (ownership.status === 'invalid') throw unavailable();
     const changes: EditText['changes'] = [];
     const payloads = ABOUT_REGIONS.map((region) => {
-      const label = { 'about-you': 'About you', 'about-working-on': "What you're working on", 'about-preferences': 'How you like things' }[region];
       const span = ownership.payloads?.[region];
       const previous = span ? new TextDecoder().decode(bytes.subarray(span.start, span.end)).split(/\r?\n/) : [];
-      return `### ${label}\n` + learnedLines(ledger, region).map((l) => {
+      return `### ${ABOUT_SECTIONS[region].label}\n` + learnedLines(ledger, region).map((l) => {
         const stored = previous.find((line) => { const entry = parseTimelineLine(line); return entry?.text === l.text && entry.date === l.date; });
         return (stored ?? learnedTimeline(ledger, l)) + '\n';
       }).join('');
