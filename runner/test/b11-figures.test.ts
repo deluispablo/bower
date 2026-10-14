@@ -414,6 +414,90 @@ describe('B11b figures when things go wrong', () => {
     }
   });
 
+  it('AC11 b11-figures-refused-read: a note Drive refuses to give may be a member, so the views over its folder say a note could not be read', async () => {
+    const OAK = `${HUNT}/Oakwick offer.md`;
+    /** Drive refuses every content read of `path` (403), as b8-health's unreadable evidence does. */
+    const refuse = (f: Folder, path: string) => (fetch: typeof globalThis.fetch) => {
+      const traffic: Observation[] = [];
+      let seen = 0;
+      return observe(f.drive, f.root, traffic)(async (input, init = {}) => {
+        const last = traffic.length > seen ? traffic.at(-1) : undefined;
+        seen = traffic.length;
+        if (last?.path === path && last.media) {
+          return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
+        }
+        return fetch(input, init);
+      });
+    };
+    const stopped = async (f: Folder, why: string) => {
+      const run = await press(f, undefined, [], refuse(f, OAK));
+      expect(phase(run), why).toBe('done');
+      expect(figures(run.after[MAP]), why).toContain('### Skills most active offers ask for\n\nNot computed: a note could not be read.\n');
+      expect(figures(run.after[MAP]), why).toContain('### Offers\n\nNot computed: a note could not be read.\n');
+      expect(figures(run.after[MAP]), why).not.toContain('| SQL |');
+      expect(retrieval(run).views?.[`${await f.id(MAP)}/offer-count`], why).toMatchObject({ result: 'unreadable' });
+    };
+    // A note whose prefix read is refused on the first run: Bower never told its type.
+    const cold = await folder({ [MAP]: map('Job hunt', [SKILLS, COUNT]), ...OFFERS, [OAK]: offer('Oakwick', 'active', '[SQL]') }, { [MAP]: HUNT });
+    await stopped(cold, 'on the first run');
+    // The same note added after a run that computed the figures.
+    const warm = await folder({ [MAP]: map('Job hunt', [SKILLS, COUNT]), ...OFFERS }, { [MAP]: HUNT });
+    expect(figures((await press(warm)).after[MAP]), 'computed while all are readable').toContain(COUNT_BLOCK(4));
+    await warm.drive.createText(await warm.id(HUNT), 'Oakwick offer.md', offer('Oakwick', 'active', '[SQL]'));
+    await stopped(warm, 'added later');
+  });
+
+  it('AC9 b11-figures-discovery-refused: a long note Drive refuses to give on a run that re-reads every prefix is not checked; the run and the figures go on', async () => {
+    const DIARY = 'Areas/Garden/Diary.md';
+    const f = await folder({ [MAP]: map('Job hunt', [SKILLS]), ...OFFERS, [DIARY]: `---\nsummary: Alex's garden diary.\n---\n\n${'Alex watered the beans.\n'.repeat(300)}` }, { [MAP]: HUNT });
+    const first = await press(f);
+    expect(figures(first.after[MAP])).toBe(`${BASE(4)}\n${SKILLS_BLOCK}`);
+    expect((JSON.parse(first.after[SYSTEM.retrieval] ?? '{}') as { files: Record<string, unknown> }).files[await f.id(DIARY)], 'known to run past the prefix').toMatchObject({ incomplete: true });
+    // Without the index Bower reads every prefix again; the long note's same version is still known to run past it.
+    await f.drive.trash(await f.id(SYSTEM.index));
+    const traffic: Observation[] = [];
+    const run = await press(f, undefined, [], (fetch) => {
+      let seen = 0;
+      return observe(f.drive, f.root, traffic)(async (input, init = {}) => {
+        const last = traffic.length > seen ? traffic.at(-1) : undefined;
+        seen = traffic.length;
+        if (last?.path === DIARY && last.media) {
+          return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
+        }
+        return fetch(input, init);
+      });
+    });
+    expect(traffic.some((t) => t.path === DIARY && t.media), 'the refusal was met').toBe(true);
+    expect(phase(run)).toBe('done');
+    expect(figures(run.after[MAP])).toBe(`${BASE(4)}\n${SKILLS_BLOCK}`);
+  });
+
+  it('AC9 b11-figures-declaration-past-prefix: a map whose views, or whose owner and type too, start past the prefix Bower indexes is read whole and computed; ownership is checked as ever', async () => {
+    const pad = `x_note: ${'p'.repeat(5000)}\n`;
+    const past = (text: string, key: string) => text.replace(key, `${pad}${key}`);
+    const line = (text: string | undefined) => /^bower_views: .*$/m.exec(text ?? '')?.[0];
+    for (const key of ['bower_views:', 'by: bower']) {
+      const text = past(map('Job hunt', [SKILLS]), key);
+      expect(new TextEncoder().encode(text.slice(0, text.indexOf(key))).length, `${key} starts past the prefix`).toBeGreaterThan(4096);
+      const f = await folder({ [MAP]: text, ...OFFERS }, { [MAP]: HUNT });
+      const declared = line(await f.drive.readText(await f.id(MAP)));
+      const run = await press(f);
+      expect(phase(run), key).toBe('done');
+      expect(figures(run.after[MAP]), key).toBe(`${BASE(4)}\n${SKILLS_BLOCK}`);
+      expect(line(run.after[MAP]), 'the declaration line is kept byte for byte').toBe(declared);
+      expect(retrieval(run).views?.[`${await f.id(MAP)}/active-offer-skills`], key).toBeDefined();
+    }
+    // The whole read is validated by the same ownership parser: a person's map, or one whose regions do not parse, is never written.
+    for (const [why, text] of [['a person\'s map', past(map('Job hunt', [SKILLS], ''), 'bower_views:')],
+      ['broken regions', past(map('Job hunt', [SKILLS]).replace('<!-- bower:ownership/2 end moc-figures -->\n', ''), 'bower_views:')]] as const) {
+      const f = await folder({ [MAP]: text, ...OFFERS }, { [MAP]: HUNT });
+      const seeded = await f.drive.readText(await f.id(MAP));
+      const run = await press(f);
+      expect(phase(run), why).toBe('done');
+      expect(run.after[MAP], why).toBe(seeded);
+    }
+  });
+
   it('AC9 b11-figures-membership: a set is its declared folder and type, recursive or direct, never the map\'s links', async () => {
     const files = {
       [MAP]: map('Job hunt', [{ ...COUNT, id: 'all-offers', title: 'All offers' }, { ...COUNT, id: 'direct-offers', title: 'Direct offers', set: { ...COUNT.set, recursive: false } },
@@ -523,7 +607,9 @@ describe('B11b figures when things go wrong', () => {
   it('AC14 b11-figures-crash-before-retrieval: a crash after the map write, before retrieval is sent, writes each once', async () => {
     const f = await folder({ [MAP]: map('Job hunt', [SKILLS]), ...OFFERS }, { [MAP]: HUNT });
     await press(f);
-    await f.drive.trash(await f.id(`${HUNT}/Mallowick offer.md`));
+    // Its id is taken before the Bin: a binned file is no longer listed.
+    const mallowick = await f.id(`${HUNT}/Mallowick offer.md`);
+    await f.drive.trash(mallowick);
     const retrievalId = await f.id(SYSTEM.retrieval);
     const traffic: Observation[] = [];
     const state = { reached: false, enabled: true };
@@ -551,7 +637,7 @@ describe('B11b figures when things go wrong', () => {
     expect(figures(again.after[MAP])).toBe(`${BASE(3)}\n### Skills most active offers ask for\n\n| Skills | Offers |\n| --- | --- |\n| SQL | 1 |\n| TypeScript | 1 |\n\n`
       + 'Not counted in Offers: 1 note with no skills.\n');
     const record = retrieval(again).views?.[`${await f.id(MAP)}/active-offer-skills`] as { inputs?: unknown[][] } | undefined;
-    expect(record?.inputs?.map(([id]) => id), 'the binned offer is no input').not.toContain(await f.id(`${HUNT}/Mallowick offer.md`));
+    expect(record?.inputs?.map(([id]) => id), 'the binned offer is no input').not.toContain(mallowick);
   });
 
   it.each<[string, (f: Folder) => Promise<void>, string]>([
@@ -621,7 +707,7 @@ describe('B11b figures when things go wrong', () => {
     expect(retrieval(second).views?.other, 'a record for no view is dropped').toBeUndefined();
   });
 
-  it.each<[string, (f: Folder) => Promise<void>, string]>([
+  it.each<[string, (f: Folder) => Promise<void>, string]>(([
     ['the last view is removed', async (f) => {
       const mapId = await f.id(MAP);
       await f.drive.writeText(mapId, (await f.drive.readText(mapId)).replace(/^bower_views: .*\n/m, ''), (await f.drive.get(mapId)).modifiedTime);
@@ -632,13 +718,23 @@ describe('B11b figures when things go wrong', () => {
       await f.drive.writeText(tableId, JSON.stringify(table, null, 2), (await f.drive.get(tableId)).modifiedTime);
     }, `${BASE(4)}\n${COUNT_BLOCK(4)}`],
     ['its folder is binned', async (f) => { await f.drive.trash(await f.id('Projects/Old hunt')); }, `${BASE(4)}\n${SKILLS_BLOCK}`],
-  ])('AC13 b11-figures-stale: when %s, its block and its record go; the others stay', async (name, change, expected) => {
+  ] as Array<[string, (f: Folder) => Promise<void>, string]>).flatMap(([name, change, expected]): Array<[string, (f: Folder) => Promise<void>, string]> =>
+    [[name, change, expected],[`${name} on a map whose body runs past the prefix`, change, expected]]))(
+    'AC13 b11-figures-stale: when %s, its block and its record go; the others stay', async (name, change, expected) => {
     const OLD = { ...COUNT, id: 'old-offers', title: 'Old offers', set: { ...COUNT.set, folderId: '$old' } };
-    const declared = name === 'the last view is removed' ? [SKILLS] : name === 'its folder is binned' ? [SKILLS, OLD] : [SKILLS, COUNT];
-    const f = await folder({ [MAP]: map('Job hunt', declared), ...OFFERS, 'Projects/Old hunt/Old offer.md': offer('Old', 'closed', '[Cobol]') }, { [MAP]: HUNT });
+    const declared = name.startsWith('the last view is removed') ? [SKILLS] : name.startsWith('its folder is binned') ? [SKILLS, OLD] : [SKILLS, COUNT];
+    // A long body keeps the whole front matter in the prefix, so the prefix alone cannot show the figures to clean up. The
+    // request goes elsewhere and the summary shares no word with it, so the planner never reads the map whole either.
+    const long = name.endsWith('past the prefix');
+    const body = long ? map('Job hunt', declared).replace('summary: Job hunt reference notes.', 'summary: Job leads kept here.')
+      .replace('notes together.\n', `notes together.\n${'Alex wrote this long paragraph. '.repeat(160)}\n`) : map('Job hunt', declared);
+    if (long) expect(new TextEncoder().encode(body.slice(0, body.indexOf('<!-- bower:ownership/2 begin moc-figures'))).length,
+      'the figures start past the prefix').toBeGreaterThan(4096);
+    const f = await folder({ [MAP]: body, ...OFFERS, 'Projects/Old hunt/Old offer.md': offer('Old', 'closed', '[Cobol]') }, { [MAP]: HUNT });
+    if (long) f.home = 'Projects';
     await rebind(f, MAP, '$old', 'Projects/Old hunt');
     const first = await press(f);
-    const removed = name === 'the last view is removed' || name === 'a type-table edit makes a view invalid' ? 'active-offer-skills' : 'old-offers';
+    const removed = name.startsWith('its folder is binned') ? 'old-offers' : 'active-offer-skills';
     const key = `${await f.id(MAP)}/${removed}`;
     expect(retrieval(first).views?.[key], 'computed first').toBeDefined();
     await change(f);
@@ -646,5 +742,112 @@ describe('B11b figures when things go wrong', () => {
     expect(phase(second)).toBe('done');
     expect(figures(second.after[MAP])).toBe(expected);
     expect(retrieval(second).views?.[key], 'no stale record').toBeUndefined();
+  });
+
+  describe('R35 b11-figures-table-only: a change only to the type table refreshes the figures on a run with nothing else to do', () => {
+    const INVALID = { v: 1, rows: [{ ...TABLE.rows[0], properties: { deadline: { type: 'date' } }, table: [] }, TABLE.rows[1]] };
+    const TEXT = { v: 1, rows: [{ ...TABLE.rows[0], properties: { skills: { type: 'text' }, deadline: { type: 'date' } } }, TABLE.rows[1]] };
+    const setTable = async (f: Folder, table: unknown) => {
+      const tableId = await f.id(SYSTEM.typeTable);
+      await f.drive.writeText(tableId, JSON.stringify(table, null, 2), (await f.drive.get(tableId)).modifiedTime);
+    };
+    /** A run with no request, no pile and no model: before maintenance it plans no operation. */
+    async function idle(f: Folder): Promise<CaseRun> {
+      f.press++;
+      const runId = `b11-idle-${f.press}`;
+      const run = await runOnDrive(f.c, f.drive, f.root, { admission: { v: 1, id: runId, rootId: f.root, scope: 'all', at: DAY + f.press, piles: [], journal: [] },
+        pacing: { baseMs: 0, sleep: async () => {} }, answerStart: { scope: 'all', requestId: runId } }, f.press);
+      expect(run.code, 'the idle run ends well').toBe(0);
+      expect(phase(run), 'the idle run ends well').toBe('done');
+      expect(run.requests, 'no captured request').toEqual([]);
+      const planned = Object.entries(run.after).filter(([path]) => path.includes(`/runs/${runId}/manifest-`))
+        .flatMap(([, text]) => (JSON.parse(text) as { operations: Array<{ effect: { kind: string; path?: string } }> }).operations)
+        .filter(({ effect }) => effect.kind !== 'maintain' && !(effect.kind === 'write-runner-json' && effect.path === SYSTEM.retrieval));
+      expect(planned, 'no planned operation before maintenance').toEqual([]);
+      return run;
+    }
+    const established = async (declared: unknown[]) => {
+      const f = await folder({ [MAP]: map('Job hunt', declared), ...OFFERS }, { [MAP]: HUNT });
+      const first = await press(f);
+      const key = `${await f.id(MAP)}/active-offer-skills`;
+      expect(figures(first.after[MAP]), 'figures first').toContain(SKILLS_BLOCK);
+      expect(retrieval(first).views?.[key], 'recorded first').toBeDefined();
+      // Drains the feed of the press's own writes, so the next run sees only the table change.
+      const drained = await idle(f);
+      expect(drained.after[MAP], 'nothing to refresh yet').toBe(first.after[MAP]);
+      return { f, first, key };
+    };
+
+    it('an edit that makes a view invalid removes its block and its record; the others stay', async () => {
+      const { f, key } = await established([SKILLS, COUNT]);
+      await setTable(f, INVALID);
+      const run = await idle(f);
+      expect(figures(run.after[MAP])).toBe(`${BASE(4)}\n${COUNT_BLOCK(4)}`);
+      expect(retrieval(run).views?.[key], 'no stale record').toBeUndefined();
+      expect(retrieval(run).views?.[`${await f.id(MAP)}/offer-count`], 'the other record stays').toBeDefined();
+    });
+
+    it('skills changed from list to text keeps the top view and recomputes its block and record from the same notes', async () => {
+      const { f, first, key } = await established([SKILLS]);
+      await setTable(f, TEXT);
+      const run = await idle(f);
+      // The same notes counted from the start under the new table.
+      const cold = await folder({ [MAP]: map('Job hunt', [SKILLS]), ...OFFERS, [SYSTEM.typeTable]: JSON.stringify(TEXT, null, 2) }, { [MAP]: HUNT });
+      const fresh = await press(cold);
+      for (const [path, text] of Object.entries(OFFERS)) expect(run.after[path], `${path} is unchanged`).toBe(text);
+      expect(figures(fresh.after[MAP]), 'text values count whole').not.toBe(figures(first.after[MAP]));
+      expect(figures(run.after[MAP])).toBe(figures(fresh.after[MAP]));
+      const record = retrieval(run).views?.[key];
+      expect(record?.result, 'the record is recomputed').toEqual(retrieval(fresh).views?.[`${await cold.id(MAP)}/active-offer-skills`]?.result);
+      expect(record?.result).not.toEqual(retrieval(first).views?.[key]?.result);
+    });
+
+    it('restoring the table after an invalidation revives the view from its declaration', async () => {
+      const { f, key } = await established([SKILLS]);
+      await setTable(f, INVALID);
+      const invalid = await idle(f);
+      expect(figures(invalid.after[MAP])).toBe(BASE(4));
+      expect(Object.keys(retrieval(invalid).views ?? {}), 'no record survives to revive it').toEqual([]);
+      await setTable(f, TABLE);
+      const restored = await idle(f);
+      expect(figures(restored.after[MAP])).toBe(`${BASE(4)}\n${SKILLS_BLOCK}`);
+      expect(retrieval(restored).views?.[key]).toBeDefined();
+    });
+
+    // Without the table the seed rows apply: offers keep their type but declare no skills.
+    const seeded = async (f: Folder, key: string, run: CaseRun) => {
+      expect(figures(run.after[MAP]), 'the skills figure goes').toBe(`${BASE(4)}\n${COUNT_BLOCK(4)}`);
+      expect(retrieval(run).views?.[key], 'no stale record').toBeUndefined();
+      expect(retrieval(run).views?.[`${await f.id(MAP)}/offer-count`], 'the other record stays').toBeDefined();
+    };
+    const revived = (run: CaseRun, key: string) => {
+      expect(figures(run.after[MAP]), 'the skills figure is back').toBe(`${BASE(4)}\n${SKILLS_BLOCK}\n${COUNT_BLOCK(4)}`);
+      expect(retrieval(run).views?.[key], 'recorded again').toBeDefined();
+    };
+
+    it('renaming the table away drops what it declared; renaming it back revives it', async () => {
+      const { f, key } = await established([SKILLS, COUNT]);
+      const tableId = await f.id(SYSTEM.typeTable);
+      await f.drive.update(tableId, { name: 'type-table-old.json' });
+      await seeded(f, key, await idle(f));
+      await f.drive.update(tableId, { name: 'type-table.json' });
+      revived(await idle(f), key);
+    });
+
+    it('binning the table drops what it declared', async () => {
+      const { f, key } = await established([SKILLS, COUNT]);
+      await f.drive.trash(await f.id(SYSTEM.typeTable));
+      await seeded(f, key, await idle(f));
+    });
+
+    it('creating the table again revives what it declares', async () => {
+      const { f, key } = await established([SKILLS, COUNT]);
+      const tableId = await f.id(SYSTEM.typeTable);
+      const bowerId = (await f.drive.get(tableId)).parents[0] ?? '';
+      await f.drive.trash(tableId);
+      await seeded(f, key, await idle(f));
+      await f.drive.createText(bowerId, 'type-table.json', JSON.stringify(TABLE, null, 2));
+      revived(await idle(f), key);
+    });
   });
 });

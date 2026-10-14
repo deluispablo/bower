@@ -1190,15 +1190,19 @@ export function leafCount(id: string, members: ReadonlyMap<string, string[]>): n
   return leaves.size;
 }
 
-/** All changes go back through note-edit's one author and the ordinary edit-text fence. */
-export function mocEdit(id: string, files: Notes, members: ReadonlyMap<string, string[]>): { changes: Change[]; text: string } | null {
+/**
+ * All changes go back through note-edit's one author and the ordinary edit-text fence. `figures`: the map's declared
+ * view blocks after its count line (B11, R4); without it the stored blocks after the count line are kept byte for byte.
+ */
+export function mocEdit(id: string, files: Notes, members: ReadonlyMap<string, string[]>, figures?: string): { changes: Change[]; text: string } | null {
   const note = files[id];
   if (!note?.moc) return null;
   const ids = members.get(id) ?? [];
   const links = noteLinks(files);
   const direct = ids.filter((member) => !members.has(member) && folderOf(files[member]?.path ?? '') === folderOf(note.path)).length;
+  const blocks = figures === undefined ? /^## Figures\n\n[^\n]*\n([\s\S]*)$/.exec(note.moc.regions['moc-figures'])?.[1] ?? '' : figures && `\n${figures}`;
   const regions = {
-    'moc-figures': `## Figures\n\n${direct} direct ${direct === 1 ? 'note' : 'notes'}; ${leafCount(id, members)} notes in all.\n`,
+    'moc-figures': `## Figures\n\n${direct} direct ${direct === 1 ? 'note' : 'notes'}; ${leafCount(id, members)} notes in all.\n${blocks}`,
     'moc-members': `## Notes\n\n${ids.map((member) => `- [[${links.get(member)}]] — ${files[member]?.summary}\n`).join('')}`,
   };
   const changes: Change[] = (['moc-figures', 'moc-members'] as const).map((region) => ({

@@ -132,12 +132,20 @@ const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 
 const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text)) && optional(v.nothingReady, (x) => x === true) && optional(v.alreadySaved, (x) => list(x, alreadySaved)) && optional(v.unconfirmed, (x) => list(x, setAside)) && optional(v.kept, (x) => list(x, setAside)) && optional(v.answered, (x) => list(x, isAnsweredRow));
 const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.report, report);
 
-/** Optional fields are read leniently: a malformed `health` id or per-file `lint` evidence counts as absent (B8 R22, R26). */
+/** `result`: the evaluator's result, or why the figure says it was not computed (R32). */
+export type ViewRecord = { hash: string; evaluator: number; asOf: string; inputs: Array<[string, string]>; result: unknown };
+/**
+ * Optional fields are read leniently: a malformed `health` id, per-file `lint` or `properties` evidence, or `views`
+ * record counts as absent (B8 R22, R26; B11 AC12).
+ */
 export interface RetrievalFile {
   v: 1; folderId: string; account: string; cursor: string;
-  files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>;
+  /** `properties`: a view member's raw front-matter values, valid only for `version` (B11 R28). */
+  files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; properties?: Record<string, string> }>;
   /** The id of Bower's health note (TL-P4-50 Q6): found by this id only, never by title. */
   health?: string;
+  /** B11 (AC12): each computed map figure's provenance by `<mapId>/<viewId>`; rebuilt by every maintain that writes retrieval. */
+  views?: Record<string, ViewRecord>;
 }
 export interface RunnerFiles {
   '.bower/type-table.json': TypeTable;
