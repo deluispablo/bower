@@ -2,7 +2,17 @@
   {
     "kind": "tidy-intent",
     "v": 1,
-    "things": []
+    "things": [],
+    "observations": [
+      {
+        "source": {
+          "pileId": "p-1"
+        },
+        "section": "about-preferences",
+        "category": "preference",
+        "text": "I want comparisons that say what is missing and keep each source apart, so a choice that is not sure stays not sure until I add the words that settle it."
+      }
+    ]
   },
   {
     "kind": "tidy-intent",
@@ -11,11 +21,11 @@
     "observations": [
       {
         "source": {
-          "recordId": "press-2"
+          "pileId": "p-2-1"
         },
-        "section": "how-you-like-things",
+        "section": "about-preferences",
         "category": "preference",
-        "text": "Prefers keeping the amber gate clear when planning garden work in Saltmere."
+        "text": "I prefer to keep the amber gate clear when I plan garden work in Saltmere, and I do not want tools left on the path by the beds at any time of day."
       }
     ]
   }

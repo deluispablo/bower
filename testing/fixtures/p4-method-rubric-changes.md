@@ -183,7 +183,9 @@ No existing rubric, expectation or threshold changes. C17 is still outside the m
 | c17-b4-forget-no-return | agrees | Points 1–8 agree: reuse About me, remove only the identified derived fact through a durable tombstone, preserve immutable sources/history, no irrelevant links/type proposals, bounded reads and actual update rows; TL-P4-39 F4 supersedes append-only treatment of this derived memory region. |
 | c17-b4-origin-not-authority | agrees | Points 1–8 agree: trusted words supply one qualified preference, clear offer fits Job hunt with immutable source and a relevant hub link; no document-created preference, sensitive inference, rule or schema, no redundant memory note, bounded reads and truthful rows (F7). |
 | c17-b4-gate-archive-first | agrees | Points 1–8 agree under TL-P4-39 addendum 2: record observations immediately, consolidate only over budget and at five new observations, preserve primary facts/conditions and archive first; the proposed 200-word section budget awaits the lead and is not a changed method threshold. |
-| c17-b4-own-text-deletion | agrees | Points 1–8 agree: supported personal text stays as edited, exactly its bound removed fact is tombstoned, remaining evidence stays live, no whole-note adoption, redundant notes or inference; matching/initialization awaits the lead, and Bower-subsection hand edits have no new recovery (F2/R1 as narrowed). |
+
+B4c refresh (2026-10-14, b4c-fixtures): the three cases are rewritten in the landed ledger grammar with made-up seeded
+history; their verdicts stand. The own-text deletion case was dropped (TL-P4-48 Q3) with its verdict row.
 
 ## B11 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-47)
 

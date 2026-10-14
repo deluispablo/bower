@@ -138,6 +138,10 @@ original record was still waiting and nothing was written; `outcome: "restored"`
 back to the active journal. `kind: "tidy"` means a new request was written. First and answer presses have no request action.
 A provider that leaves a request unanswered still leaves it waiting: the driver does not fabricate an outcome.
 
+A press may also add the person's words first: `{ "kind": "words", "line": "…" }` makes one words pile in the Inbox,
+`p-<press>-<n>`, where `n` counts only that press's `words` steps, from 1 in step order (edit, move and answer steps do
+not count). A reply names it as `{ "source": { "pileId": "p-2-1" } }`.
+
 `expected.json` can add one `runs` item per press, including the first. Top-level expectations still check the final press.
 The driver returns `CaseRun.score` and exports `scoreCase(case, result)` for assertions over saved run snapshots.
 The scripted corpus loop asserts this full driver score, so later-press, range, property and subject expectations all
@@ -178,17 +182,16 @@ The four `b23-*` cases are pending B2/B3 preparation fixtures, with exact execut
 They need C17 admission, scalar/context/maintenance oracles and B1’s step-aware driver before scripted acceptance.
 See the B23 prep notes; hot is hidden maintenance, not authoritative pending state.
 
-The four `c17-b4-*` cases are pending C17/B4 preparations. New memory reply keys,
-JSONL events and About me marks are proposed specimens, not supported production formats.
-Exact binding/structured oracles are required before switching coverage; see
-the B4 prep notes. Internal archives stay under `.bower/` (TL-P4-45).
+The three `c17-b4-*` cases use the landed ledger grammar, About me's learned regions and the memory reply keys
+(b4c-fixtures); `runner/test/b4c-fixtures.test.ts` runs them through production main. Seeded history uses made-up
+ids that are never admitted. Case 4 (own text deletion) was dropped (TL-P4-48 Q3). Internal archives stay under
+`.bower/` (TL-P4-45); the gate case's consolidation oracle is completed by b4c-consolidation.
 
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
-| c17-b4-forget-no-return | C17 / B4 | model | TL-P4-39; F4: trusted Forget, source-keyed tombstone and archive non-resurrection; scripted proof pending |
-| c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; scripted proof pending |
-| c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five and archive before replacement; scripted proof pending |
-| c17-b4-own-text-deletion | C17 / B4 | model | TL-P4-39; F4/F2/R1: supported own prose deletion; no new-region edit recovery; scripted proof pending |
+| c17-b4-forget-no-return | C17 / B4 | model | TL-P4-39; F4: trusted Forget by quote, one tombstone, no return from the same source or an archive |
+| c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; a document-sourced preference is refused |
+| c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five; words added between presses; consolidation stage pending |
 
 ## B11 preparation cases — 2026-10-10
 

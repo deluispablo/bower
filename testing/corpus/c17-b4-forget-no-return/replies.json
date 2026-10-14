@@ -5,7 +5,8 @@
     "things": [],
     "forget": [
       {
-        "factId": "fact-remote"
+        "factId": "fact-remote",
+        "quote": "I prefer remote roles, except when a role offers regular mentoring in Saltmere."
       }
     ]
   },

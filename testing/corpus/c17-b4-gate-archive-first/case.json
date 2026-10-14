@@ -3,24 +3,26 @@
   "capability": "C17",
   "title": "An over-budget section waits at four new observations and consolidates at five",
   "covers": "model",
-  "source": "new: TL-P4-39 B4/F4/F7; proposed contracts and scripted proof pending",
-  "scope": "instructions",
+  "source": "new: TL-P4-39 B4/F4/F7; TL-P4-48 landed ledger grammar (b4c-fixtures)",
+  "scope": "all",
   "allowWeb": false,
-  "inbox": [],
-  "journal": [
+  "inbox": [
     {
-      "kind": "request",
-      "text": "Refresh About me from the recorded observations without adding any new facts."
+      "line": "Remember this: I want comparisons that say what is missing and keep each source apart, so a choice that is not sure stays not sure until I add the words that settle it.",
+      "files": []
     }
   ],
+  "journal": [],
   "questions": [],
   "bowerOwned": [],
   "presses": [
     {
-      "request": {
-        "kind": "tidy",
-        "text": "I prefer keeping the amber gate clear when I plan garden work in Saltmere. Remember this additional preference."
-      }
+      "between": [
+        {
+          "kind": "words",
+          "line": "Remember this too: I prefer to keep the amber gate clear when I plan garden work in Saltmere, and I do not want tools left on the path by the beds at any time of day."
+        }
+      ]
     }
   ]
 }
