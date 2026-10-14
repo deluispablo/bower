@@ -178,13 +178,22 @@ export function observationOf(candidate: unknown, context: {
   return eventOk(value) && value.kind === 'observation' ? { ok: true, value } : { ok: false };
 }
 
+/** Each About me section's heading label and word budget (TL-P4-48 Q4); the one home for both (R32a). */
+export const ABOUT_SECTIONS: Record<AboutRegion, { label: string; budget: number }> = {
+  'about-you': { label: 'About you', budget: 400 },
+  'about-working-on': { label: "What you're working on", budget: 400 },
+  'about-preferences': { label: 'How you like things', budget: 200 },
+};
 /** Authored payload words only; framing and Timeline date/citation syntax are excluded by their existing grammar. */
 export function canRebuildAboutSection(input: { ledger: Ledger; section: AboutRegion; text: string; reason: 'consolidate' | 'forget' | 'undo' }): boolean {
   if (input.reason === 'forget' || input.reason === 'undo') return true;
-  return wordsOf(input.text) > (input.section === 'about-preferences' ? 200 : 400) && newerLive(input.ledger, input.section).length >= 5;
+  return wordsOf(input.text) > ABOUT_SECTIONS[input.section].budget && newerLive(input.ledger, input.section).length >= 5;
 }
 const wordsOf = (text: string): number => text.split(/\r?\n/).filter((line) => !/^\s*(?:#{1,6}\s|<!-- bower:ownership)/.test(line))
   .flatMap((line) => (parseTimelineLine(line)?.text ?? line).trim().split(/\s+/).filter(Boolean)).length;
+const sectionText = (ledger: Ledger, region: AboutRegion): string => learnedLines(ledger, region).map((line) => line.text).join('\n');
+/** A section's words as `consolidationDue` counts them: the authored words of the lines About me shows there. */
+export const sectionWords = (ledger: Ledger, region: AboutRegion): number => wordsOf(sectionText(ledger, region));
 /** The index of the section's latest successful consolidation, or -1. */
 const frontierOf = (ledger: Ledger, region: AboutRegion): number =>
   ledger.events.reduce((last, e, i) => e.kind === 'consolidation' && e.section === region && e.successful ? i : last, -1);
@@ -226,7 +235,7 @@ export const learnedTimeline = (ledger: Ledger, line: LearnedLine): string => ti
 
 /** The gate (R16): over budget on the projection, five live facts newer than the frontier, one of them this run's. */
 export function consolidationDue(ledger: Ledger, region: AboutRegion, runId: string): boolean {
-  return canRebuildAboutSection({ ledger, section: region, text: learnedLines(ledger, region).map((line) => line.text).join('\n'), reason: 'consolidate' })
+  return canRebuildAboutSection({ ledger, section: region, text: sectionText(ledger, region), reason: 'consolidate' })
     && newerLive(ledger, region).some((fact) => fact.origin.runId === runId);
 }
 type InputFact = { factId: string; date: string; text: string; status: 'live' | 'ended'; ended?: { date: string; quote: string } };
@@ -275,11 +284,10 @@ export function consolidationOk(ledger: Ledger, event: unknown, runId: string): 
   if (!eventOk(event) || event.kind !== 'consolidation' || !event.lines || !event.dropped || !event.successful || event.runId !== runId) return false;
   const { lines, dropped, section: region } = event;
   const input = consolidationInput(ledger, region);
-  const words = (view: Ledger): number => wordsOf(learnedLines(view, region).map((line) => line.text).join('\n'));
   return !!input && consolidationDue(ledger, region, runId) && event.factIds.join() === input.map((fact) => fact.factId).join()
     && dropped.every((factId) => input.some((fact) => fact.factId === factId && fact.status === 'ended'))
     && lineFaults(ledger, { lines }).every((fault) => fault === null)
-    && words({ ...ledger, events: [...ledger.events, event] }) < words(ledger);
+    && sectionWords({ ...ledger, events: [...ledger.events, event] }, region) < sectionWords(ledger, region);
 }
 
 type AboutContext = { personal: { kind: 'person-input'; text: string };
@@ -348,8 +356,7 @@ export function validLearnedBlock(text: string, ledger?: Ledger, creating = fals
     if (!span) return false;
     const payload = decode(span.start, span.end);
     if (payload.includes('<!-- bower:ownership')) return false;
-    const label = { 'about-you': '### About you', 'about-working-on': "### What you're working on",
-      'about-preferences': '### How you like things' }[region];
+    const label = `### ${ABOUT_SECTIONS[region].label}`;
     if (creating && payload !== label + '\n') return false;
     block += begin(region) + payload + `<!-- bower:ownership/2 end ${region} -->\n`;
     if (!ledger) continue;

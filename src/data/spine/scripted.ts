@@ -10,7 +10,7 @@
  * (`fake-run-service.ts`) or the runner applies it, recoverably, through the one engine (`engine.ts`). Given the admitted set
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
-import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
+import { createOwnershipContext, parseOwnership, type AboutRegion, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
@@ -152,6 +152,8 @@ const LEFT_AS_WRITTEN = {
 export const TOO_OLD_WHY = "Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it.";
 /** A named target with no line in this run (TL-P4-32 addendum 6; the designer's owner-signed row). */
 export const NOTHING_FOUND_WHY = "Bower didn't add the line: it found nothing about this note in what you added.";
+/** A consolidation skipped this run (B4c R25): nothing is lost, the facts stay as their own lines. */
+export const SHORTEN_SKIPPED = 'Bower could not shorten what it has learned.';
 /** Row 1's line, under "Brought up to date". */
 const LINE_ADDED = 'One line added to its Timeline, as you asked.';
 
@@ -466,6 +468,8 @@ export interface Filing {
   /** Shown facts this run's words say ended, each with the person's exact words (R35). */
   ends?: readonly { factId: string; quote: string }[];
   shownFactIds?: readonly string[];
+  /** A section's facts reworded into shorter lines, checked and judged by the provider (B4c R21-R24). */
+  consolidation?: Consolidated;
   profiles?: ReadonlyMap<string, readonly string[]>;
   kinds?: ReadonlyMap<string, string>;
   thing(fileId: string): Placement | null;
@@ -489,6 +493,14 @@ export interface Filing {
   pairAsks?: readonly PairAsk[];
   /** A question asked once this pile is filed. */
   askAfter?(pile: Pile, at: number): Question | null;
+}
+
+/** A consolidation's lines and dropped ended facts by fact id, over the section's input facts (`consolidationInput`). */
+export interface Consolidated {
+  section: AboutRegion;
+  factIds: readonly string[];
+  lines: ReadonlyArray<{ text: string; factIds: string[]; form: 'current' | 'past' }>;
+  dropped: readonly string[];
 }
 
 /**
@@ -562,7 +574,7 @@ export interface Disagreement {
  * (`modelDecisions`), or the scripted provider's, which also answers what no model reply does yet (the optional part).
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
-export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'forget' | 'ends' | 'shownFactIds' | 'profiles' | 'kinds'> {
+export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'forget' | 'ends' | 'shownFactIds' | 'consolidation' | 'profiles' | 'kinds'> {
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -595,7 +607,7 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
-    newTags: filing.newTags, observations: filing.observations, forget: filing.forget, ends: filing.ends, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
+    newTags: filing.newTags, observations: filing.observations, forget: filing.forget, ends: filing.ends, shownFactIds: filing.shownFactIds, consolidation: filing.consolidation, profiles: filing.profiles, kinds: filing.kinds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
     pileAsk: (pile) => filing.asks?.get(pile.id) ?? null,
@@ -2404,6 +2416,24 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (memoryFile) places.set(memoryFile.id, memoryFile);
     places.set(sys.id, sys);
   }
+  // B4c (R24): the section as read is archived first; the archive's deepest existing folder is a captured place and the
+  // levels below it are made; the one ledger write then ends with the consolidation naming the archive.
+  let shorten: (Consolidated & { text: string; date: string; parent: string; folders: string[] }) | null = null;
+  const aboutFile = ix.file('About me.md');
+  if (hasMemory && d.consolidation && aboutFile && !aboutFile.folder) {
+    const bytes = new TextEncoder().encode(await drive.readText(aboutFile.id));
+    const owned = parseOwnership(bytes);
+    const span = owned.status === 'invalid' ? undefined : owned.payloads?.[d.consolidation.section];
+    const folders: string[] = [];
+    let at = `.bower/archive/about-me/${d.consolidation.section}`;
+    for (; at && !ix.file(at)?.folder; at = parentOf(at)) folders.unshift(at);
+    const place = ix.file(at);
+    if (span && place) {
+      places.set(place.id, place);
+      shorten = { ...d.consolidation, text: new TextDecoder().decode(bytes.subarray(span.start, span.end)), date: noteDate, parent: at, folders };
+    }
+  }
+  if (d.consolidation && !shorten) console.error(new BowerError('unknown', SHORTEN_SKIPPED), 'About me has no section to archive');
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
@@ -2502,7 +2532,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten,
   };
 }
 type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
@@ -2516,7 +2546,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -2733,12 +2763,23 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   const memoryOps: string[] = [];
   if (memoryWrite) {
+    let text = memoryWrite.text;
+    const archived: string[] = [];
+    if (shorten) {
+      let parent: Target = { fileId: ix.idOf(shorten.parent) ?? '' };
+      for (const path of shorten.folders) parent = { createdBy: await add({ kind: 'create-folder', parent, name: nameOf(path), createKey: newKey('folder') }) };
+      // Named by its create key, which the sealed operation id hashes with the name (R24); write-once, never authority.
+      const createKey = newKey('archive');
+      archived.push(await add({ kind: 'create-text', parent, name: `${shorten.date}-${createKey}.md`, createKey, text: shorten.text, content: await utf8(shorten.text), purpose: 'about-archive' }));
+      text += `${JSON.stringify({ v: 1, kind: 'consolidation', eventId: newKey('consolidation'), section: shorten.section, date: shorten.date,
+        factIds: shorten.factIds, runId: opts.runId, operationId: archived[0], successful: true, lines: shorten.lines, dropped: shorten.dropped })}\n`;
+    }
     const effect: EffectV2 = memoryWrite.file && memoryWrite.before
       ? { kind: 'write-runner-json', before: seen(memoryWrite.file), beforeContent: memoryWrite.before,
-        path: '.bower/observations.jsonl', text: memoryWrite.text, content: await utf8(memoryWrite.text) }
+        path: '.bower/observations.jsonl', text, content: await utf8(text) }
       : { kind: 'write-runner-json', before: null, beforeContent: null, parent: { fileId: sys?.id ?? '' },
-        createKey: newKey('ledger'), path: '.bower/observations.jsonl', text: memoryWrite.text, content: await utf8(memoryWrite.text) };
-    memoryOps.push(await add(effect, [...memoryOps]));
+        createKey: newKey('ledger'), path: '.bower/observations.jsonl', text, content: await utf8(text) };
+    memoryOps.push(await add(effect, archived));
   }
   for (const op of memoryOps) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(),
     updated: [{ path: 'About me.md', what: 'Brought up to date.', op }] } });

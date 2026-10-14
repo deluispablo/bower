@@ -1,0 +1,10 @@
+{
+  "verdicts": [
+    { "n": 1, "supported": true, "reason": "Every part follows from fact 1; the mentoring exception is kept." },
+    { "n": 2, "supported": true, "reason": "Every part follows from facts 2 and 3." },
+    { "n": 3, "supported": true, "reason": "Every part follows from facts 4 and 8; the amber gate and the path are kept." },
+    { "n": 4, "supported": true, "reason": "Every part follows from fact 5; the never-guess rule is kept." },
+    { "n": 5, "supported": true, "reason": "Every part follows from fact 6; the maybe plan stays a maybe." },
+    { "n": 6, "supported": true, "reason": "Every part follows from fact 7." }
+  ]
+}

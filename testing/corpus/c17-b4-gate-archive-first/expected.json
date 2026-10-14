@@ -50,11 +50,27 @@
       }
     },
     {
+      "files": {
+        "present": [
+          ".bower/archive/about-me/about-preferences/*"
+        ]
+      },
       "notes": [
         {
           "path": ".bower/observations.jsonl",
           "contains": [
             "I prefer to keep the amber gate clear when I plan garden work in Saltmere, and I do not want tools left on the path by the beds at any time of day."
+          ]
+        },
+        {
+          "path": "About me.md",
+          "contains": [
+            "I prefer remote roles, except when a role offers regular mentoring in Saltmere, before I decide if it suits me.",
+            "I like short written updates that say what changed, why and what comes next, without opening other notes, and a small list of roles with clear tasks and regular feedback.",
+            "I like garden plans that keep the path by the amber gate in Saltmere clear, and when I plan garden work I do not want tools left on the path.",
+            "I want recipe notes to keep each ingredient next to its step and the first amounts, and never guess a new serving size.",
+            "I like travel notes that keep the meeting place and the first date, with any weather conditions, and never treat a maybe plan as a booked trip.",
+            "I want comparisons that say what is missing, so a choice that is not sure stays not sure until I add the words that settle it."
           ]
         }
       ],

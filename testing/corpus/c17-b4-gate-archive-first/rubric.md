@@ -8,9 +8,12 @@ newer than the frontier do not open the gate, so About me shows seven plain line
 made. Before press 2 Alex adds more words (a corpus `words` step, pile `p-2-1`); press 2 records the eighth
 preference, the fifth newer than the frontier, and uses up the words.
 
-This is the case's first stage (b4c-fixtures): the consolidation call, its judge, the archive written first and the
-consolidated lines are completed by b4c-consolidation, which adds the press 2 oracle for them. Keep every live fact
-and its qualifications; an archive is never authority.
+Press 2 then consolidates How you like things (b4c-consolidation): one consolidation call rewords the eight facts
+into six shorter lines, each naming its facts by number (`consolidation-reply.json`); the lines pass the checks and
+one judge call on another tier supports each of them against only its own facts (`judge-reply.json`). The section as
+press 1 left it is archived under `.bower/archive/about-me/about-preferences/` first, then the run's one ledger write
+ends with the consolidation naming that archive, and About me shows the six lines. Keep every live fact and its
+qualifications (the mentoring exception, the amber gate, the maybe plan); an archive is never authority.
 
 Method points 1–8 agree under TL-P4-39's narrowed derived-memory method, without changing sources or app surfaces.
 

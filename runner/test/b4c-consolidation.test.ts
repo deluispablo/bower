@@ -222,9 +222,12 @@ async function waited(o: Parameters<typeof folder>[0] = {}) {
 const consolidationsOf = (run: CaseRun) => ledgerOf(run).events.filter((e) => e.kind === 'consolidation' && e.runId === run.dispatch?.runId);
 const lastLine = (input: string | undefined) => JSON.parse(input?.split('\n').at(-1) ?? '{}') as Record<string, unknown>;
 const url = (input: Parameters<typeof fetch>[0]) => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-/** The archive's create: a multipart create whose metadata names a dated archive file. */
+/**
+ * The archive's create: a multipart create whose metadata names a dated archive file. Its metadata gives `parents`
+ * after the name; the run manifest's upload also holds the archive's name, in its effect, followed by `parent`.
+ */
 const archiveCreate = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => init?.method === 'POST'
-  && url(input).pathname === '/upload/drive/v3/files' && init.body instanceof Blob && /"name":"2026-10-07-[A-Za-z0-9_-]+\.md"/.test(await init.body.text());
+  && url(input).pathname === '/upload/drive/v3/files' && init.body instanceof Blob && /"name":"2026-10-07-[A-Za-z0-9_-]+\.md","parents"/.test(await init.body.text());
 const throwing = () => vi.fn(() => { throw new Error('Recovery uses the stored manifest, not a new model call.'); });
 const CONSOLIDATING: Kind[] = ['selection', 'execution', 'consolidation', 'judge'];
 /** Words that remember one whole fact per section, in one pile. */
