@@ -34,7 +34,7 @@ beforeAll(async () => {
   }
 });
 
-test('AC1: the FIFO report names an inverse retired during the same refused flush', async () => {
+test('AC1: the corrected model accepts an inverse retired during the same refused flush', async () => {
   let before: JournalRecord[] = [];
   let failed: Array<{ id: string }> = [];
   let after: JournalRecord[] = [];
@@ -42,16 +42,18 @@ test('AC1: the FIFO report names an inverse retired during the same refused flus
     (JSON.parse(localStorage.getItem(outboxKey('f1')) ?? '[]') as Array<{ line: JournalRecord }>).map(({ line }) => line);
   const flush = Journal.prototype.flush;
   vi.spyOn(Journal.prototype, 'flush').mockImplementation(async function (this: Journal) {
-    before = waiting();
+    const queued = waiting();
+    const capturesRetirement = queued.some((line) => line.undoes && line.at < (queued.at(-1)?.at ?? -Infinity));
+    if (capturesRetirement) before = queued;
     try { return await flush.call(this); }
     finally {
-      after = waiting();
-      failed = (JSON.parse(localStorage.getItem(FAILED_KEY) ?? '{}') as Record<string, Array<{ id: string }>>).f1 ?? [];
+      if (capturesRetirement) {
+        after = waiting();
+        failed = (JSON.parse(localStorage.getItem(FAILED_KEY) ?? '{}') as Record<string, Array<{ id: string }>>).f1 ?? [];
+      }
     }
   });
-  let failure: unknown;
-  try { await replay(); }
-  catch (error) { failure = error; }
+  await replay();
   const inverse = before.find((line) => line.undoes);
   const later = before.at(-1);
   expect(inverse).toBeDefined();
@@ -60,17 +62,8 @@ test('AC1: the FIFO report names an inverse retired during the same refused flus
   expect(failedIds).toEqual(expect.arrayContaining(before.filter((line) => !line.undoes).map((line) => line.id)));
   expect(failedIds).not.toContain(inverse?.id);
   expect(after).toEqual([]);
-  expect(failure).toMatchObject({
-    message: expect.stringContaining('seed: -252134783, path: "22"'),
-    cause: { actual: [`${later?.id} passed ${inverse?.id}`], expected: [],
-      stack: expect.stringContaining('invariants') },
-  });
 });
 
-// Test-model defect: sendWaiting retires an inverse of a refused original before the next send,
-// but observeSettledInverses requires its outbox entry to disappear (only at the batch's end).
-// Fix scope: the property's transport observer must recognize retirement within a flush,
-// without treating a pending inverse as delivered or relaxing genuinely unresolved-head checks.
-test.fails('AC1: seed -252134783 path 22 reproduces the FIFO break in TL-P4-28(2)', async () => {
+test('AC1: seed -252134783 path 22 recognises same-flush inverse retirement', async () => {
   await replay();
 });
