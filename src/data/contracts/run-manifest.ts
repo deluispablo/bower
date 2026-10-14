@@ -865,6 +865,12 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
           } else if (event.kind === 'tombstone') {
             if (event.runId !== value.runId || !prior.events.some((old) => old.kind === 'observation'
               && old.factId === event.factId && old.source.fileId === event.sourceId)) return false;
+          } else if (event.kind === 'ended') {
+            // The person's words of this capture: the whole note as captured, its body holding the quote (R38).
+            const pile = value.capture.piles.find((p) => p.context.kind === 'text' && p.context.file.fileId === event.source.fileId);
+            if (event.runId !== value.runId || !prior.live.some((fact) => fact.factId === event.factId)
+              || pile?.context.kind !== 'text' || pile.context.content.sha256 !== event.source.sha256
+              || !hasVerbatimQuote(parseNote(pile.context.file.name, pile.context.text).body, event.quote)) return false;
           } else if (event.successful) {
             const edit = operations.find((o) => o.operationId === event.operationId);
             if (event.runId !== value.runId || !edit || edit.ordinal >= op.ordinal || !op.dependsOn.includes(edit.operationId)

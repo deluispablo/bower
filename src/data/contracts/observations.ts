@@ -29,8 +29,11 @@ type Tombstone = { v: 1; kind: 'tombstone'; eventId: string; date: string; at?: 
   sourceId: string; reason: 'forget' | 'bin'; runId: string };
 type Consolidation = { v: 1; kind: 'consolidation'; eventId: string; section: AboutRegion; date: string;
   factIds: string[]; runId: string; operationId: string; successful: boolean };
-type Event = Observation | Tombstone | Consolidation;
-type Ledger = { events: Event[]; live: Observation[]; tombstones: Tombstone[] };
+/** The fact stopped being true on `date`, on the person's words `quote` in `source` (R33). */
+type Ended = { v: 1; kind: 'ended'; eventId: string; date: string; at?: number; factId: string; quote: string;
+  source: Source; runId: string };
+type Event = Observation | Tombstone | Consolidation | Ended;
+type Ledger = { events: Event[]; live: Observation[]; tombstones: Tombstone[]; ended: { fact: Observation; event: Ended }[] };
 
 function originOk(v: unknown): v is ObservationOrigin {
   if (!object(v) || !id(v.runId) || !hash(v.captureId)) return false;
@@ -56,6 +59,8 @@ function eventOk(v: unknown): v is Event {
     && (v.origin.kind !== 'document' || (v.category === 'biography' || v.category === 'activity') && v.section !== 'about-preferences');
   if (v.kind === 'tombstone') return closed(v, [...base, 'factId', 'sourceId', 'reason', 'runId'], ['at'])
     && id(v.factId) && id(v.sourceId) && id(v.runId) && (v.reason === 'forget' || v.reason === 'bin');
+  if (v.kind === 'ended') return closed(v, [...base, 'factId', 'quote', 'source', 'runId'], ['at'])
+    && id(v.factId) && typeof v.quote === 'string' && validSummary(v.quote) && sourceOk(v.source) && id(v.runId);
   return v.kind === 'consolidation' && closed(v, [...base, 'section', 'factIds', 'runId', 'operationId', 'successful'])
     && section(v.section) && ids(v.factIds) && id(v.runId) && id(v.operationId) && typeof v.successful === 'boolean';
 }
@@ -129,7 +134,10 @@ function resolve(events: Event[], undone: readonly string[] = []): Ledger {
           && ((t.at ?? Date.parse(t.date)) >= (event.at ?? Date.parse(event.date)) || events.indexOf(t) >= events.indexOf(event)))))) continue;
     live.push(event);
   }
-  return { events, live, tombstones };
+  // A live fact with an ending whose run is not undone is ended, by its earliest such ending (R34).
+  const endings = events.filter((e): e is Ended => e.kind === 'ended' && !undone.includes(e.runId));
+  const ended = live.flatMap((fact) => endings.filter((e) => e.factId === fact.factId).slice(0, 1).map((event) => ({ fact, event })));
+  return { events, live: live.filter((fact) => !ended.some((e) => e.fact === fact)), tombstones, ended };
 }
 
 /** Candidate fields never supply an origin, hash or id. The two collections are trusted script inputs. */
