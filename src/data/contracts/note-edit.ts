@@ -45,7 +45,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -154,6 +154,7 @@ function fieldsOk(change: Change): boolean {
       && new Set(change.renames.map((item) => item.from.toLowerCase())).size === change.renames.length;
     case 'timeline-append': return change.entries.length > 0 && change.entries.every((entry) => entryOk(entry));
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
+    case 'views-set': return (change.previous === null || typeof change.previous === 'string') && typeof change.text === 'string';
   }
 }
 const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.length + ABOUT_REGIONS.indexOf(c.region)
@@ -930,6 +931,87 @@ function holds(before: string, after: string, change: Change, step: Exclude<Step
 // The author
 // ---------------------------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------------------------
+// views-set (B11 R40, R41, R43)
+// ---------------------------------------------------------------------------------------------
+
+export const VIEWS_KEY = 'bower_views';
+const VIEWS_LINE = /^bower_views:[ \t]?(.*)$/;
+/** A map's declared views as one line: compact JSON, `<` escaped so a stored value never forms marker text (R30). */
+export const viewsLine = (list: readonly unknown[]): string => JSON.stringify(list).replace(/</g, '\\u003c');
+const viewsList = (text: string): unknown[] | null => {
+  try {
+    const value: unknown = JSON.parse(text);
+    return Array.isArray(value) ? value : null;
+  } catch {
+    // expected: a line that is not JSON holds no list.
+    return null;
+  }
+};
+/** The value of a note's last `bower_views` front-matter line (readers take the last), and how many there are. */
+export function viewsDeclared(text: string, fetched?: FetchedOwnership): { value: string | null; lines: number } {
+  const found = frontmatterLines(text, fetched).flatMap((line) => VIEWS_LINE.exec(line.text)?.[1] ?? []);
+  return { value: found.at(-1) ?? null, lines: found.length };
+}
+/**
+ * The list a map declares once `entries` are installed (R40-R41): each replaces the stored entry with its id in the first
+ * one's place (later ones with that id go) or is appended; other entries keep their JSON values. A stored line that is
+ * not a JSON list holds no view, so it is replaced (`replaced`). Null when nothing would change (R42).
+ */
+export function viewsInstalled(previous: string | null, entries: ReadonlyArray<{ id: string }>): { text: string; replaced: boolean } | null {
+  const stored = previous === null ? [] : viewsList(previous);
+  const idOf = (v: unknown): unknown => (v && typeof v === 'object' && !Array.isArray(v) ? (v as { id?: unknown }).id : undefined);
+  const list = [...stored ?? []];
+  for (const entry of entries) {
+    const at = list.findIndex((v) => idOf(v) === entry.id);
+    if (at < 0) list.push(entry);
+    else list.splice(at, 1, entry, ...list.splice(at + 1).filter((v) => idOf(v) !== entry.id));
+  }
+  const text = viewsLine(list);
+  return previous !== null && stored !== null && sameJson(stored, JSON.parse(text)) ? null : { text, replaced: previous !== null && stored === null };
+}
+/** Equal as JSON values (R42): object key order aside, array order kept. */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => sameJson(x, b[i]));
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return a === b;
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  const keys = Object.keys(x);
+  return keys.length === Object.keys(y).length && keys.every((k) => Object.hasOwn(y, k) && sameJson(x[k], y[k]));
+}
+/** The one views-set author: the last `bower_views` line replaced in place (earlier ones removed), or added last, only on a Bower map. */
+function setViews(text: string, change: Extract<Change, { kind: 'views-set' }>, fetched?: FetchedOwnership): Step {
+  let note: ReturnType<typeof parseNote>;
+  try { note = parseNote('note.md', text, fetched); }
+  catch (error) {
+    // expected: an unreadable note is not Bower's.
+    console.error('A map could not be read for its views:', error);
+    return { refused: 'not-bower' };
+  }
+  if (!note.byBower || !note.properties.some((p) => p.key === 'type' && p.value === 'moc')) return { refused: 'not-bower' };
+  const sections = sectionsOf(text, fetched);
+  const lines = frontmatterLines(text, fetched);
+  if (!sections?.front || viewsDeclared(text, fetched).value !== change.previous) return { refused: 'field' };
+  const list = viewsList(change.text);
+  if (!list) return { refused: 'field' };
+  const line = `${VIEWS_KEY}: ${viewsLine(list)}`;
+  const views = lines.filter((l) => VIEWS_LINE.test(l.text));
+  const last = views.at(-1);
+  if (!last) {
+    const end = lines.at(-1);
+    const eol = eolOf(text);
+    return { text: end ? text.slice(0, end.after) + (end.after === end.end ? eol : '') + line + eol + text.slice(end.after) : text, added: [], rules: null };
+  }
+  let out = text.slice(0, last.start) + line + text.slice(last.end);
+  for (const l of views.slice(0, -1).reverse()) out = out.slice(0, l.start) + out.slice(l.after);
+  return { text: out, added: [], rules: null };
+}
+/** Only `bower_views` lines differ between the two texts. */
+const viewsHold = (before: string, after: string): boolean => {
+  const strip = (t: string): string => t.replace(/^bower_views:.*(?:\r?\n|$)/gm, '');
+  return strip(before) === strip(after);
+};
+
 export type MocSnapshot = { text: string; regions: Record<MocRegion, string> };
 
 /** Freeze only regions the existing ownership author can rewrite. Personal maps grant no authority. */
@@ -1045,7 +1127,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
   for (const change of changes) {
     // Intermediate text is generated, even when it carries the source file id.
     const step = change.kind === 'about-append' ? appendAbout(current, change.text) : change.kind === 'state-rewrite' ? rewriteState(current, change, source)
-      : change.kind === 'link-rewrite' ? relink(current, change, source)
+      : change.kind === 'link-rewrite' ? relink(current, change, source) : change.kind === 'views-set' ? setViews(current, change, source)
         : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
@@ -1056,7 +1138,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
         || decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end))
           !== decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end))) return refuse('invariant');
     }
-    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : change.kind === 'views-set' ? viewsHold(current, step.text) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }

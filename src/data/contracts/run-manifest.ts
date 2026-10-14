@@ -5,6 +5,7 @@ import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { readTagList, TAG_LIST_MAX } from './tag-format';
 import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
+import { VIEW_LIMITS, viewFault } from './view-format';
 import { BowerError, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote, consolidationOk } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
@@ -84,7 +85,9 @@ export type Change =
   | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true; granted?: StateGrant; mark?: string }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[]; consent?: TimelineConsent }
-  | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
+  | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] }
+  /** B11 (R40-R44): a Bower map's `bower_views` line, `previous` its last value as read (null when absent), `text` the compact list written. */
+  | { kind: 'views-set'; recordIds: string[]; previous: string | null; text: string };
 /**
  * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
  * (optional, `keep-one-note-merge`): the whole file as read, described by `beforeContent`, so an undo can put it back
@@ -94,6 +97,8 @@ export type Change =
 export type EditText = {
   kind: 'edit-text'; before: SeenFile; createdBy?: string; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
+  /** A views-set edit's type table as the run read it, so the guard checks the installed entries as a write (R43). */
+  types?: string;
 };
 /** Lint evidence of one checked note version (B8): its links, stored tag count and whether its parsed summary is set; absent means not checked. */
 export type LintEvidence = { links: string[]; tags: number; summary: boolean };
@@ -145,7 +150,7 @@ export type ManifestV2 = Omit<Manifest, 'v' | 'operations'> & { v: 2; operations
 export type ManifestRefusal = RecordJsonFailure['reason'] | 'shape' | 'scope' | 'content' | 'capture-id' | 'order' | 'operation-id' | 'report';
 export type ManifestResult = { ok: true; value: Manifest; sha256: string } | { ok: false; reason: ManifestRefusal };
 /** Which TL-P2-20 rule an `edit` refusal broke, for the log; the public reason stays `edit`. */
-export type EditGuardRule = 'target' | 'one-per-file' | 'rules-path' | 'encoding' | 'size' | 'unchanged' | 'date' | 'record' | 'mark' | 'archive';
+export type EditGuardRule = 'target' | 'one-per-file' | 'rules-path' | 'encoding' | 'size' | 'unchanged' | 'date' | 'record' | 'mark' | 'archive' | 'views';
 /** `edit`: a v2 edit breaks a TL-P2-20 rule; `version`: a manifest version later than this build reads. */
 export type ManifestV2Refusal = ManifestRefusal | 'edit' | 'version';
 export type ManifestV2Result = { ok: true; value: Manifest | ManifestV2; sha256: string }
@@ -341,7 +346,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -394,6 +399,8 @@ function change(value: unknown): value is Change {
         && value.entries.length === 1 && (value.entries[0] as EditEntry).source !== null));
     case 'rules-wording': return closed(value, ['kind', 'add', 'remove']) && list(value.add, ruleAdd) && list(value.remove, ruleRemove)
       && value.add.length + value.remove.length > 0;
+    case 'views-set': return closed(value, ['kind', 'recordIds', 'previous', 'text']) && recordIds(value.recordIds)
+      && (value.previous === null || text(value.previous)) && text(value.text);
     default: return false;
   }
 }
@@ -404,7 +411,8 @@ const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? CHANGE_O
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
 function editText(value: unknown): value is EditText {
-  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText', 'createdBy']) && value.kind === 'edit-text'
+  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText', 'createdBy', 'types']) && value.kind === 'edit-text'
+    && (value.types === undefined || text(value.types))
     && seenFile(value.before) && (value.createdBy === undefined || hash(value.createdBy))
     && path(value.path) && verifiedContent(value.beforeContent)
     && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
@@ -776,8 +784,51 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
   if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
   const admitted = await admit(parsed.value, expectedRootId, (value): value is ManifestV2 => finalized ? manifestV2(value) : manifestOf(value, 2, operationV2), writes, finalized);
   if (!admitted.ok) return admitted;
-  const broken = edits(admitted.value);
+  const broken = edits(admitted.value) ?? (await viewsSetOk(admitted.value) ? null : 'views');
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
+}
+
+/**
+ * A views-set edit (B11 R43, coordinator ruling 1): re-authored from the bytes it read, so only the `bower_views` line
+ * and the run's own link rewrite change, on a Bower map; its new entries pass the write grammar against the type table
+ * it read, at most ten in all; every record it names is a request this run completes (its requests.json `done`).
+ */
+async function viewsSetOk(value: ManifestV2): Promise<boolean> {
+  const done = new Set<string>();
+  for (const { effect: e } of value.operations) {
+    const requests = e.kind === 'write-runner-json' && e.path === '.bower/requests.json'
+      || e.kind === 'create-text' && e.name === 'requests.json' && targetPath(value, e.parent) === '.bower';
+    if (!requests || !('text' in e)) continue;
+    try {
+      const file = JSON.parse(e.text) as { done?: Array<{ id?: unknown }> };
+      for (const row of file.done ?? []) if (typeof row.id === 'string') done.add(row.id);
+    } catch {
+      // expected: an unreadable requests file proves no request.
+    }
+  }
+  const journal = new Set(value.capture.journal.map((j) => j.recordId));
+  for (const { effect: e } of value.operations) {
+    if (e.kind !== 'edit-text') continue;
+    const set = e.changes.find((c): c is Extract<Change, { kind: 'views-set' }> => c.kind === 'views-set');
+    if (!set) continue;
+    if (e.changes.some((c) => c.kind !== 'views-set' && c.kind !== 'link-rewrite') || e.beforeText === undefined || e.types === undefined
+      || !set.recordIds.length || !set.recordIds.every((id) => journal.has(id) && done.has(id))
+      || !await describes(e.beforeContent, e.beforeText)) return false;
+    const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
+    if (!authored.ok || authored.text !== e.text) return false;
+    let list: unknown;
+    let stored: unknown;
+    try { list = JSON.parse(set.text); stored = set.previous === null ? [] : JSON.parse(set.previous); }
+    catch {
+      // expected: a stored line that is not JSON keeps no entry; the new line must be JSON.
+      stored = [];
+    }
+    if (!Array.isArray(list) || list.length > VIEW_LIMITS.perHome) return false;
+    const kept = new Set((Array.isArray(stored) ? stored : []).map((v) => JSON.stringify(v)));
+    const table = readTypeTable(e.types).table;
+    if (list.some((entry) => !kept.has(JSON.stringify(entry)) && viewFault(entry, table, 'write') !== null)) return false;
+  }
+  return true;
 }
 
 

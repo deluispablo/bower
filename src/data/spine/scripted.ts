@@ -12,7 +12,7 @@
  */
 import { createOwnershipContext, parseOwnership, type AboutRegion, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
@@ -493,7 +493,12 @@ export interface Filing {
   pairAsks?: readonly PairAsk[];
   /** A question asked once this pile is filed. */
   askAfter?(pile: Pile, at: number): Question | null;
+  /** Views a person's request installs (B11 R44): each by the request's record id, in one Bower map, checked as a write. */
+  views?: readonly ViewInstall[];
 }
+
+/** One aggregate a request installs in a Bower map (B11c): checked by the provider as a write, bound to a main folder. */
+export interface ViewInstall { requestId: string; home: string; definition: { id: string } & Record<string, unknown> }
 
 /** A consolidation's lines and dropped ended facts by fact id, over the section's input facts (`consolidationInput`). */
 export interface Consolidated {
@@ -595,6 +600,8 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
   hubLines?: readonly HubLine[];
   /** A question asked once this pile is filed. */
   askAfter?(pile: Pile, at: number): Question | null;
+  /** The views requests install (B11c); a request one names settles once its maps are written or already hold them. */
+  views?: readonly ViewInstall[];
   /** How it answers a request; without it, requests wait. */
   request?(text: string): RequestPlan | null;
   /** The Timeline line an answer adds to a stored note (C07). */
@@ -619,6 +626,7 @@ export function modelDecisions(filing: Filing): Decisions {
     keep: filing.keep ?? [],
     pairAsks: filing.pairAsks ?? [],
     askAfter: filing.askAfter,
+    views: filing.views ?? [],
   };
 }
 
@@ -900,6 +908,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     tableRecords.add(line.rec.id);
     columnRequests.add(line.rec.id);
   }
+  // A request a checked reply installs views for (B11c) settles by its views-set edits, never by the generic handler.
+  const viewRequests = new Set(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
+    && (opts.decisions.views ?? []).some((v) => v.requestId === l.rec.id)).map((l) => l.rec.id));
   // A refused stored destination stays waiting in the same round record until a new asking is saved.
   const reaskOf = (id: string): Ask | undefined => {
     const q = roundFor(rounds, { id: askId(id), subject: id, hash: inboxHashes.get(id) }, inbox, inboxHashes)?.reask;
@@ -957,7 +968,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return { options };
   };
   // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
-  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)), listing, ix, appends, since);
+  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;
@@ -1044,7 +1055,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return row ? [[l.rec.id, row] as const] : [];
   }));
   let journal = lines.filter((l) => {
-    if (l.rec.kind === 'request') return columnRequests.has(l.rec.id)
+    if (l.rec.kind === 'request') return columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
     if (l.rec.kind !== 'answer') return true;
     const question = questionState.questions.find((q) => answersAsking(l.rec, q));
@@ -1852,7 +1863,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; rows: Array<{ what: string; line?: number }>; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[] }> = [];
+  const edits: Array<{ file: DriveFile; path: string; rows: Array<{ what: string; line?: number }>; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[]; types?: string }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
@@ -2179,6 +2190,40 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     edits.push({ file: p.file, path: p.path, rows: [{ what: LINE_ADDED, line: 0 }], before: p.before, bytes: p.bytes, changes: [change], text: result.text, after: [p.consent.sourceFileId], keeps: [] });
   }
   for (const p of satisfied) places.set(p.file.id, p.file);
+  // Views a request installs (B11c, R40-R44): one views-set change per map, in that map's one edit (beside its link
+  // rewrite, coordinator ruling 1). A map that already holds them needs no edit (R42); one that cannot be written now
+  // leaves its requests waiting.
+  const installs = new Map<string, ViewInstall[]>();
+  for (const v of d.views ?? []) if (viewRequests.has(v.requestId)) installs.set(v.home, [...installs.get(v.home) ?? [], v]);
+  for (const [home, wanted] of installs) {
+    const target = ix.byId(home);
+    const path = ix.pathOf(home);
+    const before = target && await verified(target, 'utf8');
+    const bytes = target && before ? await drive.readBytes(home) : null;
+    const wait = (why: string): void => {
+      console.error(new BowerError('conflict', VIEWS_WAIT), why);
+      journal = journal.filter((l) => !wanted.some((v) => v.requestId === l.rec.id));
+    };
+    if (!target || !path || !before || !bytes) { wait(`${path ?? home} could not be read`); continue; }
+    // A map the person changed after Bower read it (R34): the edit keeps the version Bower read, so Drive refuses the
+    // write, their change stays, and the request waits for the next run; its other maps are written meanwhile (R44).
+    const digest = await sha256(new Blob([bytes.slice()]));
+    if (before.size !== bytes.byteLength || before.sha256 !== digest) Object.assign(before, { size: bytes.byteLength, sha256: digest });
+    const declared = viewsDeclared(new TextDecoder().decode(bytes), fetched(home));
+    const next = viewsInstalled(declared.value, wanted.map((v) => v.definition));
+    if (!next) continue;
+    if (next.replaced || declared.lines > 1) console.error(new BowerError('conflict', VIEWS_REPLACED), `${path} declared its views on ${declared.lines} line(s), the last not a list: ${!!next.replaced}`);
+    const change: Change = { kind: 'views-set', recordIds: [...new Set(wanted.map((v) => v.requestId))], previous: declared.value, text: next.text };
+    const existing = edits.find((edit) => edit.file.id === home);
+    // The contract's order: after a Current state and a link rewrite, before the rest.
+    const first = (c: Change): boolean => c.kind === 'state-rewrite' || c.kind === 'link-rewrite';
+    const changes = [...(existing?.changes ?? []).filter(first), change, ...(existing?.changes ?? []).filter((c) => !first(c))];
+    const result = applyChanges(existing?.bytes ?? bytes, changes, fetched(home));
+    if (!result.ok) { wait(`${path} refused its views (${result.reason})`); continue; }
+    if (existing) Object.assign(existing, { changes, text: result.text, types: typeText ?? '' });
+    else edits.push({ file: target, path, before, bytes, changes, text: result.text, after: [], keeps: [], rows: [], types: typeText ?? '' });
+    places.set(home, target); edited.add(home);
+  }
   for (const { pileId, folder, words } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);
     destination(to);
@@ -2703,7 +2748,8 @@ export async function build(decided: Decided): Promise<Ended> {
     // A line citing a thing filed by this run waits for that thing's move (C06).
     const cited = [...edit.after.flatMap((id) => moveOf.get(id) ?? []), ...edit.changes.flatMap((c) =>
       c.kind === 'timeline-append' && c.consent ? pointers.get(c.consent.requestId) ?? [] : [])];
-    const beforeText = edit.keeps.length || edit.changes.some((change) => change.kind === 'profile-rewrite') ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
+    // A views-set edit carries its read bytes and type table, so the guard authors it again (R43).
+    const beforeText = edit.keeps.length || edit.changes.some((change) => change.kind === 'profile-rewrite' || change.kind === 'views-set') ? { beforeText: new TextDecoder().decode(edit.bytes), ...(edit.types === undefined ? {} : { types: edit.types }) } : {};
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
     editOf.set(edit.file.id, op);
     for (const answer of edit.keeps) derive(answer, op);
@@ -3265,6 +3311,9 @@ const NOT_WRITABLE = 'Bower could not write down one of your piles; it stays in 
 /** Why a thing already saved stays (review P4-17): it or its copy changed before its Bin, so the next run looks again. */
 export const SAVED_STAYS = 'It stays in your inbox: it changed, or its saved copy did, before Bower got to it.';
 export const NOTE_NOT_WRITTEN = "Bower couldn't write its note.";
+/** What is logged when a request's figures wait, or replace a declaration no reader could use (B11c). The request's own row reports it. */
+const VIEWS_WAIT = 'Bower could not set up those figures yet; it tries again next time.';
+const VIEWS_REPLACED = "Bower replaced a map's figures it could not read.";
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
 

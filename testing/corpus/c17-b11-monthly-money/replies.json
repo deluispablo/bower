@@ -15,6 +15,7 @@
           "v": 1,
           "id": "monthly-garden-spend",
           "kind": "aggregate",
+          "title": "Monthly garden spending",
           "set": {
             "type": "receipt",
             "folderId": "$folder:Areas/Money",
@@ -32,6 +33,7 @@
           "measures": [
             {
               "id": "total",
+              "label": "Total",
               "op": "sum",
               "property": "amount"
             }

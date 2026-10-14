@@ -3,6 +3,10 @@
   "rows": [
     {
       "id": "receipt",
+      "match": [
+        "receipt"
+      ],
+      "template": "source",
       "properties": {
         "amount": {
           "type": "money"

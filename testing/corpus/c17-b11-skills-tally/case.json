@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "Active offer skills are counted by notes, with missing values visible",
   "covers": "model",
-  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; pending contract specimen",
+  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; landed grammar (b11-install)",
   "scope": "instructions",
   "allowWeb": false,
   "inbox": [],
