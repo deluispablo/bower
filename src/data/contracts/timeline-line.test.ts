@@ -1,0 +1,116 @@
+import { describe, expect, it } from 'vitest';
+import { applyChanges, entryOk } from './note-edit';
+import { parseNote, serializeNote } from './note-format';
+import * as line from './timeline-line';
+
+// B9 (TL-P4-50 B9 Q1-Q3): one helper in the one Timeline home turns a marker into plain text; the stored triple is unchanged.
+type Marker = 'contradiction' | 'uncertain' | 'inferred';
+const markerText = (line as unknown as { markerText?: (marker: Marker, text: string, alsoFrom?: string | null) => string }).markerText;
+const { parseTimelineLine, timelineLine } = line;
+
+const date = '2026-10-07';
+const BOWER = '---\nby: bower\n---\n\n## Timeline\n';
+const CANONICAL = 'Contradiction: Earlier terms give 1,450; later terms give 1,580 from 2026-11-01, per month. Neither is confirmed. (also from [[Earlier listing.txt]])';
+const append = (before: string, entries: Array<{ date: string; text: string; source: string | null }>) =>
+  applyChanges(new TextEncoder().encode(before), [{ kind: 'timeline-append', recordIds: [], entries }]);
+
+describe('B9a format', () => {
+  it('AC1 b9-marker-text: one helper writes the three closed labels and the one canonical citation', () => {
+    expect(markerText, 'timeline-line.ts exports the one marker helper').toBeTypeOf('function');
+    if (!markerText) return;
+    expect(markerText('contradiction', 'A says 1; B says 2.', 'Earlier listing.txt')).toBe('Contradiction: A says 1; B says 2. (also from [[Earlier listing.txt]])');
+    expect(markerText('uncertain', 'The garden may close.')).toBe('Uncertain: The garden may close.');
+    expect(markerText('uncertain', 'The garden may close.', 'Notice.txt')).toBe('Uncertain: The garden may close. (also from [[Notice.txt]])');
+    expect(markerText('inferred', 'The visit may be affected.')).toBe('The visit may be affected. (inferred)');
+    expect(markerText('inferred', 'The visit may be affected.', 'Visit booking.txt')).toBe('The visit may be affected. (inferred) (also from [[Visit booking.txt]])');
+    expect(markerText('uncertain', '  Spaced.  ')).toBe('Uncertain: Spaced.');
+    // A note's citation drops `.md`, as a Timeline source does (scripted citeName).
+    expect(markerText('uncertain', 'Pending.', 'Visit plan.md')).toBe('Uncertain: Pending. (also from [[Visit plan]])');
+    for (const bad of ['confirmed', 'Contradiction', '']) expect(() => markerText(bad as Marker, 'x')).toThrow();
+    expect(() => markerText('contradiction', 'One source only.')).toThrow();
+    expect(() => markerText('uncertain', 'x', 'bad|alias')).toThrow();
+  });
+
+  it('AC2 b9-entry-citation: the write rule takes exactly one canonical citation at the end', () => {
+    expect(entryOk({ date, text: CANONICAL, source: 'Later listing.txt' }), 'the canonical citation is a valid authored field').toBe(true);
+    expect(entryOk({ date, text: 'From 2026-10-02: The visit may be affected. (inferred) (also from [[Visit booking.txt]])', source: 'Later notice.txt' })).toBe(true);
+    for (const text of [
+      'Raw [[Notice]] link.',
+      'Contradiction: A. (also from [[One.txt]]) (also from [[Two.txt]])',
+      'Contradiction: A. (also from [[One.txt]]) and more.',
+      'Contradiction: A. (also from [[One.txt|alias]])',
+      'Contradiction: A. (also from [[One.txt#Heading]])',
+      'Contradiction: A. (also from [[One.txt^block]])',
+      'Contradiction: A. (also from [[]])',
+      'Contradiction: A. (also from [[[One.txt]]])',
+      'Contradiction: A. (also from [[One · Two.txt]])',
+      'Contradiction: A. (also from [[One.txt]]',
+      'Contradiction: A · B. (also from [[One.txt]])',
+      'Contradiction: A.\n(also from [[One.txt]])',
+    ]) expect(entryOk({ date, text, source: 'Later listing.txt' }), text).toBe(false);
+  });
+
+  it('AC2 b9-one-physical-line: a line or paragraph separator refuses on write, marked or not', () => {
+    for (const text of ['Uncertain: Two\u2028physical lines.', 'Uncertain: Two\u2029paragraphs.', 'Two\u2028lines without a marker.']) {
+      expect(entryOk({ date, text, source: 'Notice.txt' }), JSON.stringify(text)).toBe(false);
+      // A stored manifest is read leniently, as before (TL-P4-19 addendum 22).
+      expect(entryOk({ date, text, source: 'Notice.txt' }, 'read')).toBe(true);
+    }
+  });
+
+  it('AC3 b9-append-dedup: a canonical line appends once, round-trips and dedups on replay', () => {
+    const entry = { date, text: CANONICAL, source: 'Later listing.txt' };
+    expect(parseTimelineLine(timelineLine(entry))).toEqual(entry);
+    const first = append(BOWER, [entry]);
+    expect(first.ok, 'the existing author accepts the canonical citation').toBe(true);
+    if (!first.ok) return;
+    expect(first.text).toContain(timelineLine(entry));
+    expect(parseNote('Terms.md', first.text).timeline).toEqual([entry]);
+    expect(append(first.text, [entry])).toEqual({ ok: false, reason: 'unchanged' });
+    // Same text, other day: still present (text and source decide, R3-3).
+    expect(append(first.text, [{ ...entry, date: '2026-10-08' }])).toEqual({ ok: false, reason: 'unchanged' });
+    // Two marked lines for one note are one edit.
+    const two = append(BOWER, [{ date, text: 'Uncertain: The garden may close.', source: 'Garden notice.txt' },
+      { date, text: 'The visit may be affected. (inferred) (also from [[Visit booking.txt]])', source: 'Garden notice.txt' }]);
+    expect(two.ok).toBe(true);
+    if (two.ok) expect(parseNote('Visit.md', two.text).timeline.map((e) => e.text)).toEqual(['Uncertain: The garden may close.', 'The visit may be affected. (inferred) (also from [[Visit booking.txt]])']);
+  });
+
+  it('AC3 b9-rename-keeps-citation: renaming the cited older source rewrites the citation and the line stays valid', () => {
+    const stored = new TextEncoder().encode(BOWER + timelineLine({ date, text: CANONICAL, source: 'Later listing.txt' }) + '\n');
+    const renamed = applyChanges(stored, [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Earlier listing.txt', to: 'First listing.txt' }] }]);
+    expect(renamed.ok).toBe(true);
+    if (!renamed.ok) return;
+    const after = parseNote('Terms.md', renamed.text).timeline[0];
+    expect(after?.text).toBe(CANONICAL.replace('Earlier listing.txt', 'First listing.txt'));
+    expect(after && entryOk({ date: after.date, text: after.text, source: after.source ?? null }), 'the renamed citation is still a valid field').toBe(true);
+  });
+
+  it('AC4 guard b9-legacy-literal: old, plugin-like and unknown marker text stays literal on read', () => {
+    const old = '[!future-marker] Opening hours are undecided ^[inferred]';
+    const owned = serializeNote({ byBower: true, summary: 'Alex records visits.', properties: [], tags: [],
+      currentState: [], body: '> [!contradiction] Alex copied this literally.', timeline: [{ date, text: old }] });
+    for (const raw of [owned, BOWER + timelineLine({ date, text: old }), BOWER + timelineLine({ date, text: old, marker: '* ' })]) {
+      for (const value of [raw, raw.replaceAll('\n', '\r\n')]) {
+        const entry = parseNote('Visits.md', value).timeline[0];
+        expect(entry).toMatchObject({ date, text: old });
+        expect(entry?.source ?? null).toBeNull();
+      }
+    }
+    const plain = '## Timeline\r\n* ' + date + ' · ' + old + '\r\n';
+    expect(parseNote('Plain.md', plain).body).toContain(old);
+    expect(parseNote('Plain.md', plain).timeline).toEqual([]);
+    expect(entryOk({ date, text: 'New: Old uncited history.', source: null }, 'read')).toBe(true);
+    expect(entryOk({ date, text: 'New: Old uncited history.', source: null })).toBe(false);
+  });
+
+  it.each([
+    { date: '2026-02-30', text: 'Undecided.', source: 'Notice.txt' },
+    { date, text: 'Two\nphysical lines.', source: 'Notice.txt' },
+    { date, text: 'A · separator', source: 'Notice.txt' },
+    { date, text: 'Raw [[Notice]]', source: 'Notice.txt' },
+    { date, text: 'Undecided.', source: 'Notice|alias' },
+  ])('AC4 guard b9-unsafe-fields: still refused %j', (entry) => {
+    expect(entryOk(entry)).toBe(false);
+  });
+});
