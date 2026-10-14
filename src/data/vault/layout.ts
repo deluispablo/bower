@@ -13,6 +13,7 @@
  * the runner moves them to `changes/archive/` after reading them; `piles/`,
  * one immutable declaration per pile, written before any of its things.
  */
+import { isMonthlyLogPath } from '../contracts/log-format';
 import { typeTableOk } from '../contracts/note-format';
 import { tagListOk } from '../contracts/tag-format';
 import type { TypeTable } from '../contracts/types';
@@ -50,6 +51,8 @@ export const SYSTEM = {
  * it. `suggestions.json` and `last-run.json` are written by the barrier after the run, never through the manifest.
  */
 export const RUNNER_WRITES = [SYSTEM.questions, SYSTEM.requests, SYSTEM.hashes, SYSTEM.retrieval, SYSTEM.index, SYSTEM.hot, SYSTEM.log, SYSTEM.typeTable, SYSTEM.tags, SYSTEM.observations] as const satisfies readonly RunnerWrite[];
+
+export const isRunnerPath = (path: string): boolean => (RUNNER_WRITES as readonly string[]).includes(path) || isMonthlyLogPath(path);
 
 /** Bower's bookkeeping and any dot file stay out of the explorer. */
 export function isHidden(path: string): boolean {
@@ -129,9 +132,12 @@ const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 
 const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text)) && optional(v.nothingReady, (x) => x === true) && optional(v.alreadySaved, (x) => list(x, alreadySaved)) && optional(v.unconfirmed, (x) => list(x, setAside)) && optional(v.answered, (x) => list(x, isAnsweredRow));
 const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.report, report);
 
+/** Optional fields are read leniently: a malformed `health` id or per-file `lint` evidence counts as absent (B8 R22, R26). */
 export interface RetrievalFile {
   v: 1; folderId: string; account: string; cursor: string;
   files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>;
+  /** The id of Bower's health note (TL-P4-50 Q6): found by this id only, never by title. */
+  health?: string;
 }
 export interface RunnerFiles {
   '.bower/type-table.json': TypeTable;

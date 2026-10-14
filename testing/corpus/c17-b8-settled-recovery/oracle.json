@@ -10,14 +10,14 @@
     },
     {
       "stage": "maintenance",
-      "target": ".bower/log.md",
+      "target": ".bower/log/2026-10.md",
       "action": "let PATCH/create land, lose its response and fail reconciliation; stop before health and the maintenance commit"
     }
   ],
   "recovery": "Redispatch the same run with attempt 2 through redispatchCase, then attempt 3 after done; no provider call on either.",
   "assertions": [
-    "One event per applied primary operationId across log segments; zero events for the rejected hub edit.",
-    "No done report or retrieval completion receipt before required health/log artifacts are confirmed.",
+    "One event per applied primary operationId in the frozen monthly file; zero events for the rejected hub edit.",
+    "No done report or retrieval completion before required health/log artifacts are confirmed.",
     "Health is updated once; report record, last-run.json and fixedReport preserve its one updated row.",
     "Source bytes equal the inbox fixture; hub bytes equal seed; create/move sends do not repeat.",
     "A deliberately landed retrieval write with missing health proof is insufficient for maintenance completion."

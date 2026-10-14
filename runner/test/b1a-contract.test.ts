@@ -228,7 +228,8 @@ it('B1a contract: addendum 4: maintain writes only retrieval index once and chan
     expect.soft([...counts.values()].every((n) => n <= 1), `one content send per file in run ${press}`).toBe(true);
     for (const write of writes) {
       // TL-P4-42 Q5: hot joins this bounded set; the count assertion above still caps each target at one.
-      if (['.bower/retrieval.json', '.bower/index.md', '.bower/hot.md'].includes(write.path)) continue;
+      // B8 (R8): so does Bower's health note, created whole at the root on the first maintaining run.
+      if (['.bower/retrieval.json', '.bower/index.md', '.bower/hot.md', 'Bower health.md'].includes(write.path)) continue;
       const prior = before.get(write.path);
       const permittedMoc = prior !== undefined && prior.includes('\ntype: moc\n') && prior.includes('\nby: bower\n');
       expect.soft(permittedMoc, `maintain write set in run ${press}: ${write.path}`).toBe(true);

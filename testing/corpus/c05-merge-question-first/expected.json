@@ -14,7 +14,7 @@
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [],
     "questionsAtMost": 1,
     "questionsExactly": 1,

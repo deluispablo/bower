@@ -41,20 +41,14 @@
     {
       "path": "Bower health.md",
       "contains": [
-        "Missing summary",
-        "Plot diary",
-        "Broken link",
         "Missing plan",
-        "Orphan",
-        "Loose thought",
-        "Too many tags"
+        "Loose thought"
       ],
       "excludes": [
         "Fence ghost",
         "Tilde ghost",
-        "[[Missing plan",
-        "[[Fence ghost",
-        "[[Tilde ghost"
+        "Missing summary: Plot diary",
+        "Orphan: Plot diary"
       ]
     }
   ],

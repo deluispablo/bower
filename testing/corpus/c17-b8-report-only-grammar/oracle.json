@@ -1,14 +1,14 @@
 {
-  "status": "proposed, not scored today",
+  "status": "Ruled report-only finding oracle; scripted evidence pending.",
   "findingsExactly": [
-    {
-      "kind": "missing-summary",
-      "path": "Resources/Gardening/Plot diary.md"
-    },
     {
       "kind": "broken-link",
       "path": "Resources/Gardening/Plot diary.md",
       "target": "Missing plan"
+    },
+    {
+      "kind": "missing-summary",
+      "path": "Resources/Gardening/Loose thought.md"
     },
     {
       "kind": "orphan",
@@ -16,16 +16,16 @@
     },
     {
       "kind": "tag-count",
-      "path": "Resources/Gardening/Plot diary.md",
+      "path": "Resources/Gardening/Loose thought.md",
       "count": 4,
       "limit": 3
     }
   ],
   "checks": [
-    "Use linkTarget to remove alias, heading and block suffixes; use fenceAfter for backtick and tilde blocks.",
-    "Hub, linked reference and Plot diary have inbound links or hub status: none is an orphan.",
-    "B7 supplies the authoritative allowed-list codec; unlisted is not scored as disallowed without that input.",
-    "All personal notes keep exact bytes and no new metadata; the missing summary is advisory.",
-    "Zero additional Claude calls for lint, health rendering or logging; health refers only to resolvable source notes."
+    "Personal notes get only broken links and duplicate names, without writes or adoption.",
+    "Loose thought is Bower-owned and supplies equivalent summary, orphan and four-versus-three tag controls.",
+    "Backtick and tilde examples supply no links or edges; real alias/heading/block references resolve by id.",
+    "Only a complete inbound graph proves orphan; self-links do not count.",
+    "Zero extra model calls for lint/log/health. No unlisted-tag claim without B7 authority."
   ]
 }
