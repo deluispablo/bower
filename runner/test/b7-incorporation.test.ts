@@ -154,7 +154,7 @@ describe('B7 through production main', () => {
     const comparison = await runOnDrive(c, drive, root, { pacing: { sleep: async () => {} } }, 1);
     expect(comparison.code).toBe(0);
     const created = Object.keys(comparison.after).filter((path) => path.endsWith('.md')
-      && !path.startsWith('.bower/') && !Object.hasOwn(c.folder, path));
+      && !path.startsWith('.bower/') && !Object.hasOwn(c.folder, path) && path !== 'Bower health.md'); // B8 (R8)
     expect(created, 'R12 comparison route actually creates its table note').toHaveLength(1);
     expect(tagged(comparison, created[0] ?? '')).toEqual([]);
   });

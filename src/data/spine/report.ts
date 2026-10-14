@@ -10,7 +10,7 @@ import type { EffectEvidence, Outcome, ReportRecord } from '../contracts/run-che
 import type { OperationV2, Maintain } from '../contracts/run-manifest';
 import type { RunReport } from '../types';
 import { KEEP_REFUSED, mocEdit, mocMembership, mocSnapshot, type Notes } from '../contracts/note-edit';
-import { indexedFront } from '../contracts/note-format';
+import { indexedFront, lintFacts } from '../contracts/note-format';
 import { VaultIndex } from '../vault/vault-index';
 import { isHidden, type RetrievalFile } from '../vault/layout';
 import type { DriveFile } from '../drive/drive-api';
@@ -118,6 +118,10 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
         report.updated.push({ path: target.path, what: 'Updated map.', op: op.operationId });
       }
     }
+    // Health is declared only to change it, so a settled maintain proves its one create or update (TL-P4-50 Q5, AC13).
+    const health = op.effect.inputs.targets?.find((target) => target.kind === 'health');
+    const rows = health?.beforeContent ? report.updated : report.created;
+    if (health && !rows.some((row) => row.path === health.path)) rows.push({ path: health.path, what: 'Checked your notes for broken links.' });
   }
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;
@@ -341,10 +345,14 @@ export function refreshed(inputs: Maintain['inputs'], outcomes: readonly Outcome
     const f = outcome.evidence.file;
     if (effect.kind === 'create-text' || effect.kind === 'edit-text') {
       const path = ix.pathOf(f.fileId);
-      if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') files[f.fileId] = {
-        path, version: f.modifiedTime, ...indexedFront(effect.text), coverage: { kind: 'prefix', bytes: 4096 },
-        ...(mocSnapshot(effect.text) ? { moc: mocSnapshot(effect.text) ?? undefined } : {}),
-      };
+      if (path && !isHidden(path) && path.endsWith('.md') && path.split('/')[0] !== 'Inbox') {
+        // The run's own full text is lint evidence for this version, so the next run need not read it (AC17).
+        const lint = lintFacts(path, effect.text);
+        files[f.fileId] = {
+          path, version: f.modifiedTime, ...indexedFront(effect.text), coverage: { kind: 'prefix', bytes: 4096 },
+          ...(mocSnapshot(effect.text) ? { moc: mocSnapshot(effect.text) ?? undefined } : {}), ...(lint ? { lint } : {}),
+        };
+      }
     }
   }
   files = Object.fromEntries(Object.entries(files).flatMap(([id, note]) => {
@@ -354,7 +362,9 @@ export function refreshed(inputs: Maintain['inputs'], outcomes: readonly Outcome
   }));
   const ancestry = [...ix.entries()].flatMap(([path]) => {
     const f = ix.file(path);
-    return f && (f.folder || files[f.id]) && path.split('/')[0] !== 'Inbox' ? [f] : [];
+    // The health note's settled place and version too: this run may clear its "new" mark before maintain rewrites it.
+    return f && (f.folder || files[f.id] || f.id === inputs.health) && path.split('/')[0] !== 'Inbox' ? [f] : [];
   });
-  return { v: 1, folderId: inputs.folderId, account: inputs.account, cursor: inputs.cursor, files, listing: ancestry };
+  return { v: 1, folderId: inputs.folderId, account: inputs.account, cursor: inputs.cursor, files, listing: ancestry,
+    ...(inputs.health ? { health: inputs.health } : {}) };
 }

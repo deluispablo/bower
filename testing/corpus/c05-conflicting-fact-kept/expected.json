@@ -26,7 +26,7 @@
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [
       "Projects/Flat hunt/Larkspur Lane flat.md"
     ],

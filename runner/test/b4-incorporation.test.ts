@@ -324,7 +324,8 @@ describe('B4b through production entry points', () => {
     expect(write.mock.calls.filter(([id]) => id === aboutId)).toHaveLength(1);
     expect(memoryRows(run)).toHaveLength(1);
     expect(Object.keys(run.after).filter((p) => p.startsWith('Inbox/'))).toEqual([]);
-    expect(report(run).created.filter((r) => r.path !== ABOUT)).toEqual([]);
+    // B8 (R8): the first maintaining run also creates Bower's health note.
+    expect(report(run).created.filter((r) => r.path !== ABOUT && r.path !== 'Bower health.md')).toEqual([]);
     const fact = ledger(run).live[0];
     const line = run.after[ABOUT]?.split('\n').map(parseTimelineLine).find((l) => l?.text === REMOTE);
     expect(line).toMatchObject({ date: fact?.date, text: REMOTE, source: expect.any(String) });

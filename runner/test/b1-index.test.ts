@@ -21,6 +21,8 @@ const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const METHOD = resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubric-changes.md');
 const empty = { kind: 'tidy-intent', v: 1, things: [] };
 const pacing = { sleep: async (): Promise<void> => undefined };
+/** B8 (R8): the first maintaining run also creates Bower's health note at the root. */
+const HEALTH = 'Bower health.md';
 const oldPaging = paging.size;
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(AT); paging.size = 1000; });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); paging.size = oldPaging; });
@@ -189,8 +191,14 @@ it('B1c index: 32000 character cut names every omitted folder and preserves whol
   expect(result.wire?.requests.length, 'production-only calls stay inside Q7').toBeLessThanOrEqual(300);
   const unchangedIds = Object.entries(result.pathsById).filter(([, p]) => /^Resources\/Group \d{3}\/Note \d{3}\.md$/.test(p)
     && !p.endsWith('/Note 000.md')).map(([id]) => id);
-  expect(result.wire?.requests.filter((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media'
-    && unchangedIds.some((id) => r.url.pathname === `/drive/v3/files/${id}`)), 'same-version files add no media re-reads').toEqual([]);
+  const mediaReads = (r: CaseRun) => (r.wire?.requests ?? []).filter((q) => q.method === 'GET' && q.url.searchParams.get('alt') === 'media'
+    && unchangedIds.some((id) => q.url.pathname === `/drive/v3/files/${id}`)).map((q) => q.url.pathname).sort();
+  // B8 (R26, ruled): this older retrieval file has no lint evidence, so each unchanged note is read once to build it.
+  expect(mediaReads(result), 'without lint evidence, one read per same-version file').toEqual(unchangedIds.map((id) => `/drive/v3/files/${id}`).sort());
+  base.drive.touch(changed?.id ?? '');
+  const again = await run(base, [], undefined, 2);
+  expect(again.code).toBe(0);
+  expect(mediaReads(again), 'same-version files add no media re-reads').toEqual([]);
   expect.soft(text.length, 'context projection stays inside Q7').toBeLessThanOrEqual(32000);
   const omitted = /index cut: (\d+) folders omitted/.exec(text);
   expect(omitted, 'the cut is declared rather than silently dropping folders').not.toBeNull();
@@ -299,7 +307,7 @@ it.each([40, 41])('B1c index: existing MOC at %i direct members folds and rebuil
   expect(parseNote(path, result.after[path] ?? '').body).toBe(parseNote(path, folder[path] ?? '').body);
   expect.soft(region(result.after[path], 'moc-figures')).toMatch(new RegExp(`\\b${count}\\b`));
   folded(result, 'Garden', count + 1); // Recursive leaf count excludes the maps themselves.
-  expect(Object.keys(result.after).filter((p) => !isHidden(p)).sort(), 'existing hierarchy creates no extra maps').toEqual(Object.keys(folder).sort());
+  expect(Object.keys(result.after).filter((p) => !isHidden(p)).sort(), 'existing hierarchy creates no extra maps').toEqual([...Object.keys(folder), HEALTH].sort());
   const report = (result.lastRun as { run: { report: { updated: Array<{ path: string }>; created: Array<{ path: string }> } } }).run.report;
   expect(report.updated.filter((row) => row.path === path)).toHaveLength(1);
   expect([...report.updated, ...report.created].filter((row) => isHidden(row.path))).toEqual([]);
@@ -697,7 +705,7 @@ it.each([1, 40])('B1c fix 1: 3 figures count %i direct notes without a child map
   expect(membersById(result, legacyPath).sort(), 'positive control: descendants stay reachable without a child map')
     .toEqual(Object.keys(folder).filter((p) => p !== legacyPath).map((p) => idAt(result, p)).sort());
   folded(result, 'Garden', count + 1);
-  expect(Object.keys(result.after).filter((p) => !isHidden(p)).sort()).toEqual(Object.keys(folder).sort());
+  expect(Object.keys(result.after).filter((p) => !isHidden(p)).sort()).toEqual([...Object.keys(folder), HEALTH].sort());
   expect(region(result.after[legacyPath], 'moc-figures'), 'only notes directly in Garden count as direct')
     .toBe(`## Figures\n\n${count} direct ${count === 1 ? 'note' : 'notes'}; ${count + 1} notes in all.\n`);
 });
@@ -1017,7 +1025,8 @@ it('B1c fix 4: a warm run with changed notes counted through maintain equals the
       expect(done?.after, `${scope}/${count}: the report includes every production Drive call`).toBe(requests.length);
       // TL-P4-42 addendum 5: pre-hot (38 + count), hot prompt media (+1), live fence (+1), PATCH (+1).
       // Prior hot and questions are reused from the read cache; at most one extra fenced hot write.
-      expect.soft(requests.length, `${scope}/${count}: whole-run count with one fenced hot write`).toBe(41 + count);
+      // B8 (R8): the first health create adds its root name-check listing, root fence and POST (+3).
+      expect.soft(requests.length, `${scope}/${count}: whole-run count with one fenced hot write`).toBe(44 + count);
       const hot = listing.find((f) => base.drive.pathOf(f.id, base.root) === SYSTEM.hot);
       expect(hot).toBeDefined();
       const hotCalls = requests.filter((r) => r.path === `/drive/v3/files/${hot?.id}`

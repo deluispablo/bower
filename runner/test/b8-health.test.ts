@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
 import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
-import { observe, writes, type Observation } from './b23-hot-observe';
+import { manifests, observe, writes, type Observation } from './b23-hot-observe';
 import { setup as planningSetup, run as planningRun, select, fileIntent, folder, note, report as planningReport } from './b1-planning-support';
 import type { ClaudeCall } from '../src/claude';
 import { parseRunManifestV2, type ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
+import { sha256Hex } from '../../src/data/contracts/hashes';
+import { LedgerExhausted } from '../src/timing';
 
 const HEALTH = 'Bower health.md';
 const CHECKLIST = 'Resources/Gardening/Checklist.md';
@@ -18,8 +20,9 @@ const empty = { kind: 'tidy-intent', v: 1, things: [] };
 const pacing = { sleep: async (): Promise<void> => undefined };
 const fixture = (name: string) => loadCase(resolve(import.meta.dirname, '../../testing/corpus', `c17-b8-${name}`));
 const report = (run: CaseRun) => (run.lastRun as { run?: { report?: { created: Array<{ path: string }>; updated: Array<{ path: string }> } } } | null)?.run?.report;
-async function setup(name = 'report-only-grammar') {
+async function setup(name = 'report-only-grammar', edit?: (c: Awaited<ReturnType<typeof fixture>>) => void) {
   const c = await fixture(name);
+  edit?.(c);
   const drive = fixedDrive();
   const root = await seedCase(drive, c);
   const traffic: Observation[] = [];
@@ -305,6 +308,9 @@ describe('B8b lint and the health note through main', () => {
     const source = await base.drive.get(id);
     await base.drive.update(id, { name: 'Mulch notice.txt', addParent: inbox?.id ?? '', removeParent: source.parents[0] });
     await base.drive.trash(Object.entries(first.pathsById).find(([, path]) => path === 'Resources/Gardening/Mulch notice.md')?.[0] ?? '');
+    // The client's whole-run compensation also puts back the hub's Timeline line that cited the undone note (B3b).
+    const hub = idOf(first, 'Resources/Gardening/Gardening.md') ?? '';
+    await base.drive.writeText(hub, base.c.folder['Resources/Gardening/Gardening.md'] ?? '', (await base.drive.get(hub)).modifiedTime);
     await base.drive.createText(changes?.id ?? '', 'undo-file.json', JSON.stringify({ v: 1, id: 'undo-file', device: 'device-1',
       at: AT + 1, kind: 'move', what: 'Put back Mulch notice.', undoes: op, fileId: id, path: 'Inbox/Mulch notice.txt', from: filed }));
     await base.drive.createText(changes?.id ?? '', 'undo-request.json', JSON.stringify({ v: 1, id: 'undo-request', device: 'device-1',
@@ -316,6 +322,7 @@ describe('B8b lint and the health note through main', () => {
     expect(undone.code).toBe(0);
     expect(undone.after[HEALTH] ?? '', 'health is rebuilt from the restored evidence').toContain('by: bower');
     expect(undone.after[HEALTH]).not.toContain('Mulch notice');
+    expect(undone.after[HEALTH], 'the restored folder checks clean').toContain('No findings in the checked notes.');
   });
   it('AC18 control: the filing that Undo reverses settles through main', async () => {
     const run = await runScripted(await fixture('settled-recovery'));
@@ -332,13 +339,44 @@ describe('B8b lint and the health note through main', () => {
     const target = op.effect.inputs.targets?.find((item) => item.path === HEALTH);
     expect(target, 'the health note is a declared maintain target').toBeDefined();
     expect((await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), run.root, RUNNER_WRITES)).ok, 'a real health manifest validates').toBe(true);
-    if (!target) return;
-    target.fileId = idOf(run, DIARY) ?? '';
-    const hash = await hashRecordJson({ runId: m.runId, captureId: m.captureId, ordinal: op.ordinal, effect: op.effect });
-    if (!hash.ok) throw new Error('The mutated operation must be canonical JSON.');
-    op.operationId = hash.value;
-    expect((await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), run.root, RUNNER_WRITES)).ok,
-      'a resealed health target cannot name a personal note').toBe(false);
+  });
+  // Round 3 ruling 1: a personal note directly in the root, retargeted coherently (id, path, root parent, inputs.health,
+  // its bytes) with resealed references, so only ownership refuses it; the same retarget to the health note validates.
+  it('AC19 b8-health-target-validated: a coherent root personal target is refused for ownership alone', async () => {
+    const IDEAS = 'Garden ideas.md';
+    const base = await setup('report-only-grammar', (c) => { c.folder[IDEAS] = 'Alex jots garden ideas here.\n'; });
+    const first = await press(base);
+    const healthId = idOf(first, HEALTH) ?? '';
+    const diaryId = idOf(first, DIARY) ?? '';
+    await base.drive.writeText(diaryId, (base.c.folder[DIARY] ?? '').replace('[[Missing plan#Next|the plan]]', 'the plan'), (await base.drive.get(diaryId)).modifiedTime);
+    const second = await press(base, 2);
+    const earlier = new Set(manifests(first).map(([path]) => path));
+    const text = manifests(second).find(([path]) => !earlier.has(path))?.[1] ?? '{}';
+    const forge = async (fileId: string): Promise<boolean> => {
+      const m = JSON.parse(text) as ManifestV2;
+      const op = m.operations.find((item) => item.effect.kind === 'maintain');
+      if (op?.effect.kind !== 'maintain') throw new Error('The second run must declare maintain.');
+      const target = op.effect.inputs.targets?.find((item) => item.fileId === healthId);
+      const seen = op.effect.inputs.listing?.find((f) => f.fileId === fileId);
+      if (!target?.beforeContent || !seen) throw new Error('The health update and the root note must be in the frozen listing.');
+      const oldPath = target.path;
+      const stored = await base.drive.readText(fileId);
+      Object.assign(target, { path: seen.name, fileId, parentId: base.root,
+        beforeContent: { ...target.beforeContent, size: new TextEncoder().encode(stored).length, sha256: await sha256Hex(stored), observedModifiedTime: seen.modifiedTime } });
+      op.effect.inputs.health = fileId;
+      const oldId = op.operationId;
+      const hash = await hashRecordJson({ runId: m.runId, captureId: m.captureId, ordinal: op.ordinal, effect: op.effect });
+      if (!hash.ok) throw new Error('The mutated operation must be canonical JSON.');
+      op.operationId = hash.value;
+      for (const row of m.reportPlan) {
+        row.requires = row.requires.map((id) => id === oldId ? op.operationId : id);
+        for (const item of [...row.value.created, ...row.value.updated]) if (item.path === oldPath) item.path = seen.name;
+      }
+      return (await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), second.root, RUNNER_WRITES)).ok;
+    };
+    expect(second.pathsById[idOf(second, IDEAS) ?? '']).toBe(IDEAS);
+    expect(await forge(healthId), 'the same coherent retarget to the health note itself validates').toBe(true);
+    expect(await forge(idOf(second, IDEAS) ?? ''), 'a resealed health target cannot name a personal note').toBe(false);
   });
 
   it('AC14 ruling: maintenance exhaustion before health keeps the report; the next run creates one note', async () => {
@@ -370,11 +408,17 @@ describe('B8b lint and the health note through main', () => {
     expect(lost.state.reached, 'main must actually send the health note').toBe(true);
     expect(first.wire?.statuses.some((status) => status.phase === 'done')).toBe(false);
     lost.state.enabled = false;
+    // Round 3 ruling 4: exactly one health send across POST and PATCH together, and the landed bytes unchanged.
+    const landed = await base.drive.get(idOf(first, HEALTH) ?? '', { checksums: true });
     let calls = 0;
     const recovered = await redispatchCase(base.c, first, 2, { around: base.around, pacing, claude: async () => { calls++; throw new Error('Recovery must not model.'); } });
     expect(recovered.code).toBe(0);
     expect(calls).toBe(0);
-    expect(writes(base.traffic, HEALTH).filter((e) => e.method === 'POST'), 'one create, never a second note').toHaveLength(1);
+    expect(writes(base.traffic, HEALTH), 'one create, never a second note nor an update').toHaveLength(1);
+    expect(writes(base.traffic, HEALTH)[0]?.method).toBe('POST');
+    const after = await base.drive.get(idOf(first, HEALTH) ?? '', { checksums: true });
+    expect([after.md5Checksum, after.modifiedTime], 'the landed bytes are unchanged').toEqual([landed.md5Checksum, landed.modifiedTime]);
+    expect(recovered.after[HEALTH]).toBe(first.after[HEALTH]);
     expect(idOf(recovered, HEALTH)).toBe(idOf(first, HEALTH));
     expect(healthPaths(recovered)).toEqual([HEALTH]);
     expect(report(recovered)?.created.map((row) => row.path), 'the original create row survives recovery').toContain(HEALTH);
@@ -408,15 +452,17 @@ describe('B8b lint and the health note through main', () => {
     const id = idOf(first, HEALTH);
     expect(id, 'the first run creates the health note').toBeDefined();
     await lose(base, id ?? '');
-    const kept = await base.drive.readText(id ?? '');
-    const at = (await base.drive.get(id ?? '')).modifiedTime;
+    // The pretend Drive reads no text from the Bin, so a binned file is compared by its checksum and version.
+    const stored = async () => base.drive.get(id ?? '', { checksums: true, binned: true });
+    const { md5Checksum: kept, modifiedTime: at } = await stored();
     base.traffic.length = 0;
     const second = await press(base, 2);
     expect(second.code).toBe(0);
     expect(second.after[created] ?? '', 'a new Bower note replaces a lost identity').toContain('by: bower');
     expect(idOf(second, created)).not.toBe(id);
-    expect(await base.drive.readText(id ?? '')).toBe(kept);
-    expect((await base.drive.get(id ?? '')).modifiedTime, 'the old file is never touched').toBe(at);
+    expect(kept).toBeDefined();
+    expect((await stored()).md5Checksum).toBe(kept);
+    expect((await stored()).modifiedTime, 'the old file is never touched').toBe(at);
   });
 
   it('AC11 b8-link-identity-matrix', async () => {
@@ -467,5 +513,193 @@ describe('B8b lint and the health note through main', () => {
     const second = await press(base, 2);
     expect(second.after[HEALTH], 'readable again, its broken link is found').toContain('Missing plan');
     expect(second.after[HEALTH]).not.toMatch(/unchecked|not checked|could not (?:be )?check/i);
+  });
+
+  // Spec review round 2 of b8b: the coordinator's five rulings (ruling 3 is the coherent AC19 retarget above).
+  it('AC19 ruling 1: an update to a renamed health note validates and lands', async () => {
+    const base = await setup();
+    const first = await press(base);
+    const id = idOf(first, HEALTH) ?? '';
+    await base.drive.update(id, { name: 'Health renamed.md' });
+    const diaryId = idOf(first, DIARY) ?? '';
+    const diary = await base.drive.get(diaryId);
+    await base.drive.writeText(diaryId, (base.c.folder[DIARY] ?? '').replace('[[Missing plan#Next|the plan]]', 'the plan'), diary.modifiedTime);
+    const second = await press(base, 2);
+    expect(second.code).toBe(0);
+    const earlier = new Set(manifests(first).map(([path]) => path));
+    const text = manifests(second).find(([path]) => !earlier.has(path))?.[1] ?? '{}';
+    const m = JSON.parse(text) as ManifestV2;
+    const op = m.operations.find((item) => item.effect.kind === 'maintain');
+    if (op?.effect.kind !== 'maintain') throw new Error('The second run must declare maintain.');
+    const target = op.effect.inputs.targets?.find((item) => item.fileId === id);
+    expect(target?.path, 'the health target is the renamed note, found by its id').toBe('Health renamed.md');
+    expect((await parseRunManifestV2(new TextEncoder().encode(text), second.root, RUNNER_WRITES)).ok, 'the renamed update validates').toBe(true);
+    expect(second.pathsById[id]).toBe('Health renamed.md');
+    expect(second.after['Health renamed.md']).not.toContain('Missing plan');
+    expect(report(second)?.updated.map((row) => row.path)).toContain('Health renamed.md');
+  });
+
+  it('AC14 ruling 2: health lands, then the log exhausts: the health row stays and the run is done', async () => {
+    const base = await setup('settled-recovery');
+    const around = (fetch: typeof globalThis.fetch) => {
+      let seen = base.traffic.length;
+      return observe(base.drive, base.root, base.traffic)(async (input, init = {}) => {
+        const last = base.traffic.length > seen ? base.traffic.at(-1) : undefined;
+        seen = base.traffic.length;
+        if (last?.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(init.method ?? 'GET')) throw new LedgerExhausted(0);
+        return fetch(input, init);
+      });
+    };
+    const run = await runOnDrive(base.c, base.drive, base.root, { around, claude: caseReplies(base.c.id), pacing }, 1);
+    expect(writes(base.traffic, HEALTH), 'health was sent before the log').toHaveLength(1);
+    expect(base.traffic.some((e) => e.path.startsWith('.bower/log') && ['POST', 'PATCH'].includes(e.method)), 'the log was reached').toBe(true);
+    expect(run.code).toBe(0);
+    expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(report(run)?.created.map((row) => row.path), 'the confirmed health row stays').toContain(HEALTH);
+    expect(run.after[HEALTH]).toContain('by: bower');
+    expect(Object.keys(run.after).filter((path) => path.startsWith('.bower/log/'))).toEqual([]);
+  });
+
+  it('AC14 ruling 4: a lost health update response resends nothing', async () => {
+    const base = await setup();
+    const first = await press(base);
+    const id = idOf(first, HEALTH);
+    const diaryId = idOf(first, DIARY) ?? '';
+    const diary = await base.drive.get(diaryId);
+    await base.drive.writeText(diaryId, (base.c.folder[DIARY] ?? '').replace('[[Missing plan#Next|the plan]]', 'the plan'), diary.modifiedTime);
+    base.traffic.length = 0;
+    const lost = loss(base, HEALTH);
+    const second = await runOnDrive(base.c, base.drive, base.root, { around: lost.around, claude: replySequence([empty]), pacing,
+      request: { kind: 'tidy', text: 'Check my notes again.' } }, 2);
+    expect(lost.state.reached, 'main must actually send the health update').toBe(true);
+    expect(second.wire?.statuses.some((status) => status.phase === 'done')).toBe(false);
+    lost.state.enabled = false;
+    let calls = 0;
+    const recovered = await redispatchCase(base.c, second, 2, { around: base.around, pacing, claude: async () => { calls++; throw new Error('Recovery must not model.'); } });
+    expect(recovered.code).toBe(0);
+    expect(calls).toBe(0);
+    expect(writes(base.traffic, HEALTH).filter((e) => e.method === 'PATCH'), 'one update, never a second').toHaveLength(1);
+    expect(writes(base.traffic, HEALTH).filter((e) => e.method === 'POST')).toEqual([]);
+    expect(manifests(recovered), 'the frozen manifest is unchanged').toEqual(manifests(second));
+    expect(idOf(recovered, HEALTH)).toBe(id);
+    expect(recovered.after[HEALTH], 'the frozen findings are written').not.toContain('Missing plan');
+    expect(recovered.after[HEALTH]).toContain('Loose thought');
+    expect(report(recovered)?.updated.filter((row) => row.path === HEALTH), 'one updated row').toHaveLength(1);
+    expect(report(recovered)?.created.some((row) => row.path === HEALTH)).toBe(false);
+  });
+
+  it('AC16 ruling 5: malformed lint evidence is rebuilt from a fresh read, never a refusal', async () => {
+    const base = await setup();
+    const first = await press(base);
+    const retrievalId = idOf(first, '.bower/retrieval.json') ?? '';
+    const stored = JSON.parse(first.after['.bower/retrieval.json'] ?? '{}') as { files: Record<string, Record<string, unknown>> };
+    expect(Object.values(stored.files).some((f) => f.lint !== undefined), 'lint evidence is stored by id and version').toBe(true);
+    for (const f of Object.values(stored.files)) f.lint = { links: 'broken', tags: -1 };
+    const file = await base.drive.get(retrievalId);
+    await base.drive.writeText(retrievalId, JSON.stringify(stored), file.modifiedTime);
+    base.traffic.length = 0;
+    const second = await press(base, 2);
+    expect(second.code, 'a normal run').toBe(0);
+    expect(base.traffic.filter((e) => e.media && e.path === DIARY), 'the evidence is rebuilt from one fresh read').toHaveLength(1);
+    expect(second.after[HEALTH], 'the same findings').toBe(first.after[HEALTH]);
+    const rebuilt = JSON.parse(second.after['.bower/retrieval.json'] ?? '{}') as { files: Record<string, { path: string; lint?: { links: unknown } }> };
+    expect(Object.values(rebuilt.files).find((f) => f.path === DIARY)?.lint?.links).toEqual(expect.arrayContaining(['Missing plan#Next']));
+    base.traffic.length = 0;
+    await press(base, 3);
+    expect(base.traffic.filter((e) => e.media && e.path === DIARY), 'rebuilt evidence is reused').toEqual([]);
+  });
+
+  // Spec review round 3 of b8b: rulings 2, 3 and 5 (rulings 1 and 4 are in the AC19 and lost-create reds above).
+  it('AC11 round 3 ruling 2: About me is exempt from orphan findings; a non-hub Bower note still is not', async () => {
+    const c = await fixture('report-only-grammar');
+    c.folder['About me.md'] = '---\nsummary: What Bower knows about Alex.\nby: bower\n---\n\n## Current state\n- Alex grows herbs.\n';
+    c.folder['Rules.md'] = '---\nsummary: 1 rule Bower follows in every tidy-up.\nby: bower\n---\n\n## Rules\n- Keep receipts in Archive.\n';
+    const run = await runScripted(c);
+    expect(run.code).toBe(0);
+    const lines = (run.after[HEALTH] ?? '').split('\n');
+    expect(lines.filter((line) => /not checked/i.test(line)), 'the inbound graph is complete').toEqual([]);
+    expect(lines.filter((line) => line.includes('About me')), 'About me has no inbound link and no finding').toEqual([]);
+    expect(lines.filter((line) => line.includes('[[Rules]]')), 'nor Rules, the other note the app opens directly').toEqual([]);
+    expect(lines.filter((line) => /orphan/i.test(line) && line.includes('Loose thought'))).toHaveLength(1);
+  });
+
+  it('AC11 round 3 ruling 5: missing summary is judged on the parsed field, never on the display substitute', async () => {
+    const c = await fixture('report-only-grammar');
+    const body = '\n## My thoughts\nAlex keeps this about the garden. [[Gardening]]\n';
+    c.folder['Resources/Gardening/Seed list.md'] = `---\nby: bower\n---\n${body}`;
+    c.folder['Resources/Gardening/Pot sizes.md'] = `---\nsummary: ""\nby: bower\n---\n${body}`;
+    c.folder['Resources/Gardening/Odd summary.md'] = `---\nsummary: (no summary)\nby: bower\n---\n${body}`;
+    const run = await runScripted(c);
+    expect(run.code).toBe(0);
+    const lines = (run.after[HEALTH] ?? '').split('\n');
+    expect(lines.filter((line) => /not checked/i.test(line)), 'all three are checked').toEqual([]);
+    const missing = lines.filter((line) => /missing summary/i.test(line));
+    expect(missing.some((line) => line.includes('Seed list')), 'an absent summary is missing').toBe(true);
+    expect(missing.some((line) => line.includes('Pot sizes')), 'a quoted-empty summary is missing').toBe(true);
+    expect(missing.some((line) => line.includes('Odd summary')), 'the literal text (no summary) is a summary').toBe(false);
+  });
+
+  it('AC15 amended ruling 3: a run that merges a note away leaves no finding or link naming it; every health link resolves', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-keep-one-note'));
+    const KEPT = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
+    const OTHER = 'Projects/Flat hunt/Flat 3 (second).md';
+    const control = await runWithClaude(c, replySequence([empty]));
+    expect(control.code).toBe(0);
+    expect(control.after[HEALTH], 'control: unmerged, the start state has a finding naming the note').toContain('Flat 3 (second)');
+    const run = await runWithClaude(c, replySequence([{ kind: 'tidy-intent', v: 1, things: [], keep: [{ kept: KEPT, other: OTHER }] }]));
+    expect(run.code).toBe(0);
+    expect(run.after[OTHER], 'the run merged the note away').toBeUndefined();
+    const health = run.after[HEALTH] ?? '';
+    expect(health, 'health is written').toContain('by: bower');
+    expect(health, 'no finding or link names the merged note').not.toContain('Flat 3 (second)');
+    const links = [...health.matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1] ?? '');
+    expect(links.length, 'health still links the notes it names').toBeGreaterThan(0);
+    expect(links.filter((link) => run.after[`${link}.md`] === undefined), 'every health link resolves').toEqual([]);
+  });
+
+  it('AC15 round 3 ruling 3: health describes the folder as admitted; the run\'s own rename shows in the next run', async () => {
+    // One run renames two inbox files a personal note links to: Mulch's rename lands; Seed's is refused, as Alex moved
+    // that file to Archive (same name) right before Bower's move. Start state: both links resolve. A health from the
+    // planned renames would break both, one from settled results would break Mulch's.
+    const base = await setup('settled-recovery', (c) => {
+      c.folder[DIARY] = 'Alex keeps these rough notes.\nSee [[Mulch notice.txt]] and [[Seed swap.txt]].\n';
+      c.inbox[0]?.files.push('Seed swap.txt');
+      c.inboxFiles['Seed swap.txt'] = 'Seed swap on Saturday at the Saltmere garden.\n';
+    });
+    const intent = { kind: 'tidy-intent', v: 1, things: [
+      { fileId: '$file:Mulch notice.txt', to: 'Resources/Gardening', name: 'Mulch letter.txt', note: { name: 'Mulch collection.md',
+        summary: 'Mulch collection opens at the amber gate.', body: 'Alex can collect mulch at the amber gate.\n\nRelated: [[Gardening]].' } },
+      { fileId: '$file:Seed swap.txt', to: 'Resources/Gardening', name: 'Seed day.txt', note: { name: 'Seed day notes.md',
+        summary: 'A seed swap on Saturday.', body: 'Alex can swap seeds on Saturday.\n\nRelated: [[Gardening]].' } }] };
+    const files = await base.drive.listAll(base.root);
+    const seed = files.find((f) => f.name === 'Seed swap.txt');
+    const archive = files.find((f) => f.folder && f.name === 'Archive' && f.parents[0] === base.root);
+    let personMoved = false;
+    const around = (fetch: typeof globalThis.fetch) => {
+      let seen = base.traffic.length;
+      return observe(base.drive, base.root, base.traffic)(async (input, init = {}) => {
+        const last = base.traffic.length > seen ? base.traffic.at(-1) : undefined;
+        seen = base.traffic.length;
+        if (!personMoved && last && /Mulch notice\.txt$/.test(last.path) && init.method === 'PATCH') {
+          personMoved = true;
+          await base.drive.update(seed?.id ?? '', { addParent: archive?.id ?? '', removeParent: seed?.parents[0] ?? '' });
+        }
+        return fetch(input, init);
+      });
+    };
+    const run = await runOnDrive(base.c, base.drive, base.root, { around, claude: replySequence([intent]), pacing }, 1);
+    expect(run.code).toBe(0);
+    expect(personMoved, 'Alex moved the seed file during the run').toBe(true);
+    expect(run.after['Resources/Gardening/Mulch letter.txt'], 'the Mulch rename was applied').toBeDefined();
+    expect(run.after['Archive/Seed swap.txt'], 'the Seed rename was refused').toBeDefined();
+    expect(Object.keys(run.after).some((path) => path.endsWith('Seed day.txt'))).toBe(false);
+    const health = run.after[HEALTH] ?? '';
+    expect(health, 'health is written').toContain('by: bower');
+    expect(health, 'applied or refused, the findings come from the start state').not.toMatch(/Mulch|Seed/);
+    const next = await press(base, 2);
+    expect(next.code).toBe(0);
+    const lines = (next.after[HEALTH] ?? '').split('\n');
+    expect(lines.some((line) => /broken link/i.test(line) && line.includes('Mulch notice.txt')), 'the next run reflects the applied rename').toBe(true);
+    expect(lines.some((line) => line.includes('Seed swap')), 'the refused one still resolves').toBe(false);
   });
 });

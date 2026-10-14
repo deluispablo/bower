@@ -95,9 +95,12 @@ export type EditText = {
   kind: 'edit-text'; before: SeenFile; createdBy?: string; path: string; beforeContent: VerifiedContent;
   changes: Change[]; text: string; content: Content; beforeText?: string;
 };
-export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[] };
+/** Lint evidence of one checked note version (B8): its links, stored tag count and whether its parsed summary is set; absent means not checked. */
+export type LintEvidence = { links: string[]; tags: number; summary: boolean };
+export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[]; lint?: LintEvidence };
 export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[] };
-export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent; kind?: string; declaration?: MaintenanceDeclaration }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string } };
+/** `health`: the id of Bower's health note (TL-P4-50 Q6), kept in retrieval; a target of kind `health` names it. */
+export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent; kind?: string; declaration?: MaintenanceDeclaration }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string; health?: string } };
 export type EffectV2 = Effect | EditText | Maintain;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
@@ -416,11 +419,12 @@ function mocInput(value: unknown): value is MocSnapshot {
 }
 function maintain(value: unknown): value is Maintain {
   return closed(value, ['kind', 'inputs']) && value.kind === 'maintain'
-    && closed(value.inputs, ['folderId', 'account', 'cursor', 'changes', 'operationIds'], ['targets', 'snapshot', 'listing', 'log'])
+    && closed(value.inputs, ['folderId', 'account', 'cursor', 'changes', 'operationIds'], ['targets', 'snapshot', 'listing', 'log', 'health'])
+    && (value.inputs.health === undefined || driveId(value.inputs.health))
     && driveId(value.inputs.folderId) && driveId(value.inputs.account) && driveId(value.inputs.cursor)
     && list(value.inputs.changes, driveId) && unique(value.inputs.changes)
     && list(value.inputs.operationIds, hash) && unique(value.inputs.operationIds)
-    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage'], ['moc', 'mocChecked', 'members', 'owner', 'type', 'incomplete']) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes) && (f.incomplete === undefined || f.incomplete === true) && (f.mocChecked === undefined || f.mocChecked === true) && (f.owner === undefined || f.owner === 'bower' || f.owner === 'person') && (f.type === undefined || f.type === null || text(f.type)) && (f.moc === undefined || mocInput(f.moc)) && (f.members === undefined || (f.moc !== undefined && list(f.members, driveId) && unique(f.members))))))
+    && (value.inputs.snapshot === undefined || (record(value.inputs.snapshot) && Object.entries(value.inputs.snapshot).every(([key, f]) => driveId(key) && closed(f, ['path', 'version', 'summary', 'coverage'], ['moc', 'mocChecked', 'members', 'owner', 'type', 'incomplete', 'lint']) && (f.lint === undefined || lintEvidenceOk(f.lint)) && path(f.path) && rfc3339(f.version) && text(f.summary) && closed(f.coverage, ['kind', 'bytes']) && f.coverage.kind === 'prefix' && integer(f.coverage.bytes) && (f.incomplete === undefined || f.incomplete === true) && (f.mocChecked === undefined || f.mocChecked === true) && (f.owner === undefined || f.owner === 'bower' || f.owner === 'person') && (f.type === undefined || f.type === null || text(f.type)) && (f.moc === undefined || mocInput(f.moc)) && (f.members === undefined || (f.moc !== undefined && list(f.members, driveId) && unique(f.members))))))
     && (value.inputs.listing === undefined || list(value.inputs.listing, seenFile))
     && (value.inputs.log === undefined || text(value.inputs.log))
     && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent', 'kind', 'declaration'])
@@ -625,6 +629,17 @@ async function admit<M extends Manifest | ManifestV2>(
             || target.beforeContent.observedModifiedTime !== before.modifiedTime
             || !sameSeen(before, value.capture.places.find((p) => p.file.fileId === target.fileId)?.file ?? before)
           : target.beforeContent !== undefined) return { ok: false, reason: 'shape' };
+        continue;
+      }
+      if (target.kind === 'health') {
+        // R18 as amended: only the stored health id, directly in the root, never a note the snapshot holds (a person's).
+        const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
+        const place = value.capture.places.find((p) => p.file.fileId === target.fileId)?.file;
+        if (!maintenanceTargetOk(value, target) || target.fileId !== e.inputs.health || target.parentId !== expectedRootId
+          || e.inputs.snapshot?.[target.fileId] !== undefined || !place || place.folder || place.parents.join() !== expectedRootId
+          || (before ? !sameSeen(before, place) || !target.beforeContent || target.beforeContent.encoding !== 'utf8'
+            || target.beforeContent.observedModifiedTime !== before.modifiedTime : target.beforeContent !== undefined))
+          return { ok: false, reason: 'shape' };
         continue;
       }
       if ((writes as readonly string[]).includes(target.path)) continue;
@@ -969,9 +984,17 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
   return true;
 }
 
+/** One rule for stored lint evidence, in a manifest and in retrieval: anything else is no evidence (R26). */
+export function lintEvidenceOk(value: unknown): value is LintEvidence {
+  return closed(value, ['links', 'tags', 'summary']) && list(value.links, text) && integer(value.tags) && typeof value.summary === 'boolean';
+}
+
 /** Maintenance names must agree with captured identity and cannot alias protected memory. */
 export function maintenanceTargetOk(value: { capture: Capture; operations: readonly OperationV2[] }, target: NonNullable<Maintain['inputs']['targets']>[number]): boolean {
   const resolved = targetPath(value, { fileId: target.fileId });
+  // The health note is a root note found by its id (TL-P4-50 Q6), whatever its current name.
+  if (target.kind === 'health') return resolved === target.path && !target.path.includes('/') && target.path.endsWith('.md')
+    && target.path !== 'About me.md' && target.declaration === undefined;
   if (target.kind === 'log' || isMonthlyLogPath(target.path) || isMonthlyLogPath(resolved ?? '')) {
     const place = value.capture.places.find((p) => p.file.fileId === target.fileId);
     return target.kind === 'log' && resolved === target.path && isMonthlyLogPath(target.path)

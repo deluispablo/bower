@@ -7,7 +7,7 @@
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [],
     "setAside": 0,
     "questions": [],

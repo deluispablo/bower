@@ -1169,7 +1169,7 @@ describe('C05 person notes through runner main', () => {
       && o.effect.before.fileId === idOf(first, `${SYSTEM.changes}/pending/abc123-run1/change-1.json`));
     expect.soft(archive, 'the stale request has its archive move').toBeDefined();
     expect.soft(stored.chain.at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('applied');
-    expect.soft(reportOf(next).updated).toEqual([]);
+    expect.soft(reportOf(next).updated.filter((row) => row.path !== 'Bower health.md'), 'B8 (R8): only the health row').toEqual([]);
     expect.soft(typeof TOO_OLD_WHY, 'the designer-signed C05 why must be exported').toBe('string');
     expect.soft(TOO_OLD_WHY, 'the signed why is nonempty').toBeTruthy();
     expect.soft(reportOf(next).leftAsWritten, 'the stale request reports one Left as you wrote them row').toHaveLength(1);

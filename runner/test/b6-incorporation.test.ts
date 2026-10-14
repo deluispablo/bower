@@ -91,9 +91,11 @@ async function run(b: Base, selection: unknown, execution: unknown, retry = exec
     errors: vi.mocked(console.error).mock.calls.slice(errorsAt).flat().map(String).join('\n') };
 }
 
-const report = (r: CaseRun) => (r.lastRun as { run?: { report?: { filed: unknown[]; created: unknown[]; questions: unknown[] } } } | null)
+const report = (r: CaseRun) => (r.lastRun as { run?: { report?: { filed: unknown[]; created: Array<{ path: string }>; questions: unknown[] } } } | null)
   ?.run?.report ?? { filed: [], created: [], questions: [] };
 const questions = (r: CaseRun): Question[] => (JSON.parse(r.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
+/** B8 (R8): Bower's health note, created on the first maintaining run, is not a filing result. */
+const HEALTH = 'Bower health.md';
 const visibleNotes = (r: CaseRun) => Object.keys(r.after).filter((p) => /^(Projects|Areas|Resources|Archive)\/.+\.md$/.test(p)).sort();
 function done(r: Awaited<ReturnType<typeof run>>, count: number) {
   expect(r.code, r.errors).toBe(0);
@@ -162,7 +164,7 @@ it('b6-clear-topic-creates control: an existing fit still reuses', async () => {
     expect.objectContaining({ text: ARTICLE, source: 'Article.txt' }),
   ]);
   expect(r.after[WATER]).toContain('Alex keeps this sentence.');
-  expect(report(r).created).toEqual([]);
+  expect(report(r).created.filter((row) => row.path !== HEALTH)).toEqual([]);
 });
 
 it('b6-clear-topic-creates', async () => {
@@ -321,7 +323,7 @@ function nothingCreated(r: Awaited<ReturnType<typeof run>>, folder: Record<strin
   expect.soft(visibleNotes(r), 'a cut index never authorizes new note creation').toEqual(Object.keys(folder).sort());
   expect.soft(r.pathsById[source], 'the original stays in the inbox when creation cannot be justified').toMatch(/^Inbox\//);
   expect.soft(report(r).filed, 'the source is not reported as filed').toEqual([]);
-  expect.soft(report(r).created, 'nothing is reported as created from incomplete fit evidence').toEqual([]);
+  expect.soft(report(r).created.filter((row) => row.path !== HEALTH), 'nothing is reported as created from incomplete fit evidence').toEqual([]);
 }
 
 it('b6-cut-index-no-create', async () => {

@@ -289,13 +289,33 @@ export function timelineEntries(raw: string): TimelineEntry[] {
   return ownership.layout.timeline ? timelineOf(payloadDisplay(bytes, ownership.layout.timeline, TIMELINE)) : [];
 }
 
+/** The one link grammar: a fenced code block, an unclosed one too, holds examples, never links (CommonMark 0.31.2 §4.5). */
 function linksIn(text: string): string[] {
   const out: string[] = [];
-  for (const m of text.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-    const target = (m[1] ?? '').trim();
-    if (target && !out.includes(target)) out.push(target);
+  let fence: Fence | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const previous = fence;
+    fence = fenceAfter(line, fence);
+    if (previous || fence) continue;
+    for (const m of line.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
+      const target = (m[1] ?? '').trim();
+      if (target && !out.includes(target)) out.push(target);
+    }
   }
   return out;
+}
+
+/** What lint keeps of one stored note version (TL-P4-50 Q4): its links by the one grammar, its stored tag count and
+ * whether its parsed summary is set (never the retrieval substitute); null when unreadable. */
+export function lintFacts(path: string, raw: string): { links: string[]; tags: number; summary: boolean } | null {
+  try {
+    const note = parseNote(path, raw);
+    return { links: note.links, tags: note.tags.length, summary: note.summary.trim() !== '' };
+  } catch (error) {
+    if (!noteRefusal(error)) throw error;
+    console.error(error);
+    return null;
+  }
 }
 
 export function parseNote(path: string, raw: string, fetched?: FetchedOwnership): ParsedNote {

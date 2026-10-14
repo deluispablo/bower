@@ -132,9 +132,12 @@ const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 
 const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text)) && optional(v.nothingReady, (x) => x === true) && optional(v.alreadySaved, (x) => list(x, alreadySaved)) && optional(v.unconfirmed, (x) => list(x, setAside)) && optional(v.answered, (x) => list(x, isAnsweredRow));
 const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.report, report);
 
+/** Optional fields are read leniently: a malformed `health` id or per-file `lint` evidence counts as absent (B8 R22, R26). */
 export interface RetrievalFile {
   v: 1; folderId: string; account: string; cursor: string;
   files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number } }>;
+  /** The id of Bower's health note (TL-P4-50 Q6): found by this id only, never by title. */
+  health?: string;
 }
 export interface RunnerFiles {
   '.bower/type-table.json': TypeTable;

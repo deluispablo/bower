@@ -70,7 +70,8 @@ describe('two notes for one thing (keep-one-not-asked)', () => {
     expect(run.code).toBe(0);
     expect(timelineOf(run.after[KEPT] ?? '')).toContain(`- 2026-10-07 · ${NEWS}`);
     const before = Object.keys(c.folder).filter((p) => p.endsWith('.md')).sort();
-    expect(Object.keys(run.after).filter((p) => p.endsWith('.md') && !p.startsWith('.bower/')).sort()).toEqual(before);
+    // B8 (R8): the first maintaining run also creates Bower's health note.
+    expect(Object.keys(run.after).filter((p) => p.endsWith('.md') && !p.startsWith('.bower/')).sort()).toEqual([...before, 'Bower health.md'].sort());
     // The pile went to the Bin once its line was written: the inbox is empty.
     expect(Object.keys(run.after).filter((p) => p.startsWith('Inbox/'))).toEqual([]);
     expect((run.lastRun as { run: { report: { updated: Array<{ path: string; what: string }> } } }).run.report.updated).toContainEqual(expect.objectContaining({ path: KEPT, what: NEWS }));
