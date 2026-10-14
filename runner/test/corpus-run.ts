@@ -328,10 +328,26 @@ export function replySequence(replies: unknown[]): ClaudeSpawn {
   const execution = async (call: ClaudeCall, turn: number) => {
     const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
+    // B11 selectors (R13): `$note:<path>` and `$folder:<path>` by the seeded Drive's paths, `$request:<record id>` by the
+    // journal file holding that record.
+    const fixture = (call as ClaudeCall & { fixture?: PlanningFixture }).fixture;
+    const files = fixture && JSON.stringify(replies).includes('"$') ? await fixture.drive.listAll(fixture.root) : [];
+    const byPath = new Map(files.map((f) => [fixture?.drive.pathOf(f.id, fixture.root) ?? '', f.id]));
+    const records = new Map<string, string>();
+    for (const [path, id] of byPath) if (path.startsWith(`${SYSTEM.changes}/`) && path.endsWith('.json')) {
+      const rec: unknown = JSON.parse(await fixture?.drive.readText(id) ?? '{}');
+      if (isJournalRecord(rec)) records.set(rec.id, id);
+    }
     const bind = (value: unknown): unknown => {
       if (typeof value === 'string' && value.startsWith('$file:')) {
         const id = ids.get(value.slice(6));
         if (!id) throw new Error(`Scripted reply names an unshown file: ${value}`);
+        return id;
+      }
+      const selector = typeof value === 'string' ? /^\$(note|folder|request):(.+)$/.exec(value) : null;
+      if (selector) {
+        const id = selector[1] === 'request' ? records.get(selector[2] ?? '') : byPath.get(selector[2] ?? '');
+        if (!id) throw new Error(`Scripted reply names nothing seeded: ${String(value)}`);
         return id;
       }
       if (Array.isArray(value)) return value.map(bind);

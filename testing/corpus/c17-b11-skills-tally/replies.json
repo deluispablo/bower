@@ -15,6 +15,7 @@
           "v": 1,
           "id": "active-offer-skills",
           "kind": "aggregate",
+          "title": "Skills most active offers ask for",
           "set": {
             "type": "offer",
             "folderId": "$folder:Projects/Job hunt",
@@ -29,10 +30,10 @@
           "measures": [
             {
               "id": "skills",
+              "label": "Offers",
               "op": "top",
               "property": "skills",
-              "limit": 3,
-              "count": "notes"
+              "limit": 3
             }
           ]
         }

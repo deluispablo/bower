@@ -414,6 +414,32 @@ describe('B11c installs through production main', () => {
     expect(archived(run, 'press-2'), 'the request is done, never left waiting').toBe(true);
   });
 
+  it('AC17 b11-install-identical-key-order: the same view with its object keys in another order is identical (JSON values, R42), no map write', async () => {
+    const f = await folder({}, [SKILLS]);
+    const mapId = await f.id(MAP);
+    const warm = await press(f, () => empty, { words: 'Update these notes.' });
+    const reversed = (v: unknown): unknown => Array.isArray(v) ? v.map(reversed) : v && typeof v === 'object'
+      ? Object.fromEntries(Object.entries(v).reverse().map(([k, x]) => [k, reversed(x)])) : v;
+    let mapWrites = 0;
+    const run = await press(f, (ctx) => ({ ...empty, views: install(ctx).views.map((v) => ({ ...v, definition: reversed(v.definition) })) }), { around: (next) => async (input, init) => {
+      if (init?.method === 'PATCH' && url(input).pathname === `/upload/drive/v3/files/${mapId}`) mapWrites++;
+      return next(input, init);
+    } });
+    expect(phase(run)).toBe('done');
+    expect(mapWrites, 'nothing to write').toBe(0);
+    expect(run.after[MAP]).toBe(warm.after[MAP]);
+    expect(archived(run, 'press-2'), 'the request is done, never left waiting').toBe(true);
+  });
+
+  it('AC17 b11-install-array-order: the same view with its measures in another order is a different view, so the map is written', async () => {
+    const two = { ...count('two'), measures: [{ id: 'n', label: 'Offers', op: 'count' }, { id: 'statuses', label: 'Statuses', op: 'countValues', property: 'status' }] };
+    const f = await folder({}, [two]);
+    const swapped = { ...two, measures: [...two.measures].reverse() };
+    const run = await press(f, (ctx) => install(ctx, swapped));
+    expect(phase(run)).toBe('done');
+    expect(declared(run.after[MAP])).toEqual([bound(swapped, await f.id(HUNT))]);
+  });
+
   it('AC17 b11-install-batch: one request may install several views and several maps; two requests settle each', async () => {
     const FLATS = 'Projects/Flats/Flats.md';
     const f = await folder({ [FLATS]: map('Flats'), 'Projects/Flats/Amber offer.md': offer('Amber', 'active', '[Go]') });
@@ -488,6 +514,67 @@ describe('B11c installs through production main', () => {
     expect(JSON.stringify(stored), 'the rule record was admitted in this run').toContain('"rule-1"');
     expect(await ok(await variant((t) => t, ['rule-1'])), 'an admitted record that is not a request').toBe(false);
     expect(await ok(await variant((t) => t, [])), 'no record at all').toBe(false);
+  });
+
+  it('AC22 b11-install-with-link-rewrite: an install and a link rewrite on one map share its one edit; the request settles; a replay writes nothing more', async () => {
+    // Coordinator ruling (1) over spec-review round 2: the R43 restriction applies per change, never per whole edit.
+    const linked = map('Job hunt').replace('notes together.\n', 'notes together, with [[Past offer]].\n');
+    const f = await folder({ [MAP]: linked });
+    const mapId = await f.id(MAP);
+    await f.drive.update(await f.id(`${HUNT}/Past offer.md`), { name: 'Old offer.md' });
+    await f.drive.createText(await f.id(SYSTEM.changes), 'rename-1.json', JSON.stringify({ v: 1, id: 'rename-1', device: 'device-1', at: DAY,
+      kind: 'rename', what: 'Renamed Past offer to Old offer', from: `${HUNT}/Past offer.md`, path: `${HUNT}/Old offer.md` }));
+    const run = await press(f, (ctx) => install(ctx));
+    expect(phase(run)).toBe('done');
+    expect(run.after[MAP]).toContain('[[Old offer]]');
+    expect(declared(run.after[MAP])).toEqual([bound(SKILLS, await f.id(HUNT))]);
+    expect(archived(run, 'press-1'), 'the request is done').toBe(true);
+    const manifest = JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
+    const edits = manifest.operations.filter((o) => o.effect.kind === 'edit-text' && o.effect.path === MAP);
+    expect(edits.map((o) => (o.effect.changes as Array<{ kind: string }>).map((c) => c.kind)), 'one edit holds both changes').toEqual([['link-rewrite', 'views-set']]);
+    let mapWrites = 0;
+    const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A redispatch must not call a model.'); });
+    const again = await redispatchCase(f.c, run, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} }, around: (next) => async (input, init) => {
+      if (init?.method === 'PATCH' && url(input).pathname === `/upload/drive/v3/files/${mapId}`) mapWrites++;
+      return next(input, init);
+    } });
+    expect(again.after[MAP], 'the replay writes nothing more').toBe(run.after[MAP]);
+    expect(mapWrites).toBe(0);
+    expect(model).not.toHaveBeenCalled();
+  });
+
+  it('AC17 b11-install-duplicate-lines: two differing declaration lines (one malformed) end as one line, the last one\'s views plus the installed view', async () => {
+    // Coordinator ruling (2) over spec-review round 2: readers take the last line (note-format.ts); the install keeps exactly one.
+    const f = await folder({}, [count('stored-1')]);
+    const mapId = await f.id(MAP);
+    const text = await f.drive.readText(mapId);
+    await f.drive.writeText(mapId, text.replace('summary: Job hunt reference notes.\n', 'bower_views: [{"v":1,\nsummary: Job hunt reference notes.\n'), (await f.drive.get(mapId)).modifiedTime);
+    const run = await press(f, (ctx) => install(ctx));
+    expect(phase(run)).toBe('done');
+    const lines = (run.after[MAP] ?? '').split('\n---\n')[0]?.split('\n').filter((line) => line.startsWith('bower_views')) ?? [];
+    expect(lines, 'exactly one declaration line').toHaveLength(1);
+    expect(declared(run.after[MAP])).toEqual([bound(count('stored-1'), await f.id(HUNT)), bound(SKILLS, await f.id(HUNT))]);
+    expect(run.after[MAP]).toContain('summary: Job hunt reference notes.\n');
+    expect(vi.mocked(console.error).mock.calls.some((args) => args.some((a) => a instanceof Error && a.name === 'BowerError')), 'logged').toBe(true);
+    expect(archived(run, 'press-1')).toBe(true);
+  });
+
+  it('AC17 b11-install-identical: with an earlier duplicate line, reinstalling the last line\'s view still writes nothing (R42 over ruling 2)', async () => {
+    // Coordinator ruling over spec-review round 5: the reader takes the last line, so the map already shows this view.
+    const f = await folder({}, [SKILLS]);
+    const mapId = await f.id(MAP);
+    const text = await f.drive.readText(mapId);
+    await f.drive.writeText(mapId, text.replace('summary: Job hunt reference notes.\n', 'bower_views: [{"v":1,\nsummary: Job hunt reference notes.\n'), (await f.drive.get(mapId)).modifiedTime);
+    const warm = await press(f, () => empty, { words: 'Update these notes.' });
+    let mapWrites = 0;
+    const run = await press(f, (ctx) => install(ctx), { around: (next) => async (input, init) => {
+      if (init?.method === 'PATCH' && url(input).pathname === `/upload/drive/v3/files/${mapId}`) mapWrites++;
+      return next(input, init);
+    } });
+    expect(phase(run)).toBe('done');
+    expect(mapWrites, 'nothing to write').toBe(0);
+    expect(run.after[MAP]).toBe(warm.after[MAP]);
+    expect(archived(run, 'press-2')).toBe(true);
   });
 
   it('AC22 b11-views-set-author: the one author writes only the declaration line, and only on a Bower map', () => {

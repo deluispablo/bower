@@ -5,7 +5,7 @@ by: bower
 created: 2026-10-01
 spent_on: 2026-10-02
 category: garden
-amount: 30 EUR
+amount: {"amount":30,"currency":"EUR"}
 ---
 
 Mulch is Alex's garden expense.

@@ -39,7 +39,8 @@ import { normalizeModelInput } from './model-input';
 import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
-import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, timelineDate } from '../../src/data/contracts/note-edit';
+import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
+import { VIEW_LIMITS, viewFault } from '../../src/data/contracts/view-format';
 import { lintFacts, timelineBullets, validSummary } from '../../src/data/contracts/note-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../../src/data/contracts/note-templates';
 import { markerText, parseTimelineLine } from '../../src/data/contracts/timeline-line';
@@ -51,7 +52,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, TypeRow } from '../../src/data/contracts/types';
-import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
@@ -821,6 +822,9 @@ export const REFUSALS = {
   keepKeys: 'a note kept with keys outside the intent: give "kept" and "other"',
   keepNote: 'a note kept that is not two different notes below, each named once and the other given no line or state',
   keepNotAsked: 'a note kept that the person did not say yes to keeping as one',
+  viewKeys: 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId}, mode: "install", definition}) or a declaration the grammar refuses',
+  viewBinding: "a view whose request is not one of the person's requests below, whose home is not one of Bower's maps below, or whose folder is not one of the main folders",
+  viewLimit: 'more than ten views in one map, or two views with one id there',
 } as const;
 export type RefusalKind = keyof typeof REFUSALS;
 type Refused = { ok: false; kind: RefusalKind; why: string };
@@ -877,6 +881,9 @@ export interface Seen {
    * took to a question about keeping one note that names both notes; `answer` is that answer's record id.
    */
   merges?: ReadonlyArray<{ notes: readonly [string, string]; answer: string }>;
+  /** B11c (R7): this run's request records by journal file id (their record id and words), and Bower's maps by file id. */
+  requests?: ReadonlyMap<string, { id: string; text: string }>;
+  maps?: ReadonlySet<string>;
 }
 
 /**
@@ -1037,7 +1044,7 @@ const section = z.array(z.unknown(), intentIssue).optional();
 /** The reply as a whole: a tidy-up intent, v1, with only these lists. */
 const Envelope = z.strictObject({
   kind: z.literal('tidy-intent', intentIssue), v: z.literal(1, intentIssue), things: z.array(z.unknown(), intentIssue),
-  newTags: z.unknown().optional(), notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, observations: section, forget: section, ends: section,
+  newTags: z.unknown().optional(), notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, views: section, observations: section, forget: section, ends: section,
 }, intentIssue);
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
@@ -1072,6 +1079,10 @@ const AfterShape = z.strictObject({
   text: z.string(named('askText', 'askKeys')), yes: z.string(named('askText', 'askKeys')), no: z.string(named('askText', 'askKeys')),
   proposal: z.custom<Proposal>(proposalOk, named('askKeys')),
 }, named('askKeys'));
+const ViewShape = z.strictObject({
+  requestId: z.string(named('viewKeys')), home: z.strictObject({ kind: z.literal('moc', named('viewKeys')), fileId: z.string(named('viewKeys')) }, named('viewKeys')),
+  mode: z.literal('install', named('viewKeys')), definition: z.record(z.string(), z.unknown(), named('viewKeys')),
+}, named('viewKeys'));
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type NoteIn = z.output<typeof NoteShape>;
 
@@ -1178,6 +1189,22 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     return !!pile && !thingsOf(pile).length && !words.has(id);
   };
   const kept: KeepOne[] = [];
+  // Views a request installs (B11c): shape (keys and grammar, as a write), then binding (request, home, folder), then the
+  // limit per map; the stored entries are counted by the provider, which reads the map (R16, R44).
+  const views: ViewInstall[] = [];
+  type ViewIn = z.output<typeof ViewShape>;
+  const folderOf = (v: ViewIn): unknown => isRecord(v.definition.set) ? v.definition.set.folderId : undefined;
+  const View = ViewShape.superRefine(inOrder<ViewIn>([
+    rule('viewKeys', (v) => { const fault = viewFault(v.definition, { v: 1, rows: [...seen.types ?? []] }, 'write'); return fault === null || `a view the grammar refuses: ${fault}`; }),
+    rule('numbers', (v) => {
+      const n = ungrounded(String(v.definition.title ?? ''), groundsOf(seen.requests?.get(v.requestId)?.text ?? ''));
+      return !n || `a number that is in none of its sources: "${n}" in the view title; write only figures from the person's request`;
+    }),
+    rule('viewBinding', (v) => seen.requests?.has(v.requestId) === true),
+    rule('viewBinding', (v) => seen.maps?.has(v.home.fileId) === true),
+    rule('viewBinding', (v) => typeof folderOf(v) === 'string' && seen.folderCandidates?.has(folderOf(v) as string) === true),
+    rule('viewLimit', (v) => !views.some((x) => x.home === v.home.fileId && x.definition.id === v.definition.id)),
+  ], (v) => views.push({ requestId: seen.requests?.get(v.requestId)?.id ?? '', home: v.home.fileId, definition: v.definition as ViewInstall['definition'] })));
   const inPairs = new Set<string>();
   const plain = (text: string, max: number): boolean => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
 
@@ -1384,7 +1411,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     notes: z.array(Words).optional(),
     lines: z.array(Line).max(AUTHORED.lines, named('tooManyLines')).optional(),
     states: z.array(State).optional(), asks: z.array(Asked).optional(), keep: z.array(Keep).optional(),
-    askAfter: z.array(After).optional(),
+    askAfter: z.array(After).optional(), views: z.array(View).optional(),
     observations: z.array(z.unknown()).max(20, named('keepNotAsked')).optional().transform((value) => { observations = value ?? []; return value; }),
     forget: z.array(z.strictObject({ factId: z.string(), quote: z.string().optional() }, named('keepNotAsked'))).max(20, named('keepNotAsked')).optional().transform((value) => { forget = value ?? []; return value; }),
     // Memory refusals share Forget's kind, worded for endings (R35).
@@ -1413,7 +1440,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     intent: () => {
       // A pile with a thing neither placed nor asked about waits whole for the next run.
       const held = new Set(piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
-      return { ok: true, held, filing: { newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}) } };
+      return { ok: true, held, filing: { newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}) } };
     },
   };
 }
@@ -1918,7 +1945,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         mocFolders: new Set(shown.notes.filter((n) => indexed[ix.idOf(n.path) ?? '']?.type === 'moc' && indexed[ix.idOf(n.path) ?? '']?.owner === 'bower').map((n) => n.path.slice(0, n.path.lastIndexOf('/')))),
         folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'),
         shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
-        merges: mergesOf(answers, shown.notes.map((n) => n.path)) };
+        merges: mergesOf(answers, shown.notes.map((n) => n.path)), requests: new Map(), maps: new Set(Object.entries(indexed)
+          .flatMap(([id, note]) => (note.type === 'moc' && note.owner === 'bower' ? [id] : []))) };
+      // A request record of this run is the only authority to install (R7): never a document or the model's words.
+      for (const line of shownTook.taken.journal) {
+        let rec: unknown;
+        try { rec = JSON.parse(await read.readText(line.fileId)); } catch (e) { if (!(e instanceof SyntaxError)) throw e; console.error('A file of your changes is not valid JSON'); }
+        if (isJournalRecord(rec) && rec.kind === 'request') (seen.requests as Map<string, { id: string; text: string }>).set(line.fileId, { id: rec.id, text: rec.text ?? rec.what });
+      }
       let validatedPlan: RunManifest | undefined;
       const targets = new Set(Object.values(selection.allowedTargets).flat());
       const journal = took.taken.journal.filter((line) =>
@@ -2000,6 +2034,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           if (addedCurrency || /\b(?:scores?|should|recommend|advice)\b/iu.test(words)
             || bodyLinks(String(note.body ?? ''), own, linked)) return no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link');
         }
+        // The limit counts what each map keeps once installed, its stored entries included (R22, R44).
+        for (const home of new Set((got.filing.views ?? []).map((v) => v.home))) {
+          const declared = viewsDeclared(await read.readText(home));
+          const next = viewsInstalled(declared.value, (got.filing.views ?? []).filter((v) => v.home === home).map((v) => v.definition));
+          if (next && (JSON.parse(next.text) as unknown[]).length > VIEW_LIMITS.perHome) return no('viewLimit');
+        }
         got.filing.shownFactIds = shown.aboutMe?.learned.factIds ?? [];
         if (got.filing.observations?.length || got.filing.forget?.length || got.filing.ends?.length || got.filing.profiles?.size) {
           try { validatedPlan = await plannedWith(got.filing, got.held, shown.own, `with ${model}`, journal); }
@@ -2024,8 +2064,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           return validatedPlan;
         }
       }
-      // A request whose targets were not selected stays in the inbox for a later run.
-      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, journal);
+      // A request whose targets were not selected stays in the inbox for a later run; one a checked view installs is taken.
+      const installing = new Set((intent.filing.views ?? []).map((v) => v.requestId));
+      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, took.taken.journal.filter((line) =>
+        journal.includes(line) || installing.has(seen.requests?.get(line.fileId)?.id ?? '')));
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };

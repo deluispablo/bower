@@ -3,10 +3,13 @@
   "rows": [
     {
       "id": "offer",
+      "match": [
+        "job offer"
+      ],
+      "template": "source",
       "properties": {
         "skills": {
-          "type": "list",
-          "itemType": "text"
+          "type": "list"
         }
       },
       "table": [
