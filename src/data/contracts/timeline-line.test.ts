@@ -29,6 +29,7 @@ describe('B9a format', () => {
     for (const bad of ['confirmed', 'Contradiction', '']) expect(() => markerText(bad as Marker, 'x')).toThrow();
     expect(() => markerText('contradiction', 'One source only.')).toThrow();
     expect(() => markerText('uncertain', 'x', 'bad|alias')).toThrow();
+    expect(() => markerText('uncertain', 'x', 'Two\u2028lines.txt')).toThrow();
   });
 
   it('AC2 b9-entry-citation: the write rule takes exactly one canonical citation at the end', () => {
@@ -58,6 +59,14 @@ describe('B9a format', () => {
     }
   });
 
+  it('AC2 b9-one-physical-line-sources: the terminal source and the citation name refuse a separator on write too (R19)', () => {
+    for (const source of ['Notice\u2028two.txt', 'Notice\u2029two.txt']) {
+      expect(entryOk({ date, text: 'Undecided.', source }), JSON.stringify(source)).toBe(false);
+      expect(entryOk({ date, text: 'Undecided.', source }, 'read')).toBe(true);
+    }
+    expect(entryOk({ date, text: 'Uncertain: A. (also from [[Two\u2028lines.txt]])', source: 'Notice.txt' })).toBe(false);
+  });
+
   it('AC3 b9-append-dedup: a canonical line appends once, round-trips and dedups on replay', () => {
     const entry = { date, text: CANONICAL, source: 'Later listing.txt' };
     expect(parseTimelineLine(timelineLine(entry))).toEqual(entry);
@@ -84,6 +93,33 @@ describe('B9a format', () => {
     const after = parseNote('Terms.md', renamed.text).timeline[0];
     expect(after?.text).toBe(CANONICAL.replace('Earlier listing.txt', 'First listing.txt'));
     expect(after && entryOk({ date: after.date, text: after.text, source: after.source ?? null }), 'the renamed citation is still a valid field').toBe(true);
+  });
+
+  it('AC4 b9-v2-literal: a framed ownership/2 note keeps old marker text literal and takes a canonical line in its Timeline', () => {
+    const old = '[!contradiction] Opening hours are undecided ^[inferred]';
+    const raw = serializeNote({ template: 'concept', byBower: true, summary: 'Alex records garden visits.', status: 'active', tags: ['gardening'],
+      properties: [{ key: 'type', label: 'Type', value: 'concept' }, { key: 'created', label: 'Created', value: '2026-10-02' },
+        { key: 'updated', label: 'Updated', value: '2026-10-02' }, { key: 'source', label: 'Source', value: 'Garden bulletin' },
+        { key: 'related', label: 'Related', value: 'Gardening', link: 'Gardening' }],
+      currentState: ['Alex visits in spring.'], body: 'Alex copied [!future-marker] literally.',
+      timeline: [{ date: '2026-10-02', text: old, source: 'Garden bulletin' }] });
+    expect(raw).toContain('bower_format: ownership/2');
+    expect(raw).toContain('<!-- bower:ownership/2 begin timeline -->');
+    expect(parseNote('Visits.md', raw).timeline).toEqual([{ date: '2026-10-02', text: old, source: 'Garden bulletin' }]);
+    const entry = { date, text: CANONICAL, source: 'Later listing.txt' };
+    const first = append(raw, [entry]);
+    expect(first.ok, 'the v2 Timeline region takes the canonical line').toBe(true);
+    if (!first.ok) return;
+    expect(parseNote('Visits.md', first.text).timeline).toEqual([{ date: '2026-10-02', text: old, source: 'Garden bulletin' }, entry]);
+    expect(first.text).toContain('Alex copied [!future-marker] literally.');
+  });
+
+  it('AC4 b9-stored-separator-reads: a stored line holding U+2028 or U+2029 still reads as one Timeline entry, bytes kept (R16)', () => {
+    for (const sep of ['\u2028', '\u2029']) {
+      const text = `The visit${sep}may be affected.`;
+      expect(parseNote('Visits.md', `${BOWER}${timelineLine({ date, text, source: 'Notice.txt' })}\n`).timeline, JSON.stringify(sep))
+        .toEqual([{ date, text, source: 'Notice.txt' }]);
+    }
   });
 
   it('AC4 guard b9-legacy-literal: old, plugin-like and unknown marker text stays literal on read', () => {

@@ -23,10 +23,11 @@ const TARGET = 'Projects/Garden visit/Visit.md';
 const OTHER = 'Projects/Garden visit/Second visit.md';
 const BODY = '## My thoughts\nAlex keeps the sketchbook.\n\n## Timeline\n';
 
-async function keep(history: string) {
+async function keep(history: string, { words = '', source = 'Later notice.txt' } = {}) {
+  const other = `## My thoughts\nAlex keeps the sketchbook.${words}\n\n## Timeline\n- 2026-10-02 · ${history} · [[${source}]]\n`;
   const base = await setup({ folder: {
     [TARGET]: note('Alex records one visit.', BODY, true),
-    [OTHER]: note('Alex records the same visit.', `${BODY}- 2026-10-02 · ${history} · [[Later notice.txt]]\n`, true),
+    [OTHER]: note('Alex records the same visit.', other, true),
     'Projects/Garden visit/Earlier notice.txt': 'The garden may close.',
     'Projects/Garden visit/Later notice.txt': 'The booking is still open.',
     'Projects/Garden visit/Ordinary reference.md': note('Alex keeps an ordinary reference.'),
@@ -63,4 +64,32 @@ it.each([
 ])('AC6 b9-keep-citation-and-qualifier: a carried %s line keeps its label, qualifier, citation and source', async (_marker, history) => {
   const carried = await keep(history);
   expect(carried.map((e) => [e.text, e.source]), 'keep carries the canonical citation as a link').toContainEqual([`From 2026-10-02: ${history}`, 'Later notice.txt']);
+});
+
+it.each([
+  ['an ordinary link before the citation', 'Alex copied [[Ordinary reference]]; the visit may be affected. (inferred) (also from [[Earlier notice.txt]])',
+    'From 2026-10-02: Alex copied Ordinary reference; the visit may be affected. (inferred) (also from [[Earlier notice.txt]])'],
+  ['an aliased citation', 'The visit may be affected. (inferred) (also from [[Earlier notice.txt|the notice]])',
+    'From 2026-10-02: The visit may be affected. (inferred) (also from the notice)'],
+  ['a citation not at the end', 'The visit may be affected. (also from [[Earlier notice.txt]]) Alex agrees.',
+    'From 2026-10-02: The visit may be affected. (also from Earlier notice.txt) Alex agrees.'],
+  ['two citations', 'Uncertain: A. (also from [[Earlier notice.txt]]) (also from [[Ordinary reference]])',
+    'From 2026-10-02: Uncertain: A. (also from Earlier notice.txt) (also from [[Ordinary reference]])'],
+])('AC6 b9-keep-mixed-links: %s keeps only one canonical end citation as a link (R17)', async (_name, history, carried) => {
+  expect((await keep(history)).map((e) => [e.text, e.source])).toContainEqual([carried, 'Later notice.txt']);
+});
+
+it('AC6 b9-keep-citation-follows-kept-name: a carried citation of the binned note names the kept note (R18)', async () => {
+  const carried = await keep('Uncertain: The two notes may be one visit. (also from [[Second visit]])');
+  expect(carried.map((e) => [e.text, e.source]), 'the citation follows the keep rename, as every other link does')
+    .toContainEqual(['From 2026-10-02: Uncertain: The two notes may be one visit. (also from [[Visit]])', 'Later notice.txt']);
+});
+
+it('AC6 b9-keep-stored-separators: stored line and paragraph separators carry as spaces, so keep never stalls (R16)', async () => {
+  const carried = await keep('The visit\u2029may be affected. (inferred) (also from [[Earlier notice.txt]])', { words: ' Alex\u2028sketches.' });
+  expect(carried.map((e) => e.text)).toContain('Alex keeps the sketchbook. Alex sketches.');
+  expect(carried.map((e) => [e.text, e.source])).toContainEqual(['From 2026-10-02: The visit may be affected. (inferred) (also from [[Earlier notice.txt]])', 'Later notice.txt']);
+  // A stored source name that cannot be written carries no source, as an unlinkable name does today.
+  const unnamed = await keep('The garden may close.', { source: 'Later\u2028notice.txt' });
+  expect(unnamed.map((e) => [e.text, e.source ?? null])).toContainEqual(['From 2026-10-02: The garden may close.', null]);
 });
