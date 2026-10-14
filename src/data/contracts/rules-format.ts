@@ -45,6 +45,25 @@ export function managedRules(text: string, byBower: boolean): Rule[] {
     : byBower ? parseRules(text) : [];
 }
 
+/** The model reads all personal prose first, then nonempty app rules, without ownership marks. */
+export function modelRules(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'invalid') return text;
+  const span = own.payloads?.['rules-added'];
+  if (!span) return text;
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const before = decoder.decode(bytes.subarray(0, span.start));
+  const payload = decoder.decode(bytes.subarray(span.start, span.end));
+  const after = decoder.decode(bytes.subarray(span.end));
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lead = `${eol}## Rules added in Bower${eol}<!-- bower:ownership/2 begin rules-added -->${eol}`;
+  const end = `<!-- bower:ownership/2 end rules-added -->${eol}`;
+  if (!before.endsWith(lead) || !after.startsWith(end)) return text;
+  const prose = before.slice(0, -lead.length) + after.slice(end.length);
+  return parseRules(payload).length ? `${prose}${prose ? eol : ''}## Rules added in Bower${eol}${payload}` : prose;
+}
+
 export function serializeRules(rules: readonly Rule[]): string {
   const worded = rules.filter((r) => !r.pending);
   const body = worded.flatMap((r) => [
