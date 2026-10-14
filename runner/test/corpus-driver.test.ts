@@ -115,7 +115,7 @@ it('answers a pair question through the answer path between presses', async () =
   const second = run.runs?.[1];
   expect(second?.code).toBe(0);
   expect(JSON.parse(second?.after['.bower/questions.json'] ?? '{}')).toEqual({ v: 1, questions: [] });
-  expect(score({ expected: { report: { updated: [KEPT], questionsExactly: 0 } }, before: c.folder,
+  expect(score({ expected: { report: { updated: [KEPT, 'Bower health.md'], questionsExactly: 0 } }, before: c.folder,
     after: second?.after ?? {}, lastRun: second?.lastRun })).toEqual({ pass: true, unmet: [] });
   expect(score({ expected: { report: { updated: [], questionsExactly: 0 } }, before: c.folder,
     after: run.after, lastRun: run.lastRun })).toEqual({ pass: true, unmet: [] });
