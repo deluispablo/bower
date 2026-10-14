@@ -463,6 +463,8 @@ export interface Filing {
   newTags?: readonly string[];
   observations?: readonly unknown[];
   forget?: readonly { factId: string; quote?: string }[];
+  /** Shown facts this run's words say ended, each with the person's exact words (R35). */
+  ends?: readonly { factId: string; quote: string }[];
   shownFactIds?: readonly string[];
   profiles?: ReadonlyMap<string, readonly string[]>;
   kinds?: ReadonlyMap<string, string>;
@@ -560,7 +562,7 @@ export interface Disagreement {
  * (`modelDecisions`), or the scripted provider's, which also answers what no model reply does yet (the optional part).
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
-export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'forget' | 'shownFactIds' | 'profiles' | 'kinds'> {
+export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'forget' | 'ends' | 'shownFactIds' | 'profiles' | 'kinds'> {
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -593,7 +595,7 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
-    newTags: filing.newTags, observations: filing.observations, forget: filing.forget, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
+    newTags: filing.newTags, observations: filing.observations, forget: filing.forget, ends: filing.ends, shownFactIds: filing.shownFactIds, profiles: filing.profiles, kinds: filing.kinds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
     pileAsk: (pile) => filing.asks?.get(pile.id) ?? null,
@@ -801,7 +803,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const shownText = new Set(boundedLearned.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
   const shownIds = new Set(memoryLedger.live.filter((f) => shownText.has(f.text)
     && (!opts.decisions.shownFactIds || opts.decisions.shownFactIds.includes(f.factId))).map((f) => f.factId));
-  const forgetFacts = [...memoryLedger.live, ...memoryLedger.events.flatMap((f) => f.kind === 'observation'
+  // Forget reaches ended facts with no shown rule (R37); forgotten ones keep a retried Forget a no-op.
+  const forgetFacts = [...memoryLedger.live, ...memoryLedger.ended.map((e) => e.fact), ...memoryLedger.events.flatMap((f) => f.kind === 'observation'
     && memoryLedger.tombstones.some((t) => t.factId === f.factId) ? [f] : [])];
   const boundForget = new Map<string, string[]>();
   for (const { factId, quote } of opts.decisions.forget ?? []) {
@@ -812,6 +815,15 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       || memoryLedger.live.some((f) => f.factId === factId) && !shownIds.has(factId)) continue;
     const pile = matching[0];
     if (pile) { boundForget.set(pile.id, [...(boundForget.get(pile.id) ?? []), factId]); memoryWords.add(pile.id); }
+  }
+  // An ending binds as Forget does: a live shown fact, its quote in the words of exactly one pile (R36).
+  const boundEnds: Array<{ factId: string; quote: string; pileId: string }> = [];
+  for (const { factId, quote } of opts.decisions.ends ?? []) {
+    const matching = piles.filter((p) => hasVerbatimQuote(p.text, quote));
+    const pile = matching.length === 1 ? matching[0] : undefined;
+    if (!pile || !shownIds.has(factId)) { console.error('An ending was not bound to a shown fact and one pile of words.', { factId }); continue; }
+    boundEnds.push({ factId, quote, pileId: pile.id });
+    memoryWords.add(pile.id);
   }
   const chosen = new Map<string, { place: Placement | null; record: string }>();
   const hasChoice = (id: string): boolean => !!chosen.get(id)?.place;
@@ -2379,7 +2391,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!words.length) continue;
     forgetIds.add(f.factId);
   }
-  const tombstones = memoryLedger.live.flatMap((fact) => {
+  const tombstones = [...memoryLedger.live, ...memoryLedger.ended.map((e) => e.fact)].flatMap((fact) => {
     const bin = journal.find((l) => l.rec.kind === 'trash' && l.rec.fileId === fact.source.fileId);
     if (!forgetIds.has(fact.factId) && !bin) return [];
     if (bin) memoryRecords.add(bin.rec.id);
@@ -2387,7 +2399,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       factId: fact.factId, sourceId: fact.source.fileId, reason: forgetIds.has(fact.factId) ? 'forget' as const : 'bin' as const,
       runId: opts.runId }];
   });
-  const hasMemory = (d.observations?.length ?? 0) > 0 || forgetIds.size > 0 || tombstones.length > 0;
+  const hasMemory = (d.observations?.length ?? 0) > 0 || forgetIds.size > 0 || tombstones.length > 0 || boundEnds.length > 0;
   if (hasMemory) {
     if (!sys?.folder) return refused('learned facts need a readable ledger');
     if (memoryFile) places.set(memoryFile.id, memoryFile);
@@ -2423,14 +2435,21 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (resolved.value.origin.kind === 'answer' || resolved.value.origin.kind === 'rule') memoryRecords.add(resolved.value.origin.recordId);
     observations.push(resolved.value);
   }
-  const added = [...tombstones, ...observations];
+  // Forget and Bin win over an ending of the same fact; the source is the pile's whole note as captured.
+  const endings = boundEnds.flatMap(({ factId, quote, pileId }) => {
+    const source = evidence.find((e) => e.kind === 'words' && e.pileId === pileId)?.source;
+    if (!source || tombstones.some((t) => t.factId === factId)) return [];
+    return [{ v: 1 as const, kind: 'ended' as const, eventId: newKey('ended'), date: noteDate, at: opts.requestedAt, factId, quote, source, runId: opts.runId }];
+  });
+  const added = [...tombstones, ...observations, ...endings];
   let memoryWrite: { file: DriveFile | undefined; before: VerifiedContent | null; text: string } | null = null;
   if (hasMemory) {
     const trialText = memoryText + added.map((e) => JSON.stringify(e) + '\n').join('');
     const trial = parseObservations(new TextEncoder().encode(trialText));
     const liveIds = new Set(trial.live.map((f) => f.factId));
     // Replayed/tombstoned candidates are inert, including new hashes and archive copies.
-    const accepted = added.filter((e) => e.kind === 'tombstone' || liveIds.has(e.factId));
+    const accepted = added.filter((e) => e.kind === 'tombstone' || liveIds.has(e.factId)
+      || e.kind === 'ended' && trial.ended.some((x) => x.event.eventId === e.eventId));
     const nextText = memoryText + accepted.map((e) => JSON.stringify(e) + '\n').join('');
     const nextLedger = parseObservations(new TextEncoder().encode(nextText));
     const unwritten = observations.filter((fact) => fact.origin.kind === 'words' && !nextLedger.live.some((live) =>
