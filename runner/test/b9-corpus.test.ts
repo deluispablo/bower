@@ -69,12 +69,29 @@ it('AC12 c17-b9-contradiction-two-sources: one contradiction with both rents, bo
   // A done redispatch makes no model call and no write.
   const done = await redispatchCase(c, first, 2, { claude: () => { throw new Error('A done redispatch must not call a model.'); } });
   expect(done.after[FLAT]).toBe(first.after[FLAT]);
-  // The same materialized entry on a fresh press is a duplicate: text and source decide.
-  const [reply] = await replies(c.id);
-  const again = await runOnDrive(c, final.drive, final.root, { claude: replySequence([{ ...reply, things: [], lines: reply?.lines?.map((l) => ({ ...l, cites: undefined })) }]),
-    request: { kind: 'tidy', text: 'Record the same disagreement only if it is not already in the flat note.' }, pacing: { baseMs: 0, sleep: async () => {} } }, 3);
-  expect(again.after[FLAT]).toBe(first.after[FLAT]);
 });
+
+/** Press 1 files the later listing with its line; a fresh press repeats the same line, citing the filed listing. */
+async function freshPress(marked: boolean) {
+  const c = await load('c17-b9-contradiction-two-sources');
+  const [reply, second] = await replies(c.id);
+  const line = (l: Record<string, unknown>) => (marked ? l : (({ marker: _m, alsoCites: _a, ...rest }) => rest)(l));
+  const first = { ...reply, lines: reply?.lines?.map(line) } as Reply;
+  const final = await runWithClaude(c, replySequence([first, second]));
+  expect(final.code).toBe(0);
+  const filed = Object.entries(final.pathsById).find(([, path]) => path === 'Projects/Flat hunt/Later listing.txt')?.[0];
+  expect(filed, 'the later listing was filed').toBeDefined();
+  const { calls, spawn } = counted(replySequence([{ ...first, things: [], lines: first.lines?.map((l) => ({ ...l, cites: filed })) }]));
+  const again = await runOnDrive(c, final.drive, final.root, { claude: spawn,
+    request: { kind: 'tidy', text: 'Record the same disagreement only if it is not already in the flat note.' }, pacing: { baseMs: 0, sleep: async () => {} } }, 3);
+  expect(again.code, 'the repeated line is valid input: it is already present').toBe(0);
+  expect(calls, 'selection then execution, no validation retry').toEqual(['selection', 'execution']);
+  expect(again.after[FLAT], 'no second line').toBe(final.after[FLAT]);
+  const rows = ((again.lastRun as { run?: { report?: { updated?: Array<{ path: string }> } } })?.run?.report?.updated ?? []).map((r) => r.path);
+  expect(rows, 'no updated row for a line already there').not.toContain(FLAT);
+}
+it('AC12 control: an ordinary line repeated on a fresh press is a no-op', async () => { await freshPress(false); });
+it('AC12 b9-fresh-press-dedup: the same marked line on a fresh press is a no-op, found by its final text (R20)', async () => { await freshPress(true); });
 
 it.each([
   ['one source', (line: Record<string, unknown>) => { delete line.alsoCites; }],

@@ -25,9 +25,9 @@ const SOURCE = 'Garden notice.txt';
 const TEXT = 'The garden may close if heavy rain is forecast; no decision has been made.';
 const body = '# Visit\n\n## My thoughts\nAlex keeps the booking.\n\n## Timeline\n- 2026-10-02 · The booking remains open. · [[Earlier notice.txt]]\n';
 
-async function fixture(person = false) {
-  const base = await setup({ folder: { [TARGET]: note('Alex records a garden visit.', body, !person),
-    [EARLIER]: 'The booking remains open.', [LOOSE]: 'Opening hours for the season.' },
+async function fixture(person = false, { folder = {}, links = '' }: { folder?: Record<string, string>; links?: string } = {}) {
+  const base = await setup({ folder: { [TARGET]: note('Alex records a garden visit.', body.replace('Alex keeps the booking.', `Alex keeps the booking.${links}`), !person),
+    [EARLIER]: 'The booking remains open.', [LOOSE]: 'Opening hours for the season.', ...folder },
   inbox: [{ line: 'Update Visit from the garden notice.', files: [SOURCE] }],
   inboxFiles: { [SOURCE]: TEXT } });
   if (person) {
@@ -138,6 +138,8 @@ it.each([
   ['the cited thing itself', { marker: 'contradiction', alsoCites: [`Inbox/${SOURCE}`] }],
   ['a reference with link syntax', { marker: 'uncertain', alsoCites: ['Projects/Garden visit/Earlier notice.txt|alias'] }],
   ['an inferred figure', { marker: 'inferred', text: 'The visit on 2026-10-02 may be affected.' }],
+  ['empty marked text', { marker: 'uncertain', text: '' }],
+  ['blank marked text', { marker: 'inferred', text: '   ' }],
   ['an invented figure', { marker: 'uncertain', text: 'The garden may close on 77 days.' }],
   ['a label without a marker', { text: 'Contradiction: the notices disagree.' }],
   ['a qualifier without a marker', { text: 'The visit may be affected. (inferred)' }],
@@ -180,4 +182,67 @@ it('AC11 guard b9-temporal-change: a dated change is ordinary sourced history, n
   expect(result.after[TARGET]).not.toMatch(/Contradiction:|Uncertain:|\(inferred\)/);
   expect(report(result).questions).toEqual([]);
   expect(result.frames).toHaveLength(2);
+});
+
+// Round 1 of the b9b spec review (R3a, R21-R24).
+const SEP = '\u2028';
+it.each([
+  ['a name another folder shares, linked by name', { folder: { 'Projects/Other/Earlier notice.txt': 'Another notice.' } }, [EARLIER], false],
+  ['a name another folder shares, linked by its exact path', { folder: { 'Projects/Other/Earlier notice.txt': 'Another notice.' }, links: ' See [[Projects/Garden visit/Earlier notice.txt]].' }, [EARLIER], true],
+  ['a linked name with the Timeline separator', { folder: { 'Projects/Garden visit/Earlier · notice.txt': 'x' }, links: ' See [[Earlier · notice.txt]].' }, ['Projects/Garden visit/Earlier · notice.txt'], false],
+  ['a linked name with a line separator', { folder: { [`Projects/Garden visit/Earlier${SEP}notice.txt`]: 'x' }, links: ` See [[Earlier${SEP}notice.txt]].` }, [`Projects/Garden visit/Earlier${SEP}notice.txt`], false],
+] as const)('AC9 b9-reference-names: %s (R3a, R21)', async (_name, options, alsoCites, ok) => {
+  const base = await fixture(false, { folder: { ...options.folder }, links: 'links' in options ? options.links : '' });
+  const result = await run(base, [select(base, [base.id(TARGET)], 'Projects/Garden visit'), intent(base, { marker: 'uncertain', alsoCites: [...alsoCites] })]);
+  if (ok) {
+    expect(result.code, 'an exact path link binds even when another folder shares the name').toBe(0);
+    expect(added(base, result.after[TARGET])).toEqual([{ date: '2026-10-07', text: `Uncertain: ${TEXT} (also from [[Earlier notice.txt]])`, source: SOURCE }]);
+    expect(result.frames).toHaveLength(2);
+  } else {
+    expect(result.code).toBe(1);
+    expect(result.after[TARGET]).toBe(base.c.folder[TARGET]);
+    expect(manifest(result).operations, 'refused at the reply, before any effect').toEqual([]);
+    expect(result.frames[2]?.call.input).toMatch(/^Your reply was refused:/m);
+    expect(result.frames[2]?.call.input).not.toContain('a line with keys outside the intent');
+  }
+});
+
+it('AC9 b9-inferred-own-words: only the line\'s own words count as figures, not a cited file name (R22)', async () => {
+  const base = await fixture(false, { folder: { 'Projects/Garden visit/Booking 2026.txt': 'The booking is open.' }, links: ' See [[Booking 2026.txt]].' });
+  const result = await run(base, [select(base, [base.id(TARGET)], 'Projects/Garden visit'),
+    intent(base, { marker: 'inferred', text: 'The visit may be affected.', alsoCites: ['Projects/Garden visit/Booking 2026.txt'] })]);
+  expect(result.code).toBe(0);
+  expect(result.frames).toHaveLength(2);
+  expect(added(base, result.after[TARGET])).toEqual([{ date: '2026-10-07', text: 'The visit may be affected. (inferred) (also from [[Booking 2026.txt]])', source: SOURCE }]);
+});
+
+it.each([
+  ['a basename, then the exact path', { alsoCites: ['Earlier notice.txt'] }, { alsoCites: [EARLIER] }, `Uncertain: ${TEXT} (also from [[Earlier notice.txt]])`],
+  ['201 decorated characters, then 200', { text: 'a'.repeat(201 - 'Uncertain: '.length) }, { text: 'a'.repeat(200 - 'Uncertain: '.length) }, `Uncertain: ${'a'.repeat(189)}`],
+])('AC9 b9-marker-retry-accepted: %s is written once after the retry (R24)', async (_name, bad, good, text) => {
+  const base = await fixture();
+  const result = await run(base, [select(base, [base.id(TARGET)], 'Projects/Garden visit'),
+    intent(base, { marker: 'uncertain', ...bad }), intent(base, { marker: 'uncertain', ...good })]);
+  expect(result.code, 'the corrected marked reply is accepted').toBe(0);
+  expect(result.frames).toHaveLength(3);
+  expect(result.frames[2]?.call.input).toMatch(/^Your reply was refused:/m);
+  expect(added(base, result.after[TARGET])).toEqual([{ date: '2026-10-07', text, source: SOURCE }]);
+  const rows = (result.lastRun as { run?: { report?: { updated?: Array<{ path: string; what: string }> } } })?.run?.report?.updated ?? [];
+  expect(rows.filter((row) => row.path === TARGET).map((row) => row.what)).toEqual([text.replace(/\[\[([^\]]+)\]\]/, '$1')]);
+});
+
+it.each(['things', 'states', 'asks'] as const)('AC9 guard b9-separator-scope: a separator in %s is checked as a space is, as today (R23)', async (field) => {
+  const outcome = async (gap: string) => {
+    const base = await fixture();
+    const id = base.sources[0]?.itemId;
+    const reply = field === 'asks'
+      ? { ...empty, asks: [{ fileId: id, text: `File the garden${gap}notice?`, yes: 'Yes', no: 'No' }] }
+      : field === 'states'
+        ? { ...intent(base, {}), states: [{ note: TARGET, lines: [`The visit${gap}is confirmed.`], cites: id }] }
+        : { ...empty, things: [{ fileId: id, to: 'Projects/Garden visit', name: SOURCE, responsibility: `garden${gap}visits`,
+          note: { name: 'Garden notice.md', summary: `The garden${gap}may close.`, body: 'The garden may close if heavy rain is forecast.' } }] };
+    const result = await run(base, [select(base, [base.id(TARGET)], 'Projects/Garden visit'), reply]);
+    return { code: result.code, calls: result.frames.length };
+  };
+  expect(await outcome(SEP), 'the Timeline-only separator rule does not reach this field').toEqual(await outcome(' '));
 });
