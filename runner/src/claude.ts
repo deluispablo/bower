@@ -70,6 +70,7 @@ import { createOwnershipContext } from '../../src/data/contracts/ownership-forma
 import { propertyValuesOk } from '../../src/data/contracts/note-format';
 import { mocMembership, mocSnapshot } from './moc';
 import { readTagList } from '../../src/data/contracts/tag-format';
+import { modelRules } from '../../src/data/contracts/rules-format';
 
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_MAX_TURNS = 60;
@@ -223,12 +224,13 @@ interface Shown {
 }
 
 /** `text` within `room` characters: whole, cut and marked, or not shown when there is no room left. */
-function bounded(text: string, room: number): { text: string | null; cut: number } {
+function bounded(text: string, room: number, marker = CUT): { text: string | null; cut: number } {
   if (text.length <= room) return { text, cut: 0 };
   if (room <= 0) return { text: null, cut: text.length };
-  const notice = CUT(text.length);
-  const length = Math.max(0, room - notice.length - 10);
-  return { text: (text.slice(0, length) + CUT(text.length - length)).slice(0, room), cut: text.length - length };
+  const notice = marker(text.length);
+  let length = Math.max(0, room - notice.length - 10);
+  if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(text.slice(length - 1, length + 1))) length--;
+  return { text: (text.slice(0, length) + marker(text.length - length)).slice(0, room), cut: text.length - length };
 }
 
 /**
@@ -510,7 +512,8 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const rulesFile = listing.find((f) => !f.folder && f.name === 'Rules.md' && f.parents.includes(run.rootId));
   // A cut list says so in words about the rules, so the model never takes part of the list for all of it (TL-P4-07 addendum 3).
   const rules = rulesFile
-    ? bounded(await read.readText(rulesFile.id), CONTEXT_BOUNDS.perNote).text?.replace(/\[cut here: (\d+) more characters not shown\]$/, '[cut here: $1 more characters of the rules not shown; the list may go on]') ?? null
+    ? bounded(modelRules(await read.readText(rulesFile.id)), CONTEXT_BOUNDS.perNote,
+      (left) => `\n[cut here: ${left} more characters of the rules not shown; the list may go on]`).text ?? null
     : null;
   const named = new Set<string>();
   const suppressed = new Set<string>();
@@ -962,7 +965,7 @@ function ruleLine(basis: string, rules: string | undefined): boolean {
   // A list that was cut ends in a half line before the marker: that line is not one of the person's.
   const cut = lines.findIndex((line) => line.trim().startsWith('[cut here:'));
   const whole = cut < 0 ? lines : lines.slice(0, Math.max(0, cut - 1));
-  return whole.some((line) => bare(line) === want);
+  return whole.some((line) => !/^#{1,6}\s/.test(line.trim()) && bare(line) === want);
 }
 
 /** A typed basis for a new Project: the goal quoted exactly from the source it names (TL-P4-47 Q6). */
