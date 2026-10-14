@@ -38,7 +38,7 @@
     {
       "path": "Projects/Flat hunt/Larkspur Lane flat.md",
       "timeline": [
-        "Contradiction: Earlier terms give 1,450; later terms give 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]])",
+        "Contradiction: Earlier terms give 1,450; later terms give 1,580 from 2026-11-01, per month. Neither is confirmed. (also from [[Earlier listing.txt]])",
         "2026-10-02 · The earlier listing gives rent from 2026-11-01 as 1,450 a month. · [[Earlier listing.txt]]"
       ],
       "timelineCount": 2,
@@ -61,7 +61,7 @@
         {
           "path": "Projects/Flat hunt/Larkspur Lane flat.md",
           "timeline": [
-            "Contradiction: Earlier terms give 1,450; later terms give 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]])",
+            "Contradiction: Earlier terms give 1,450; later terms give 1,580 from 2026-11-01, per month. Neither is confirmed. (also from [[Earlier listing.txt]])",
             "2026-10-02 · The earlier listing gives rent from 2026-11-01 as 1,450 a month. · [[Earlier listing.txt]]"
           ],
           "timelineCount": 2,
@@ -73,7 +73,9 @@
       ],
       "report": {
         "filed": 1,
-        "created": [],
+        "created": [
+          "Bower health.md"
+        ],
         "updated": [
           "Projects/Flat hunt/Larkspur Lane flat.md"
         ],
@@ -85,7 +87,7 @@
         {
           "path": "Projects/Flat hunt/Larkspur Lane flat.md",
           "timeline": [
-            "Contradiction: Earlier terms give 1,450; later terms give 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]])",
+            "Contradiction: Earlier terms give 1,450; later terms give 1,580 from 2026-11-01, per month. Neither is confirmed. (also from [[Earlier listing.txt]])",
             "2026-10-02 · The earlier listing gives rent from 2026-11-01 as 1,450 a month. · [[Earlier listing.txt]]"
           ],
           "timelineCount": 2,

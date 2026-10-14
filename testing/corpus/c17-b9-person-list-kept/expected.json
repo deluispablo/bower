@@ -57,9 +57,13 @@
   ],
   "linksResolve": true,
   "report": {
-    "filed": 0,
-    "created": [],
-    "updated": [],
+    "filed": 1,
+    "created": [
+      "Bower health.md"
+    ],
+    "updated": [
+      "Areas/Home/Alex plot.md"
+    ],
     "questionsExactly": 0
   },
   "runs": [
@@ -108,7 +112,9 @@
       ],
       "report": {
         "filed": 1,
-        "created": [],
+        "created": [
+          "Bower health.md"
+        ],
         "updated": [
           "Areas/Home/Alex plot.md"
         ],
@@ -159,9 +165,13 @@
         }
       ],
       "report": {
-        "filed": 0,
-        "created": [],
-        "updated": [],
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Areas/Home/Alex plot.md"
+        ],
         "questionsExactly": 0
       }
     }
