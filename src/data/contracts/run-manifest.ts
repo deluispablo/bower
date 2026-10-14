@@ -1,12 +1,12 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { isMonthlyLogPath } from './log-format';
-import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion } from './ownership-format';
+import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion, parseOwnership } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { readTagList, TAG_LIST_MAX } from './tag-format';
 import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { BowerError, type UpdatedRow } from './types';
-import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote } from './observations';
+import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote, consolidationOk } from './observations';
 import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
@@ -788,6 +788,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
   const enc = new TextEncoder();
   const ledgers = new Map<string, ReturnType<typeof parseObservations>>();
   const archives = new Map<string, OperationV2 & { effect: Extract<Effect, { kind: 'create-text' }> }>();
+  const consolidationArchives = new Set<string>();
+  const namedArchives = new Set<string>();
   let lastLedger: OperationV2 | undefined;
   let lastMemory: OperationV2 | undefined;
   let finalAbout: string | undefined;
@@ -820,8 +822,9 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
           if (e.purpose !== 'about-archive' && !path.startsWith('.bower/archive/about-me/')) continue;
           if (e.purpose !== 'about-archive' || !aboutArchivePath(path) || archives.has(path)
             || value.capture.places.some((p) => p.path === path)
-            || !e.name.endsWith(`-${e.createKey}.md`) || !e.name.startsWith(`${timelineDate(value.requestedAt)}-`)
-            || !lastLedger || !op.dependsOn.includes(lastLedger.operationId)) return false;
+            || !e.name.endsWith(`-${e.createKey}.md`) || !e.name.startsWith(`${timelineDate(value.requestedAt)}-`)) return false;
+          // B4a's archive follows the ledger write it depends on; any other must be B4c's, named by a later consolidation.
+          if (!lastLedger || !op.dependsOn.includes(lastLedger.operationId)) consolidationArchives.add(op.operationId);
           archives.set(path, { ...op, effect: e });
           lastMemory = op;
         }
@@ -871,6 +874,22 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
             if (event.runId !== value.runId || !prior.live.some((fact) => fact.factId === event.factId)
               || pile?.context.kind !== 'text' || pile.context.content.sha256 !== event.source.sha256
               || !hasVerbatimQuote(parseNote(pile.context.file.name, pile.context.text).body, event.quote)) return false;
+          } else if (event.lines) {
+            // B4c (R18): the write's last event, naming the archive it depends on, which holds the section maintain read.
+            const [path, archive] = [...archives].find(([, a]) => a.operationId === event.operationId) ?? [];
+            const maintain = operations.at(-1)?.effect;
+            const declared = maintain?.kind === 'maintain' ? maintain.inputs.targets?.find((t) => t.kind === 'about')
+              ?.declaration?.sources.find((s) => s.path === 'About me.md')?.text : undefined;
+            const bytes = declared === undefined ? undefined : enc.encode(declared);
+            const own = bytes && parseOwnership(bytes);
+            const span = own && own.status !== 'invalid' ? own.payloads?.[event.section] : undefined;
+            const payload = bytes && span ? new TextDecoder().decode(bytes.subarray(span.start, span.end)) : undefined;
+            if (event !== ledger.events.at(-1) || !archive || !consolidationArchives.has(archive.operationId)
+              || !op.dependsOn.includes(archive.operationId) || path?.split('/')[3] !== event.section
+              || !consolidationOk({ ...ledger, events: ledger.events.slice(0, -1) }, event, value.runId)
+              // Before maintenance (finalized: false) there is no declaration yet; the stored manifest is checked again.
+              || maintain?.kind === 'maintain' && payload !== archive.effect.text) return false;
+            namedArchives.add(archive.operationId);
           } else if (event.successful) {
             const edit = operations.find((o) => o.operationId === event.operationId);
             if (event.runId !== value.runId || !edit || edit.ordinal >= op.ordinal || !op.dependsOn.includes(edit.operationId)
@@ -931,7 +950,8 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
     return false;
   }
   for (const [path, archive] of archives) {
-    if (!operations.some((o) => o.effect.kind === 'edit-text' && o.dependsOn.includes(archive.operationId)
+    if (consolidationArchives.has(archive.operationId) ? !namedArchives.has(archive.operationId)
+      : !operations.some((o) => o.effect.kind === 'edit-text' && o.dependsOn.includes(archive.operationId)
       && o.effect.changes.some((c) => c.kind === 'about-rewrite' && c.archive === path))) return false;
   }
   return !finalized || !lastMemory || operations.at(-1)?.effect.kind === 'maintain';

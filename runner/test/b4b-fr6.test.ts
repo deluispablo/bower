@@ -119,8 +119,8 @@ async function execute(f: Fixture, factId: string, quote?: string) {
   expect(frames[0]?.piles, 'main read the actual single Forget request').toEqual([
     { pileId: 'p-1', words: f.words, things: [] },
   ]);
-  expect(frames[0]?.aboutMe?.learned.factIds, 'both live ids were shown to the model').toEqual(
-    f.facts.map((fact) => fact.factId));
+  expect(frames[0]?.aboutMe?.learned.factIds, 'both live ids were shown to the model, in About me\'s order').toEqual(
+    ABOUT_REGIONS.flatMap((region) => f.facts.filter((fact) => fact.section === region)).map((fact) => fact.factId));
   return { ...run, refusals };
 }
 
@@ -137,7 +137,8 @@ async function asked(f: Fixture, run: CaseRun) {
 async function expectAsk(f: Fixture, run: CaseRun, finding: string) {
   expect(await asked(f, run), finding).toEqual({ code: 0, phase: 'done', unchanged: true, words: f.words,
     wordsBinned: false, parentBinned: false, updated: [], questions: 1,
-    choices: f.facts.map((fact) => ({ kind: 'forget-fact', factId: fact.factId })) });
+    choices: ABOUT_REGIONS.flatMap((region) => f.facts.filter((fact) => fact.section === region))
+      .map((fact) => ({ kind: 'forget-fact', factId: fact.factId })) });
 }
 
 const cases = [

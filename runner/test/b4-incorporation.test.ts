@@ -274,7 +274,7 @@ describe('B4b through production entry points', () => {
     expect(run.after[ABOUT]).toBe(learned(f.facts, edited));
     expect(run.frames.at(-1)?.aboutMe, 'own text is typed direct context, never learned authority').toMatchObject({
       personal: { kind: 'person-input', text: expect.stringContaining('Alex grows peas.') },
-      learned: { kind: 'learned', factIds: f.facts.map((x) => x.factId) },
+      learned: { kind: 'learned', factIds: ABOUT_REGIONS.flatMap((r) => f.facts.filter((x) => x.section === r)).map((x) => x.factId) },
     });
   });
 

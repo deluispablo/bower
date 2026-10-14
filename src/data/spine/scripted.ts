@@ -28,7 +28,7 @@ import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAn
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
-import { markerText, parseTimelineLine, splitCitation, timelineLine } from '../contracts/timeline-line';
+import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
@@ -42,7 +42,7 @@ import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
 
-import { aboutContext, hasVerbatimQuote, normalizedText, observationOf, parseObservations } from '../contracts/observations';
+import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseObservations } from '../contracts/observations';
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
 
 export { SET_ASIDE, listedPiles };
@@ -791,18 +791,18 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const l = answers[0]; const answer = l && journalAnswer(l.rec);
     const option = typeof answer === 'object' && 'option' in answer ? q.options?.find((o) => o.id === answer.option) : undefined;
     const action = isQuestionOption(option) ? option.action : undefined;
+    // The person chose from the options shown when asked: a fact that ended since still goes (R14).
     if (action?.kind === 'forget-fact' && q.subject && (memoryLedger.live.some((f) => f.factId === action.factId)
+      || memoryLedger.ended.some((e) => e.fact.factId === action.factId)
       || memoryLedger.tombstones.some((t) => t.reason === 'forget' && t.factId === action.factId))) {
       forgetChoices.set(q.subject, { factId: action.factId, recordId: l?.rec.id ?? '' });
       memoryWords.add(q.subject);
     }
   }
   const forgetWords = piles.filter((p) => /\bforget\b/i.test(p.text));
-  const boundedLearned = aboutContext({ personal: '', learned: memoryLedger.live.map((f) =>
-    timelineLine({ date: f.date, text: f.text, source: f.origin.kind === 'document' ? 'Source' : 'Your words' })).join('\n'), factIds: [] }).learned.text;
-  const shownText = new Set(boundedLearned.split(/\r?\n/).flatMap((line) => parseTimelineLine(line)?.text ?? []));
-  const shownIds = new Set(memoryLedger.live.filter((f) => shownText.has(f.text)
-    && (!opts.decisions.shownFactIds || opts.decisions.shownFactIds.includes(f.factId))).map((f) => f.factId));
+  // Position 4's facts, in its order (R14): the bindings and the options agree with what the model was shown.
+  const shownFacts = learnedContext(memoryLedger, '').facts.filter((f) => !opts.decisions.shownFactIds || opts.decisions.shownFactIds.includes(f.factId));
+  const shownIds = new Set(shownFacts.map((f) => f.factId));
   // Forget reaches ended facts with no shown rule (R37); forgotten ones keep a retried Forget a no-op.
   const forgetFacts = [...memoryLedger.live, ...memoryLedger.ended.map((e) => e.fact), ...memoryLedger.events.flatMap((f) => f.kind === 'observation'
     && memoryLedger.tombstones.some((t) => t.factId === f.factId) ? [f] : [])];
@@ -821,7 +821,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const { factId, quote } of opts.decisions.ends ?? []) {
     const matching = piles.filter((p) => hasVerbatimQuote(p.text, quote));
     const pile = matching.length === 1 ? matching[0] : undefined;
-    if (!pile || !shownIds.has(factId)) { console.error('An ending was not bound to a shown fact and one pile of words.', { factId }); continue; }
+    if (!pile || !shownIds.has(factId) || !memoryLedger.live.some((f) => f.factId === factId)) { console.error('An ending was not bound to a shown fact and one pile of words.', { factId }); continue; }
     boundEnds.push({ factId, quote, pileId: pile.id });
     memoryWords.add(pile.id);
   }
@@ -923,8 +923,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       return null;
     };
     if (pile && /\bforget\b/i.test(pile.text)) {
-      const facts = memoryLedger.live.filter((fact, i, all) => shownIds.has(fact.factId)
-        && all.findIndex((f) => f.text === fact.text) === i).slice(0, 4);
+      const facts = shownFacts.filter((fact, i, all) => all.findIndex((f) => f.text === fact.text) === i).slice(0, 4);
       // shortcut: offer the first four shown facts; add narrowed retrieval when more choices are needed.
       if (facts.length < 2) return unavailable();
       const options = facts.map((fact, i) => ({ id: `fact-${i + 1}`,
