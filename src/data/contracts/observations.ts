@@ -228,10 +228,8 @@ export function learnedLines(ledger: Ledger, region: AboutRegion): LearnedLine[]
   const placed = new Set(shown.flatMap((line) => line.factIds));
   return [...shown, ...live.filter((fact) => !placed.has(fact.factId)).map(own)];
 }
-/** A learned line as About me shows it, dated and labelled as one fact is (R11). */
-export const learnedTimeline = (ledger: Ledger, line: LearnedLine): string => timelineLine({ date: line.date, text: line.text,
-  source: line.factIds.some((factId) => ledger.events.some((e) => e.kind === 'observation' && e.factId === factId
-    && e.origin.kind === 'document')) ? 'Source' : 'Your words' });
+/** A learned line as About me shows it: dated, citing no note (no note bears its origin's name; the ledger keeps it). */
+export const learnedTimeline = (line: { date: string; text: string }): string => timelineLine({ date: line.date, text: line.text });
 
 /** The gate (R16): over budget on the projection, five live facts newer than the frontier, one of them this run's. */
 export function consolidationDue(ledger: Ledger, region: AboutRegion, runId: string): boolean {
@@ -306,7 +304,7 @@ export function aboutContext(input: { personal: string; learned: string; factIds
  * full, counted by position and never by equal text; an ended member of a shown line is listed with it.
  */
 export function learnedContext(ledger: Ledger, personal: string): { about: AboutContext; facts: Observation[] } {
-  const lines = ABOUT_REGIONS.flatMap((region) => learnedLines(ledger, region)).map((line) => ({ line, text: learnedTimeline(ledger, line) }));
+  const lines = ABOUT_REGIONS.flatMap((region) => learnedLines(ledger, region)).map((line) => ({ line, text: learnedTimeline(line) }));
   const learned = lines.map(({ text }) => text).join('\n');
   const limit = learned.length > 4000 ? 4000 - CUT.length : learned.length;
   let end = -1;
@@ -362,9 +360,11 @@ export function validLearnedBlock(text: string, ledger?: Ledger, creating = fals
     if (!ledger) continue;
     // R13: each line is a live fact of its region or a line the projection shows there. Neither can read as a forgotten
     // text (the set excludes live texts; the projection drops such lines), so no whole-block scan is needed.
-    const allowed = new Set([...ledger.live.filter((fact) => fact.section === region), ...learnedLines(ledger, region)]
-      .map((line) => normalizedText(line.text)));
-    if (!payload.split('\n').every((line) => !line.trim() || line.trim() === label
+    const entries = [...ledger.live.filter((fact) => fact.section === region), ...learnedLines(ledger, region)];
+    const allowed = new Set(entries.map((line) => normalizedText(line.text)));
+    // As maintain renders it: words ending in ` · [[name]]` would parse as a citation (R8).
+    const rendered = new Set(entries.map(learnedTimeline));
+    if (!payload.split('\n').every((line) => !line.trim() || line.trim() === label || rendered.has(line)
       || allowed.has(normalizedText(parseTimelineLine(line)?.text ?? line.replace(/^[-*] /, ''))))) return false;
   }
   const start = prefix.length - heading.length - begin('about-you').length;

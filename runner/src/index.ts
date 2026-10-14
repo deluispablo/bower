@@ -76,14 +76,8 @@ const aboutTarget: DeclaredTarget = {
     const ownership = parseOwnership(bytes);
     if (ownership.status === 'invalid') throw unavailable();
     const changes: EditText['changes'] = [];
-    const payloads = ABOUT_REGIONS.map((region) => {
-      const span = ownership.payloads?.[region];
-      const previous = span ? new TextDecoder().decode(bytes.subarray(span.start, span.end)).split(/\r?\n/) : [];
-      return `### ${ABOUT_SECTIONS[region].label}\n` + learnedLines(ledger, region).map((l) => {
-        const stored = previous.find((line) => { const entry = parseTimelineLine(line); return entry?.text === l.text && entry.date === l.date; });
-        return (stored ?? learnedTimeline(ledger, l)) + '\n';
-      }).join('');
-    });
+    const payloads = ABOUT_REGIONS.map((region) => `### ${ABOUT_SECTIONS[region].label}\n`
+      + learnedLines(ledger, region).map((l) => learnedTimeline(l) + '\n').join(''));
     if (!ownership.payloads?.['about-you']) {
       changes.push({ kind: 'about-append', recordIds: [], text: '## What Bower has learned\n'
         + ABOUT_REGIONS.map((region, i) => `<!-- bower:ownership/2 begin ${region} -->\n${payloads[i]}<!-- bower:ownership/2 end ${region} -->\n`).join('') });
