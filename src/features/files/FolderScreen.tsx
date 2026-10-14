@@ -17,7 +17,7 @@ import { Explorer } from './Explorer';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
 import { useBookmarks } from './bookmarks';
-import { parseNote, scalarList, tableProperties, TECHNICAL_PROPERTIES, propertyValuesOk } from '@/data/contracts/note-format';
+import { amountText, parseNote, propertyValue, tableProperties, TECHNICAL_PROPERTIES, type PropertyValue } from '@/data/contracts/note-format';
 import { timelineDay } from '@/data/dates';
 
 /** `/files`: the tree on a phone; `/files/<folder>`: a folder as a list or a table. */
@@ -276,31 +276,20 @@ function FolderTable({ items }: { items: TreeNode[] }) {
     if (selected && !note?.properties.some((p) => p.key === 'type' && p.value === selected.id)) return '';
     return note?.properties.find((p) => p.key === key.slice('property:'.length))?.value ?? '';
   };
-  const typed = (raw: string, key: string): unknown => {
+  // Only number, money and list are decoded; other values show as written (R26).
+  const typed = (raw: string, key: string): PropertyValue => {
     if (!key.startsWith('property:')) return raw;
     key = key.slice('property:'.length);
-    const kind = selected?.properties[key]?.type;
-    if (!selected || !raw || !['number', 'money', 'list'].includes(kind ?? '')) return raw;
-    try {
-      const decoded: unknown = kind === 'list' ? scalarList(raw) : JSON.parse(raw);
-      return propertyValuesOk(selected, { [key]: decoded }) ? decoded : raw;
-    } catch (e) {
-      if (!(e instanceof SyntaxError)) throw e;
-      return raw;
-    }
+    if (!selected || !['number', 'money', 'list'].includes(selected.properties[key]?.type ?? '')) return raw;
+    const decoded = propertyValue(selected, key, raw);
+    return typeof decoded === 'object' ? decoded.value : raw;
   };
-  const amount = (v: unknown): number | null => typeof v === 'number' ? v
-    : v && typeof v === 'object' && 'amount' in v && typeof v.amount === 'number' ? v.amount : null;
+  const amount = (v: PropertyValue): number | null => typeof v === 'number' ? v : typeof v === 'object' && !Array.isArray(v) ? v.amount : null;
   const display = (i: TreeNode, key: string): string => {
     const raw = value(i, key);
     const v = typed(raw, key);
     if (Array.isArray(v)) return v.join(', ');
-    const number = amount(v);
-    if (number !== null) return new Intl.NumberFormat('en-US', {
-      ...(v && typeof v === 'object' && 'currency' in v && typeof v.currency === 'string'
-        ? { style: 'currency', currency: v.currency } : {}),
-      minimumFractionDigits: Number.isInteger(number) ? 0 : undefined, maximumFractionDigits: 4,
-    }).format(number);
+    if (typeof v !== 'string') return amountText(v);
     return selected?.properties[key.slice('property:'.length)]?.type === 'date' ? timelineDay(raw) : raw;
   };
   const numeric = (key: string): boolean => ['money', 'number'].includes(selected?.properties[key.slice('property:'.length)]?.type ?? '');

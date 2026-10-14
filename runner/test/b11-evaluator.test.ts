@@ -204,6 +204,93 @@ describe('B11a the evaluator', () => {
       .toEqual([{ group: [null], values: { n: 1 } }]);
   });
 
+  it('AC7 b11-evaluator-group-order (ruling 1): numbers by value, text by code point, dates ascending; the first key decides, null last', async () => {
+    const count = [{ id: 'n', label: 'N', op: 'count' }];
+    const groups = async (groupBy: unknown[], notes: Note[]) => (await aggregate(view(count, groupBy), OFFER, notes)).rows.map((r) => r.group);
+    expect(await groups([{ property: 'rank' }], ranks(10, 9, 100, -2.5)), 'numeric, not lexical').toEqual([[-2.5], [9], [10], [100]]);
+    const companies = ['b', 'B', 'a', 'Ä', '\u{1F600}', '～'].map((company, i) => note(`c${i}`, { company }));
+    expect(await groups([{ property: 'company' }], [...companies, note('none', {})]), 'code points, no locale; astral after BMP; missing last')
+      .toEqual([['B'], ['a'], ['b'], ['Ä'], ['～'], ['\u{1F600}'], [null]]);
+    expect(await groups([{ property: 'deadline' }], ['2026-10-14', '2025-12-31', '2026-01-02'].map((deadline, i) => note(`d${i}`, { deadline }))))
+      .toEqual([['2025-12-31'], ['2026-01-02'], ['2026-10-14']]);
+    const pairs = [note('1', { level: 'senior' }), note('2', { company: 'Acme' }), note('3', { company: 'Acme', level: 'junior' }), note('4', { company: 'Zed', level: 'senior' })];
+    expect(await groups([{ property: 'company' }, { property: 'level' }], pairs), 'key by key: a missing first key sorts after every present one')
+      .toEqual([['Acme', 'junior'], ['Acme', null], ['Zed', 'senior'], [null, 'senior']]);
+  });
+
+  it('AC7 b11-evaluator-identity: values are told apart by their decoded value, never by how the stored text spells it', async () => {
+    const eur30 = ['{"amount":30,"currency":"EUR"}', '{"currency":"EUR","amount":30}', '{"amount":3e1,"currency":"EUR"}', '{"currency":"EUR","amount":30.0}'];
+    expect(await valueOf('countValues', 'salary', eur30.map((salary, i) => note(`s${i}`, { salary }))), 'money: key order and number spelling').toBe(1);
+    expect(await valueOf('countValues', 'salary', [note('a', { salary: '{"currency":"EUR","amount":-0}' }), note('b', { salary: money(0) })]), 'money: -0 is 0').toBe(1);
+    expect(await valueOf('countValues', 'rank', ['1e3', '1000', '1000.0', '1E3', ' 1000 '].map((rank, i) => note(`r${i}`, { rank }))), 'numbers').toBe(1);
+    expect(await valueOf('countValues', 'rank', [note('a', { rank: '-0' }), note('b', { rank: '0' })]), 'numbers: -0 is 0').toBe(1);
+    expect(await valueOf('countValues', 'skills', [note('a', { skills: `['a', "b"]` }), note('b', { skills: '[a, b]' })]), 'list items: quoted or not').toBe(2);
+    expect(await valueOf('countValues', 'company', [note('a', { company: ' Acme ' }), note('b', { company: 'Acme' })]), 'text: surrounding spaces').toBe(1);
+    expect(await valueOf('countValues', 'deadline', [note('a', { deadline: '2026-10-14' }), note('b', { deadline: ' 2026-10-14' })]), 'dates').toBe(1);
+
+    const count = [{ id: 'n', label: 'N', op: 'count' }];
+    const rows = async (groupBy: unknown[], notes: Note[], measures: unknown[] = count) => (await aggregate(view(measures, groupBy), OFFER, notes)).rows;
+    const numbers = await rows([{ property: 'rank' }], ['-0', '1e3', '0', '1000', '1000.0'].map((rank, i) => note(`r${i}`, { rank })));
+    expect(numbers, 'one group per number').toEqual([{ group: [0], values: { n: 2 } }, { group: [1000], values: { n: 3 } }]);
+    expect(Object.is(numbers[0]?.group[0], 0), 'the zero group is 0, never -0').toBe(true);
+    expect(await rows([{ property: 'company' }], [note('a', { company: ' Acme' }), note('b', { company: 'Acme ' })]), 'one group per text')
+      .toEqual([{ group: ['Acme'], values: { n: 2 } }]);
+    expect(await rows([{ property: 'deadline', bucket: 'month' }], [note('a', { deadline: '2026-10-14' }), note('b', { deadline: '2026-10-01 ' })]), 'one group per date bucket')
+      .toEqual([{ group: ['2026-10'], values: { n: 2 } }]);
+    const salaries = await rows([{ property: 'rank' }], eur30.map((salary, i) => note(`s${i}`, { salary, rank: i % 2 ? '1e3' : '1000' })),
+      [...count, { id: 'k', label: 'K', op: 'countValues', property: 'salary' }, { id: 't', label: 'T', op: 'sum', property: 'salary' }]);
+    expect(salaries, 'one currency row and one money value, whatever the key order').toEqual([
+      { group: [1000], currency: 'EUR', values: { n: 4, k: 1, t: { amount: 120, currency: 'EUR' } } }]);
+    expect(JSON.stringify(salaries[0]?.values.t), 'money results in one key order').toBe('{"amount":120,"currency":"EUR"}');
+  });
+
+  it('AC7 b11-evaluator-rounding (ruling 2): 4 decimals, half away from zero, never -0', async () => {
+    expect(await valueOf('sum', 'rank', [note('a', { rank: '2.00005' })])).toBe(2.0001);
+    expect(await valueOf('sum', 'rank', [note('a', { rank: '-2.00005' })])).toBe(-2.0001);
+    expect(await valueOf('sum', 'rank', [note('a', { rank: '1.23444' })])).toBe(1.2344);
+    const zero = await valueOf('sum', 'rank', [note('a', { rank: '-0.00004' })]);
+    expect(Object.is(zero, 0), `a result that rounds to zero is 0, got ${String(zero)}`).toBe(true);
+    expect(await valueOf('sum', 'salary', [note('a', { salary: money(-0.0001) }), note('b', { salary: money(0.0001) })])).toEqual({ amount: 0, currency: 'EUR' });
+    expect((await formula(single('number', p('area')), FLAT, { area: '2.00005' })).k).toEqual({ value: 2.0001 });
+    expect((await formula(single('number', p('area')), FLAT, { area: '-2.00005' })).k).toEqual({ value: -2.0001 });
+    const k = (await formula(single('number', p('area')), FLAT, { area: '-0.00004' })).k as { value: number };
+    expect(Object.is(k.value, 0), 'a formula never gives -0').toBe(true);
+  });
+
+  it('AC7/AC8 b11-evaluator-rounding-large: a value within 4 decimals stays exactly; correct near the 10^15 bound', async () => {
+    for (const n of [999999999999999.9, -999999999999999.9, 123456789012.3456, -123456789012.3456, 1e15, -1e15]) {
+      expect(await valueOf('sum', 'rank', [note('a', { rank: String(n) })]), `aggregate ${n}`).toBe(n);
+      expect(await valueOf('sum', 'salary', [note('a', { salary: money(n) })]), `money ${n}`).toEqual({ amount: n, currency: 'EUR' });
+      expect((await formula(single('number', p('area')), FLAT, { area: String(n) })).k, `formula ${n}`).toEqual({ value: n });
+      expect((await formula(single('money', p('rent')), FLAT, { rent: money(n) })).k, `money formula ${n}`).toEqual({ value: { amount: n, currency: 'EUR' } });
+    }
+    // 5 decimals where the value shifted by 10^4 is past 2^52, so its half is not a float: still half away from zero.
+    expect(await valueOf('sum', 'rank', [note('a', { rank: '450400000000.00085' })])).toBe(450400000000.0009);
+    expect(await valueOf('sum', 'rank', [note('a', { rank: '-450400000000.00085' })])).toBe(-450400000000.0009);
+    expect((await formula(single('number', p('area')), FLAT, { area: '450400000000.00085' })).k).toEqual({ value: 450400000000.0009 });
+    expect((await formula(single('number', p('area')), FLAT, { area: '-450400000000.00085' })).k).toEqual({ value: -450400000000.0009 });
+  });
+
+  it('AC8a b11-evaluator-extension-keys: an ignored key on an operation never changes its result', async () => {
+    const sum = { op: '+', left: { number: 2 }, right: { number: 3 } };
+    for (const extra of [{ property: 'area' }, { number: 99 }, { property: 'area', number: 99 }]) {
+      expect(await formula(single('number', { ...sum, ...extra }), FLAT, { area: '42' }), JSON.stringify(extra)).toEqual({ k: { value: 5 } });
+    }
+    expect(await formula(single('number', { op: 'daysUntil', value: p('deadline'), number: 99 }), FLAT, { deadline: '2026-10-14' })).toEqual({ k: { value: 7 } });
+  });
+
+  it('AC7 b11-evaluator-money-partition (ruling 4): other measures count only the notes of their currency row; no money, no row', async () => {
+    const notes = [note('a', { salary: money(100), rank: '3' }), note('b', { salary: money(50), rank: 'abc' }), note('c', { salary: money(10, 'USD') }),
+      note('d', { rank: 'x' }), note('e', { salary: money(8, 'XYZ'), rank: '5' }), note('f', { salary: '', rank: '' })];
+    const result = await aggregate(view([{ id: 'n', label: 'N', op: 'count' }, { id: 's', label: 'S', op: 'sum', property: 'salary' },
+      { id: 'r', label: 'R', op: 'sum', property: 'rank' }]), OFFER, notes);
+    // d, e and f have no readable money: each is counted once, on the money measure, and never on r.
+    expect(result).toEqual({ selected: 6, excluded: 0, unknown: 0,
+      rows: [{ group: [], currency: 'EUR', values: { n: 2, s: { amount: 150, currency: 'EUR' }, r: 3 } },
+        { group: [], currency: 'USD', values: { n: 1, s: { amount: 10, currency: 'USD' }, r: null } }],
+      unavailable: { s: { missing: 2, invalid: 1 }, r: { missing: 1, invalid: 1 } } });
+  });
+
   it('AC7 b11-evaluator-deterministic: the order of the notes never changes a result', async () => {
     const forward = await aggregate(MONTHLY, RECEIPT, RECEIPTS);
     expect(await aggregate(MONTHLY, RECEIPT, [...RECEIPTS].reverse())).toEqual(forward);

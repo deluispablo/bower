@@ -200,6 +200,19 @@ describe('B11a the closed view language', () => {
     expect(await fault(formula(out('k', 'number', deep(9))), TABLE), 'an expression 9 deep').toEqual(expect.any(String));
   });
 
+  it('AC3 b11-depth-across-if (ruling 3): one depth counter; a condition inside if.when continues from its expression', async () => {
+    const small = { op: 'lt', property: 'area', value: 30 };
+    const nested = (n: number): unknown => (n === 1 ? small : { op: 'not', of: nested(n - 1) });
+    // The if is depth 1, so its condition at depth 2 holds 7 levels to reach 8 in all.
+    const pick = (n: number) => formula(out('pick', 'money', { op: 'if', when: nested(n), then: p('rent'), else: p('deposit') }));
+    expect(await fault(pick(7), TABLE), 'if plus 7 condition levels: depth 8').toBeNull();
+    expect(await fault(pick(8), TABLE), 'if plus 8 condition levels: depth 9').toEqual(expect.any(String));
+    const inner = (n: number) => formula(out('k', 'number', { op: '+', left: { op: 'if', when: nested(n), then: p('area'), else: { number: 0 } }, right: { number: 1 } }));
+    expect(await fault(inner(6), TABLE), '+ then if then 6 condition levels: depth 8').toBeNull();
+    expect(await fault(inner(7), TABLE), 'depth 9').toEqual(expect.any(String));
+    expect(await fault(inner(7), TABLE, 'read'), 'depth is semantic: refused on read too').toEqual(expect.any(String));
+  });
+
   it('AC3 b11-bytes-at-max: a declaration of exactly 4,096 UTF-8 bytes is valid and 4,097 is refused', async () => {
     // Two `in` lists of text values fill the declaration; the last value is sized to the byte.
     const sized = (bytes: number) => {
@@ -237,6 +250,13 @@ describe('B11a the closed view language', () => {
     expect(decode(OFFER, 'rank', 'abc')).toBe('invalid');
     expect(decode(OFFER, 'rank', '1e16')).toBe('invalid');
     expect(decode(RECEIPT, 'amount', '{"amount":30,"currency":"EUR"}')).toEqual({ value: { amount: 30, currency: 'EUR' } });
+    // A decoded value is canonical: its identity never depends on how the stored text spelled it.
+    const reversed = decode(RECEIPT, 'amount', '{"currency":"EUR","amount":3e1}') as { value: object };
+    expect(JSON.stringify(reversed.value), 'money in one key order, whatever the stored order').toBe('{"amount":30,"currency":"EUR"}');
+    expect(Object.is((decode(OFFER, 'rank', '-0') as { value: number }).value, 0), 'a stored -0 decodes to 0').toBe(true);
+    expect(Object.is((decode(RECEIPT, 'amount', '{"amount":-0,"currency":"EUR"}') as { value: { amount: number } }).value.amount, 0), 'and as an amount').toBe(true);
+    expect(decode(OFFER, 'rank', '1e3')).toEqual({ value: 1000 });
+    expect(decode(OFFER, 'skills', `['a', "b", c]`)).toEqual({ value: ['a', 'b', 'c'] });
     expect(decode(RECEIPT, 'amount', '{"amount":8,"currency":"XYZ"}')).toBe('invalid');
     expect(decode(RECEIPT, 'amount', '30 EUR')).toBe('invalid');
     expect(decode(RECEIPT, 'amount', '{"amount":1.23456,"currency":"EUR"}')).toBe('invalid');

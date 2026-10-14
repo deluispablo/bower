@@ -86,6 +86,10 @@ function scalarOf(value: string): string {
 
 /** Flow and collected block lists split only at commas outside quoted items. */
 export function scalarList(value: string): string[] {
+  return listScan(value).items;
+}
+/** The one list scan: its items, and whether it ended inside a quote (`open`), which only `propertyValue` refuses. */
+function listScan(value: string): { items: string[]; open: boolean } {
   const text = value.trim().replace(/^\[|\]$/g, '');
   const items: string[] = [];
   let quote = '';
@@ -105,7 +109,7 @@ export function scalarList(value: string): string[] {
     }
   }
   items.push(text.slice(start));
-  return items.map((item) => item.trim()).filter(Boolean).map(scalarOf);
+  return { items: items.map((item) => item.trim()).filter(Boolean).map(scalarOf), open: quote !== '' };
 }
 
 const SUMMARY_TYPES = [
@@ -561,21 +565,64 @@ const currencies = new Set([...Intl.supportedValuesOf('currency'),
   'BOV', 'CHE', 'CHW', 'CLF', 'COU', 'MXV', 'USN', 'UYI', 'UYW', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XDR', 'XPD', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX']);
 export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
   if (!typeRowOk(row, true) || !schemaObject(value)) return false;
-  return Object.entries(value).every(([key, item]) => {
-    if (!Object.hasOwn(row.properties, key)) return false;
-    const declaration = row.properties[key];
-    switch (declaration?.type) {
-      case 'text': return typeof item === 'string' && item.length <= 200;
-      case 'list': return Array.isArray(item) && item.length <= 10 && item.every((v) => typeof v === 'string' && v.length <= 200);
-      case 'enum': return typeof item === 'string' && !!declaration.values?.includes(item);
-      case 'number': return typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e15;
-      case 'money': return schemaObject(item) && Object.keys(item).length === 2 && schemaClosed(item, ['amount', 'currency'])
-        && typeof item.amount === 'number' && Number.isFinite(item.amount) && Number(item.amount.toFixed(4)) === item.amount
-        && typeof item.currency === 'string' && currencies.has(item.currency);
-      case 'date': return typeof item === 'string' && dateOk(item);
-      default: return false;
+  return Object.entries(value).every(([key, item]) => Object.hasOwn(row.properties, key) && valueOk(row.properties[key], item));
+}
+/** One value against its declaration; numbers and money amounts stay within 10^15, money has at most 4 decimals (R25). */
+export function valueOk(declaration: TypeRow['properties'][string] | undefined, item: unknown): boolean {
+  switch (declaration?.type) {
+    case 'text': return typeof item === 'string' && item.length <= 200;
+    case 'list': return Array.isArray(item) && item.length <= 10 && item.every((v) => typeof v === 'string' && v.length <= 200);
+    case 'enum': return typeof item === 'string' && !!declaration.values?.includes(item);
+    case 'number': return typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e15;
+    case 'money': return schemaObject(item) && Object.keys(item).length === 2 && schemaClosed(item, ['amount', 'currency'])
+      && typeof item.amount === 'number' && Number.isFinite(item.amount) && Math.abs(item.amount) <= 1e15
+      && Number(item.amount.toFixed(4)) === item.amount && typeof item.currency === 'string' && currencies.has(item.currency);
+    case 'date': return typeof item === 'string' && dateOk(item);
+    default: return false;
+  }
+}
+export type Money = { amount: number; currency: string };
+export type PropertyValue = string | number | string[] | Money;
+/** A row's declaration of a key; `status` reads as text unless the row declares it (R1). */
+export function propertyDeclaration(row: TypeRow, key: string): TypeRow['properties'][string] | undefined {
+  return Object.hasOwn(row.properties, key) ? row.properties[key] : key === 'status' ? { type: 'text' } : undefined;
+}
+/**
+ * The one decode of a stored front-matter value, for the Table and the view engine (B11 AC5): the raw text trimmed;
+ * numbers and money by `JSON.parse`, as the Table always read them (R24); lists through the legacy scan (R19).
+ */
+export function propertyValue(row: TypeRow, key: string, raw: string | undefined): { value: PropertyValue } | 'missing' | 'invalid' {
+  const text = raw?.trim() ?? '';
+  if (!text) return 'missing';
+  const declaration = propertyDeclaration(row, key);
+  let value: unknown = text;
+  if (declaration?.type === 'list') {
+    const scan = listScan(text);
+    if (scan.open || scan.items.includes('')) return 'invalid';
+    value = scan.items;
+  } else if (declaration?.type === 'number' || declaration?.type === 'money') {
+    try { value = JSON.parse(text); }
+    catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      return 'invalid';
     }
-  });
+  }
+  if (!valueOk(declaration, value)) return 'invalid';
+  // Canonical (one key order, never -0), so a value's identity never depends on how the stored text spelled it.
+  if (typeof value === 'number') return { value: value + 0 };
+  if (declaration?.type === 'money') {
+    const { amount, currency } = value as Money;
+    return { value: { amount: amount + 0, currency } };
+  }
+  return { value: value as PropertyValue };
+}
+/** The one text of a number or an amount of money, for the Table and the figures: en-US, up to 4 decimals. */
+export function amountText(value: number | Money): string {
+  const number = typeof value === 'number' ? value : value.amount;
+  return new Intl.NumberFormat('en-US', {
+    ...(typeof value === 'number' ? {} : { style: 'currency', currency: value.currency }),
+    minimumFractionDigits: Number.isInteger(number) ? 0 : undefined, maximumFractionDigits: 4,
+  }).format(number);
 }
 
 /** TL-P4-38's eight ordered seed classifications; later planning supplies the grounded destinations. */
