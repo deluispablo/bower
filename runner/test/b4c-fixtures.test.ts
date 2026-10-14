@@ -161,7 +161,15 @@ it('AC3 AC6 c17-b4-gate-archive-first: press 1 appends the seventh fact plainly;
   const eighth = ledgerOf(final.after).live.find((f) => f.text === EIGHTH);
   expect(eighth?.origin.kind === 'words' ? eighth.origin.pileId : null, 'the between words pile is press 2\'s source').toBe('p-2-1');
   expect(Object.keys(final.after).filter((p) => p.startsWith('Inbox/')), 'its words were consumed').toEqual([]);
-  expect(final.score?.unmet, 'the case\'s A-stage oracle scores clean').toEqual([]);
+  // This older transport throws on the memory calls (C's R31), so press 2's consolidation is skipped (R25): of the
+  // case's oracle, which C completes (R32), exactly press 2's archive and six lines stay unmet.
+  const stage = c.expected.runs?.[1];
+  const consolidated = [
+    ...(stage?.files?.present ?? []).filter((p) => p.startsWith('.bower/archive/about-me/')).map((p) => `run 2: missing file: ${p}`),
+    ...(stage?.notes ?? []).filter((n) => n.path === ABOUT).flatMap((n) => (n.contains ?? []).map((line) => `run 2: ${ABOUT}: lacks "${line}"`)),
+  ];
+  expect(consolidated, 'press 2\'s oracle holds the archive and the six consolidated lines (C, R32)').toHaveLength(7);
+  expect(final.score?.unmet, 'everything else, the case\'s A-stage oracle, scores clean').toEqual(consolidated);
 });
 
 it('AC6 b4c-words-step: each words step adds its own pile, numbered among the press\'s words steps only', async () => {
