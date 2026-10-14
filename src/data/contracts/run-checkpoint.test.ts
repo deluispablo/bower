@@ -280,6 +280,23 @@ describe('run checkpoints keep one honest recoverable chain', () => {
     await accept(value, run01);
   });
 
+  // report-kept-your-change: the kept rows are read as the unconfirmed ones are: a name and a why each, never empty.
+  it('accepts kept rows and refuses an empty or malformed kept list', async () => {
+    const withKept = async (kept: unknown): Promise<Checkpoint> => {
+      const value = cp3Pending();
+      if (value.report.state !== 'pending') throw new Error('a pending report');
+      Object.assign(value.report.body.report, { kept });
+      const digest = await hashRecordJson(value.report.body);
+      if (!digest.ok) throw new Error('Synthetic body must be canonical');
+      value.report.reportHash = digest.value;
+      return value;
+    };
+    await accept(await withKept([{ name: 'August pay.pdf', why: 'You changed it after Bower did; Bower kept your change.' }]), run01);
+    for (const bad of [[], [{ name: 'August pay.pdf' }], [{ name: 'August pay.pdf', why: 'x', fileId: 'FILE_ID' }], 'August pay.pdf']) {
+      await refuse(bytes(await withKept(bad)), run01, 'shape');
+    }
+  });
+
   // TL-P4-19 addendum 3: an updated row names the operation that wrote it and its Timeline line, an additive field;
   // what was stored before it (this fixture) still reads, in the report and in the manifest's report plan.
   it('an old report without row op ids still reads', async () => {
