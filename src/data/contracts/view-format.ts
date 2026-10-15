@@ -89,6 +89,10 @@ export function viewFault(definition: unknown, table: TypeTable | null, mode: 'w
   }
 }
 
+/** B12 (R1): `null` when a map's set is valid against the table as a write, else B11's own sentence for it, as a count's set. */
+export const setFault = (set: unknown, table: TypeTable): string | null =>
+  viewFault({ v: 1, id: 'set', kind: 'aggregate', title: 'Set', set, groupBy: [], measures: [{ id: 'n', label: 'Notes', op: 'count' }] }, table);
+
 function check(d: unknown, table: TypeTable | null, mode: 'write' | 'read'): void {
   need(isObject(d), 'A view must be one object.');
   need(new TextEncoder().encode(JSON.stringify(d)).length <= VIEW_LIMITS.bytes, 'The view is too long.');

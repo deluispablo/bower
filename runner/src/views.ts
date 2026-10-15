@@ -2,7 +2,7 @@
  * B11 (TL-P4-38 addendum 3, TL-P4-48 Q2): the one evaluator of declared views. Pure and zero-token: it never runs
  * model code. Each evaluator first checks the declaration as a stored read against its one row (R21).
  */
-import { amountText, labelOf, propertyDeclaration, propertyValue, type Money, type PropertyValue } from '../../src/data/contracts/note-format';
+import { amountText, dateOk, labelOf, propertyDeclaration, propertyValue, type Money, type PropertyValue } from '../../src/data/contracts/note-format';
 import { VIEW_LIMITS, viewFault, type AggregateView, type Expression, type FormulaView, type Predicate } from '../../src/data/contracts/view-format';
 import { BowerError, type TypeRow, type TypeTable } from '../../src/data/contracts/types';
 
@@ -66,7 +66,7 @@ function bucket(date: string, by: string | undefined): string {
 }
 
 /** A three-valued condition: true, false, or the reason it cannot be told. `exists` is never unknown. */
-function truth(p: Predicate, row: TypeRow, properties: Record<string, string>): boolean | Reason {
+export function truth(p: Predicate, row: TypeRow, properties: Record<string, string>): boolean | Reason {
   if (p.op === 'exists') return (properties[p.property]?.trim() ?? '') !== '';
   if (p.op === 'not') {
     const inner = truth(p.of, row, properties);
@@ -90,6 +90,34 @@ function truth(p: Predicate, row: TypeRow, properties: Record<string, string>): 
   }
   const order = typeof a === 'number' ? a - (b as number) : String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
   return { eq: order === 0, ne: order !== 0, lt: order < 0, lte: order <= 0, gt: order > 0, gte: order >= 0 }[p.op];
+}
+
+/** Whether a note's path is in a set's folder (`''` the folder's top), its subfolders only when `recursive`. */
+export const inSetFolder = (path: string, folder: string, recursive: boolean): boolean => (folder === '' ? recursive || !path.includes('/')
+  : path.startsWith(`${folder}/`) && (recursive || !path.slice(folder.length + 1).includes('/')));
+
+/** A candidate of a set (a note in its folder, never a map): its front-matter values, or null when it could not be read. */
+export type SetNote = { id: string; path: string; properties: Record<string, string> | null };
+
+/**
+ * The one set membership (B11 figures, B12 R1, R5-R8): the candidates of the set's type whose `where` is true. A condition
+ * that cannot be told selects nothing (`unknown` counts them); a candidate that could not be read may be a member
+ * (`unread` counts them). Members in the set's order: a real `created` date newest first, none last, then path by code
+ * point, then id (TL-P4-52 Q2).
+ */
+export function setMembers(set: { type: string; where?: Predicate }, row: TypeRow, notes: readonly SetNote[]): { members: string[]; unknown: number; unread: number } {
+  let unknown = 0;
+  let unread = 0;
+  const chosen: Array<{ id: string; path: string; created: string }> = [];
+  for (const note of notes) {
+    if (note.properties === null) { unread++; continue; }
+    if (note.properties.type !== set.type) continue;
+    const t = set.where ? truth(set.where, row, note.properties) : true;
+    if (typeof t === 'string') unknown++;
+    else if (t) chosen.push({ id: note.id, path: note.path, created: dateOk(note.properties.created ?? '') ? note.properties.created ?? '' : '' });
+  }
+  chosen.sort((a, b) => byCodePoint(b.created, a.created) || byCodePoint(a.path, b.path) || byCodePoint(a.id, b.id));
+  return { members: chosen.map((c) => c.id), unknown, unread };
 }
 
 export function evaluateAggregate(view: unknown, row: TypeRow, notes: Note[]) {

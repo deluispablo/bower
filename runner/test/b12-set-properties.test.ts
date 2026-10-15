@@ -152,7 +152,9 @@ async function ask(f: Folder, name: string, words: string, at: number): Promise<
 const guardOk = async (f: Folder, m: unknown) => (await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), f.root, RUNNER_WRITES)).ok;
 type Op = { operationId: string; dependsOn: string[]; effect: Record<string, unknown> & { kind: string } };
 type Manifest = { runId: string; captureId: string; operations: Op[] } & Record<string, unknown>;
-const manifestOf = (run: CaseRun): Manifest => JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
+/** The manifest of the run's own press (the latest run folder): an earlier press's manifest stays in the folder. */
+const manifestOf = (run: CaseRun): Manifest => JSON.parse(Object.entries(run.after).filter(([path]) => /\/manifest-[^/]+\.json$/.test(path))
+  .sort(([a], [b]) => Number(/b12-run-(\d+)\//.exec(b)?.[1] ?? 0) - Number(/b12-run-(\d+)\//.exec(a)?.[1] ?? 0))[0]?.[1] ?? '{}') as Manifest;
 const editsOf = (m: Manifest, fileId: string) => (m.operations ?? []).filter((o) => o.effect.kind === 'edit-text' && (o.effect.before as { fileId: string }).fileId === fileId);
 const changeKinds = (op: Op | undefined) => ((op?.effect.changes ?? []) as Array<{ kind: string }>).map((c) => c.kind);
 
@@ -360,6 +362,47 @@ describe('B12a a request maps a property or a tag over a set', () => {
       expect(rows.filter((r) => r.id === 'press-1').map((r) => r.done)).toEqual([REQUEST_DONE]);
     });
 
+  /** Ferrowick with its skills as a block list of these items, one per line (R58: an item's own scalar, a comma in it kept). */
+  const blockFerro = (items: string[]) => offer('Ferrowick', { created: '2026-10-06', skills: '[SQL]' }).replace('skills: [SQL]\n', `skills:\n${items.map((i) => `  - ${i}\n`).join('')}`);
+  it('AC4 b12-set-properties-block-set: a set of two items replaces a block list whose one item holds a comma; its replay writes nothing', async () => {
+    const ferro = blockFerro(['C, C++']);
+    const f = await folder({ [FERRO]: ferro });
+    const words = 'Set the skills of the active offers.';
+    const ops = [{ kind: 'property', key: 'skills', mode: 'set', value: ['C', 'C++'] }];
+    const run = await press(f, (ctx) => opsMap(ctx, ops), { words });
+    expect(run.after[FERRO], 'one stored item is not the two asked for').toBe(swap(ferro, ['skills:\n  - C, C++\n', 'skills: [C, C++]\n']));
+    const replay = await press(f, (ctx) => opsMap(ctx, ops), { words });
+    expect(editsOf(manifestOf(replay), await f.id(FERRO)), 'the same items are not written again').toHaveLength(0);
+  });
+
+  it('AC4 b12-set-properties-block-commas: a block list whose items hold commas validates by its items and takes a union, each item kept whole', async () => {
+    const items = ['SQL', 'C, C++', 'Go', 'R, S', 'Rust', 'dbt', 'Java', 'Kotlin', 'Swift'];
+    const ferro = blockFerro(items);
+    const f = await folder({ [FERRO]: ferro });
+    const run = await press(f, (ctx) => opsMap(ctx, [{ kind: 'property', key: 'skills', mode: 'union', value: ['Scala'] }]), { words: 'Add Scala to the active offers.' });
+    expect(run.after[FERRO], 'nine items and one more: ten, never the eleven a comma split would count')
+      .toBe(swap(ferro, [`skills:\n${items.map((i) => `  - ${i}\n`).join('')}`, 'skills: [SQL, "C, C++", Go, "R, S", Rust, dbt, Java, Kotlin, Swift, Scala]\n']));
+    expect(await guardOk(f, manifestOf(run)), 'the guard reads the items as written').toBe(true);
+    expect(phase(run)).toBe('done');
+  });
+
+  it('AC4 b12-set-properties-block-identical: a set equal to a block list\'s items writes nothing', async () => {
+    const ferro = blockFerro(['C, C++', 'Go']);
+    const f = await folder({ [FERRO]: ferro });
+    const run = await press(f, (ctx) => opsMap(ctx, [{ kind: 'property', key: 'skills', mode: 'set', value: ['C, C++', 'Go'] }]), { words: 'Set the skills of the active offers.' });
+    expect(editsOf(manifestOf(run), await f.id(FERRO)), 'already as asked').toHaveLength(0);
+    expect(run.after[FERRO]).toBe(ferro);
+    expect(archived(run, 'press-1')).toBe(true);
+  });
+
+  it('AC3 b12-set-properties-block-membership: a condition on a list reads a block list by its items, a comma inside one kept', async () => {
+    const ferro = blockFerro(['C, C++', 'Go']);
+    const f = await folder({ [FERRO]: ferro, [MALLO]: offer('Mallowick', { created: '2026-10-06', skills: '["C, C++"]' }) });
+    const run = await press(f, (ctx) => opsMap(ctx, [REVIEWED], { set: set(ctx, { where: { op: 'all', of: [ACTIVE, { op: 'contains', property: 'skills', value: 'C, C++' }] } }) }));
+    expect(run.after[FERRO], 'the block item "C, C++" is one item').toBe(swap(ferro, REVIEW));
+    expect(run.after[MALLO]).toContain('review_state: reviewed\n');
+  });
+
   it('AC4 b12-set-properties-block-list: a union, a tag add and a tag remove on a block list write one canonical inline list in its place, every item kept', async () => {
     const ferro = offer('Ferrowick', { created: '2026-10-06', skills: '[SQL]' }).replace('skills: [SQL]\n', 'skills:\n  - SQL\n  - C, C++\n');
     const mallo = offer('Mallowick', { created: '2026-10-06', tags: '[career]' }).replace('tags: [career]\n', 'tags:\n  - career\n  - remote\n');
@@ -398,6 +441,43 @@ describe('B12a a request maps a property or a tag over a set', () => {
     for (const value of ['', '   ']) expect(propertyValue(row, 'q1', frontValues(`---\nq1: ${JSON.stringify(value)}\n---\n`)?.q1), JSON.stringify(value)).toBe('missing');
   });
 
+  /** Money in both key orders: equal as JSON values (object key order aside), never as text. */
+  const MONEY_TABLE = { v: 1, rows: [{ ...ROW, properties: { ...ROW.properties, salary: { type: 'money' } } },
+    { ...PROFILE_ROW, properties: { ...PROFILE_ROW.properties, target_pay: { type: 'money' } } }] };
+  const CURRENCY_FIRST = { currency: 'EUR', amount: 10 };
+  const AMOUNT_FIRST = { amount: 10, currency: 'EUR' };
+  it.each([['currency first', CURRENCY_FIRST], ['amount first', AMOUNT_FIRST]] as const)(
+    'AC1 b12-set-properties-money-key-order: a money value with its keys %s applies, its replay writes nothing, and the guard takes either order', async (_name, value) => {
+      const f = await folder({}, { table: MONEY_TABLE });
+      const words = 'Set the salary of the active offers.';
+      const ops = [{ kind: 'property', key: 'salary', mode: 'set', value }];
+      const run = await press(f, (ctx) => opsMap(ctx, ops), { words });
+      expect(refusals(), 'not refused for its key order').toEqual([]);
+      expect(run.after[FERRO]).toBe(swap(OFFERS[FERRO], ['review_state: new\n---\n', `review_state: new\nsalary: ${JSON.stringify(value)}\n---\n`]));
+      const stored = manifestOf(run);
+      const ferroId = await f.id(FERRO);
+      const other = JSON.stringify(value === CURRENCY_FIRST ? AMOUNT_FIRST : CURRENCY_FIRST);
+      const reorder = (e: Record<string, unknown>) => {
+        e.text = String(e.text).replace(`salary: ${JSON.stringify(value)}`, `salary: ${other}`);
+        for (const c of e.changes as Array<Record<string, unknown>>) if (c.key === 'salary') c.line = `salary: ${other}`;
+      };
+      expect(await guardOk(f, await resealed(stored, ferroId, reorder)), 'the resealed twin in the other key order').toBe(true);
+      const replay = await press(f, (ctx) => opsMap(ctx, ops), { words });
+      expect(editsOf(manifestOf(replay), ferroId), 'a value already there is not written again').toHaveLength(0);
+      const other2 = await press(f, (ctx) => opsMap(ctx, [{ kind: 'property', key: 'salary', mode: 'set', value: JSON.parse(other) as unknown }]), { words });
+      expect(editsOf(manifestOf(other2), ferroId), 'the same value in the other key order is already there').toHaveLength(0);
+    });
+
+  it('AC5 b12-set-properties-money-coalesce: two members give one money value in two key orders: one change on the shared note', async () => {
+    const f = await folder({}, { table: MONEY_TABLE });
+    const run = await press(f, async (ctx) => resultsMap(ctx, [
+      await result(ctx, FERRO, [prop(await ctx.id(PROFILE), 'target_pay', 'set', CURRENCY_FIRST)]),
+      await result(ctx, MALLO, [prop(await ctx.id(PROFILE), 'target_pay', 'set', AMOUNT_FIRST)])]), { words: 'Set the target pay of Career profile from the active offers.' });
+    expect(refusals()).toEqual([]);
+    expect(run.after[PROFILE], 'identical values coalesce, whatever their key order').toBe(swap(PROFILE_TEXT, ['skills: [Python]\n---\n', `skills: [Python]\ntarget_pay: ${JSON.stringify(CURRENCY_FIRST)}\n---\n`]));
+    expect(phase(run)).toBe('done');
+  });
+
   it('AC4 b12-set-properties-quoted-round-trip: quoted values are written, read back equal, and a replay writes nothing', async () => {
     const f = await folder({}, { table: QUOTED_TABLE });
     const ops = () => QUOTED.map(([key, value]) => ({ kind: 'property', key, mode: 'set', value }));
@@ -418,7 +498,8 @@ describe('B12a a request maps a property or a tag over a set', () => {
       const reviewWords = 'Mark the active offers in Job hunt as reviewed.';
       const levelWords = 'Set the level and the skills from the active offers.';
       const f = await folder();
-      const other = await ask(f, 'other-1', opsOlder ? reviewWords : levelWords, opsOlder ? DAY - 1 : DAY + 100);
+      // `other-1` is the older map's request in both cases (R52: by record `at`).
+      const other = await ask(f, 'other-1', opsOlder ? reviewWords : levelWords, DAY - 1);
       const run = await press(f, async (ctx) => ({ ...empty, maps: [
         map({ ...ctx, request: opsOlder ? other : ctx.request }, { ops: [REVIEWED] }),
         map({ ...ctx, request: opsOlder ? ctx.request : other }, { results: [
@@ -571,6 +652,23 @@ describe('B12a refusals: shape, binding, limit', () => {
     expect(phase(run)).toBe('done');
   });
 
+  // Ruling 2 (round 3): the 8-op limit counts every op that would apply to one note, a broadcast map's and a results map's together.
+  const FIVE = [REVIEWED, { kind: 'property', key: 'level', mode: 'set', value: 'senior' }, { kind: 'property', key: 'note', mode: 'set', value: 'Remote first' },
+    { kind: 'tag', mode: 'add', value: 'shortlist' }, { kind: 'property', key: 'skills', mode: 'union', value: ['Go'] }];
+  it.each([['5 broadcast ops and 4 of its own on one note are refused', 5, true], ['4 broadcast ops and 4 of its own on one note pass', 4, false]] as const)(
+    'AC2 b12-set-properties-combined-limit: %s (mapLimit)', async (_name, broadcast, refused) => {
+      const f = await folder();
+      const other = await ask(f, 'other-1', 'Set the level and the skills from the active offers.', DAY - 1);
+      const run = await press(f, async (ctx, attempt) => {
+        if (attempt > 0) return opsMap(ctx, [REVIEWED]);
+        const ferro = await ctx.id(FERRO);
+        return { ...empty, maps: [map(ctx, { ops: FIVE.slice(0, broadcast) }), map({ ...ctx, request: other }, { results: [{ memberId: ferro,
+          ops: [prop(ferro, 'level', 'set', 'junior'), prop(ferro, 'skills', 'union', ['Rust']), prop(ferro, 'note', 'set', 'Hybrid'), { kind: 'tag', targetId: ferro, mode: 'add', value: 'remote' }] }] }, { title: 'Offer levels' })] };
+      });
+      expect(refusals().slice(0, 2)).toEqual(refused ? ['mapLimit', 'more than 8 ops for one note'] : []);
+      expect(phase(run)).toBe('done');
+    });
+
   it('AC2 b12-set-properties-two-maps: two maps for one request are refused once (mapLimit)', async () => {
     const f = await folder();
     const run = await press(f, async (ctx, attempt) => attempt === 0 ? { ...empty, maps: [ops(ctx), ops(ctx)] } : opsMap(ctx, [REVIEWED]));
@@ -639,6 +737,27 @@ describe('B12a writes: the person\'s edit, recovery, the guard, the ledger', () 
     expect(editsOf(manifestOf(second), await f.id(FERRO)), 'a member already as asked is not written again').toHaveLength(0);
     expect(ferroWrites).toBe(1);
     expect(archived(second, 'press-1')).toBe(true);
+  });
+
+  it('AC3 b12-set-properties-unreadable-member: a candidate that cannot be read keeps the request waiting; the next run settles it', async () => {
+    const zel = `${HUNT}/Zelwick offer.md`;
+    const f = await folder({ [zel]: offer('Zelwick') });
+    const zelId = await f.id(zel);
+    // Ruling 3 (round 3): Drive refuses the whole read of one candidate; its prefix still reads.
+    const first = await press(f, (ctx) => opsMap(ctx, [REVIEWED]), { around: (next) => async (input, init) => {
+      const at = url(input);
+      const ranged = new Headers(init?.headers).has('Range');
+      if (at.pathname === `/drive/v3/files/${zelId}` && at.searchParams.get('alt') === 'media' && !ranged) {
+        return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refusal.', errors: [{ reason: 'cannotDownloadFile' }] } }), { status: 403 });
+      }
+      return next(input, init);
+    } });
+    expect(refusals(), 'not a refusal of the reply').toEqual([]);
+    expect(archived(first, 'press-1'), 'membership is not known: the request waits').toBe(false);
+    expect(first.after[zel]).toBe(offer('Zelwick'));
+    const second = await press(f, (ctx) => opsMap({ ...ctx, request: first.request ?? '' }, [REVIEWED]), { words: 'Update these notes.' });
+    for (const path of [FERRO, MALLO, zel]) expect(second.after[path], path).toContain('review_state: reviewed\n');
+    expect(archived(second, 'press-1'), 'the next run settles it').toBe(true);
   });
 
   it('AC7 b12-set-properties-crash-before-write: a crash before a member write is sent writes it once on redispatch, with no model call', async () => {

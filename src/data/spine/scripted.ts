@@ -12,7 +12,7 @@
  */
 import { createOwnershipContext, parseOwnership, type AboutRegion, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal, relinkEntry } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, frontLine, sameJson, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal, relinkEntry } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { formulaInstalled, parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
@@ -40,8 +40,9 @@ import type { AdmissionManifest } from './admission';
 import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
-import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
-import { VIEW_LIMITS, viewFault } from '../contracts/view-format';
+import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable, bowerNoteRole, frontValues, propertyValue, scalarList, scalarOf, summaryScalar, valueOk } from '../contracts/note-format';
+import { VIEW_LIMITS, computedBy, viewFault } from '../contracts/view-format';
+import type { TypeRow } from '../contracts/types';
 
 import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseObservations } from '../contracts/observations';
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
@@ -498,7 +499,18 @@ export interface Filing {
   views?: readonly ViewInstall[];
   /** Views a request suggests (B11f), asked before or after the askAfter questions, as the reply wrote them (R73). */
   suggestions?: { first: boolean; views: readonly ViewSuggestion[] };
+  /** Maps requests answer (B12), checked by the provider, in reply order. */
+  maps?: readonly MapRequest[];
 }
+
+/** One op of a map on one note (B12): a property `set` or `union` (with the row it was checked against), or a tag (`key: 'tags'`) `add` or `remove`. */
+export interface MapOp { targetId: string; key: string; mode: 'set' | 'union' | 'add' | 'remove'; value: unknown; rowId?: string }
+/**
+ * A map a request answers (B12 R1-R21, checked by the provider): its set's members in the set's order, and each member's
+ * ops in reply order (one rule for all, given to each member, or a result per member). `pending`: a candidate of the set
+ * could not be read, so its membership is not known and the request waits whole (ruling 3).
+ */
+export interface MapRequest { requestId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[] }>; pending?: true }
 
 /**
  * One view a request installs (B11c, B11e), checked by the provider as a write: an aggregate in a Bower map (`home` its
@@ -612,6 +624,8 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
   views?: readonly ViewInstall[];
   /** The views requests suggest (B11f): asked as proposals; a yes installs the frozen one. */
   suggestions?: Filing['suggestions'];
+  /** The maps requests answer (B12); a request one answers settles once its notes are written, unavailable or as asked. */
+  maps?: Filing['maps'];
   /** How it answers a request; without it, requests wait. */
   request?(text: string): RequestPlan | null;
   /** The Timeline line an answer adds to a stored note (C07). */
@@ -638,6 +652,7 @@ export function modelDecisions(filing: Filing): Decisions {
     askAfter: filing.askAfter,
     views: filing.views ?? [],
     ...(filing.suggestions ? { suggestions: filing.suggestions } : {}),
+    ...(filing.maps ? { maps: filing.maps } : {}),
   };
 }
 
@@ -692,6 +707,130 @@ const emptyReport = (): ManifestRunReport => ({ filed: [], created: [], updated:
  * refuses the plan as too big, it is planned again with one edit fewer. The rest wait for the next run;
  * a pile whose merge line waits is planned again as `held`, left whole for the next run with its answer.
  */
+/**
+ * The oldest request owns a shared note (B12 R52, R53; C05's rule): this run's requests by record `at`, then id. A map
+ * member whose ops touch a note an older request changes or names is unavailable, and its request still settles; a C05
+ * request naming a note an older map changes waits untouched (`waits`).
+ */
+function mapsOwned(maps: readonly MapRequest[], requests: readonly JournalLine[], named: (text: string) => string[]) {
+  const unavailable = new Map<string, Set<string>>();
+  const waits = new Set<string>();
+  if (!maps.length) return { unavailable, waits };
+  const owner = new Map<string, string>();
+  const byMap = new Map(maps.map((m) => [m.requestId, m]));
+  for (const l of [...requests].sort((a, b) => a.rec.at - b.rec.at || (a.rec.id < b.rec.id ? -1 : a.rec.id > b.rec.id ? 1 : 0))) {
+    const m = byMap.get(l.rec.id);
+    if (!m) {
+      const notes = named(l.rec.text ?? l.rec.what);
+      if (notes.some((id) => byMap.has(owner.get(id) ?? ''))) waits.add(l.rec.id);
+      else for (const id of notes) if (!owner.has(id)) owner.set(id, l.rec.id);
+      continue;
+    }
+    for (const r of m.results) {
+      const targets = [...new Set(r.ops.map((o) => o.targetId))];
+      if (targets.some((t) => (owner.get(t) ?? m.requestId) !== m.requestId)) unavailable.set(m.requestId, (unavailable.get(m.requestId) ?? new Set()).add(r.memberId));
+      else for (const t of targets) owner.set(t, m.requestId);
+    }
+  }
+  return { unavailable, waits };
+}
+
+/** A front-matter line's value as written. */
+const lineValue = (line: string): string => line.slice(line.indexOf(':') + 1).trim();
+/** The items of a flow list line, each with its span in the line (quotes respected, as `scalarList` reads them). */
+function flowItems(line: string): Array<{ start: number; end: number; value: string }> {
+  const open = line.indexOf('[');
+  const close = line.lastIndexOf(']');
+  const items: Array<{ start: number; end: number; value: string }> = [];
+  let quote = '';
+  let start = open + 1;
+  const push = (end: number): void => {
+    const raw = line.slice(start, end);
+    const lead = raw.length - raw.trimStart().length;
+    if (raw.trim()) items.push({ start: start + lead, end: start + raw.trimEnd().length, value: scalarOf(raw.trim()) });
+  };
+  for (let i = open + 1; i < close; i++) {
+    const c = line[i];
+    if (quote) {
+      if (quote === '"' && c === '\\') i++;
+      else if (c === quote) quote = quote === "'" && line[i + 1] === "'" ? (i++, quote) : '';
+    } else if ((c === '"' || c === "'") && !line.slice(start, i).trim()) quote = c;
+    else if (c === ',') { push(i); start = i + 1; }
+  }
+  push(close);
+  return items;
+}
+
+/**
+ * A target's front-matter lines once a map's ops apply, in the set's order (B12 R10-R13, R16, R55, R57, R58): each key
+ * once, in the order the ops first name it, through the one scalar writer. A `union` or a tag `add` appends to a stored
+ * flow list (its bytes kept), a tag `remove` takes that item and its separator, a `set` replaces the line, and any other
+ * stored list is written again as one inline list in its place. [] when every op already holds; null when the target
+ * is refused: two values for one key, more than 10 items or 3 tags, or a value that cannot be read or written back.
+ */
+function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[], vocabulary: readonly string[]): Array<{ key: string; line: string }> | null {
+  const out: Array<{ key: string; line: string }> = [];
+  const decoded = (key: string, line: string) => row ? propertyValue(row, key, frontValues(`---\n${line}\n---\n`)?.[key]) : 'invalid';
+  /** A key's stored value from its first line, as the author replaces it; a block list by the items read, never as one text. */
+  const storedValue = (key: string, stored: ReturnType<typeof frontLine>, items: readonly string[]): ReturnType<typeof decoded> => {
+    if (!stored) return 'missing';
+    if (!stored.items) return decoded(key, stored.line);
+    if (!items.length) return 'missing';
+    const declaration = row?.properties[key];
+    return declaration?.type === 'list' && valueOk(declaration, items) && items.every((i) => i.trim()) ? { value: [...items] } : 'invalid';
+  };
+  const inline = (key: string, items: readonly string[]): string => `${key}: [${items.map((i) => summaryScalar(i, true)).join(', ')}]`;
+  for (const key of [...new Set(ops.map((o) => o.key))]) {
+    const mine = ops.filter((o) => o.key === key);
+    const stored = frontLine(text, key);
+    const items = stored === null ? [] : stored.items ? stored.items.map(scalarOf) : scalarList(lineValue(stored.line));
+    const flow = stored && !stored.items && /^\[.*\]$/.test(lineValue(stored.line)) ? stored.line : null;
+    const append = (line: string, adds: readonly string[]): string => {
+      const at = line.lastIndexOf(']');
+      return line.slice(0, at) + (lineValue(line).slice(1, -1).trim() ? ', ' : '') + adds.map((i) => summaryScalar(i, true)).join(', ') + line.slice(at);
+    };
+    if (key === 'tags') {
+      const adds = [...new Set(mine.filter((o) => o.mode === 'add').map((o) => String(o.value)))].filter((t) => !items.includes(t));
+      const removes = new Set(mine.filter((o) => o.mode === 'remove').map((o) => String(o.value)));
+      if (mine.some((o) => o.mode === 'add' && removes.has(String(o.value)))) return null;
+      const result = [...items.filter((t) => !removes.has(t)), ...adds];
+      if (result.length === items.length && result.every((t, i) => t === items[i])) continue;
+      if (result.length > NOTE_TAGS_MAX || result.some((t) => !vocabulary.includes(t))) return null;
+      if (!flow) { out.push({ key, line: inline(key, result) }); continue; }
+      let line = flow;
+      for (const item of flowItems(flow).filter((x) => removes.has(x.value)).reverse()) {
+        const now = flowItems(line);
+        const k = now.findIndex((x) => x.start === item.start);
+        const next = now[k + 1];
+        const prev = now[k - 1];
+        line = next ? line.slice(0, item.start) + line.slice(next.start) : prev ? line.slice(0, prev.end) + line.slice(item.end) : line.slice(0, item.start) + line.slice(item.end);
+      }
+      out.push({ key, line: adds.length ? append(line, adds) : line });
+      continue;
+    }
+    const declaration = row?.properties[key];
+    const was = storedValue(key, stored, items);
+    if (!row || !declaration || computedBy(row).has(key) || was === 'invalid' || new Set(mine.map((o) => o.mode)).size > 1) return null;
+    let line: string;
+    if (mine[0]?.mode === 'union') {
+      const adds = [...new Set(mine.flatMap((o) => (Array.isArray(o.value) ? o.value.map(String) : [])))].filter((i) => !items.includes(i));
+      if (!adds.length) continue;
+      if (items.length + adds.length > 10) return null;
+      line = flow ? append(flow, adds) : inline(key, [...items, ...adds]);
+    } else {
+      if (mine.some((o) => !sameJson(o.value, mine[0]?.value))) return null;
+      const value = mine[0]?.value;
+      line = Array.isArray(value) ? inline(key, value.map(String)) : `${key}: ${typeof value === 'string' ? summaryScalar(value) : JSON.stringify(value)}`;
+      const now = decoded(key, line);
+      if (typeof was === 'object' && typeof now === 'object' && sameJson(was.value, now.value)) continue;
+    }
+    // R57: a written value reads back as one its property holds.
+    if (typeof decoded(key, line) !== 'object') return null;
+    out.push({ key, line });
+  }
+  return out;
+}
+
 export async function planScripted(drive: ScriptedRead, rootId: string, opts: PlanOptions, editCap = EDITS_PER_RUN, held: ReadonlySet<string> = new Set()): Promise<RunPlan> {
   const captured = await capture(drive, rootId, opts);
   let attempt: Attempt = { editCap, held };
@@ -782,7 +921,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
+  return { context, rootId, all, listing, ix, lines, inbox, journalAll: read, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -986,6 +1125,26 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // A request a checked reply installs views for (B11c) settles by its views-set edits, never by the generic handler.
   const viewRequests = new Set(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
     && (opts.decisions.views ?? []).some((v) => v.requestId === l.rec.id)).map((l) => l.rec.id));
+  // Maps requests answer (B12): settled by their own edits, never by the generic handler; one whose membership is not
+  // known waits whole (ruling 3).
+  const maps = (opts.decisions.maps ?? []).filter((m) => !columnRequests.has(m.requestId) && !viewRequests.has(m.requestId)
+    && lines.some((l) => l.rec.kind === 'request' && l.rec.id === m.requestId));
+  const mapWaits = new Set(maps.filter((m) => m.pending).map((m) => m.requestId));
+  const mapRequests = new Set(maps.filter((m) => !m.pending).map((m) => m.requestId));
+  // Every request in your changes counts, one this run leaves waiting too: the oldest owns a note (R52).
+  const mapOwned = mapsOwned(maps.filter((m) => !m.pending), snapshot.journalAll.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
+    && !viewRequests.has(l.rec.id) && !mapWaits.has(l.rec.id)), (text) => requestTargets(listing, ix, text).notes.map((n) => n.file.id));
+  // A property asked for that is not a column becomes one, the first in reply order, once per row (R25, R56).
+  const columned = new Set<string>();
+  if (types.writeAllowed && sys?.folder) for (const m of maps.filter((x) => mapRequests.has(x.requestId))) for (const r of m.results) for (const op of r.ops) {
+    const row = nextTable.rows.find((x) => x.id === op.rowId);
+    if (!row || op.key === 'tags' || columned.has(row.id) || row.table.includes(op.key)) continue;
+    const changed = requestTableColumn(row, op.key, { kind: 'words', recordId: m.requestId });
+    if (!changed) continue;
+    columned.add(row.id);
+    nextTable = { ...nextTable, rows: nextTable.rows.map((old) => old.id === row.id ? changed.row : old) };
+    tableRecords.add(m.requestId);
+  }
   // A refused stored destination stays waiting in the same round record until a new asking is saved.
   const reaskOf = (id: string): Ask | undefined => {
     const q = roundFor(rounds, { id: askId(id), subject: id, hash: inboxHashes.get(id) }, inbox, inboxHashes)?.reask;
@@ -1043,7 +1202,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return { options };
   };
   // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
-  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)), listing, ix, appends, since);
+  const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)
+    && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;
@@ -1130,7 +1290,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return row ? [[l.rec.id, row] as const] : [];
   }));
   let journal = lines.filter((l) => {
-    if (l.rec.kind === 'request') return formulaWaits.has(l.rec.id) ? false : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id)
+    if (l.rec.kind === 'request') return formulaWaits.has(l.rec.id) || mapWaits.has(l.rec.id) || mapOwned.waits.has(l.rec.id) ? false
+      : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id) || mapRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
     if (l.rec.kind !== 'answer') return true;
     if (proposalSettled.has(l.rec.id)) return true;
@@ -1937,7 +2098,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; rows: Array<{ what: string; line?: number }>; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[]; types?: string }> = [];
+  const edits: Array<{ file: DriveFile; path: string; rows: Array<{ what: string; line?: number }>; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[]; types?: string; tags?: string }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
@@ -2269,21 +2430,30 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // leaves its requests waiting. A yes to a suggested view (B11f) installs the same way, by its answer (R64, R70).
   const installs = new Map<string, ViewInstall[]>();
   for (const v of [...(d.views ?? []).filter((x) => viewRequests.has(x.requestId)), ...yesViews]) if (v.kind === 'moc') installs.set(v.home, [...installs.get(v.home) ?? [], v]);
+  /**
+   * A note a request's edit changes, read now. One the person changed after Bower read it (R34): the edit keeps the
+   * version Bower read, so Drive refuses the write, their change stays, and the request waits for the next run.
+   */
+  const readNote = async (id: string) => {
+    const file = ix.byId(id);
+    const path = ix.pathOf(id);
+    const before = file && await verified(file, 'utf8');
+    const bytes = file && before ? await drive.readBytes(id) : null;
+    if (!file || !path || !before || !bytes) return null;
+    const digest = await sha256(new Blob([bytes.slice()]));
+    if (before.size !== bytes.byteLength || before.sha256 !== digest) Object.assign(before, { size: bytes.byteLength, sha256: digest });
+    return { file, path, before, bytes };
+  };
   for (const [home, asked] of installs) {
     let wanted = asked;
-    const target = ix.byId(home);
-    const path = ix.pathOf(home);
-    const before = target && await verified(target, 'utf8');
-    const bytes = target && before ? await drive.readBytes(home) : null;
     const wait = (why: string): void => {
       console.error(new BowerError('conflict', VIEWS_WAIT), why);
       journal = journal.filter((l) => !wanted.some((v) => v.requestId === l.rec.id));
     };
-    if (!target || !path || !before || !bytes) { wait(`${path ?? home} could not be read`); continue; }
-    // A map the person changed after Bower read it (R34): the edit keeps the version Bower read, so Drive refuses the
-    // write, their change stays, and the request waits for the next run; its other maps are written meanwhile (R44).
-    const digest = await sha256(new Blob([bytes.slice()]));
-    if (before.size !== bytes.byteLength || before.sha256 !== digest) Object.assign(before, { size: bytes.byteLength, sha256: digest });
+    const read = await readNote(home);
+    if (!read) { wait(`${ix.pathOf(home) ?? home} could not be read`); continue; }
+    // Its other maps are written meanwhile (R44).
+    const { file: target, path, before, bytes } = read;
     const declared = viewsDeclared(new TextDecoder().decode(bytes), fetched(home));
     let next = viewsInstalled(declared.value, wanted.map((v) => v.definition));
     if (next && (JSON.parse(next.text) as unknown[]).length > VIEW_LIMITS.perHome && wanted.some((v) => yesViews.includes(v))) {
@@ -2314,6 +2484,59 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (existing) Object.assign(existing, { changes, text: result.text, types: typeText ?? '', keeps: [...existing.keeps, ...answers] });
     else edits.push({ file: target, path, before, bytes, changes, text: result.text, after: [], keeps: answers, rows: [], types: typeText ?? '' });
     places.set(home, target); edited.add(home);
+  }
+  // Maps (B12 R10-R17): each member's ops combined by target in the set's order, before any effect. A target refused (two
+  // values, a cap, a value that cannot be read, a note that is not Bower's or is a Source) leaves every member that
+  // contributes to it unavailable, and the other targets are planned again without them (R14). A written target is one
+  // edit, joined with the run's other changes there (R15), outside the edit cap (R24).
+  const mapTags = JSON.stringify({ v: 1, tags: snapshot.tagList.tags });
+  for (const m of maps.filter((x) => mapRequests.has(x.requestId))) {
+    const out = new Set(mapOwned.unavailable.get(m.requestId) ?? []);
+    const order = (id: string): number => m.members.indexOf(id);
+    const notes = new Map<string, (NonNullable<Awaited<ReturnType<typeof readNote>>> & { text: string; row?: TypeRow }) | null>();
+    let planned = new Map<string, { note: NonNullable<ReturnType<typeof notes.get>>; changes: Change[]; text: string }>();
+    for (let refused = true; refused;) {
+      refused = false;
+      planned = new Map();
+      const byTarget = new Map<string, { ops: MapOp[]; members: Set<string> }>();
+      for (const r of m.results.filter((x) => !out.has(x.memberId) && order(x.memberId) >= 0).sort((a, b) => order(a.memberId) - order(b.memberId))) {
+        for (const op of r.ops) {
+          const t = byTarget.get(op.targetId) ?? { ops: [], members: new Set<string>() };
+          t.ops.push(op);
+          t.members.add(r.memberId);
+          byTarget.set(op.targetId, t);
+        }
+      }
+      for (const [targetId, { ops, members }] of byTarget) {
+        if (!notes.has(targetId)) {
+          const read = ix.pathOf(targetId)?.endsWith('.md') ? await readNote(targetId) : null;
+          const text = read ? new TextDecoder().decode(read.bytes) : '';
+          let own = false;
+          try { own = !!read && parseNote(read.path, text, fetched(targetId)).byBower && bowerNoteRole(text, fetched(targetId)) !== 'source'; } catch (e) { console.error(e); }
+          notes.set(targetId, read && own ? { ...read, text, row: nextTable.rows.find((r) => r.id === frontValues(text)?.type) } : null);
+        }
+        const note = notes.get(targetId);
+        const lines = note ? mapLines(note.text, note.row, ops, grownTags.tags) : null;
+        const existing = edits.find((e) => e.file.id === targetId);
+        const first = (c: Change): boolean => c.kind === 'state-rewrite' || c.kind === 'link-rewrite' || c.kind === 'views-set';
+        const changes: Change[] = lines ? [...(existing?.changes ?? []).filter(first), ...lines.map(({ key, line }): Change => ({ kind: 'property-set', recordIds: [m.requestId], key, line })),
+          ...(existing?.changes ?? []).filter((c) => !first(c))] : [];
+        const result = note && lines?.length ? applyChanges(existing?.bytes ?? note.bytes, changes, fetched(targetId)) : null;
+        if (note && lines && (!lines.length || result?.ok)) {
+          if (result?.ok) planned.set(targetId, { note, changes, text: result.text });
+          continue;
+        }
+        for (const id of members) out.add(id);
+        refused = true;
+      }
+    }
+    for (const [targetId, { note, changes, text }] of planned) {
+      const existing = edits.find((e) => e.file.id === targetId);
+      if (existing) Object.assign(existing, { changes, text, types: typeText ?? '', tags: mapTags });
+      else edits.push({ file: note.file, path: note.path, before: note.before, bytes: note.bytes, changes, text, after: [], keeps: [], rows: [], types: typeText ?? '', tags: mapTags });
+      places.set(targetId, note.file);
+      edited.add(targetId);
+    }
   }
   for (const { pileId, folder, words } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);
@@ -2852,8 +3075,12 @@ export async function build(decided: Decided): Promise<Ended> {
     const cited = [...edit.after.flatMap((id) => moveOf.get(id) ?? []), ...edit.changes.flatMap((c) =>
       c.kind === 'timeline-append' && c.consent ? pointers.get(c.consent.requestId) ?? [] : [])];
     // A views-set edit carries its read bytes and type table, so the guard authors it again (R43).
-    const beforeText = edit.keeps.length || edit.changes.some((change) => change.kind === 'profile-rewrite' || change.kind === 'views-set') ? { beforeText: new TextDecoder().decode(edit.bytes), ...(edit.types === undefined ? {} : { types: edit.types }) } : {};
-    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
+    // So does a property-set edit, with the tag list it read (B12 R22, R54).
+    const beforeText = edit.keeps.length || edit.changes.some((change) => change.kind === 'profile-rewrite' || change.kind === 'views-set' || change.kind === 'property-set')
+      ? { beforeText: new TextDecoder().decode(edit.bytes), ...(edit.types === undefined ? {} : { types: edit.types }), ...(edit.tags === undefined ? {} : { tags: edit.tags }) } : {};
+    // A tag this run adds to the list is there before a note takes it.
+    const tagged = tagOp && edit.changes.some((c) => c.kind === 'property-set' && c.key === 'tags') ? [tagOp] : [];
+    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, [...cited, ...tagged]);
     editOf.set(edit.file.id, op);
     for (const answer of edit.keeps) derive(answer, op);
     for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) need(id).edits.push(op);

@@ -81,7 +81,8 @@ export class RunTiming {
       outputTokens: previous.outputTokens + stats.outputTokens,
     } : stats;
   }
-  requireOperations(count: number, items: number): void { if (count > 200) throw new LedgerExhausted(items); }
+  /** B1d's one ledger (B12 R23): 200 ordinary operations, and 1,000 in all with a map's (`mapped` of the `count`). */
+  requireOperations(count: number, items: number, mapped = 0): void { if (count - mapped > 200 || count > 1000) throw new LedgerExhausted(items); }
 
   /** Discovery, declaration and settling share maintenance's one whole-run allowance. */
   async maintenance<T>(f: () => Promise<T>, items?: number): Promise<T> {
