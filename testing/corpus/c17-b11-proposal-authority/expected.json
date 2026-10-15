@@ -19,19 +19,18 @@
     {
       "path": "Projects/Job hunt/Job hunt.md",
       "contains": [
-        "No view has been installed."
+        "## Figures"
       ],
       "excludes": [
+        "bower_views",
         "window.fetch",
         "sensitive_preference"
       ]
     }
   ],
   "report": {
-    "filed": 1,
-    "created": [
-      "Projects/Job hunt/Ferrowick offer.md"
-    ],
+    "filed": 0,
+    "created": [],
     "questionsExactly": 0
   },
   "runs": [

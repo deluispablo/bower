@@ -3,6 +3,10 @@
   "rows": [
     {
       "id": "offer",
+      "match": [
+        "job offer"
+      ],
+      "template": "source",
       "properties": {
         "deadline": {
           "type": "date"

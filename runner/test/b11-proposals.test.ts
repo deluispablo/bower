@@ -127,6 +127,9 @@ const asked = (p: { id: string }): Question => ({ id: `q-proposal-${p.id}`, ...A
 /** A suggestion's proposal id: its home plus its view id, the installed identity (R67). */
 const pid = async (f: Folder, id: string, home: unknown = { kind: 'moc', fileId: f.mapId }) => `view-${(await canonical({ home, id })).hash.slice(0, 16)}`;
 const phase = (run: CaseRun) => run.wire?.statuses.at(-1)?.phase;
+/** A request's body as text: a stamped write is a multipart Blob, which `String` would only name. */
+const bodyOf = async (init?: RequestInit) => (init?.body == null ? '' : await new Response(init.body).text());
+const target = (input: RequestInfo | URL) => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 const questions = (run: CaseRun) => (JSON.parse(run.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
 function declared(text: string | undefined): unknown[] | undefined {
   const line = /^bower_views: (.*)$/m.exec((text ?? '').split('\n---\n')[0] ?? '')?.[1];
@@ -157,6 +160,12 @@ const AMBER_TEXT = `---\nsummary: Amber flat is in Saltmere.\ntype: flat\nby: bo
   + 'deadline: 2026-10-14\n---\n\nAmber flat is in Saltmere.\n';
 const YEAR = { v: 1, id: 'flat-year', kind: 'formula', type: 'flat', outputs: [{ property: 'rent_year', type: 'money', expr: { op: '*', left: { property: 'rent' }, right: { number: 12 } } }] };
 const DAYS_LEFT = { v: 1, id: 'flat-days', kind: 'formula', type: 'flat', outputs: [{ property: 'days_left', type: 'number', expr: { op: 'daysUntil', value: { property: 'deadline' } } }] };
+/** A suggested view's verdict from the proposal contract and from the app's questions-file reader (layout.ts isRunnerFile). */
+const contracts = (definition: Record<string, unknown>) => {
+  const home = definition.kind === 'formula' ? { kind: 'type-row', rowId: 'flat' } : { kind: 'moc', fileId: 'map-1' };
+  const proposal = { id: 'view-x', payload: { kind: 'view', home, definition: definition.kind === 'formula' ? definition : bound(definition, 'folder-1') } };
+  return [proposalOk(proposal), isRunnerFile(SYSTEM.questions, { v: 1, questions: [{ id: 'q-proposal-view-x', ...ASK, askedAt: DAY, proposal }] })];
+};
 const FLAT_ROW = { id: 'flat', match: ['flat listing'], template: 'source',
   properties: { rent: { type: 'money' }, area: { type: 'number' }, deadline: { type: 'date' }, rent_year: { type: 'money' } }, table: ['rent', 'area', 'deadline'] };
 /** The offer row compact and the flat row with its formula list written compact, so untouched bytes can be found again. */
@@ -246,11 +255,10 @@ describe('B11f suggested views', () => {
     const p = frozen(DEADLINES);
     const f = await folder({ questions: [asked(p)], proposals: [p], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
     const state = { reached: false };
-    const target = (input: RequestInfo | URL) => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const first = await press(f, () => empty, { words: 'Update these notes.', around: (next) => async (input, init) => {
       if (state.reached && target(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
       // Only the install write, the one carrying the declaration; other map writes go through.
-      if (init?.method === 'PATCH' && target(input).pathname === `/upload/drive/v3/files/${f.mapId}` && String(init.body).includes('bower_views: ')) {
+      if (init?.method === 'PATCH' && target(input).pathname === `/upload/drive/v3/files/${f.mapId}` && (await bodyOf(init)).includes('bower_views: ')) {
         state.reached = true;
         throw new TypeError('Made-up crash before the install write.');
       }
@@ -379,9 +387,62 @@ describe('B11f suggested views', () => {
     expect(isRunnerFile(SYSTEM.questions, file(view)), 'the app reads a view suggestion').toBe(true);
   });
 
-  it('AC37 b11-proposal-yes-known-folder: a yes after a run that already read the folder counts every member, past the prefix too; body text is not front matter', async () => {
+  it.each<[string, Record<string, unknown>]>([
+    ['a formula with no outputs', { v: 1, id: 'f', kind: 'formula', type: 'flat' }],
+    ['an unknown key in a formula output', { ...DAYS_LEFT, outputs: [{ ...DAYS_LEFT.outputs[0], note: 'x' }] }],
+    ['an unknown key in an expression', { ...DAYS_LEFT, outputs: [{ ...DAYS_LEFT.outputs[0], expr: { op: 'daysUntil', value: { property: 'deadline', code: 'x' } } }] }],
+    ['an unknown key in a measure', { ...DEADLINES, measures: [{ ...DEADLINES.measures[0], code: 'x' }] }],
+    ['an aggregate with no measures', { ...DEADLINES, measures: undefined }],
+    ['an unknown key in a condition', { ...DEADLINES, set: { ...DEADLINES.set, where: { ...DEADLINES.set.where, code: 'x' } } }],
+  ])('AC40 b11-proposal-contract-whole: %s is refused by the proposal contract and by the app\'s questions-file reader', (_name, definition) => {
+    expect(contracts(definition)).toEqual([false, false]);
+  });
+
+  // Ruling (2): without the table a suggestion is checked for shape only, at every depth; its types wait for the install (R64).
+  const RENT = { property: 'rent' };
+  const N = { number: 1 };
+  const SEVEN = { op: '+', left: { op: '+', left: N, right: N }, right: { op: '+', left: N, right: N } };
+  const formula = (expr: unknown, type = 'number') => ({ ...DAYS_LEFT, outputs: [{ property: 'days_left', type, expr }] });
+  const where = (w: unknown) => ({ ...DEADLINES, set: { ...DEADLINES.set, where: w } });
+  const nested = (levels: number): unknown => (levels === 0 ? { property: 'deadline' } : { op: 'daysUntil', value: nested(levels - 1) });
+  const outputs = (exprs: unknown[]) => ({ ...DAYS_LEFT, outputs: exprs.map((expr, i) => ({ property: `out_${i}`, type: 'number', expr })) });
+  const { type: _type, ...untyped } = DEADLINES.set;
+  const unnamed = { id: 'first', label: 'Earliest deadline', op: 'earliest' };
+  it.each<[string, Record<string, unknown>, boolean]>([
+    ['a binary right operand (valid twin)', formula({ op: '/', left: RENT, right: { property: 'area' } }, 'money'), true],
+    ['an unknown key in a binary right operand', formula({ op: '/', left: RENT, right: { property: 'area', code: 'x' } }, 'money'), false],
+    ['a missing binary right operand', formula({ op: '/', left: RENT }, 'money'), false],
+    ['an "if" (valid twin)', formula({ op: 'if', when: { op: 'exists', property: 'rent' }, then: RENT, else: { property: 'rent_year' } }, 'money'), true],
+    ['an unknown key in if.else', formula({ op: 'if', when: { op: 'exists', property: 'rent' }, then: RENT, else: { property: 'rent_year', code: 'x' } }, 'money'), false],
+    ['a missing if.else', formula({ op: 'if', when: { op: 'exists', property: 'rent' }, then: RENT }, 'money'), false],
+    ['an unknown key in if.when', formula({ op: 'if', when: { op: 'exists', property: 'rent', code: 'x' }, then: RENT, else: RENT }, 'money'), false],
+    ['a missing if.when', formula({ op: 'if', then: RENT, else: RENT }, 'money'), false],
+    ['nested all and not (valid twin)', where({ op: 'all', of: [{ op: 'not', of: { op: 'eq', property: 'status', value: 'active' } }] }), true],
+    ['an unknown key inside nested all and not', where({ op: 'all', of: [{ op: 'not', of: { op: 'eq', property: 'status', value: 'active', code: 'x' } }] }), false],
+    ['a missing condition inside nested all and not', where({ op: 'all', of: [{ op: 'not' }] }), false],
+    ['empty outputs', { ...DAYS_LEFT, outputs: [] }, false],
+    ['empty measures', { ...DEADLINES, measures: [] }, false],
+    ['the maximum depth', formula(nested(7)), true],
+    ['one level over the maximum depth', formula(nested(8)), false],
+    ['the maximum node count', outputs([SEVEN, SEVEN, SEVEN, SEVEN]), true],
+    ['one node over the maximum count', outputs([SEVEN, SEVEN, SEVEN, { ...SEVEN, right: { op: '+', left: N, right: { op: 'daysUntil', value: N } } }]), false],
+    ['a formula with no type', { ...DAYS_LEFT, type: undefined }, false],
+    ['a formula whose type is not a string', { ...DAYS_LEFT, type: 7 }, false],
+    ['a set with no type', { ...DEADLINES, set: untyped }, false],
+    ['a set whose type is not a string', { ...DEADLINES, set: { ...DEADLINES.set, type: 7 } }, false],
+    ['an expression property that is not a string', formula({ op: 'daysUntil', value: { property: 7 } }), false],
+    ['a measure with no property', { ...DEADLINES, measures: [unnamed] }, false],
+    ['a condition with no property', where({ op: 'eq', value: 'active' }), false],
+    ['an output with no property', { ...DAYS_LEFT, outputs: [{ type: 'number', expr: N }] }, false],
+    ['a valid reference to an undeclared property', formula({ op: 'daysUntil', value: { property: 'never_declared' } }), true],
+  ])('AC40 b11-proposal-contract-whole (ruling 2): %s, through the proposal contract and the app\'s questions-file reader', (_name, definition, ok) => {
+    expect(contracts(definition)).toEqual([ok, ok]);
+  });
+
+  it('AC37 b11-proposal-yes-known-folder: a yes after a run that already read the folder counts every member, a long body too; body text is not front matter', async () => {
     const p = frozen(DEADLINES);
-    const padded = offer('Ferrowick', '2026-10-14').replace('status: active\n', `x_note: ${'p'.repeat(5000)}\nstatus: active\n`);
+    // Its front matter fits the prefix; the padding is in the body (ruling: AC11, R29 and R37 stand).
+    const padded = offer('Ferrowick', '2026-10-14').replace('Related:', `${'p'.repeat(5000)}\nRelated:`);
     const tricky = offer('Mallowick', '2026-11-02').replace('Related:', 'deadline: 2026-01-01\nRelated:');
     const f = await folder({ questions: [asked(p)], proposals: [p], files: { [`${HUNT}/Ferrowick offer.md`]: padded, [`${HUNT}/Mallowick offer.md`]: tricky } });
     const known = await press(f, () => empty, { words: 'Update these notes.' });
@@ -450,6 +511,66 @@ describe('B11f suggested views', () => {
     expect(table, 'the stored formula, byte for byte').toContain(JSON.stringify(YEAR));
     expect(settledProposals(run)).toEqual([]);
     expect(run.after[AMBER]).toMatch(/^days_left: 7$/m);
+  });
+
+  // AC33/R64: a yes passes the same ten-per-home limit a request does; one that would make the eleventh is stale.
+  const stored = (n: number) => Array.from({ length: n }, (_, i) => ({ v: 1, id: `flat-f${i + 1}`, kind: 'formula', type: 'flat',
+    outputs: [{ property: `f_${i + 1}`, type: 'number', expr: { property: 'area' } }] }));
+  const rowWith = (views: Array<{ outputs: Array<{ property: string }> }>) => ({ ...FLAT_ROW, views,
+    properties: { ...FLAT_ROW.properties, ...Object.fromEntries(views.map((v) => [v.outputs[0]?.property, { type: 'number' }])) } });
+  it.each([[9, true], [10, false]])('AC37 b11-proposal-yes-limit-row: a yes beside %i stored formulas installs only up to ten (%s)', async (n, installs) => {
+    const p = { id: 'view-flat-days', payload: { kind: 'view', home: { kind: 'type-row', rowId: 'flat' }, definition: DAYS_LEFT } };
+    const f = await folder({ table: { v: 1, rows: [TABLE.rows[0], rowWith(stored(n))] }, files: { [AMBER]: AMBER_TEXT }, questions: [asked(p)], proposals: [p],
+      answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
+    const run = await press(f, () => empty, { words: 'Update these notes.' });
+    expect(phase(run)).toBe('done');
+    const flat = (JSON.parse(run.after[SYSTEM.typeTable] ?? '') as { rows: Array<{ id: string; views?: unknown[] }> }).rows.find((r) => r.id === 'flat');
+    expect(flat?.views).toEqual(installs ? [...stored(n), DAYS_LEFT] : stored(n));
+    expect(settledProposals(run), 'the yes settles either way').toEqual([]);
+    expect(logged(), 'a stale yes is said').toBe(!installs);
+  });
+
+  it.each([[9, true], [10, false]])('AC37 b11-proposal-yes-limit-map: a yes beside %i stored views installs only up to ten (%s)', async (n, installs) => {
+    const p = frozen(DEADLINES);
+    const f = await folder({ questions: [asked(p)], proposals: [p], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
+    const views = Array.from({ length: n }, (_, i) => bound(other(`stored-${i + 1}`), f.folderId));
+    const text = await f.drive.readText(f.mapId);
+    await f.drive.writeText(f.mapId, text.replace(/^(summary: .*)$/m, `$1\nbower_views: ${JSON.stringify(views)}`), (await f.drive.get(f.mapId)).modifiedTime);
+    const run = await press(f, () => empty, { words: 'Update these notes.' });
+    expect(phase(run)).toBe('done');
+    expect(declared(run.after[MAP])).toEqual(installs ? [...views, bound(DEADLINES, f.folderId)] : views);
+    expect(settledProposals(run), 'the yes settles either way').toEqual([]);
+    expect(logged(), 'a stale yes is said').toBe(!installs);
+  });
+
+  it('AC37 b11-proposal-yes-folder-left: a yes whose folder is no longer under a main folder installs nothing, settles and is logged', async () => {
+    const p = frozen(DEADLINES);
+    const f = await folder({ questions: [asked(p)], proposals: [p], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
+    // Its folder is one at the top of the person's folder, where no request could point a view (question and frozen file alike).
+    const top = await f.drive.createFolder(f.root, 'Old hunt');
+    for (const path of [SYSTEM.questions, `${SYSTEM.proposals}/${p.id}.json`]) {
+      const id = await f.id(path);
+      const text = await f.drive.readText(id);
+      await f.drive.writeText(id, text.split(JSON.stringify(f.folderId)).join(JSON.stringify(top.id)), (await f.drive.get(id)).modifiedTime);
+    }
+    const run = await press(f, () => empty, { words: 'Update these notes.' });
+    expect(phase(run)).toBe('done');
+    expect(declared(run.after[MAP])).toBeUndefined();
+    expect(settledProposals(run)).toEqual([]);
+    expect(logged()).toBe(true);
+  });
+
+  it('AC37 b11-proposal-yes-map-taken: a yes whose map is no longer Bower\'s installs nothing, settles and is logged', async () => {
+    const p = frozen(DEADLINES);
+    const f = await folder({ questions: [asked(p)], proposals: [p], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
+    // The person makes the map their own note, which no request could install a view in.
+    const text = (await f.drive.readText(f.mapId)).replace('by: bower\n', '');
+    await f.drive.writeText(f.mapId, text, (await f.drive.get(f.mapId)).modifiedTime);
+    const run = await press(f, () => empty, { words: 'Update these notes.' });
+    expect(phase(run)).toBe('done');
+    expect(run.after[MAP]).toBe(text);
+    expect(settledProposals(run)).toEqual([]);
+    expect(logged()).toBe(true);
   });
 
   it('AC38 b11-proposal-budget-shared: open type-row suggestions count toward the five open', async () => {
@@ -552,21 +673,46 @@ describe('B11f suggested views', () => {
     }
   });
 
+  /** A yes to `frozen(DEADLINES)` with no frozen file yet; an unrelated frozen file (no question) keeps the proposals folder in place. */
+  const yesFolder = async () => {
+    const p = frozen(DEADLINES);
+    return folder({ questions: [asked(p)], proposals: [frozen(other('unrelated'))], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
+  };
+  /** Its frozen side, every id bound, so only the damage under test can be at fault. */
+  const frozenBound = (f: Folder) => ({ id: frozen(DEADLINES).id, payload: { kind: 'view', home: { kind: 'moc', fileId: f.mapId }, definition: bound(DEADLINES, f.folderId) } });
+  const writeFrozen = async (f: Folder, p: { id: string; payload: unknown }) => {
+    await f.drive.createText(await f.id(SYSTEM.proposals), `${p.id}.json`, `${JSON.stringify({ v: 1, ...p }, null, 2)}\n`);
+  };
+
+  it('AC37 b11-proposal-yes-broken-twin (guard): the same yes with its frozen file written whole and its question untouched installs', async () => {
+    const f = await yesFolder();
+    await writeFrozen(f, frozenBound(f));
+    const run = await press(f, () => empty, { words: 'Update these notes.' });
+    expect(phase(run)).toBe('done');
+    expect(refused()).toEqual([]);
+    expect(declared(run.after[MAP])).toEqual([bound(DEADLINES, f.folderId)]);
+    expect(settledProposals(run)).toEqual([]);
+  });
+
   it.each<[string, (f: Folder, p: { id: string; payload: unknown }) => Promise<void>]>([
     ['its frozen file is absent', async () => {}],
     ['its frozen file is not JSON', async (f, p) => { await f.drive.createText(await f.id(SYSTEM.proposals), `${p.id}.json`, '{ not json'); }],
     ['its question is malformed', async (f, p) => {
-      await f.drive.createText(await f.id(SYSTEM.proposals), `${p.id}.json`, `${JSON.stringify({ v: 1, ...p }, null, 2)}\n`);
+      await writeFrozen(f, p);
       const qId = await f.id(SYSTEM.questions);
       const file = JSON.parse(await f.drive.readText(qId)) as { questions: Array<Record<string, unknown>> };
       for (const q of file.questions) q.proposal = { ...(q.proposal as object), payload: { kind: 'view', home: { kind: 'moc', fileId: f.mapId }, definition: { code: 'x' } } };
       await f.drive.writeText(qId, JSON.stringify(file, null, 2), (await f.drive.get(qId)).modifiedTime);
     }],
+    // A questions file that is there but not a list of questions at all: as broken as a malformed question (R69).
+    ...(['{ not json', 'null'] as const).map((text): [string, (f: Folder, p: { id: string; payload: unknown }) => Promise<void>] => [`its questions file is ${text}`, async (f, p) => {
+      await writeFrozen(f, p);
+      const qId = await f.id(SYSTEM.questions);
+      await f.drive.writeText(qId, text, (await f.drive.get(qId)).modifiedTime);
+    }]),
   ])('AC37 b11-proposal-yes-broken: a yes when %s installs nothing, refuses no reply, settles and is logged', async (_name, damage) => {
-    const p = frozen(DEADLINES);
-    // An unrelated frozen file (no question) keeps the proposals folder in place.
-    const f = await folder({ questions: [asked(p)], proposals: [frozen(other('unrelated'))], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
-    await damage(f, { ...p, payload: { ...p.payload, home: { kind: 'moc', fileId: f.mapId } } });
+    const f = await yesFolder();
+    await damage(f, frozenBound(f));
     const run = await press(f, () => empty, { words: 'Update these notes.' });
     expect(phase(run)).toBe('done');
     expect(declared(run.after[MAP])).toBeUndefined();
@@ -580,7 +726,6 @@ describe('B11f suggested views', () => {
     const p = frozen(DEADLINES);
     const f = await folder({ questions: [asked(p)], proposals: [p], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
     const file = await f.id(`${SYSTEM.proposals}/${p.id}.json`);
-    const target = (input: RequestInfo | URL) => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const first = await press(f, () => empty, { words: 'Update these notes.', around: (next) => async (input, init) => {
       if ((init?.method ?? 'GET') === 'GET' && target(input).pathname.endsWith(`/files/${file}`) && target(input).searchParams.get('alt') === 'media') {
         throw new TypeError('Made-up read failure.');
@@ -693,11 +838,10 @@ describe('B11f suggested views', () => {
   it('AC37 b11-proposal-yes-ack-lost: a yes install written but not acknowledged completes once on redispatch, settles the question, with no model call', async () => {
     const p = frozen(DEADLINES);
     const f = await folder({ questions: [asked(p)], proposals: [p], answers: [{ questionId: `q-proposal-${p.id}`, answer: true }] });
-    const target = (input: RequestInfo | URL) => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     let crashed = false;
     const first = await press(f, () => empty, { words: 'Update these notes.', around: (next) => async (input, init) => {
       if (crashed && target(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
-      if (init?.method === 'PATCH' && target(input).pathname === `/upload/drive/v3/files/${f.mapId}` && String(init.body).includes('bower_views: ')) {
+      if (init?.method === 'PATCH' && target(input).pathname === `/upload/drive/v3/files/${f.mapId}` && (await bodyOf(init)).includes('bower_views: ')) {
         const response = await next(input, init);
         crashed = response.ok;
         throw new TypeError('Made-up lost acknowledgement after the install write.');
@@ -717,11 +861,12 @@ describe('B11f suggested views', () => {
 
   it('AC36 b11-propose-ack-lost: a suggestion whose question write is not acknowledged completes once on redispatch: one question, one frozen file, no model call', async () => {
     const f = await folder();
-    const target = (input: RequestInfo | URL) => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    // The questions file only, by its id: the manifest upload also holds the question's id.
+    const questionsId = await f.id(SYSTEM.questions);
     let crashed = false;
     const first = await press(f, (ctx) => ({ ...empty, views: [proposing(f, ctx.request)] }), { around: (next) => async (input, init) => {
       if (crashed && target(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
-      if ((init?.method === 'PATCH' || init?.method === 'POST') && target(input).pathname.startsWith('/upload/') && String(init.body).includes('"q-proposal-')) {
+      if (init?.method === 'PATCH' && target(input).pathname === `/upload/drive/v3/files/${questionsId}` && (await bodyOf(init)).includes('"q-proposal-')) {
         const response = await next(input, init);
         crashed = response.ok;
         throw new TypeError('Made-up lost acknowledgement after the question write.');
@@ -729,12 +874,69 @@ describe('B11f suggested views', () => {
       return next(input, init);
     } });
     expect(crashed, 'the question write landed').toBe(true);
+    const id = await pid(f, 'offer-deadlines');
+    expect(questions(first).map((q) => q.id), 'the question is in the file before redispatch').toEqual([`q-proposal-${id}`]);
     const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A redispatch must not call a model.'); });
     const resumed = await redispatchCase(f.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });
     expect(phase(resumed)).toBe('done');
     expect(model).not.toHaveBeenCalled();
-    const id = await pid(f, 'offer-deadlines');
     expect(questions(resumed).filter((q) => q.proposal).map((q) => q.id)).toEqual([`q-proposal-${id}`]);
     expect(Object.keys(resumed.after).filter((path) => path.startsWith(`${SYSTEM.proposals}/`)), 'one frozen file').toEqual([`${SYSTEM.proposals}/${id}.json`]);
+  });
+
+  it('AC36 b11-propose-frozen-ack-lost: a suggestion whose frozen file create lands unacknowledged completes once on redispatch: one frozen file as written, one question, no model call', async () => {
+    const f = await folder();
+    const id = await pid(f, 'offer-deadlines');
+    let crashed = false;
+    const first = await press(f, (ctx) => ({ ...empty, views: [proposing(f, ctx.request)] }), { around: (next) => async (input, init) => {
+      if (crashed && target(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
+      // The create's own metadata part only: the manifest upload also names the file.
+      if (init?.method === 'POST' && target(input).pathname === '/upload/drive/v3/files' && (await bodyOf(init)).includes(`{"name":"${id}.json","parents"`)) {
+        const response = await next(input, init);
+        crashed = response.ok;
+        throw new TypeError('Made-up lost acknowledgement after the frozen file create.');
+      }
+      return next(input, init);
+    } });
+    expect(crashed, 'the frozen file create landed').toBe(true);
+    const path = `${SYSTEM.proposals}/${id}.json`;
+    const written = first.after[path];
+    expect(written, 'the frozen file is there before redispatch').toBeDefined();
+    const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A redispatch must not call a model.'); });
+    const resumed = await redispatchCase(f.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });
+    expect(phase(resumed)).toBe('done');
+    expect(model).not.toHaveBeenCalled();
+    expect(Object.keys(resumed.after).filter((p) => p.startsWith(`${SYSTEM.proposals}/`)), 'one frozen file').toEqual([path]);
+    expect(resumed.after[path], 'its payload unchanged').toBe(written);
+    expect(JSON.parse(written ?? '{}')).toEqual({ v: 1, id, payload: { kind: 'view', home: { kind: 'moc', fileId: f.mapId }, definition: bound(DEADLINES, f.folderId) } });
+    expect(questions(resumed).filter((q) => q.proposal).map((q) => q.id), 'one question').toEqual([`q-proposal-${id}`]);
+  });
+
+  it('AC37 b11-proposal-stale-then-revised: after a stale yes, a revised suggestion takes a new view id and is stored and asked; the old frozen file is untouched and its id is not proposed again', async () => {
+    const f = await folder();
+    const asked1 = await press(f, (ctx) => ({ ...empty, views: [proposing(f, ctx.request)] }));
+    expect(phase(asked1)).toBe('done');
+    const old = await pid(f, 'offer-deadlines');
+    const oldPath = `${SYSTEM.proposals}/${old}.json`;
+    expect(asked1.after[oldPath]).toBeDefined();
+    // The person drops the deadline from the row, then says yes: the suggestion no longer fits (R8).
+    const tableId = await f.id(SYSTEM.typeTable);
+    const table = { v: 1, rows: [{ ...TABLE.rows[0], properties: { skills: { type: 'list' } }, table: ['skills'] }] };
+    await f.drive.writeText(tableId, JSON.stringify(table, null, 2), (await f.drive.get(tableId)).modifiedTime);
+    await answer(f, 'answer-stale', `q-proposal-${old}`, true);
+    const REVISED = other('offers-active');
+    const run = await press(f, (ctx) => ({ ...empty, views: [
+      // The same view id, revised: a frozen id never changes, so it is not proposed again.
+      proposing(f, ctx.request, { ...DEADLINES, title: 'Active offers', measures: [{ id: 'n', label: 'Offers', op: 'count' }] }),
+      proposing(f, ctx.request, REVISED, { ...ASK, text: 'Save an active-offers count in Job hunt?' }),
+    ] }));
+    expect(phase(run)).toBe('done');
+    expect(logged(), 'the stale yes is logged').toBe(true);
+    expect(declared(run.after[MAP]), 'the stale yes installs nothing').toBeUndefined();
+    const fresh = await pid(f, 'offers-active');
+    expect(settledProposals(run).map((q) => q.id), 'only the new id is asked').toEqual([`q-proposal-${fresh}`]);
+    expect(JSON.parse(run.after[`${SYSTEM.proposals}/${fresh}.json`] ?? '{}')).toEqual({ v: 1, id: fresh,
+      payload: { kind: 'view', home: { kind: 'moc', fileId: f.mapId }, definition: bound(REVISED, f.folderId) } });
+    expect(run.after[oldPath], 'the old frozen file is untouched').toBe(asked1.after[oldPath]);
   });
 });

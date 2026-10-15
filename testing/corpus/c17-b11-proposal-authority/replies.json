@@ -26,6 +26,7 @@
           "v": 1,
           "id": "offer-deadlines",
           "kind": "aggregate",
+          "title": "Earliest deadline of active offers",
           "set": {
             "type": "offer",
             "folderId": "$folder:Projects/Job hunt",
@@ -40,11 +41,15 @@
           "measures": [
             {
               "id": "earliest-deadline",
+              "label": "Earliest deadline",
               "op": "earliest",
               "property": "deadline"
             }
           ]
-        }
+        },
+        "text": "Save an earliest-deadline view for active offers in Job hunt?",
+        "yes": "Save it",
+        "no": "Not now"
       }
     ]
   },

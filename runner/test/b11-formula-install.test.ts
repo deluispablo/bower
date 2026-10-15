@@ -99,9 +99,9 @@ const url = (input: RequestInfo | URL): URL => new URL(typeof input === 'string'
 /** Each refusal of the run as [kind, reason], from the provider's log line. */
 const refused = () => vi.mocked(console.error).mock.calls.flatMap((args) => args.map(String))
   .flatMap((line) => { const m = /was refused \((\w+)\): (.*); asking once more/.exec(line); return m ? [[m[1], m[2]]] : []; });
-/** The widened viewKeys reason (R45, R58): what a shape fault of a view entry says. */
-const VIEW_KEYS_TEXT = 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId} or {kind: "type-row", rowId}, mode: "install", '
-  + 'definition, and for a formula in a type row an optional column: one of its outputs}) or a declaration the grammar refuses';
+/** The widened viewKeys reason (R45, R58, widened for suggestions by R63): what a shape fault of a view entry says. */
+const VIEW_KEYS_TEXT = 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId} or {kind: "type-row", rowId}, mode: "install" or "propose", '
+  + 'definition; for a formula installed in a type row an optional column: one of its outputs; to propose, the question\'s text, yes and no}) or a declaration the grammar refuses';
 const grammar = (fault: string) => `a view the grammar refuses: ${fault}`;
 const region = (name: string, body = '') => `<!-- bower:ownership/2 begin ${name} -->\n${body}<!-- bower:ownership/2 end ${name} -->\n`;
 /** A Bower map of the flat hunt, with the views given (each `$folder` bound after seeding). */

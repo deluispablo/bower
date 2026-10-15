@@ -140,7 +140,15 @@ export interface TypeRow {
   profile?: { template: 'profile' };
 }
 export interface TypeTable { v: 1; rows: TypeRow[] }
-export interface Proposal { id: string; payload: { kind: string; row: TypeRow } }
+/** Where a view lives (B11): a Bower map by its file id, or a type row by its id. */
+export type ViewHome = { kind: 'moc'; fileId: string } | { kind: 'type-row'; rowId: string };
+/** A view's declaration as data, `viewFault` its grammar; its parts never `unknown`, so the Worker's RPC types keep it. */
+export interface ViewDefinition { id: string; [key: string]: string | number | boolean | null | object }
+/** A frozen suggestion (B5): a type row, or a view at its home (B11f); `proposalOk` checks it, `'row' in payload` tells them apart. */
+export interface Proposal {
+  id: string;
+  payload: { kind: string; row: TypeRow } | { kind: 'view'; home: ViewHome; definition: ViewDefinition };
+}
 
 export interface Question {
   /** Frozen proposal identity and payload, never supplied by an answer. */

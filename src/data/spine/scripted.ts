@@ -18,7 +18,7 @@ import { formulaInstalled, parseRunManifestV2, recordableId, recordableRecordId,
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal, type ViewDefinition, type ViewHome } from '../types';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
@@ -41,6 +41,7 @@ import type { ScriptedRead } from './read';
 import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable } from '../contracts/note-format';
+import { VIEW_LIMITS, viewFault } from '../contracts/view-format';
 
 import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseObservations } from '../contracts/observations';
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
@@ -495,13 +496,17 @@ export interface Filing {
   askAfter?(pile: Pile, at: number): Question | null;
   /** Views a person's request installs (B11 R44): each by the request's record id, in one Bower map, checked as a write. */
   views?: readonly ViewInstall[];
+  /** Views a request suggests (B11f), asked before or after the askAfter questions, as the reply wrote them (R73). */
+  suggestions?: { first: boolean; views: readonly ViewSuggestion[] };
 }
 
 /**
  * One view a request installs (B11c, B11e), checked by the provider as a write: an aggregate in a Bower map (`home` its
  * file id, bound to a main folder) or a formula in a type row (`home` the row id, with at most one requested column).
  */
-export interface ViewInstall { requestId: string; kind: 'moc' | 'type-row'; home: string; definition: { id: string } & Record<string, unknown>; column?: string }
+export interface ViewInstall { requestId: string; kind: 'moc' | 'type-row'; home: string; definition: ViewDefinition; column?: string }
+/** A view a request suggests (B11f), checked as an install is, with its question in the model's words: a B5 proposal. */
+export interface ViewSuggestion extends Omit<ViewInstall, 'column'>, Pick<Ask, 'text' | 'yes' | 'no'> {}
 
 /** A consolidation's lines and dropped ended facts by fact id, over the section's input facts (`consolidationInput`). */
 export interface Consolidated {
@@ -605,6 +610,8 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
   askAfter?(pile: Pile, at: number): Question | null;
   /** The views requests install (B11c); a request one names settles once its maps are written or already hold them. */
   views?: readonly ViewInstall[];
+  /** The views requests suggest (B11f): asked as proposals; a yes installs the frozen one. */
+  suggestions?: Filing['suggestions'];
   /** How it answers a request; without it, requests wait. */
   request?(text: string): RequestPlan | null;
   /** The Timeline line an answer adds to a stored note (C07). */
@@ -630,6 +637,7 @@ export function modelDecisions(filing: Filing): Decisions {
     pairAsks: filing.pairAsks ?? [],
     askAfter: filing.askAfter,
     views: filing.views ?? [],
+    ...(filing.suggestions ? { suggestions: filing.suggestions } : {}),
   };
 }
 
@@ -755,9 +763,12 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   // admitted is past refusing: what it took and finds gone waits, and it ends with nothing filed (TL-P3-25 point 2).
   if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
   const questionsFile = ix.file(SYSTEM.questions);
-  const questionValue = questionsFile && (questionsFile.size === undefined || questionsFile.size > 40 || lines.some((l) => l.rec.kind === 'answer'))
-    ? parsed(await ownText(drive, questionsFile)) : null;
+  const questionText = questionsFile && (questionsFile.size === undefined || questionsFile.size > 40 || lines.some((l) => l.rec.kind === 'answer'))
+    ? await ownText(drive, questionsFile) : null;
+  const questionValue = questionText === null ? null : parsed(questionText);
   const questionState: QuestionsFile = isRunnerFile(SYSTEM.questions, questionValue) ? questionValue : { v: 1, questions: [] };
+  // A list that is there but unreadable (not JSON, `null`, a bad question) is broken; an absent one is not (R69).
+  const questionsBroken = questionText !== null && !isRunnerFile(SYSTEM.questions, questionValue);
   const memoryFile = ix.file('.bower/observations.jsonl');
   const memoryText = memoryFile ? await ownText(drive, memoryFile) : '';
   const memoryLedger = parseObservations(new TextEncoder().encode(memoryText));
@@ -771,7 +782,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
+  return { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -781,7 +792,7 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
+  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
   const { editCap, held } = attempt;
   const grownTags = growTags(opts.decisions.newTags, snapshot.tagList);
   if (!grownTags) return refused('invalid new tags');
@@ -879,6 +890,13 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   let nextTable = types.table;
   const tableRecords = new Set<string>();
   const proposalSettled = new Set<string>();
+  /** Suggested views a yes installs (B11f), each by its answer's record id, as a request's install is by its request's. */
+  const yesViews: ViewInstall[] = [];
+  /** A yes that installs nothing (R8, R64, R69): its question settles, and it is said. */
+  const staleYes = (id: string, why: string): void => {
+    proposalSettled.add(id);
+    console.error(new BowerError('conflict', VIEW_STALE), why);
+  };
   for (const q of questionState.questions) {
     if (!q.proposal) continue;
     const line = latest.get(q.id);
@@ -888,14 +906,50 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (typeof answer !== 'boolean') continue;
     if (!answer) { proposalSettled.add(line.rec.id); continue; }
     const frozen = proposals.get(q.proposal.id);
-    if (!types.writeAllowed || !sys?.folder || !frozen
-      || (await canonical(frozen)).hash !== (await canonical(q.proposal)).hash) continue;
-    const existing = nextTable.rows.find((row) => row.id === frozen.payload.row.id);
-    if (existing && (!typeRowOk(existing) || (await canonical(existing)).hash !== (await canonical(frozen.payload.row)).hash)) continue;
-    if (!existing) nextTable = insertTypeRow(nextTable, frozen.payload.row);
+    const same = !!frozen && (await canonical(frozen)).hash === (await canonical(q.proposal)).hash;
+    if (!('row' in q.proposal.payload)) {
+      // A yes to a suggested view (B11f): checked on both sides, then against its home as it is now (R64, R69).
+      const payload = same ? frozen?.payload : undefined;
+      if (!payload || 'row' in payload) { staleYes(line.rec.id, `${q.id} does not match its frozen suggestion`); continue; }
+      const { home, definition } = payload;
+      if (home.kind === 'moc') {
+        const map = ix.byId(home.fileId);
+        const set = definition.set;
+        const folder = set && typeof set === 'object' && 'folderId' in set && typeof set.folderId === 'string' ? ix.byId(set.folderId) : undefined;
+        // As a request's view: a folder under a main folder (claude.ts folderCandidates), valid against the table now.
+        if (!map || map.folder || !folder?.folder || !generatedPlace(ix.pathOf(folder.id) ?? '') || viewFault(definition, nextTable, 'write') !== null) {
+          staleYes(line.rec.id, `${q.id} no longer fits its map`);
+          continue;
+        }
+        yesViews.push({ requestId: line.rec.id, kind: 'moc', home: home.fileId, definition });
+      } else {
+        // As a type-row yes: a table Bower may not write leaves the yes waiting.
+        if (!types.writeAllowed || !sys?.folder) continue;
+        const row = nextTable.rows.find((r) => r.id === home.rowId);
+        const next = row && formulaInstalled(row, definition);
+        // The request path's limits too (AC33): an eleventh formula in its row is no longer a fit.
+        const full = !!next && 'views' in next && Array.isArray(next.views) && next.views.length > VIEW_LIMITS.perHome;
+        if (!row || (next && (full || viewFault(definition, nextTable, 'write') !== null))) { staleYes(line.rec.id, `${q.id} no longer fits its type`); continue; }
+        // One equal as a value is there already: settled with no write (R65).
+        if (next) {
+          nextTable = { ...nextTable, rows: nextTable.rows.map((old) => old.id === row.id ? next : old) };
+          tableRecords.add(line.rec.id);
+        }
+      }
+      proposalSettled.add(line.rec.id);
+      continue;
+    }
+    if (!types.writeAllowed || !sys?.folder || !same || !frozen || !('row' in frozen.payload)) continue;
+    const { row: proposed } = frozen.payload;
+    const existing = nextTable.rows.find((row) => row.id === proposed.id);
+    if (existing && (!typeRowOk(existing) || (await canonical(existing)).hash !== (await canonical(proposed)).hash)) continue;
+    if (!existing) nextTable = insertTypeRow(nextTable, proposed);
     tableRecords.add(line.rec.id);
     proposalSettled.add(line.rec.id);
   }
+  // A yes to a suggestion whose question cannot be read (R69): nothing can be checked, so nothing is installed; the
+  // list is replaced and the answer settles.
+  if (questionsBroken) for (const l of lines) if (l.rec.kind === 'answer' && l.rec.questionId?.startsWith('q-proposal-')) staleYes(l.rec.id, `${l.rec.questionId} cannot be read`);
   const columnRequests = new Set<string>();
   if (types.writeAllowed && sys?.folder) for (const line of lines) {
     if (line.rec.kind !== 'request') continue;
@@ -1079,8 +1133,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (l.rec.kind === 'request') return formulaWaits.has(l.rec.id) ? false : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
     if (l.rec.kind !== 'answer') return true;
+    if (proposalSettled.has(l.rec.id)) return true;
     const question = questionState.questions.find((q) => answersAsking(l.rec, q));
-    if (question && subjectOf(question).kind === 'proposal') return proposalSettled.has(l.rec.id);
+    if (question && subjectOf(question).kind === 'proposal') return false;
     return d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '');
   });
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
@@ -2213,10 +2268,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   for (const p of satisfied) places.set(p.file.id, p.file);
   // Views a request installs (B11c, R40-R44): one views-set change per map, in that map's one edit (beside its link
   // rewrite, coordinator ruling 1). A map that already holds them needs no edit (R42); one that cannot be written now
-  // leaves its requests waiting.
+  // leaves its requests waiting. A yes to a suggested view (B11f) installs the same way, by its answer (R64, R70).
   const installs = new Map<string, ViewInstall[]>();
-  for (const v of d.views ?? []) if (v.kind === 'moc' && viewRequests.has(v.requestId)) installs.set(v.home, [...installs.get(v.home) ?? [], v]);
-  for (const [home, wanted] of installs) {
+  for (const v of [...(d.views ?? []).filter((x) => viewRequests.has(x.requestId)), ...yesViews]) if (v.kind === 'moc') installs.set(v.home, [...installs.get(v.home) ?? [], v]);
+  for (const [home, asked] of installs) {
+    let wanted = asked;
     const target = ix.byId(home);
     const path = ix.pathOf(home);
     const before = target && await verified(target, 'utf8');
@@ -2231,8 +2287,16 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const digest = await sha256(new Blob([bytes.slice()]));
     if (before.size !== bytes.byteLength || before.sha256 !== digest) Object.assign(before, { size: bytes.byteLength, sha256: digest });
     const declared = viewsDeclared(new TextDecoder().decode(bytes), fetched(home));
-    const next = viewsInstalled(declared.value, wanted.map((v) => v.definition));
+    let next = viewsInstalled(declared.value, wanted.map((v) => v.definition));
+    if (next && (JSON.parse(next.text) as unknown[]).length > VIEW_LIMITS.perHome && wanted.some((v) => yesViews.includes(v))) {
+      // A yes that would pass the limit no longer fits its map (R8): it installs nothing, the requests' views do.
+      console.error(new BowerError('conflict', VIEW_STALE), `${path} has no room for a suggested view`);
+      wanted = wanted.filter((v) => !yesViews.includes(v));
+      next = wanted.length ? viewsInstalled(declared.value, wanted.map((v) => v.definition)) : null;
+    }
     if (!next) continue;
+    // A yes's question closes with its install write: a write Drive refuses keeps it open (R70), as a keep's answer is.
+    const answers = wanted.filter((v) => yesViews.includes(v)).map((v) => v.requestId);
     if (next.replaced || declared.lines > 1) console.error(new BowerError('conflict', VIEWS_REPLACED), `${path} declared its views on ${declared.lines} line(s), the last not a list: ${!!next.replaced}`);
     const change: Change = { kind: 'views-set', recordIds: [...new Set(wanted.map((v) => v.requestId))], previous: declared.value, text: next.text };
     const existing = edits.find((edit) => edit.file.id === home);
@@ -2240,9 +2304,17 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const first = (c: Change): boolean => c.kind === 'state-rewrite' || c.kind === 'link-rewrite';
     const changes = [...(existing?.changes ?? []).filter(first), change, ...(existing?.changes ?? []).filter((c) => !first(c))];
     const result = applyChanges(existing?.bytes ?? bytes, changes, fetched(home));
-    if (!result.ok) { wait(`${path} refused its views (${result.reason})`); continue; }
-    if (existing) Object.assign(existing, { changes, text: result.text, types: typeText ?? '' });
-    else edits.push({ file: target, path, before, bytes, changes, text: result.text, after: [], keeps: [], rows: [], types: typeText ?? '' });
+    if (!result.ok) {
+      // A map that is no longer Bower's (claude.ts seen.maps) takes no suggested view: the yes settles as stale (R8).
+      if (result.reason === 'not-bower' && wanted.some((v) => yesViews.includes(v))) {
+        console.error(new BowerError('conflict', VIEW_STALE), `${path} is no longer Bower's map`);
+        wanted = wanted.filter((v) => !yesViews.includes(v));
+      }
+      wait(`${path} refused its views (${result.reason})`);
+      continue;
+    }
+    if (existing) Object.assign(existing, { changes, text: result.text, types: typeText ?? '', keeps: [...existing.keeps, ...answers] });
+    else edits.push({ file: target, path, before, bytes, changes, text: result.text, after: [], keeps: answers, rows: [], types: typeText ?? '' });
     places.set(home, target); edited.add(home);
   }
   for (const { pileId, folder, words } of fromWords) {
@@ -2306,7 +2378,16 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const answered = answeredAskings(journal.map((l) => l.rec));
   // A question asked again (a granted section changed since) replaces the one its answer drops, under the same id.
   const again = new Set(reasked.map((q) => q.id));
-  let toAsk = [...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles]
+  // A view a request suggests (B11f, R67): its proposal id from its home and view id, the identity an install has; in
+  // reply order around the askAfter questions, so the two-new budget goes to the earlier ones (R73).
+  const suggested: Question[] = [];
+  for (const s of d.suggestions?.views ?? []) {
+    const home: ViewHome = s.kind === 'moc' ? { kind: 'moc', fileId: s.home } : { kind: 'type-row', rowId: s.home };
+    const id = `view-${(await canonical({ home, id: s.definition.id })).hash.slice(0, 16)}`;
+    suggested.push({ id: `q-proposal-${id}`, text: s.text, yes: s.yes, no: s.no, askedAt: opts.requestedAt, proposal: { id, payload: { kind: 'view', home, definition: s.definition } } });
+  }
+  const first = d.suggestions?.first ? suggested : [];
+  let toAsk = [...first, ...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles, ...(first.length ? [] : suggested)]
     .filter((q, i, all) => (subjectOf(q).kind === 'inbox' || again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   // Immutable artifacts retain payload identity after a card closes, including declines.
   const knownPayloads = new Set<string>();
@@ -2327,10 +2408,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (!q.proposal) { admitted.push(q); continue; }
     if (!proposalOk(q.proposal) || q.id !== `q-proposal-${q.proposal.id}`
       || [q.subject, q.hash, q.state, q.shown, q.words, q.options].some((field) => field !== undefined)) continue;
-    const key = (await canonical(q.proposal.payload)).hash;
+    const payload = q.proposal.payload;
+    const key = (await canonical(payload)).hash;
     if (knownPayloads.has(key) || proposalIds.has(q.proposal.id) || declinedIds.has(q.id)
       || admittedProposals >= 2 || openProposals + admittedProposals >= 5
-      || nextTable.rows.some((row) => row.id === q.proposal?.payload.row.id)) continue;
+      || ('row' in payload && nextTable.rows.some((row) => row.id === payload.row.id))) continue;
     knownPayloads.add(key); admittedProposals++; admitted.push(structuredClone(q));
   }
   toAsk = admitted;
@@ -3337,6 +3419,7 @@ export const NOTE_NOT_WRITTEN = "Bower couldn't write its note.";
 /** What is logged when a request's figures wait, or replace a declaration no reader could use (B11c). The request's own row reports it. */
 const VIEWS_WAIT = 'Bower could not set up those figures yet; it tries again next time.';
 const VIEWS_REPLACED = "Bower replaced a map's figures it could not read.";
+const VIEW_STALE = 'That suggested view no longer fits, so Bower did not set it up.';
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
 

@@ -13,6 +13,7 @@ import type { Pile, Question, Proposal } from './types';
 import type { JournalRecord } from './journal-record';
 import { BowerError } from './types';
 import { typeRowOk } from './note-format';
+import { viewFault } from './view-format';
 import { EMPTY_MD5 } from './hashes';
 import { keepAlreadyBinned, STATE_READ } from './note-edit';
 import { displayName, nameOf, thingName } from './tree';
@@ -401,5 +402,13 @@ export function proposalOk(value: unknown): value is Proposal {
   if (Object.keys(v).length !== 2 || typeof v.id !== 'string' || v.id.length > 128 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v.id)
     || !v.payload || typeof v.payload !== 'object' || Array.isArray(v.payload)) return false;
   const payload = v.payload as Record<string, unknown>;
-  return Object.keys(payload).length === 2 && payload.kind === 'type-row' && typeRowOk(payload.row);
+  if (payload.kind === 'type-row') return Object.keys(payload).length === 2 && typeRowOk(payload.row);
+  // A view (B11f, R66): its home and kind agree; the declaration is whole in its own shape. Against the folder's table
+  // it is checked when it is answered, as it then is (R64).
+  const home: Record<string, unknown> = payload.home && typeof payload.home === 'object' ? payload.home as Record<string, unknown> : {};
+  const d: Record<string, unknown> = payload.definition && typeof payload.definition === 'object' ? payload.definition as Record<string, unknown> : {};
+  return payload.kind === 'view' && Object.keys(payload).length === 3 && Object.keys(home).length === 2
+    && (home.kind === 'moc' ? typeof home.fileId === 'string' && home.fileId !== '' && d.kind === 'aggregate'
+      : home.kind === 'type-row' && typeof home.rowId === 'string' && d.kind === 'formula' && d.type === home.rowId)
+    && viewFault(d, null) === null;
 }
