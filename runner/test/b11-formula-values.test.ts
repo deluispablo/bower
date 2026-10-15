@@ -1,7 +1,7 @@
 /** B11d through production main: maintain writes each installed formula's values on Bower's notes (TL-P4-48 Q2, Q3, Q5-Q8). */
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseNote, propertyValue, readTypeTable, typeRowOk } from '../../src/data/contracts/note-format';
+import { frontValues, parseNote, propertyValue, readTypeTable, typeRowOk } from '../../src/data/contracts/note-format';
 import { viewFault } from '../../src/data/contracts/view-format';
 import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -297,6 +297,15 @@ describe('B11d formula values through production main', () => {
     expect(computed(run.after[`${HUNT}/Gorse flat.md`], 'price_per_area'), 'front matter past the prefix is read whole to be written').toEqual({ amount: 20, currency: 'EUR' });
     expect(run.after[`${HUNT}/Heath offer.md`], 'another type is never written').toBe(files[`${HUNT}/Heath offer.md`]);
     expect(run.after[ALEX]).toBe(FLATS_FILES[ALEX]);
+    // Taken out of the row, the formula takes the long note's lines too: its whole read made it a member (R35, R37).
+    const gorse = await f.id(`${HUNT}/Gorse flat.md`);
+    await setViews(f, []);
+    const removed = await press(f);
+    expect(phase(removed)).toBe('done');
+    expect(computed(removed.after[`${HUNT}/Gorse flat.md`], 'price_per_area'), 'no stale value past the prefix').toBeUndefined();
+    expect(computed(removed.after[`${HUNT}/Gorse flat.md`], 'days_left')).toBeUndefined();
+    expect(others(removed.after[`${HUNT}/Gorse flat.md`]), 'only computed lines change').toEqual(others(files[`${HUNT}/Gorse flat.md`]));
+    expect(retrieval(removed).views?.[`${gorse}/flat-metrics`], 'no stale record').toBeUndefined();
   });
 
   it('AC26 b11-values-filed-flat: a Bower flat filed in the run gets its values in that run\'s maintain', async () => {
@@ -640,7 +649,51 @@ describe('B11d formula values through production main', () => {
     expect(phase(second)).toBe('done');
     expect(retrieval(second).views?.[`${amber}/flat-metrics`], 'the removed formula\'s record goes').toBeUndefined();
     expect(retrieval(second).views?.[`${amber}/flat-year`]?.result, 'the other formula\'s record stays').toEqual({ rent_year: { value: { amount: 12000, currency: 'EUR' } } });
-    expect(retrieval(second).views?.[`${mapId}/flat-count`], 'the figures\' record stays').toEqual(retrieval(first).views?.[`${mapId}/flat-count`]);
+    // Run 2's cleanup rewrites the flats, so their versions in the record change legitimately (R38); the rest stays.
+    const { inputs: _after, ...kept } = retrieval(second).views?.[`${mapId}/flat-count`] ?? {};
+    const { inputs: _before, ...stored } = retrieval(first).views?.[`${mapId}/flat-count`] ?? {};
+    expect(retrieval(second).views?.[`${mapId}/flat-count`], 'the figures\' record stays').toBeDefined();
+    expect(kept, 'the figures\' record stays').toEqual(stored);
+  });
+
+  it('AC23 b11-values-duplicate-lines: duplicate lines of a computed key leave one line in the first one\'s place; removal takes every line of the key (ruling 4)', async () => {
+    const DUNE = `${HUNT}/Dune flat.md`;
+    const text = flat('Dune flat', ['days_left: 3', `rent: ${money(1000)}`, 'area: 50', 'deadline: 2026-10-14', 'days_left: 9']);
+    const front = (t: string | undefined) => {
+      const lines = (t ?? '').split('\n');
+      return lines.slice(1, lines.indexOf('---', 1));
+    };
+    const f = await folder([FLATS], { ...FLATS_FILES, [DUNE]: text });
+    const dune = await f.id(DUNE);
+    const first = await press(f);
+    expect(phase(first)).toBe('done');
+    expect(front(first.after[DUNE]).filter((l) => l.startsWith('days_left:')), 'one line').toEqual(['days_left: 7']);
+    expect(front(first.after[DUNE]).indexOf('days_left: 7'), 'in the first one\'s place').toBe(front(text).indexOf('days_left: 3'));
+    // The first copy goes stale while the last holds the right value: readers take the first, so Bower writes.
+    await f.drive.writeText(dune, (first.after[DUNE] ?? '').replace('days_left: 7', 'days_left: 2').replace('area: 50\n', 'area: 50\ndays_left: 7\n'),
+      (await f.drive.get(dune)).modifiedTime);
+    const second = await press(f);
+    expect(phase(second)).toBe('done');
+    expect(front(second.after[DUNE]).filter((l) => l.startsWith('days_left:')), 'no stale copy survives').toEqual(['days_left: 7']);
+    expect(front(second.after[DUNE]).indexOf('days_left: 7'), 'in the first one\'s place').toBe(front(text).indexOf('days_left: 3'));
+    // The same stale first copy, with this version's evidence kept by an earlier build that did not note duplicates.
+    const stale = (second.after[DUNE] ?? '').replace('days_left: 7', 'days_left: 2').replace('area: 50\n', 'area: 50\ndays_left: 7\n');
+    await f.drive.writeText(dune, stale, (await f.drive.get(dune)).modifiedTime);
+    const retrievalId = await f.id(SYSTEM.retrieval);
+    const kept = JSON.parse(second.after[SYSTEM.retrieval] ?? '{}') as { files: Record<string, Record<string, unknown>> };
+    kept.files[dune] = { ...kept.files[dune], version: (await f.drive.get(dune)).modifiedTime, properties: frontValues(stale) };
+    delete kept.files[dune]?.doubled;
+    await f.drive.writeText(retrievalId, JSON.stringify(kept), (await f.drive.get(retrievalId)).modifiedTime);
+    const cached = await press(f);
+    expect(phase(cached)).toBe('done');
+    expect(front(cached.after[DUNE]).filter((l) => l.startsWith('days_left:')), 'evidence that never noted duplicates is read again').toEqual(['days_left: 7']);
+    // The person copies the line again, then takes the formula out of the row.
+    await f.drive.writeText(dune, (cached.after[DUNE] ?? '').replace('area: 50\n', 'area: 50\ndays_left: 7\n'), (await f.drive.get(dune)).modifiedTime);
+    await setViews(f, []);
+    const third = await press(f);
+    expect(phase(third)).toBe('done');
+    expect(front(third.after[DUNE]).filter((l) => /^(?:days_left|price_per_area):/.test(l)), 'every line of a removed key goes').toEqual([]);
+    expect(others(third.after[DUNE]), 'only computed lines change').toEqual(others(text));
   });
 
   it('AC23 b11-values-body-kept: body lines that look like computed properties, a rule line and CRLF line ends are kept exactly', async () => {

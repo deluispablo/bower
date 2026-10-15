@@ -26,6 +26,7 @@ import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
 import { renderLink } from './links';
 import { normalizeTag, NOTE_TAGS_MAX, tagListOk } from './tag-format';
+import { computedBy, VIEW_LIMITS, viewFault, type FormulaView } from './view-format';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state', 'bower_template', 'bower_views'] as const;
@@ -218,7 +219,7 @@ function templateProjection(bytes: Uint8Array, ownership: ReturnType<typeof owne
 }
 
 /** The properties between the fences: `key: value` lines, and the YAML block lists Obsidian writes for tags. */
-function frontOf(block: string): Map<string, string> {
+function frontOf(block: string, duplicates?: Set<string>): Map<string, string> {
   const front = new Map<string, string>();
   let listKey: string | null = null;
   for (const line of block.split('\n')) {
@@ -236,17 +237,21 @@ function frontOf(block: string): Map<string, string> {
     const key = line.slice(0, i).trim();
     const value = line.slice(i + 1).trim();
     listKey = value ? null : key;
+    if (front.has(key)) duplicates?.add(key);
     front.set(key, key === 'tags' ? value : scalarOf(value));
   }
   return front;
 }
 
-/** B11 (R29): a note's raw front-matter values from its text or read prefix; `null` when its front matter is not all there. */
-export function frontValues(raw: string): Record<string, string> | null {
+/**
+ * B11 (R29): a note's raw front-matter values from its text or read prefix; `null` when its front matter is not all there.
+ * `duplicates` collects the keys written on more than one line (coordinator ruling 4).
+ */
+export function frontValues(raw: string, duplicates?: Set<string>): Record<string, string> | null {
   const text = raw.replace(/\r\n/g, '\n');
   if (!text.startsWith('---\n')) return {};
   const close = text.indexOf('\n---', 3);
-  return close < 0 ? null : Object.fromEntries(frontOf(text.slice(4, close)));
+  return close < 0 ? null : Object.fromEntries(frontOf(text.slice(4, close), duplicates));
 }
 
 export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null; links?: string[]; incomplete?: boolean };
@@ -542,9 +547,22 @@ const schemaClosed = (v: Record<string, unknown>, keys: readonly string[]): bool
 const schemaText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= 200;
 const schemaTexts = (v: unknown): v is string[] => Array.isArray(v) && v.every(schemaText);
 const slug = (v: unknown): v is string => typeof v === 'string' && v.length <= 128 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v);
-/** JSON Schema-style closed writes; stored reads and rewrites retain extension keys. */
+/**
+ * JSON Schema-style closed writes; stored reads and rewrites retain extension keys. `views` (B11 AC33): written, at most
+ * ten formulas, each valid against the row as installed, with its outputs declared under their own types and no id twice;
+ * stored, a list whose entries are checked only when evaluated (R21).
+ */
 export function typeRowOk(v: unknown, stored = false): v is TypeRow {
-  if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by', 'profile']))
+  return rowOk(v, stored) && (v.views === undefined || Array.isArray(v.views) && (stored || viewsOk(v as TypeRow, v.views)));
+}
+function viewsOk(row: TypeRow, views: unknown[]): boolean {
+  const ids = views.map((view) => (schemaObject(view) ? view.id : undefined));
+  return views.length <= VIEW_LIMITS.perHome && new Set(ids).size === ids.length && views.every((view) => schemaObject(view) && view.kind === 'formula'
+    && viewFault(view, { v: 1, rows: [row] }, 'read') === null
+    && (view as unknown as FormulaView).outputs.every((output) => row.properties[output.property]?.type === output.type));
+}
+function rowOk(v: unknown, stored: boolean): v is TypeRow & { views?: unknown } {
+  if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by', 'profile', 'views']))
     || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template) || (!stored && v.template === 'profile')
     || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
@@ -571,9 +589,11 @@ export function typeTableOk(v: unknown, stored = false): v is TypeTable {
 /** ISO 4217 codes supplied by ICU, plus the ISO fund, metal and testing units ICU omits. */
 const currencies = new Set([...Intl.supportedValuesOf('currency'),
   'BOV', 'CHE', 'CHW', 'CLF', 'COU', 'MXV', 'USN', 'UYI', 'UYW', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XDR', 'XPD', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX']);
+/** A reply's authored properties: declared, well typed, and never one a formula computes (B11 R45). */
 export function propertyValuesOk(row: TypeRow, value: unknown): boolean {
   if (!typeRowOk(row, true) || !schemaObject(value)) return false;
-  return Object.entries(value).every(([key, item]) => Object.hasOwn(row.properties, key) && valueOk(row.properties[key], item));
+  const computed = computedBy(row);
+  return Object.entries(value).every(([key, item]) => Object.hasOwn(row.properties, key) && !computed.has(key) && valueOk(row.properties[key], item));
 }
 /** One value against its declaration; numbers and money amounts stay within 10^15, money has at most 4 decimals (R25). */
 export function valueOk(declaration: TypeRow['properties'][string] | undefined, item: unknown): boolean {

@@ -1,9 +1,9 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { frontValues, indexedFront, lintFacts, noteRefusal, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
-import type { TypeTable } from '../../src/data/contracts/types';
-import { VIEW_LIMITS } from '../../src/data/contracts/view-format';
-import { evaluateAggregate, EVALUATOR_VERSION, storedViews, viewBlock } from './views';
+import { frontValues, indexedFront, lintFacts, noteRefusal, propertyValue, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
+import type { TypeRow, TypeTable } from '../../src/data/contracts/types';
+import { computedBy, VIEW_LIMITS } from '../../src/data/contracts/view-format';
+import { evaluateAggregate, evaluateFormulas, EVALUATOR_VERSION, storedFormulas, storedViews, viewBlock } from './views';
 import { lintEvidenceOk } from '../../src/data/contracts/run-manifest';
 import { failureKind } from '../../src/data/drive/transport';
 import { PREFIX_BYTES } from '../../src/data/drive/drive-api';
@@ -18,7 +18,7 @@ import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
-import { isRunnerPath, SYSTEM, isHidden, isRunnerFile, type RetrievalFile, type ViewRecord } from '../../src/data/vault/layout';
+import { isFormulaRecord, isRunnerPath, SYSTEM, isHidden, isRunnerFile, type FormulaOutput, type RetrievalFile, type ViewRecord } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
 import { applyChanges, isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
@@ -31,7 +31,7 @@ import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { renderHot, sameExceptDate, type HotInputs } from './hot';
 import { LedgerExhausted, type RunTiming } from './timing';
 import { ABOUT_SECTIONS, learnedLines, learnedTimeline, parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
-import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
+import { ABOUT_REGIONS, createOwnershipContext, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { appendLog, logEvents } from './log';
 import { formatLogEvent } from '../../src/data/contracts/log-format';
 import { FOLDER_TEMPLATE } from '../../src/data/contracts/folder-template';
@@ -405,43 +405,72 @@ function unreadable(error: unknown): void {
   console.error(error);
 }
 
+/** A type row's stored `views` (B11): its list, or none. */
+const rowViews = (row: TypeRow): unknown[] => {
+  const views: unknown = (row as TypeRow & { views?: unknown }).views;
+  return Array.isArray(views) ? views : [];
+};
 const textValues = (v: unknown): v is Record<string, string> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every((x) => typeof x === 'string');
 
+/** One note's computed edit (B11 R51): its values to set or remove; `settle` records what its write did. */
+type ComputedWrite = { id: string; path: string; values: Array<{ key: string; value: string | null }>; text?: string;
+  settle(written: { file: SeenFile; text: string } | 'stale' | 'refused'): void };
+
 /**
- * B11 (AC9-AC14): Bower maps' declared figures, computed after settled effects. A set is its declared folder and type
- * (R36); member properties come from retrieval's evidence for the same id and version, else one prefix read (R28,
- * R29). Nothing is read for a folder whose maps declare no views.
+ * B11: the views maintain computes after settled effects, with one retrieval store of evidence and records (R55).
+ * Bower maps' declared figures (AC9-AC14): a set is its declared folder and type (R36); member properties come from
+ * retrieval's evidence for the same id and version, else one prefix read (R28, R29). Type rows' formulas (AC23-AC29):
+ * each Bower note of the type gets its computed lines, its records driving cleanup (R35, R49). Nothing is read for a
+ * folder whose maps declare no views and whose notes have no type.
  */
-function mapFigures(drive: RunnerDrive, inputs: Maintain['inputs'], state: RetrievalState, asOf: string) {
+function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: RetrievalState, asOf: string) {
   const frozen = VaultIndex.build(inputs.folderId, (inputs.listing ?? []).map(file));
   const places = VaultIndex.build(inputs.folderId, state.listing ?? []);
   const readJson = async (path: string): Promise<string | null> => {
     const f = frozen.file(path);
     return f ? drive.readListedText(f) : null;
   };
-  let kept: Promise<Record<string, { version?: unknown; properties?: unknown }>> | undefined;
+  type Kept = { files: Record<string, { version?: unknown; properties?: unknown; doubled?: unknown; type?: unknown } | undefined>; views: Record<string, unknown> };
+  let kept: Promise<Kept> | undefined;
   let table: Promise<TypeTable> | undefined;
   const reads = new Map<string, Promise<Record<string, string> | null>>();
   const evidence = new Map<string, Record<string, string>>();
   const records = new Map<string, ViewRecord>();
+  const stored = (): Promise<Kept> => kept ??= readJson(SYSTEM.retrieval).then((text) => {
+    try {
+      const value: unknown = text === null ? null : JSON.parse(text);
+      const part = (key: 'files' | 'views'): Record<string, never> => {
+        const v: unknown = value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : null;
+        return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, never> : {};
+      };
+      return { files: part('files'), views: part('views') };
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      return { files: {}, views: {} };
+    }
+  });
+  const types = (): Promise<TypeTable> => table ??= readJson(SYSTEM.typeTable).then((text) => readTypeTable(text).table);
+  // Keys a note writes on more than one line, by note; kept beside its evidence (`doubled`), so readers take the first (ruling 4).
+  const doubled = new Map<string, Set<string>>();
+  const valuesOf = (id: string, text: string): Record<string, string> | null => {
+    const duplicates = new Set<string>();
+    const values = frontValues(text, duplicates);
+    if (duplicates.size) doubled.set(id, duplicates);
+    else doubled.delete(id);
+    return values;
+  };
   const read = async (id: string, note: MaintenanceNote): Promise<Record<string, string> | null> => {
-    kept ??= readJson(SYSTEM.retrieval).then((text) => {
-      try {
-        const value: unknown = text === null ? null : JSON.parse(text);
-        const files: unknown = value && typeof value === 'object' ? (value as { files?: unknown }).files : null;
-        return files && typeof files === 'object' ? files as Record<string, { version?: unknown; properties?: unknown }> : {};
-      } catch (error) {
-        if (!(error instanceof SyntaxError)) throw error;
-        return {};
-      }
-    });
-    const stored = (await kept)[id];
+    const kept = (await stored()).files[id];
     // Malformed evidence, or evidence for another version, is rebuilt from a fresh read (AC12).
-    if (stored?.version === note.version && textValues(stored.properties)) return stored.properties;
+    // Evidence that never noted its duplicate keys (an earlier build's) is read again once (ruling 4).
+    if (kept?.version === note.version && textValues(kept.properties) && Array.isArray(kept.doubled) && kept.doubled.every((k) => typeof k === 'string')) {
+      if (kept.doubled.length) doubled.set(id, new Set(kept.doubled as string[]));
+      return kept.properties;
+    }
     const f = places.byId(id);
     try {
       const text = f ? await drive.readPrefix(f) : null;
-      return text === null ? null : frontValues(text);
+      return text === null ? null : valuesOf(id, text);
     } catch (error) {
       if (error instanceof BowerError && error.code === 'not-found') console.error(error);
       else unreadable(error);
@@ -453,6 +482,22 @@ function mapFigures(drive: RunnerDrive, inputs: Maintain['inputs'], state: Retri
     reads.set(id, once);
     return once;
   };
+  /** A note's whole text, once, for a computed edit (R37); undefined when Drive will not give it. */
+  const texts = new Map<string, Promise<string | undefined>>();
+  const whole = (id: string): Promise<string | undefined> => {
+    const once = texts.get(id) ?? (async () => {
+      const f = places.byId(id);
+      try {
+        return f ? await drive.readListedText(f) : undefined;
+      } catch (error) {
+        if (error instanceof BowerError && error.code === 'not-found') console.error(error);
+        else unreadable(error);
+        return undefined;
+      }
+    })();
+    texts.set(id, once);
+    return once;
+  };
   /** Drops a map's records; true when it had any. */
   const forget = (mapId: string): boolean => {
     const keys = [...records.keys()].filter((key) => key.startsWith(`${mapId}/`));
@@ -461,16 +506,16 @@ function mapFigures(drive: RunnerDrive, inputs: Maintain['inputs'], state: Retri
   };
   return {
     forget,
+    whole,
     /** The blocks after the map's count line; '' when it declares none. */
     async render(mapId: string): Promise<string> {
       forget(mapId);
       const line = frontValues(state.files[mapId]?.moc?.text ?? '')?.bower_views;
       if (line === undefined) return '';
-      table ??= readJson(SYSTEM.typeTable).then((text) => readTypeTable(text).table);
-      const types = await table;
+      const table = await types();
       const blocks: string[] = [];
-      for (const view of storedViews(line, types)) {
-        const row = types.rows.find((r) => r.id === view.set.type);
+      for (const view of storedViews(line, table)) {
+        const row = table.rows.find((r) => r.id === view.set.type);
         const folder = places.pathOf(view.set.folderId);
         // A binned folder takes its figure and record with it (R35).
         if (!row || folder === undefined || view.set.folderId !== inputs.folderId && !places.byId(view.set.folderId)?.folder) continue;
@@ -499,15 +544,115 @@ function mapFigures(drive: RunnerDrive, inputs: Maintain['inputs'], state: Retri
       }
       return blocks.join('\n');
     },
-    /** Retrieval with the figures' evidence and records; exactly the state when no map declares views (R2). */
+    /**
+     * B11 (AC23-AC29): each Bower note whose computed lines change, with all its formulas' values and removals for one
+     * edit (R51). A note needing none is recorded here; one to write is recorded by `settle` once its write is known.
+     */
+    async formulas(): Promise<ComputedWrite[]> {
+      const { files: before, views: kept } = await stored();
+      // Readable formula records by note (ruling 2); any other record is a map's, rebuilt by its render, or broken (R49).
+      const old = new Map<string, Map<string, ViewRecord>>();
+      for (const [key, record] of Object.entries(kept)) {
+        const at = key.indexOf('/');
+        if (at > 0 && isFormulaRecord(record)) old.set(key.slice(0, at), (old.get(key.slice(0, at)) ?? new Map<string, ViewRecord>()).set(key.slice(at + 1), record));
+      }
+      const keep = (id: string): void => {
+        for (const [viewId, record] of old.get(id) ?? []) records.set(`${id}/${viewId}`, record);
+      };
+      // A note whose front matter runs past the prefix may be one of Bower's (R37): it is read whole.
+      const cutFront = (n: MaintenanceNote): boolean => n.incomplete === true && n.owner === 'person' && n.type === null;
+      const typed = Object.entries(state.files).filter(([id, n]) => !n.moc && (n.owner === 'bower' && typeof n.type === 'string' || cutFront(n) || old.has(id)));
+      if (!typed.length) return [];
+      // A note's type as its last full read established it: the prefix cannot tell a long front matter's (R37).
+      const typeOf = (id: string, n: MaintenanceNote): unknown => n.type ?? before[id]?.type;
+      const rows = (await types()).rows.filter((row) => rowViews(row).length || typed.some(([id, n]) => old.has(id) && typeOf(id, n) === row.id));
+      const writes: ComputedWrite[] = [];
+      for (const row of rows) {
+        const declared = new Set(rowViews(row).flatMap((v) => (v && typeof v === 'object' && typeof (v as { id?: unknown }).id === 'string' ? [(v as { id: string }).id] : [])));
+        const held = computedBy(row);
+        const formulas = storedFormulas(row);
+        const outputType = new Map(formulas.flatMap((f) => f.outputs.map((o) => [o.property, o.type] as const)));
+        const hashes = new Map(await Promise.all(formulas.map(async (f) => [f.id, (await canonical(f)).hash] as const)));
+        const listed = typed.filter(([, n]) => n.owner === 'bower' && n.type === row.id);
+        // Counted from the listing before any read (R15): over the bound no formula computes and every record stays.
+        if (formulas.some((f) => evaluateFormulas(f, row, listed.map(([id]) => ({ id, properties: {} })), asOf) === 'over')) {
+          for (const [id] of listed) keep(id);
+          continue;
+        }
+        const members: Array<{ id: string; note: MaintenanceNote; properties: Record<string, string>; text?: string }> = [];
+        for (const [id, note] of [...listed, ...typed.filter(([, n]) => cutFront(n))]) {
+          let properties = await propertiesOf(id, note);
+          let text: string | undefined;
+          if (properties === null) {
+            text = await whole(id);
+            properties = text === undefined ? null : valuesOf(id, text);
+          }
+          if (properties === null) { keep(id); continue; }
+          evidence.set(id, properties);
+          if (properties.by !== 'bower' || properties.type !== row.id) continue;
+          members.push({ id, note, properties, ...(text === undefined ? {} : { text }) });
+          // Kept in retrieval, so the next run's cleanup knows the member the whole read found (R35, R37).
+          state.files[id] = { ...note, owner: 'bower', type: row.id };
+        }
+        const results = formulas.map((f) => evaluateFormulas(f, row, members, asOf));
+        if (results.some((r) => r === 'over')) {
+          for (const { id } of members) keep(id);
+          continue;
+        }
+        for (const { id, note, properties, text } of members) {
+          const values = new Map<string, string | null>();
+          const own = new Map<string, ViewRecord>();
+          for (const [viewId, record] of old.get(id) ?? []) {
+            if (formulas.some((f) => f.id === viewId)) continue;
+            // Still declared, though refused or skipped: its lines and record stay as last written (R47).
+            if (declared.has(viewId)) { own.set(viewId, record); continue; }
+            // Taken out of the row while the note kept its type: its readable record's lines go, but a property another
+            // formula now holds stays its own (R35, R49, R54). A note new to this type drops the record only (ruling 1).
+            if (before[id]?.type === row.id) for (const key of Object.keys(record.result as object)) if (!held.has(key)) values.set(key, null);
+          }
+          formulas.forEach((f, i) => {
+            const result = (results[i] as Record<string, Record<string, FormulaOutput>>)[id] ?? {};
+            for (const output of f.outputs) {
+              const out = result[output.property];
+              values.set(output.property, out && 'value' in out ? output.type === 'date' ? String(out.value) : JSON.stringify(out.value) : null);
+            }
+            own.set(f.id, { hash: hashes.get(f.id) ?? '', evaluator: EVALUATOR_VERSION, asOf, inputs: [[id, note.version]], result });
+          });
+          // Equal as values (R46, R50): decoded under the output's own type; an absent output is a line to remove. A key on
+          // more than one line is never equal, so the write leaves one line and no stale copy survives (ruling 4).
+          const same = (key: string, value: string | null): boolean => !doubled.get(id)?.has(key) && (value === null ? properties[key] === undefined : (() => {
+            const decl = { ...row, properties: { [key]: { type: outputType.get(key) ?? 'text' } } };
+            const a = propertyValue(decl, key, properties[key]), b = propertyValue(decl, key, value);
+            return typeof a === 'object' && typeof b === 'object' && JSON.stringify(a.value) === JSON.stringify(b.value);
+          })());
+          const record = (): void => { for (const [viewId, r] of own) records.set(`${id}/${viewId}`, r); };
+          if ([...values].every(([key, value]) => same(key, value))) { record(); continue; }
+          writes.push({ id, path: note.path, values: [...values].map(([key, value]) => ({ key, value })), ...(text === undefined ? {} : { text }),
+            settle: (written) => {
+              // Refused (the person changed the note while Bower worked, R10, R34): it keeps what it had.
+              if (written === 'refused') { keep(id); return; }
+              // R39: a landed write the note has changed since claims nothing; the next run reads it again.
+              if (written === 'stale') { evidence.delete(id); return; }
+              state.files[id] = { ...note, owner: 'bower', type: row.id, version: written.file.modifiedTime };
+              state.listing = state.listing?.map((x) => x.id === id ? file(written.file) : x);
+              const next = valuesOf(id, written.text) ?? properties;
+              evidence.set(id, next);
+              reads.set(id, Promise.resolve(next));
+              record();
+            } });
+        }
+      }
+      return writes;
+    },
+    /** Retrieval with the views' evidence and records; exactly the state when nothing declares views (R2, R55). */
     retrieval(s: RetrievalState): RetrievalState {
       // The ancestry keeps the table the figures read, so the next run knows its previous path (R35).
       const chain = table ? SYSTEM.typeTable.split('/').flatMap((_, i, parts) => frozen.file(parts.slice(0, i + 1).join('/')) ?? []) : [];
       const ancestry = s.listing;
       if (ancestry) s = { ...s, listing: [...ancestry, ...chain.filter((f) => !ancestry.some((k) => k.id === f.id))] };
-      if (!records.size) return s;
-      return { ...s, files: Object.fromEntries(Object.entries(s.files).map(([id, n]) => [id, evidence.has(id) ? { ...n, properties: evidence.get(id) } : n])),
-        views: Object.fromEntries(records) };
+      if (!records.size && !evidence.size) return s;
+      return { ...s, files: Object.fromEntries(Object.entries(s.files).map(([id, n]) => [id, evidence.has(id) ? { ...n, properties: evidence.get(id), doubled: [...doubled.get(id) ?? []] } : n])),
+        ...(records.size ? { views: Object.fromEntries(records) } : {}) };
     },
   };
 }
@@ -666,7 +811,15 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     && await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }) !== undefined;
   // Maps that declare views owe their figures again after any type-table edit, even on an idle run (R35).
   const figuresOwed = refreshed.tableChanged && Object.values(state?.files ?? {}).some((n) => n.moc && frontValues(n.moc.text)?.bower_views !== undefined);
-  if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && await healthKept()) {
+  // Formulas owe their values on a new as-of day since a record, or after a type-table edit (R52).
+  const formulasOwed = async (): Promise<boolean> => {
+    const recorded = Object.values(state?.views && typeof state.views === 'object' ? state.views : {}).filter((r) => isFormulaRecord(r));
+    if (recorded.some((r) => r.asOf !== timelineDate(manifest.requestedAt))) return true;
+    const table = refreshed.tableChanged && !recorded.length ? ix.file(SYSTEM.typeTable) : undefined;
+    return refreshed.tableChanged && (!!recorded.length || !!table && readTypeTable(await drive.readListedText(table)).table.rows
+      .some((row) => rowViews(row).length > 0));
+  };
+  if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && !await formulasOwed() && await healthKept()) {
     return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
   }
   // Evidence absent, malformed or unreadable before is rebuilt from one read of this version (R26).
@@ -935,7 +1088,39 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       const index = projectIndex(state.files);
       const asOf = timelineDate(manifest.requestedAt);
       if (!asOf) throw unavailable();
-      const figures = mapFigures(drive, op.effect.inputs, state, asOf);
+      const figures = computedViews(drive, op.effect.inputs, state, asOf);
+      const stamp = stampOf(head.runId, op.operationId);
+      const subHead = (fileId: string) => ({ ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? { operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId } : o) });
+      // Computed values first, each note in one edit under the maintain's stamp, so figures read them (B11 R51). A landed
+      // write found on redispatch counts as applied (R39); a write refused for the person's change skips that note (R10).
+      for (const write of await figures.formulas()) {
+        const f = state.listing?.find((x) => x.id === write.id);
+        const before = f === undefined ? undefined : write.text ?? await figures.whole(write.id);
+        if (f === undefined || before === undefined) { write.settle('refused'); continue; }
+        const changes: EditText['changes'] = [{ kind: 'computed-set', recordIds: [], values: write.values }];
+        const result = applyChanges(new TextEncoder().encode(before), changes, { fileId: f.id, context: createOwnershipContext(), path: write.path, name: f.name });
+        if (!result.ok) {
+          if (result.reason !== 'unchanged') console.error(new BowerError('unknown', 'Bower could not update a computed property.', undefined, { cause: result.reason }));
+          write.settle('refused');
+          continue;
+        }
+        const content = { encoding: 'utf8' as const, size: result.bytes.byteLength, sha256: await rawHash(result.text) };
+        const beforeContent: VerifiedContent = { encoding: 'utf8', size: new TextEncoder().encode(before).length, sha256: await rawHash(before),
+          provenance: drive.provenance, observedModifiedTime: f.modifiedTime };
+        const sub = { ...op, effect: { kind: 'edit-text' as const, before: seen(f), path: write.path, beforeContent, changes, text: result.text, content } };
+        if (replaying.has(op.operationId)) {
+          const ev = await drive.evidence(write.id);
+          if (ev && happened({ stamp }, ev.file)) {
+            const back = await ordinary.readBack(sub, subHead(write.id), manifest);
+            if (back.state !== 'landed') throw unavailable();
+            write.settle(back.evidence.content?.sha256 === content.sha256 ? { file: back.evidence.file, text: result.text } : 'stale');
+            continue;
+          }
+        }
+        await sending();
+        const settled = await ordinary.apply(sub, subHead(write.id), w, manifest, async () => write.id);
+        write.settle(settled.state === 'applied' ? { file: settled.evidence.file, text: result.text } : 'refused');
+      }
       let last: Settled | undefined;
       // Person-facing projections, then retrieval (holding the health id), health and the log (R20).
       const rank = (target: NonNullable<Maintain['inputs']['targets']>[number]): number =>
@@ -970,16 +1155,13 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         if (logFolder) {
           const effect: EffectV2 = { kind: 'create-folder', parent: { fileId: target.parentId }, name: 'log', createKey: op.operationId };
           const sub = { ...op, effect };
-          const subHead = { ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? {
-            operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId: target.fileId } : o) };
           if (replaying.has(op.operationId)) {
-            const back = await ordinary.readBack(sub, subHead, manifest);
+            const back = await ordinary.readBack(sub, subHead(target.fileId), manifest);
             if (back.state === 'landed') { last = { state: 'applied', evidence: back.evidence }; continue; }
             if (back.state !== 'not-landed') throw unavailable();
           }
           await sending();
-          const written = await w.createFolder(target.parentId, 'log', { bowerItem: op.operationId,
-            bowerOp: stampOf(head.runId, op.operationId) }, target.fileId);
+          const written = await w.createFolder(target.parentId, 'log', { bowerItem: op.operationId, bowerOp: stamp }, target.fileId);
           last = { state: 'applied', evidence: { file: seen(written), trashed: false, content: null, provenance: drive.provenance } };
           continue;
         }
@@ -1018,9 +1200,8 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           beforeContent: target.beforeContent, text, content }
           : { kind: 'create-text' as const, parent: { fileId: target.parentId }, name: target.path.split('/').at(-1) ?? '', createKey: op.operationId, purpose: owned || health ? 'generated' as const : 'runner-json' as const, text, content };
         const sub = { ...op, effect };
-        const subHead = { ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? { operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId: target.fileId } : o) };
-        if (ev && happened({ stamp: stampOf(head.runId, op.operationId) }, ev.file)) {
-          const back = await ordinary.readBack(sub, subHead, manifest);
+        if (ev && happened({ stamp }, ev.file)) {
+          const back = await ordinary.readBack(sub, subHead(target.fileId), manifest);
           if (back.state !== 'landed') throw unavailable();
           last = { state: 'applied' as const, evidence: back.evidence };
           if (health) reached.health = last;
@@ -1039,7 +1220,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         if (kind?.cachedCheck && before && beforeContent) cachedCheck = { file: file(before), trashed: false,
           content: { size: beforeContent.size, sha256: beforeContent.sha256 } };
         try {
-          last = await ordinary.apply(sub, subHead, w, manifest, async () => target.fileId);
+          last = await ordinary.apply(sub, subHead(target.fileId), w, manifest, async () => target.fileId);
         } finally {
           cachedCheck = undefined;
         }

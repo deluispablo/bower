@@ -300,6 +300,30 @@ function compute(e: Expression, row: TypeRow, properties: Record<string, string>
   return bounded(e.op === '+' ? x + y : e.op === '-' ? x - y : e.op === '*' ? x * y : x / y, currency);
 }
 
+/**
+ * A type row's stored formulas, read leniently (R21, R47, R48, R53): each valid formula in order. A non-object, a
+ * refused formula, an aggregate, an id seen before or a property an earlier formula claims is skipped alone and logged.
+ */
+export function storedFormulas(row: TypeRow): FormulaView[] {
+  const views: unknown = (row as TypeRow & { views?: unknown }).views;
+  const ids = new Set<unknown>();
+  return (Array.isArray(views) ? views : []).flatMap((entry: unknown) => {
+    const id = entry && typeof entry === 'object' ? (entry as { id?: unknown }).id : undefined;
+    const fault = ids.has(id) ? 'Two formulas have one id.' : viewFault(entry, { v: 1, rows: [row] }, 'read')
+      ?? ((entry as FormulaView).kind !== 'formula' ? 'A type holds formulas only.' : null);
+    if (typeof id === 'string') ids.add(id);
+    if (!fault) return [entry as FormulaView];
+    console.error(new BowerError('unknown', 'Bower skipped a computed property it could not read.', undefined, { cause: fault }));
+    return [];
+  });
+}
+
+/** One formula over a type's notes (B11 AC29): each note's outputs by id; `'over'` past 200 notes, so none is written. */
+export function evaluateFormulas(view: unknown, row: TypeRow, notes: Note[], asOf: string): Record<string, ReturnType<typeof evaluateFormula>> | 'over' {
+  if (notes.length > VIEW_LIMITS.notes) return 'over';
+  return Object.fromEntries(notes.map((note) => [note.id, evaluateFormula(view, row, note.properties, asOf)]));
+}
+
 export function evaluateFormula(view: unknown, row: TypeRow, properties: Record<string, string>, asOf: string) {
   checked(view, row, 'formula');
   return Object.fromEntries((view as FormulaView).outputs.map((output) => {

@@ -13,7 +13,7 @@ import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
 import { sha256 } from './hashes';
-import { dateOk, bowerNoteRole, parseNote, timelineEntries } from './note-format';
+import { BOWER_KEYS, dateOk, bowerNoteRole, parseNote, TECHNICAL_PROPERTIES, timelineEntries } from './note-format';
 import { ABOUT_REGIONS, MOC_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type MocRegion, type ByteSpan, type Fence, type Layout, type OwnershipFailure, type FetchedOwnership } from './ownership-format';
 import { parseTimelineLine, splitCitation, timelineLine, type TimelineMarker } from './timeline-line';
 import { managedRules } from './rules-format';
@@ -45,7 +45,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'computed-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -155,6 +155,7 @@ function fieldsOk(change: Change): boolean {
     case 'timeline-append': return change.entries.length > 0 && change.entries.every((entry) => entryOk(entry));
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
     case 'views-set': return (change.previous === null || typeof change.previous === 'string') && typeof change.text === 'string';
+    case 'computed-set': return computedOk(change);
   }
 }
 const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.length + ABOUT_REGIONS.indexOf(c.region)
@@ -1012,6 +1013,52 @@ const viewsHold = (before: string, after: string): boolean => {
   return strip(before) === strip(after);
 };
 
+// ---------------------------------------------------------------------------------------------
+// computed-set (B11 R50, R51, R56)
+// ---------------------------------------------------------------------------------------------
+
+/** A front-matter line's key, as note-format's reader takes it (text before the first colon, trimmed). */
+const keyOf = (line: string): string | null => {
+  const i = line.indexOf(':');
+  return i > 0 ? line.slice(0, i).trim() : null;
+};
+const computedOk = (change: Extract<Change, { kind: 'computed-set' }>): boolean => change.values.length > 0
+  && new Set(change.values.map((v) => v.key)).size === change.values.length
+  && change.values.every(({ key, value }) => /^[a-z][a-z0-9_]*$/.test(key) && !key.startsWith('bower_')
+    && !(BOWER_KEYS as readonly string[]).includes(key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key)
+    && (value === null || value.trim() !== '' && !controls(value)));
+/**
+ * The one computed-set author, only on a Bower note and only in its front matter: a key's first line takes the value
+ * (readers take the first) and its later lines go; a key with no line gets one, last, in the note's own line ending; a
+ * null value removes every line of the key (coordinator ruling 4).
+ */
+function setComputed(text: string, change: Extract<Change, { kind: 'computed-set' }>, fetched?: FetchedOwnership): Step {
+  if (!byBower(text, fetched)) return { refused: 'not-bower' };
+  const lines = frontmatterLines(text, fetched);
+  const end = lines.at(-1);
+  if (!end) return { refused: 'field' };
+  const eol = eolOf(text);
+  const edits: Array<{ start: number; end: number; text: string }> = [];
+  const added: string[] = [];
+  for (const { key, value } of change.values) {
+    const line = value === null ? null : `${key}: ${value}`;
+    const own = lines.filter((l) => keyOf(l.text) === key);
+    own.forEach((l, i) => edits.push(i === 0 && line !== null ? { start: l.start, end: l.end, text: line } : { start: l.start, end: l.after, text: '' }));
+    if (!own.length && line !== null) added.push(line);
+  }
+  if (added.length) edits.push({ start: end.after, end: end.after, text: (end.after === end.end ? eol : '') + added.map((l) => l + eol).join('') });
+  let out = text;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, edit.start) + edit.text + out.slice(edit.end);
+  return { text: out, added: [], rules: null };
+}
+/** Only front-matter lines of the change's keys differ between the two texts. */
+const computedHold = (before: string, after: string, change: Extract<Change, { kind: 'computed-set' }>): boolean => {
+  const keys = new Set(change.values.map((v) => v.key));
+  const strip = (t: string): string => [...frontmatterLines(t)].reverse()
+    .reduce((out, l) => (keys.has(keyOf(l.text) ?? '') ? out.slice(0, l.start) + out.slice(l.after) : out), t);
+  return strip(before) === strip(after);
+};
+
 export type MocSnapshot = { text: string; regions: Record<MocRegion, string> };
 
 /** Freeze only regions the existing ownership author can rewrite. Personal maps grant no authority. */
@@ -1119,7 +1166,9 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
   const note = parseNote(fetched?.path ?? 'note.md', text, fetched);
   const role = bowerNoteRole(text, fetched);
   const shape = role ? NOTE_TEMPLATES[role] : undefined;
-  if (version === 2 && shape && (shape.immutable || !shape.timeline && changes.some((c) => c.kind === 'timeline-append'))) return refuse('unsupported');
+  // A source note's text is immutable; its computed properties are Bower's derived lines (B11).
+  const computedOnly = changes.every((c) => c.kind === 'computed-set');
+  if (version === 2 && shape && (shape.immutable && !computedOnly || !shape.timeline && changes.some((c) => c.kind === 'timeline-append'))) return refuse('unsupported');
   const map = isHub(note.path, fetched?.name, note.properties.find((p) => p.key === 'type')?.value);
   if (version === 2 && map && own.status !== 'v2' && !note.byBower && changes.some((c) => c.kind !== 'link-rewrite')) return refuse('not-bower');
   let current = text;
@@ -1128,6 +1177,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
     // Intermediate text is generated, even when it carries the source file id.
     const step = change.kind === 'about-append' ? appendAbout(current, change.text) : change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source) : change.kind === 'views-set' ? setViews(current, change, source)
+        : change.kind === 'computed-set' ? setComputed(current, change, source)
         : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
@@ -1138,7 +1188,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
         || decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end))
           !== decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end))) return refuse('invariant');
     }
-    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : change.kind === 'views-set' ? viewsHold(current, step.text) : holds(current, step.text, change, step);
+    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : change.kind === 'views-set' ? viewsHold(current, step.text) : change.kind === 'computed-set' ? computedHold(current, step.text, change) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }
