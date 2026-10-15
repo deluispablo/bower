@@ -134,14 +134,27 @@ const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.rep
 
 /** `result`: the evaluator's result, or why the figure says it was not computed (R32). */
 export type ViewRecord = { hash: string; evaluator: number; asOf: string; inputs: Array<[string, string]>; result: unknown };
+/** A formula's output for one note, as `evaluateFormula` gives it. */
+export type FormulaOutput = { value: unknown } | { unavailable: string };
+/**
+ * A note's formula record (`<noteId>/<viewId>`, B11 AC27) in the full shape maintain writes; anything else is broken
+ * and names no line (R49, coordinator ruling 2). A map's record never passes: its result is no set of outputs.
+ */
+export function isFormulaRecord(v: unknown): v is ViewRecord & { result: Record<string, FormulaOutput> } {
+  return object(v) && text(v.hash) && number(v.evaluator) && text(v.asOf) && list(v.inputs, (pair) => list(pair, text) && (pair as unknown[]).length === 2)
+    && object(v.result) && Object.values(v.result).every((o) => object(o) && (Object.keys(o).join() === 'value' || Object.keys(o).join() === 'unavailable' && text(o.unavailable)));
+}
 /**
  * Optional fields are read leniently: a malformed `health` id, per-file `lint` or `properties` evidence, or `views`
  * record counts as absent (B8 R22, R26; B11 AC12).
  */
 export interface RetrievalFile {
   v: 1; folderId: string; account: string; cursor: string;
-  /** `properties`: a view member's raw front-matter values, valid only for `version` (B11 R28). */
-  files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; properties?: Record<string, string> }>;
+  /**
+   * `properties`: a view member's raw front-matter values, valid only for `version` (B11 R28); `doubled`: its keys written
+   * on more than one line (ruling 4), noted with every evidence written since b11-formula-values.
+   */
+  files: Record<string, { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; properties?: Record<string, string>; doubled?: string[] }>;
   /** The id of Bower's health note (TL-P4-50 Q6): found by this id only, never by title. */
   health?: string;
   /** B11 (AC12): each computed map figure's provenance by `<mapId>/<viewId>`; rebuilt by every maintain that writes retrieval. */
@@ -171,6 +184,7 @@ export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): 
     case SYSTEM.requests: return list(v.done, request);
     case SYSTEM.lastRun: return run(v.run);
     case SYSTEM.hashes: return object(v.hashes) && Object.entries(v.hashes).every(([hash, value]) => /^[a-f\d]{64}$/i.test(hash) && text(value));
+    // A path read at run time may name no runner file.
+    default: return false;
   }
-  return false;
 }

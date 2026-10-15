@@ -87,7 +87,12 @@ export type Change =
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[]; consent?: TimelineConsent }
   | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] }
   /** B11 (R40-R44): a Bower map's `bower_views` line, `previous` its last value as read (null when absent), `text` the compact list written. */
-  | { kind: 'views-set'; recordIds: string[]; previous: string | null; text: string };
+  | { kind: 'views-set'; recordIds: string[]; previous: string | null; text: string }
+  /**
+   * B11 (R51, R56): a Bower note's computed front-matter lines, each `value` the line's text or null to remove every line
+   * of that key. Maintain's own edit, derived at write time and never sealed in a manifest (R43), so it names no record.
+   */
+  | { kind: 'computed-set'; recordIds: []; values: Array<{ key: string; value: string | null }> };
 /**
  * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
  * (optional, `keep-one-note-merge`): the whole file as read, described by `beforeContent`, so an undo can put it back

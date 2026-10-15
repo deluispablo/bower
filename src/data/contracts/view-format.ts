@@ -52,15 +52,25 @@ const ARITHMETIC: Record<string, Record<string, string>> = {
   '*': { 'number number': 'number', 'money number': 'money', 'number money': 'money' },
   '/': { 'number number': 'number', 'money number': 'money', 'money money': 'number' },
 };
-const RESERVED = new Set<string>(['name', 'modified', 'kind', 'folder', ...TECHNICAL_PROPERTIES, ...BOWER_KEYS]);
+// Built on first use: note-format imports this module back (typeRowOk, propertyValuesOk), so its constants may not be ready yet.
+let reserved: Set<string> | undefined;
+const isReserved = (key: string): boolean => (reserved ??= new Set<string>(['name', 'modified', 'kind', 'folder', ...TECHNICAL_PROPERTIES, ...BOWER_KEYS])).has(key);
 
-/** The formulas installed in a row (`views`), read leniently: each computed property and the formula id that computes it. */
-function computedBy(row: TypeRow): Map<string, { id: string; type: unknown }> {
+/**
+ * The formulas installed in a row (`views`), read leniently: each computed property and the formula id that computes it.
+ * The first formula wins (R48, R53): a later one with an id already seen, or listing a property already claimed, claims
+ * nothing; a formula the grammar refuses still claims its id and every output it lists; an entry with no id claims nothing.
+ */
+export function computedBy(row: TypeRow): Map<string, { id: string; type: unknown }> {
   const views: unknown = (row as TypeRow & { views?: unknown }).views;
   const computed = new Map<string, { id: string; type: unknown }>();
+  const ids = new Set<string>();
   for (const view of Array.isArray(views) ? views : []) {
-    if (!isObject(view) || view.kind !== 'formula' || typeof view.id !== 'string' || !Array.isArray(view.outputs)) continue;
-    for (const output of view.outputs) if (isObject(output) && typeof output.property === 'string') computed.set(output.property, { id: view.id, type: output.type });
+    if (!isObject(view) || view.kind !== 'formula' || typeof view.id !== 'string' || ids.has(view.id)) continue;
+    ids.add(view.id);
+    const outputs = (Array.isArray(view.outputs) ? view.outputs : []).filter((o): o is Json & { property: string } => isObject(o) && typeof o.property === 'string');
+    if (outputs.some((o) => computed.has(o.property))) continue;
+    for (const output of outputs) computed.set(output.property, { id: view.id, type: output.type });
   }
   return computed;
 }
@@ -217,7 +227,7 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
   for (const value of d.outputs) {
     const output = node(value, ['property', 'type', 'expr'], 0);
     const key = output.property;
-    need(typeof key === 'string' && /^[a-z][a-z0-9_]*$/.test(key) && !RESERVED.has(key) && !key.startsWith('bower_') && !outputs.has(key),
+    need(typeof key === 'string' && /^[a-z][a-z0-9_]*$/.test(key) && !isReserved(key) && !key.startsWith('bower_') && !outputs.has(key),
       'Each computed property needs its own free name.');
     outputs.set(key, output.type);
     need(['number', 'money', 'date'].includes(output.type as string), 'A computed property is a number, money or a date.');
