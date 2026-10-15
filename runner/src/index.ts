@@ -16,7 +16,7 @@ import { driveEffects, type Effects, type Settled } from '../../src/data/spine/e
 import { filingMove, materialize, refreshed, wordsNotes } from '../../src/data/spine/report';
 import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { runKeys } from '../../src/data/spine/scripted';
+import { emptyManifest, runKeys } from '../../src/data/spine/scripted';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
@@ -321,11 +321,8 @@ async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, ix: VaultIn
 export async function withProgress(drive: RunnerDrive, run: { rootId: string; runId: string; allowWeb: boolean; taken: AdmissionManifest },
   refreshed: Awaited<ReturnType<typeof refreshPlanning>>): Promise<RunManifest> {
   const { ix, old, state, snapshot, lints, cursor } = refreshed;
-  const scope = { rootId: run.rootId };
-  const capture = { piles: [], members: [], journal: [], places: [] };
-  const manifest: RunManifest = { v: 1, kind: 'run-manifest', scope, runId: run.runId, requestId: run.taken.id, runScope: run.taken.scope,
-    allowWeb: run.allowWeb, requestedAt: run.taken.at, captureId: (await canonical({ scope, runScope: run.taken.scope, capture })).hash,
-    capture, reportPlan: [], operations: [] };
+  const manifest: RunManifest = await emptyManifest(run.rootId,
+    { scope: run.taken.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: run.taken.id, requestedAt: run.taken.at });
   const files: Notes = {};
   // Stored entries stay as stored, under their path now; a note binned or gone loses its entry (R8, R11).
   for (const [id, stored] of Object.entries(state?.files ?? {})) {
