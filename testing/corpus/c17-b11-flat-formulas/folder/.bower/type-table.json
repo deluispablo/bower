@@ -3,6 +3,10 @@
   "rows": [
     {
       "id": "flat",
+      "match": [
+        "flat listing"
+      ],
+      "template": "source",
       "properties": {
         "rent": {
           "type": "money"
@@ -15,14 +19,6 @@
         },
         "location": {
           "type": "text"
-        },
-        "price_per_area": {
-          "type": "money",
-          "computedBy": "flat-metrics"
-        },
-        "days_left": {
-          "type": "number",
-          "computedBy": "flat-metrics"
         }
       },
       "table": [
@@ -30,41 +26,6 @@
         "area",
         "deadline",
         "location"
-      ],
-      "views": [
-        {
-          "v": 1,
-          "id": "flat-metrics",
-          "kind": "formula",
-          "type": "flat",
-          "outputs": [
-            {
-              "property": "price_per_area",
-              "type": "money",
-              "label": "Rent per square metre",
-              "expr": {
-                "op": "/",
-                "left": {
-                  "property": "rent"
-                },
-                "right": {
-                  "property": "area"
-                }
-              }
-            },
-            {
-              "property": "days_left",
-              "type": "number",
-              "label": "Days left",
-              "expr": {
-                "op": "daysUntil",
-                "value": {
-                  "property": "deadline"
-                }
-              }
-            }
-          ]
-        }
       ]
     }
   ]

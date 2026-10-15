@@ -14,7 +14,7 @@ import { createOwnershipContext, parseOwnership, type AboutRegion, type Ownershi
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
+import { formulaInstalled, parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -497,8 +497,11 @@ export interface Filing {
   views?: readonly ViewInstall[];
 }
 
-/** One aggregate a request installs in a Bower map (B11c): checked by the provider as a write, bound to a main folder. */
-export interface ViewInstall { requestId: string; home: string; definition: { id: string } & Record<string, unknown> }
+/**
+ * One view a request installs (B11c, B11e), checked by the provider as a write: an aggregate in a Bower map (`home` its
+ * file id, bound to a main folder) or a formula in a type row (`home` the row id, with at most one requested column).
+ */
+export interface ViewInstall { requestId: string; kind: 'moc' | 'type-row'; home: string; definition: { id: string } & Record<string, unknown>; column?: string }
 
 /** A consolidation's lines and dropped ended facts by fact id, over the section's input facts (`consolidationInput`). */
 export interface Consolidated {
@@ -908,6 +911,24 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     tableRecords.add(line.rec.id);
     columnRequests.add(line.rec.id);
   }
+  // Formulas a request installs in a type row (B11e, R11, R44): one table write for every row, with the one requested
+  // column; a row that already holds them needs no write and the request settles (R42); a table Bower may not write
+  // leaves the request waiting.
+  const formulaWaits = new Set<string>();
+  for (const v of opts.decisions.views ?? []) {
+    if (v.kind !== 'type-row' || !lines.some((l) => l.rec.kind === 'request' && l.rec.id === v.requestId)) continue;
+    const row = nextTable.rows.find((r) => r.id === v.home);
+    if (!types.writeAllowed || !sys?.folder || !row) {
+      console.error(new BowerError('conflict', VIEWS_WAIT), `the ${v.home} type could not be changed`);
+      formulaWaits.add(v.requestId);
+      continue;
+    }
+    const installed = formulaInstalled(row, v.definition) ?? row;
+    const next = v.column === undefined ? installed : requestTableColumn(installed, v.column, { kind: 'words', recordId: v.requestId })?.row ?? installed;
+    if (JSON.stringify(next) === JSON.stringify(row)) continue;
+    nextTable = { ...nextTable, rows: nextTable.rows.map((old) => old.id === row.id ? next : old) };
+    tableRecords.add(v.requestId);
+  }
   // A request a checked reply installs views for (B11c) settles by its views-set edits, never by the generic handler.
   const viewRequests = new Set(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
     && (opts.decisions.views ?? []).some((v) => v.requestId === l.rec.id)).map((l) => l.rec.id));
@@ -1055,7 +1076,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return row ? [[l.rec.id, row] as const] : [];
   }));
   let journal = lines.filter((l) => {
-    if (l.rec.kind === 'request') return columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id)
+    if (l.rec.kind === 'request') return formulaWaits.has(l.rec.id) ? false : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
     if (l.rec.kind !== 'answer') return true;
     const question = questionState.questions.find((q) => answersAsking(l.rec, q));
@@ -2194,7 +2215,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // rewrite, coordinator ruling 1). A map that already holds them needs no edit (R42); one that cannot be written now
   // leaves its requests waiting.
   const installs = new Map<string, ViewInstall[]>();
-  for (const v of d.views ?? []) if (viewRequests.has(v.requestId)) installs.set(v.home, [...installs.get(v.home) ?? [], v]);
+  for (const v of d.views ?? []) if (v.kind === 'moc' && viewRequests.has(v.requestId)) installs.set(v.home, [...installs.get(v.home) ?? [], v]);
   for (const [home, wanted] of installs) {
     const target = ix.byId(home);
     const path = ix.pathOf(home);
@@ -2428,8 +2449,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (proposalFolder?.folder) places.set(proposalFolder.id, proposalFolder);
   }
   const tableChanged = types.writeAllowed && !!sys?.folder && (!typeFile || tableRecords.size > 0);
+  // A table with formulas carries the text it replaced: the guard checks each new formula against that row (R61).
   const tableWrite = tableChanged ? { file: typeFile ?? null, text: rewriteTypeTable(typeText, types.table, nextTable),
-    content: typeFile ? await ownVerified(typeFile) : null } : null;
+    content: typeFile ? await ownVerified(typeFile) : null,
+    beforeText: typeText !== null && nextTable.rows.some((row) => Object.hasOwn(row, 'views')) ? typeText : undefined } : null;
   if (tableWrite && !typeFile && sys) places.set(sys.id, sys);
   const tagWrite = grownTags.tags.length > snapshot.tagList.tags.length && sys?.folder
     ? { file: tagFile ?? null, text: `${JSON.stringify({ v: 1, tags: grownTags.tags }, null, 2)}\n`, content: tagFile ? await ownVerified(tagFile) : null } : null;
@@ -2877,7 +2900,7 @@ export async function build(decided: Decided): Promise<Ended> {
     const content = await utf8(tableWrite.text);
     const op = tableWrite.file && tableWrite.content
       ? await add({ kind: 'write-runner-json', before: seen(tableWrite.file), beforeContent: tableWrite.content,
-        path: SYSTEM.typeTable, text: tableWrite.text, content })
+        path: SYSTEM.typeTable, text: tableWrite.text, content, ...(tableWrite.beforeText === undefined ? {} : { beforeText: tableWrite.beforeText }) })
       : await add({ kind: 'write-runner-json', before: null, beforeContent: null, parent: { fileId: sys?.id ?? '' },
         createKey: (await runKeys(opts.runId))('table'), path: SYSTEM.typeTable, text: tableWrite.text, content });
     for (const id of tableRecords) derive(id, op);

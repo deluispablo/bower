@@ -37,7 +37,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
-import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
+import { formulaInstalled, MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
 import { VIEW_LIMITS, viewFault } from '../../src/data/contracts/view-format';
@@ -822,7 +822,8 @@ export const REFUSALS = {
   keepKeys: 'a note kept with keys outside the intent: give "kept" and "other"',
   keepNote: 'a note kept that is not two different notes below, each named once and the other given no line or state',
   keepNotAsked: 'a note kept that the person did not say yes to keeping as one',
-  viewKeys: 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId}, mode: "install", definition}) or a declaration the grammar refuses',
+  viewKeys: 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId} or {kind: "type-row", rowId}, mode: "install", '
+    + 'definition, and for a formula in a type row an optional column: one of its outputs}) or a declaration the grammar refuses',
   viewBinding: "a view whose request is not one of the person's requests below, whose home is not one of Bower's maps below, or whose folder is not one of the main folders",
   viewLimit: 'more than ten views in one map, or two views with one id there',
 } as const;
@@ -1080,8 +1081,13 @@ const AfterShape = z.strictObject({
   proposal: z.custom<Proposal>(proposalOk, named('askKeys')),
 }, named('askKeys'));
 const ViewShape = z.strictObject({
-  requestId: z.string(named('viewKeys')), home: z.strictObject({ kind: z.literal('moc', named('viewKeys')), fileId: z.string(named('viewKeys')) }, named('viewKeys')),
+  requestId: z.string(named('viewKeys')),
+  home: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('moc'), fileId: z.string(named('viewKeys')) }, named('viewKeys')),
+    z.strictObject({ kind: z.literal('type-row'), rowId: z.string(named('viewKeys')) }, named('viewKeys')),
+  ], named('viewKeys')),
   mode: z.literal('install', named('viewKeys')), definition: z.record(z.string(), z.unknown(), named('viewKeys')),
+  column: z.string(named('viewKeys')).min(1, named('viewKeys')).optional(),
 }, named('viewKeys'));
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type NoteIn = z.output<typeof NoteShape>;
@@ -1194,17 +1200,36 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const views: ViewInstall[] = [];
   type ViewIn = z.output<typeof ViewShape>;
   const folderOf = (v: ViewIn): unknown => isRecord(v.definition.set) ? v.definition.set.folderId : undefined;
+  const homeOf = (v: ViewIn): string => (v.home.kind === 'moc' ? v.home.fileId : v.home.rowId);
+  const requestOf = (v: ViewIn): string => seen.requests?.get(v.requestId)?.id ?? '';
+  // A formula (B11e, R58) is checked against its row with this reply's earlier formulas for that row in place.
+  const rowsNow = (): TypeRow[] => (seen.types ?? []).map((row) => views.reduce((r, x) => (x.kind === 'type-row' && x.home === r.id
+    ? formulaInstalled(r, x.definition) ?? r : r), row));
   const View = ViewShape.superRefine(inOrder<ViewIn>([
-    rule('viewKeys', (v) => { const fault = viewFault(v.definition, { v: 1, rows: [...seen.types ?? []] }, 'write'); return fault === null || `a view the grammar refuses: ${fault}`; }),
+    rule('viewKeys', (v) => v.column === undefined || v.home.kind === 'type-row'),
+    rule('viewKeys', (v) => {
+      const fault = viewFault(v.definition, { v: 1, rows: v.definition.kind === 'formula' ? rowsNow() : [...seen.types ?? []] }, 'write');
+      return fault === null || `a view the grammar refuses: ${fault}`;
+    }),
     rule('numbers', (v) => {
       const n = ungrounded(String(v.definition.title ?? ''), groundsOf(seen.requests?.get(v.requestId)?.text ?? ''));
       return !n || `a number that is in none of its sources: "${n}" in the view title; write only figures from the person's request`;
     }),
     rule('viewBinding', (v) => seen.requests?.has(v.requestId) === true),
-    rule('viewBinding', (v) => seen.maps?.has(v.home.fileId) === true),
-    rule('viewBinding', (v) => typeof folderOf(v) === 'string' && seen.folderCandidates?.has(folderOf(v) as string) === true),
-    rule('viewLimit', (v) => !views.some((x) => x.home === v.home.fileId && x.definition.id === v.definition.id)),
-  ], (v) => views.push({ requestId: seen.requests?.get(v.requestId)?.id ?? '', home: v.home.fileId, definition: v.definition as ViewInstall['definition'] })));
+    rule('viewBinding', (v) => v.home.kind !== 'moc' || seen.maps?.has(v.home.fileId) === true),
+    rule('viewBinding', (v) => v.home.kind !== 'type-row' || v.definition.type === v.home.rowId || 'a formula whose home is not the type row it is for'),
+    rule('viewBinding', (v) => v.home.kind !== 'moc' || typeof folderOf(v) === 'string' && seen.folderCandidates?.has(folderOf(v) as string) === true),
+    rule('viewKeys', (v) => v.column === undefined || (Array.isArray(v.definition.outputs) && v.definition.outputs.some((o) => isRecord(o) && o.property === v.column))
+      || 'a column that is not one of the formula\'s outputs'),
+    rule('viewLimit', (v) => !views.some((x) => x.kind === v.home.kind && x.home === homeOf(v) && x.definition.id === v.definition.id)),
+    rule('viewLimit', (v) => v.column === undefined || !views.some((x) => x.column !== undefined && x.requestId === requestOf(v)) || 'more than one column for one request'),
+    rule('viewLimit', (v) => {
+      const row = v.home.kind === 'type-row' ? rowsNow().find((r) => r.id === homeOf(v)) : undefined;
+      const installed = row && (formulaInstalled(row, v.definition as ViewInstall['definition']) ?? row) as TypeRow & { views?: unknown[] };
+      return (installed?.views?.length ?? 0) <= VIEW_LIMITS.perHome;
+    }),
+  ], (v) => views.push({ requestId: requestOf(v), kind: v.home.kind, home: homeOf(v), definition: v.definition as ViewInstall['definition'],
+    ...(v.column === undefined ? {} : { column: v.column }) })));
   const inPairs = new Set<string>();
   const plain = (text: string, max: number): boolean => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
 
@@ -2035,9 +2060,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
             || bodyLinks(String(note.body ?? ''), own, linked)) return no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link');
         }
         // The limit counts what each map keeps once installed, its stored entries included (R22, R44).
-        for (const home of new Set((got.filing.views ?? []).map((v) => v.home))) {
+        const mapViews = (got.filing.views ?? []).filter((v) => v.kind === 'moc');
+        for (const home of new Set(mapViews.map((v) => v.home))) {
           const declared = viewsDeclared(await read.readText(home));
-          const next = viewsInstalled(declared.value, (got.filing.views ?? []).filter((v) => v.home === home).map((v) => v.definition));
+          const next = viewsInstalled(declared.value, mapViews.filter((v) => v.home === home).map((v) => v.definition));
           if (next && (JSON.parse(next.text) as unknown[]).length > VIEW_LIMITS.perHome) return no('viewLimit');
         }
         got.filing.shownFactIds = shown.aboutMe?.learned.factIds ?? [];

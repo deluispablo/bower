@@ -3,14 +3,14 @@
   "capability": "C17",
   "title": "Flat formulas exclude zero and missing areas and leave personal notes intact",
   "covers": "model",
-  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; pending contract specimen",
+  "source": "new; TL-P4-39 B11, F13/R5/R7; TL-P4-41/42/44/45/47; landed grammar (b11-formula-install)",
   "scope": "instructions",
   "allowWeb": false,
   "inbox": [],
   "journal": [
     {
       "kind": "request",
-      "text": "For flats, calculate rent per square metre and days left before the deadline. Add these columns to the flat type."
+      "text": "For flats, calculate rent per square metre and days left before the deadline, and show the rent per square metre in the flat table."
     }
   ],
   "questions": [],

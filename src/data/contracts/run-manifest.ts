@@ -6,9 +6,9 @@ import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from
 import { readTagList, TAG_LIST_MAX } from './tag-format';
 import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
 import { VIEW_LIMITS, viewFault } from './view-format';
-import { BowerError, type UpdatedRow } from './types';
+import { BowerError, type TypeRow, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote, consolidationOk } from './observations';
-import { applyChanges, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { applyChanges, viewsInstalled, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 
@@ -43,7 +43,9 @@ export type Effect =
     purpose: 'generated' | 'runner-json' | 'about-archive' }
   | { kind: 'write-runner-json'; before: SeenFile; beforeContent: VerifiedContent;
     /** One of the runner-writable files the reader is given (`RUNNER_WRITES` in `vault/layout.ts`). */
-    path: RunnerWrite; text: string; content: Content }
+    path: RunnerWrite; text: string; content: Content;
+    /** The type table as read, the very text `beforeContent` describes: the row a formula install replaced (B11e R61). */
+    beforeText?: string }
   | { kind: 'write-runner-json'; before: null; beforeContent: null; path: '.bower/type-table.json' | '.bower/tags.json' | '.bower/observations.jsonl';
     parent: Target; createKey: string; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
@@ -338,8 +340,9 @@ function effect(value: unknown): value is Effect {
     case 'write-runner-json': return text(value.text) && content(value.content) && (value.before === null
       ? closed(value, ['kind', 'before', 'beforeContent', 'path', 'parent', 'createKey', 'text', 'content'])
         && value.beforeContent === null && oneOf(value.path, ['.bower/type-table.json', '.bower/tags.json', '.bower/observations.jsonl']) && target(value.parent) && id(value.createKey)
-      : closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'])
-        && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path));
+      : closed(value, ['kind', 'before', 'beforeContent', 'path', 'text', 'content'], ['beforeText'])
+        && seenFile(value.before) && verifiedContent(value.beforeContent) && text(value.path)
+        && (!Object.hasOwn(value, 'beforeText') || value.path === '.bower/type-table.json' && text(value.beforeText)));
     case 'bin': return closed(value, ['kind', 'before', 'capturedChildIds'])
       && seenFile(value.before) && list(value.capturedChildIds, driveId) && unique(value.capturedChildIds);
     default: return false;
@@ -530,7 +533,8 @@ function texts(value: Manifest | ManifestV2): { text: string; content: Content }
   for (const { effect } of value.operations) {
     if (effect.kind === 'create-text' || effect.kind === 'write-runner-json' || effect.kind === 'edit-text') found.push(effect);
     // A before-image is the very text `beforeContent` describes.
-    if (effect.kind === 'edit-text' && effect.beforeText !== undefined) found.push({ text: effect.beforeText, content: effect.beforeContent });
+    if ((effect.kind === 'edit-text' || effect.kind === 'write-runner-json' && effect.before !== null) && effect.beforeText !== undefined)
+      found.push({ text: effect.beforeText, content: effect.beforeContent });
   }
   return found;
 }
@@ -1013,6 +1017,55 @@ async function aboutArtifactsOk(value: Manifest | ManifestV2, finalized: boolean
   return !finalized || !lastMemory || operations.at(-1)?.effect.kind === 'maintain';
 }
 
+/**
+ * The row once a formula is installed (B11e, R44), for the reply check, the plan and the guard alike: the entry replaces
+ * the one with its id, or is appended, through the views-set merge (R41), and its outputs are declared with its types.
+ * Null when the row already holds it (R42). Here, not in view-format, which note-edit's imports must not reach back to.
+ */
+export function formulaInstalled(row: TypeRow, definition: { id: string } & Record<string, unknown>): TypeRow | null {
+  const stored: unknown = (row as TypeRow & { views?: unknown }).views;
+  const views = viewsInstalled(stored === undefined ? null : JSON.stringify(stored), [definition]);
+  const outputs = (Array.isArray(definition.outputs) ? definition.outputs : []).filter((o): o is { property: string; type: string } =>
+    record(o) && typeof o.property === 'string' && typeof o.type === 'string');
+  const declare = outputs.filter((o) => row.properties[o.property]?.type !== o.type);
+  if (!views && !declare.length) return null;
+  return { ...row, properties: { ...row.properties, ...Object.fromEntries(declare.map((o) => [o.property, { type: o.type }])) },
+    ...(views ? { views: JSON.parse(views.text) as unknown[] } : {}) };
+}
+
+/**
+ * The formulas a type-table write adds or changes (B11e R59, R61, coordinator ruling 2): each is a formula for its own
+ * row that passes the write grammar against the row the write replaced, with the earlier ones in place (as the install
+ * checks it), and against the row it writes, which declares its outputs under their types; a stored formula valid
+ * before the write stays valid on the row written. The replaced row comes only from the before
+ * text, which `texts` verifies against `beforeContent`; without it no entry counts as untouched. Untouched entries are
+ * read as stored (R21), never as a write.
+ */
+function formulasOk(written: unknown, beforeText: string | null | undefined): boolean {
+  const prior = beforeText === undefined ? { v: 1 as const, rows: [] } : readTypeTable(beforeText).table;
+  const rows = record(written) && Array.isArray(written.rows) ? written.rows : [];
+  return rows.every((row) => {
+    if (!typeRowOk(row, true)) return true;
+    const old = prior.rows.find((r) => r.id === row.id);
+    const kept = new Set(((old as { views?: unknown[] } | undefined)?.views ?? []).map((v) => JSON.stringify(v)));
+    let current = old;
+    const written = { v: 1 as const, rows: [row] };
+    for (const entry of (row as { views?: unknown[] }).views ?? []) {
+      // An untouched entry is read as stored on both sides: one that held before the write still holds on the row written.
+      if (kept.has(JSON.stringify(entry))) {
+        if (old && viewFault(entry, { v: 1, rows: [old] }, 'read') === null && viewFault(entry, written, 'read') !== null) return false;
+        continue;
+      }
+      const table = { ...prior, rows: prior.rows.map((r) => (r.id === row.id && current ? current : r)) };
+      if (!record(entry) || entry.kind !== 'formula' || entry.type !== row.id || viewFault(entry, table, 'write') !== null
+        || viewFault(entry, written, 'write') !== null
+        || !(entry.outputs as Array<{ property: string; type: string }>).every((o) => row.properties[o.property]?.type === o.type)) return false;
+      current = current && (formulaInstalled(current, entry as { id: string }) ?? current);
+    }
+    return true;
+  });
+}
+
 /** Type tables use the existing write effect; proposals are immutable creates bound to their stored question. */
 async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolean> {
   const questions = value.reportPlan.flatMap((row) => row.value.questions).filter((q) => q.proposal !== undefined);
@@ -1036,7 +1089,8 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
       const valid = typeTableOk(table, effect.before !== null) || effect.before !== null && readTypeTable(effect.text).writeAllowed
         && !!table && typeof table === 'object' && 'rows' in table && Array.isArray(table.rows)
         && table.rows.some((row) => typeRowOk(row, true));
-      if (!valid || effect.before !== null && (effect.before.folder || effect.before.name !== 'type-table.json')) return false;
+      if (!valid || effect.before !== null && (effect.before.folder || effect.before.name !== 'type-table.json')
+        || !formulasOk(table, effect.before === null ? null : effect.beforeText)) return false;
     }
     if (effect.kind !== 'create-text') continue;
     const parentPath = targetPath(value, effect.parent);

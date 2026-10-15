@@ -705,7 +705,46 @@ function jsonValueSpans(text: string, start: number): Array<{ key: string | unde
   return spans;
 }
 
-/** Keep skipped rows and extension bytes; existing rows only change their requested table value. */
+type Splice = { start: number; end: number; text: string };
+/**
+ * Edits turning the stored value at `value` into `now`, keeping the bytes of every member or entry left as it was (B11e
+ * R40, R59): an object's changed member is written in its place and a new one added after the last; a list keeps its
+ * equal entries in order, rewrites a view replaced by id, drops an entry the new list no longer has at that place (a
+ * later view with that id, R41; a column given way, with those after it) and appends the rest.
+ */
+function partEdits(text: string, value: { start: number; end: number }, now: unknown): Splice[] {
+  const json = (v: unknown): string => JSON.stringify(v);
+  const parts = jsonValueSpans(text, value.start).map((part) => ({ ...part, stored: JSON.parse(text.slice(part.start, part.end)) as unknown }));
+  const append = (items: string[], after: number | undefined): Splice[] => (items.length
+    ? [{ start: after ?? value.start + 1, end: after ?? value.start + 1, text: `${after === undefined ? '' : ','}${items.join(',')}` }] : []);
+  const was: unknown = JSON.parse(text.slice(value.start, value.end));
+  if (schemaObject(was) && schemaObject(now)) {
+    if (Object.keys(was).some((key) => !Object.hasOwn(now, key))) throw new BowerError('conflict', 'Bower could not change that table.');
+    const changed = Object.entries(now).filter(([key, v]) => !Object.hasOwn(was, key) || json(was[key]) !== json(v));
+    return [...changed.flatMap(([key, v]) => parts.filter((p) => p.key === key).slice(-1).map((p) => ({ ...p, text: json(v) }))),
+      ...append(changed.filter(([key]) => !Object.hasOwn(was, key)).map(([key, v]) => `${json(key)}:${json(v)}`), parts.at(-1)?.end)];
+  }
+  if (!Array.isArray(was) || !Array.isArray(now)) return [{ ...value, text: json(now) }];
+  const idOf = (v: unknown): unknown => (schemaObject(v) ? v.id : undefined);
+  const edits: Splice[] = [];
+  const dropped: number[] = [];
+  let k = 0;
+  let last = -1;
+  parts.forEach((part, i) => {
+    const same = k < now.length && json(part.stored) === json(now[k]);
+    if (!same && (k >= now.length || idOf(part.stored) === undefined || idOf(part.stored) !== idOf(now[k]))) { dropped.push(i); return; }
+    if (!same) edits.push({ ...part, text: json(now[k]) });
+    k++;
+    last = i;
+  });
+  const end = parts[last]?.end;
+  // A dropped entry before the last kept one goes with the separator after it; the trailing ones go together.
+  for (const i of dropped.filter((i) => i < last)) edits.push({ start: parts[i]?.start ?? 0, end: parts[i + 1]?.start ?? 0, text: '' });
+  if (dropped.some((i) => i > last)) edits.push({ start: end ?? value.start + 1, end: parts.at(-1)?.end ?? 0, text: '' });
+  return [...edits, ...append(now.slice(k).map(json), end)];
+}
+
+/** Keep skipped rows and extension bytes; existing rows only change their requested values. */
 export function rewriteTypeTable(text: string | null, before: TypeTable, next: TypeTable): string {
   if (text === null) return `${JSON.stringify(next, null, 2)}\n`;
   if (!readTypeTable(text).writeAllowed) throw new BowerError('conflict', 'Bower could not change that table.');
@@ -720,10 +759,14 @@ export function rewriteTypeTable(text: string | null, before: TypeTable, next: T
     seen.add(row.id);
     const old = before.rows.find((item) => item.id === row.id);
     const changed = next.rows.find((item) => item.id === row.id);
-    if (old && changed && JSON.stringify(old.table) !== JSON.stringify(changed.table)) {
-      const table = jsonValueSpans(text, span.start).filter((item) => item.key === 'table').at(-1);
-      if (!table) throw new BowerError('conflict', 'Bower could not change that table.');
-      edits.push({ ...table, text: JSON.stringify(changed.table) });
+    // Only a changed value is written again; a formula install adds `views` as the row's last key (B11e, R40).
+    if (old && changed) for (const key of ['properties', 'table', 'views'] as const) {
+      const [was, now] = [old, changed].map((r) => (r as TypeRow & { views?: unknown })[key]);
+      if (JSON.stringify(was) === JSON.stringify(now)) continue;
+      const value = jsonValueSpans(text, span.start).filter((item) => item.key === key).at(-1);
+      if (value) edits.push(...partEdits(text, value, now));
+      else if (now !== undefined && was === undefined) edits.push({ start: span.end - 1, end: span.end - 1, text: `,${JSON.stringify(key)}:${JSON.stringify(now)}` });
+      else throw new BowerError('conflict', 'Bower could not change that table.');
     }
     return [{ id: row.id, span }];
   });
@@ -739,7 +782,8 @@ export function rewriteTypeTable(text: string | null, before: TypeTable, next: T
     edits.push({ start: at, end: at, text: fallback ? `${addition},` : `${spans.length ? ',' : ''}${addition}` });
   }
   let result = text;
-  for (const edit of edits.sort((a, b) => b.start - a.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+  // Last first; at one place a removal goes before an insertion, so the insertion survives it.
+  for (const edit of edits.sort((a, b) => b.start - a.start || b.end - a.end)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
   return result;
 }
 
@@ -759,7 +803,11 @@ export function requestTableColumn(row: TypeRow, key: string, origin: unknown): 
     || !('recordId' in origin) || typeof origin.recordId !== 'string' || !origin.recordId.trim()) return null;
   const next = structuredClone(row);
   if (next.table.includes(key)) return { row: next, replaced: null };
-  const replaced = next.table.length === 4 ? next.table.pop() ?? null : null;
-  next.table.push(key);
-  return { row: next, replaced };
+  // The fourth column gives way; columns a person added after it stay (B11 R62).
+  if (next.table.length < 4) {
+    next.table.push(key);
+    return { row: next, replaced: null };
+  }
+  const [replaced] = next.table.splice(3, 1, key);
+  return { row: next, replaced: replaced ?? null };
 }
