@@ -508,9 +508,10 @@ export interface MapOp { targetId: string; key: string; mode: 'set' | 'union' | 
 /**
  * A map a request answers (B12 R1-R21, checked by the provider): its set's members in the set's order, and each member's
  * ops in reply order (one rule for all, given to each member, or a result per member). `pending`: a candidate of the set
- * could not be read, so its membership is not known and the request waits whole (ruling 3).
+ * could not be read, so its membership is not known and the request waits whole (ruling 3). `move`: the member's new
+ * folder, its new name, or both, made by one ordinary move after its edit (B12 R26).
  */
-export interface MapRequest { requestId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[] }>; pending?: true }
+export interface MapRequest { requestId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[]; move?: { parentId?: string; name?: string } }>; pending?: true }
 
 /**
  * One view a request installs (B11c, B11e), checked by the provider as a write: an aggregate in a Bower map (`home` its
@@ -727,7 +728,7 @@ function mapsOwned(maps: readonly MapRequest[], requests: readonly JournalLine[]
       continue;
     }
     for (const r of m.results) {
-      const targets = [...new Set(r.ops.map((o) => o.targetId))];
+      const targets = [...new Set([...r.ops.map((o) => o.targetId), ...(r.move ? [r.memberId] : [])])];
       if (targets.some((t) => (owner.get(t) ?? m.requestId) !== m.requestId)) unavailable.set(m.requestId, (unavailable.get(m.requestId) ?? new Set()).add(r.memberId));
       else for (const t of targets) owner.set(t, m.requestId);
     }
@@ -2490,11 +2491,57 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // contributes to it unavailable, and the other targets are planned again without them (R14). A written target is one
   // edit, joined with the run's other changes there (R15), outside the edit cap (R24).
   const mapTags = JSON.stringify({ v: 1, tags: snapshot.tagList.tags });
+  // Moves (B12 R26-R29, R60, R65): each member that changes folder or name gets one ordinary move after its edit. A
+  // destination already holding the name, or taken by an earlier member in set order, leaves that member unavailable,
+  // all its operations unmade. Its renames go through `renamesFor` (`taken`, R67); every note linking to a renamed
+  // member gets one link fix waiting for those moves (built below), and a note that cannot take it (a Source) leaves
+  // the members it links to unavailable (R28).
+  const mapMoves: Array<{ requestId: string; file: DriveFile; parentId: string; name: string }> = [];
+  const mapFixes = new Map<string, { read: NonNullable<Awaited<ReturnType<typeof readNote>>>; renames: Array<Rename & { fileId: string }>; requestIds: string[] }>();
+  const linkReads = new Map<string, Awaited<ReturnType<typeof readNote>>>();
+  /** Where a member goes, or null when it is not a note or is already there under that name (R60). */
+  const destinationOf = (r: MapRequest['results'][number]) => {
+    const file = ix.byId(r.memberId);
+    if (!r.move || !file || file.folder) return null;
+    const parentId = r.move.parentId ?? file.parents[0] ?? '';
+    const name = r.move.name ?? file.name;
+    return parentId === file.parents[0] && name === file.name ? null : { file, parentId, name, key: `${parentId}/${name.toLowerCase()}` };
+  };
+  // A free name goes to one member across the run (R65 as ruled): the oldest request first (by record `at`, then id, as
+  // a shared note's owner, R52), then set order.
+  const requestAt = new Map(snapshot.journalAll.map((l) => [l.rec.id, l.rec.at] as const));
+  const claims = new Map<string, string>();
+  for (const m of maps.filter((x) => mapRequests.has(x.requestId)).sort((a, b) => (requestAt.get(a.requestId) ?? 0) - (requestAt.get(b.requestId) ?? 0)
+    || (a.requestId < b.requestId ? -1 : a.requestId > b.requestId ? 1 : 0))) {
+    const order = (id: string): number => m.members.indexOf(id);
+    for (const r of m.results.filter((x) => !mapOwned.unavailable.get(m.requestId)?.has(x.memberId) && order(x.memberId) >= 0).sort((a, b) => order(a.memberId) - order(b.memberId))) {
+      const to = destinationOf(r);
+      if (to && !claims.has(to.key)) claims.set(to.key, r.memberId);
+    }
+  }
   for (const m of maps.filter((x) => mapRequests.has(x.requestId))) {
     const out = new Set(mapOwned.unavailable.get(m.requestId) ?? []);
+    const unavailable = (id: string, why: string): void => {
+      if (out.has(id)) return;
+      out.add(id);
+      console.error(new BowerError('conflict', why), ix.pathOf(id) ?? id);
+    };
     const order = (id: string): number => m.members.indexOf(id);
     const notes = new Map<string, (NonNullable<Awaited<ReturnType<typeof readNote>>> & { text: string; row?: TypeRow }) | null>();
     let planned = new Map<string, { note: NonNullable<ReturnType<typeof notes.get>>; changes: Change[]; text: string }>();
+    let moving: Array<{ file: DriveFile; parentId: string; name: string }> = [];
+    let fixes = new Map<string, { read: NonNullable<Awaited<ReturnType<typeof readNote>>>; renames: Array<Rename & { fileId: string }> }>();
+    for (let again = true; again;) {
+    again = false;
+    moving = [];
+    for (const r of m.results.filter((x) => !out.has(x.memberId) && order(x.memberId) >= 0).sort((a, b) => order(a.memberId) - order(b.memberId))) {
+      const to = destinationOf(r);
+      if (!to) continue;
+      const { file, parentId, name } = to;
+      if (listing.some((f) => f.id !== file.id && !f.trashed && f.parents.includes(parentId) && f.name.toLowerCase() === name.toLowerCase())) unavailable(r.memberId, MAP_NAME_THERE);
+      else if (claims.get(to.key) !== r.memberId) unavailable(r.memberId, MAP_NAME_CLAIMED);
+      else moving.push({ file, parentId, name });
+    }
     for (let refused = true; refused;) {
       refused = false;
       planned = new Map();
@@ -2530,12 +2577,51 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         refused = true;
       }
     }
+    moving = moving.filter((mv) => !out.has(mv.file.id));
+    // Only a member whose title changes leaves `taken`: one moved to another folder keeps its title, so a bare link may
+    // still mean it (R67). Other maps' notes stay taken, so their titles keep bare links as they are.
+    const renaming = moving.filter((mv) => displayName(mv.file.name).toLowerCase() !== displayName(mv.name).toLowerCase());
+    const renamingIds = new Set(renaming.map((mv) => mv.file.id));
+    const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md') && !renamingIds.has(ix.idOf(p) ?? '')).map((p) => displayName(nameOf(p)).toLowerCase()));
+    const kept = new Set(renamesFor(renaming.map((mv) => ({ id: mv.file.id, at: 0, kind: 'move' as const, what: '', from: ix.pathOf(mv.file.id) ?? '',
+      path: join(ix.pathOf(mv.parentId) ?? '', mv.name) })), taken).map((r) => r.from));
+    const renames = renaming.flatMap((mv) => (kept.has(displayName(mv.file.name).toLowerCase()) ? [{ from: displayName(mv.file.name), to: displayName(mv.name), fileId: mv.file.id }] : []));
+    fixes = new Map();
+    for (const [path, entry] of renames.length ? ix.entries() : []) {
+      const f = entry.type === 'file' && path.endsWith('.md') && !path.startsWith('Inbox/') && !path.startsWith(`${SYSTEM.dir}/`) ? ix.file(path) : undefined;
+      if (!f || f.folder) continue;
+      if (!linkReads.has(f.id)) linkReads.set(f.id, await readNote(f.id));
+      const read = linkReads.get(f.id);
+      const mine = read ? renames.filter((r) => mentions(read.bytes, [r])) : [];
+      if (!read || !mine.length) continue;
+      const base = planned.get(f.id)?.text ?? edits.find((e) => e.file.id === f.id)?.text;
+      const result = applyChanges(base === undefined ? read.bytes : new TextEncoder().encode(base), [{ kind: 'link-rewrite', recordIds: [], renames: mine.map(({ from, to }) => ({ from, to })) }], fetched(f.id));
+      if (result.ok) fixes.set(f.id, { read, renames: mine });
+      else if (result.reason !== 'unchanged') {
+        for (const r of mine) unavailable(r.fileId, MAP_LINK_REFUSED);
+        again = true;
+      }
+    }
+    }
     for (const [targetId, { note, changes, text }] of planned) {
       const existing = edits.find((e) => e.file.id === targetId);
       if (existing) Object.assign(existing, { changes, text, types: typeText ?? '', tags: mapTags });
       else edits.push({ file: note.file, path: note.path, before: note.before, bytes: note.bytes, changes, text, after: [], keeps: [], rows: [], types: typeText ?? '', tags: mapTags });
       places.set(targetId, note.file);
       edited.add(targetId);
+    }
+    for (const mv of moving) {
+      mapMoves.push({ requestId: m.requestId, ...mv });
+      const folder = ix.byId(mv.parentId);
+      if (folder) places.set(folder.id, folder);
+      places.set(mv.file.id, mv.file);
+      edited.add(mv.file.id);
+    }
+    for (const [id, { read, renames }] of fixes) {
+      const had = mapFixes.get(id);
+      mapFixes.set(id, { read, renames: [...had?.renames ?? [], ...renames], requestIds: [...new Set([...had?.requestIds ?? [], m.requestId])] });
+      places.set(id, read.file);
+      edited.add(id);
     }
   }
   for (const { pileId, folder, words } of fromWords) {
@@ -2807,7 +2893,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   if (d.consolidation && !shorten) console.error(new BowerError('unknown', SHORTEN_SKIPPED), 'About me has no section to archive');
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
-  const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
+  // The sets a map moves, as admitted (B12 R26): what `outsideAdmitted` and the guard check its moves against.
+  const capturedMaps = maps.filter((m) => mapMoves.some((mv) => mv.requestId === m.requestId)).map((m) => ({ recordId: m.requestId, members: [...m.members] }));
+  const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces, ...(capturedMaps.length ? { maps: capturedMaps } : {}) };
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
   const evidence: Parameters<typeof observationOf>[1]['admitted'][number][] = [];
@@ -2903,7 +2991,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes,
   };
 }
 type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
@@ -2917,7 +3005,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3108,6 +3196,28 @@ export async function build(decided: Decided): Promise<Ended> {
   for (const [id, a] of answerLines) {
     const op = lineState.get(a.line) === 'planned' ? editOf.get(a.fileId) : undefined;
     if (op) derive(id, op);
+  }
+  // A map's moves (B12 R26, R66): one ordinary move per member after its edit, carrying its request's record id. Then
+  // each link fix, after its note's own edit and move and every move it follows (R28, R62): the engine refuses it whole
+  // when one of those did not land, so links follow only moves that landed, and its request waits (ruling c).
+  const mapMoveOf = new Map<string, string>();
+  for (const mv of mapMoves) {
+    const own = editOf.get(mv.file.id);
+    const op = await add({ kind: 'move', before: seen(mv.file), parent: { fileId: mv.parentId }, name: mv.name, properties: {}, recordIds: [mv.requestId] }, own ? [own] : []);
+    mapMoveOf.set(mv.file.id, op);
+    derive(mv.requestId, op);
+  }
+  for (const [id, { read, renames, requestIds }] of mapFixes) {
+    const edit = edits.find((e) => e.file.id === id);
+    const base = edit ? new TextEncoder().encode(edit.text) : read.bytes;
+    const changes: Change[] = [{ kind: 'link-rewrite', recordIds: requestIds, renames: renames.map(({ from, to }) => ({ from, to })) }];
+    const result = applyChanges(base, changes, fetched(id));
+    // Checked at planning; the note's own edit is final by now, so a refusal here is a defect.
+    if (!result.ok) throw new BowerError('unknown', B_FAILURE);
+    const beforeContent = edit ? { ...read.before, ...await utf8(edit.text) } : read.before;
+    const after = [editOf.get(id), mapMoveOf.get(id), ...renames.map((r) => mapMoveOf.get(r.fileId))].flatMap((op) => (op ? [op] : []));
+    const op = await add({ kind: 'edit-text', before: seen(read.file), path: read.path, beforeContent, changes, text: result.text, content: await utf8(result.text) }, [...new Set(after)]);
+    for (const requestId of requestIds) derive(requestId, op);
   }
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
   // The other note of each keep goes to the Bin (never deleted), once the kept note and every link to it are written;
@@ -3650,6 +3760,10 @@ export const NOTE_NOT_WRITTEN = "Bower couldn't write its note.";
 const VIEWS_WAIT = 'Bower could not set up those figures yet; it tries again next time.';
 const VIEWS_REPLACED = "Bower replaced a map's figures it could not read.";
 const VIEW_STALE = 'That suggested view no longer fits, so Bower did not set it up.';
+/** Why a map's member stays where it is, its operations unmade (B12 R28, R29, R65). */
+const MAP_NAME_THERE = 'A note with that name is already there.';
+const MAP_NAME_CLAIMED = 'Another note in this request takes that name.';
+const MAP_LINK_REFUSED = 'A note that links to it cannot be updated.';
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
 
