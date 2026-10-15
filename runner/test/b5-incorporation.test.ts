@@ -22,8 +22,10 @@ const row = (id: string): TypeRow => ({ id, match: [id], template: 'source',
   properties: { company: { type: 'text' }, salary: { type: 'money' }, location: { type: 'text' },
     stage: { type: 'enum', values: ['new', 'applied'] }, hours: { type: 'number' } },
   table: ['company', 'salary', 'location', 'stage'] });
-const proposal = (id: string): Question & { proposal: Proposal } => ({ id: `q-proposal-${id}`, text: `Remember ${id} as a type?`,
+const proposal = (id: string): Question & { proposal: Proposal & { payload: { kind: 'type-row'; row: TypeRow } } } => ({ id: `q-proposal-${id}`, text: `Remember ${id} as a type?`,
   yes: 'Yes', no: 'No', askedAt: AT, proposal: { id, payload: { kind: 'type-row', row: row(id) } } });
+/** A question's proposed type row; a view suggestion proposes none. */
+const rowOf = (q: Question): TypeRow | undefined => (q.proposal && 'row' in q.proposal.payload ? q.proposal.payload.row : undefined);
 const oldPaging = paging.size;
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(AT); paging.size = 1000; });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); paging.size = oldPaging; });
@@ -164,7 +166,7 @@ it('b5-proposal-yes-no-ignore-replay: decline never returns while unrelated prop
   const inbox = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === 'Inbox');
   await base.drive.createText(inbox?.id ?? '', 'Another lease.txt', 'Alex has another lease.');
   const second = await runOnDrive(base.c, base.drive, base.root, {}, 2);
-  expect.soft(questionsOf(second).some((q) => q.proposal?.payload.row.id === 'lease')).toBe(false);
+  expect.soft(questionsOf(second).some((q) => rowOf(q)?.id === 'lease')).toBe(false);
 });
 
 it.each([null])('b5-table-first-create-and-lenient-read: seeds and first creation for %s', async (stored) => {
@@ -239,7 +241,7 @@ it('b5-unknown-files-and-two-proposals: payload identity deduplicates different 
   const base = await setup(['Lease.txt', 'Lease copy.txt', 'Permit.txt']);
   decisions([first, repeated, proposal('permit')]); const result = await run(base);
   filed(result, ['Lease.txt', 'Lease copy.txt', 'Permit.txt']);
-  expect(questionsOf(result).map((q) => q.proposal?.payload.row.id)).toEqual(['lease', 'permit']);
+  expect(questionsOf(result).map((q) => rowOf(q)?.id)).toEqual(['lease', 'permit']);
 });
 it('b5-proposal-yes-no-ignore-replay: changed authoritative card cannot replace the frozen proposal payload', async () => {
   const frozen = proposal('lease');
@@ -280,7 +282,7 @@ it('b5-proposal-yes-no-ignore-replay: a later run deduplicates an ignored payloa
   const q = proposal('lease'); const base = await setup(['Lease.txt'], undefined, [q]);
   const repeated = proposal('lease-again'); repeated.proposal.payload = structuredClone(q.proposal.payload);
   decisions([repeated]); const first = await run(base); filed(first, ['Lease.txt']);
-  expect(questionsOf(first).filter((item) => item.proposal?.payload.row.id === 'lease')).toEqual([q]);
+  expect(questionsOf(first).filter((item) => rowOf(item)?.id === 'lease')).toEqual([q]);
 });
 
 

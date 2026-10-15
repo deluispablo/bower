@@ -52,7 +52,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, TypeRow } from '../../src/data/contracts/types';
-import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall } from '../../src/data/spine/scripted';
+import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
@@ -822,8 +822,8 @@ export const REFUSALS = {
   keepKeys: 'a note kept with keys outside the intent: give "kept" and "other"',
   keepNote: 'a note kept that is not two different notes below, each named once and the other given no line or state',
   keepNotAsked: 'a note kept that the person did not say yes to keeping as one',
-  viewKeys: 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId} or {kind: "type-row", rowId}, mode: "install", '
-    + 'definition, and for a formula in a type row an optional column: one of its outputs}) or a declaration the grammar refuses',
+  viewKeys: 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId} or {kind: "type-row", rowId}, mode: "install" or "propose", '
+    + 'definition; for a formula installed in a type row an optional column: one of its outputs; to propose, the question\'s text, yes and no}) or a declaration the grammar refuses',
   viewBinding: "a view whose request is not one of the person's requests below, whose home is not one of Bower's maps below, or whose folder is not one of the main folders",
   viewLimit: 'more than ten views in one map, or two views with one id there',
 } as const;
@@ -1086,8 +1086,9 @@ const ViewShape = z.strictObject({
     z.strictObject({ kind: z.literal('moc'), fileId: z.string(named('viewKeys')) }, named('viewKeys')),
     z.strictObject({ kind: z.literal('type-row'), rowId: z.string(named('viewKeys')) }, named('viewKeys')),
   ], named('viewKeys')),
-  mode: z.literal('install', named('viewKeys')), definition: z.record(z.string(), z.unknown(), named('viewKeys')),
+  mode: z.enum(['install', 'propose'], named('viewKeys')), definition: z.record(z.string(), z.unknown(), named('viewKeys')),
   column: z.string(named('viewKeys')).min(1, named('viewKeys')).optional(),
+  text: z.string(named('viewKeys')).optional(), yes: z.string(named('viewKeys')).optional(), no: z.string(named('viewKeys')).optional(),
 }, named('viewKeys'));
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type NoteIn = z.output<typeof NoteShape>;
@@ -1153,7 +1154,7 @@ const bodyOf = (n: NoteIn): string => n.body.replace(/\r\n?/g, '\n');
  * within their bounds, lines only on the notes it was shown, and no other key (no id, hash or digest of its own). Its
  * `intent` is what the reply asked for, once the schema passed it.
  */
-function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z.ZodType; intent: () => Extract<Intent, { ok: true }> } {
+function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z.ZodType; intent: (value: unknown) => Extract<Intent, { ok: true }> } {
   const { notes } = seen;
   const tagList = seen.tagList ?? { tags: [], growth: true };
   let grownTags = { ...tagList, declared: [] as string[] };
@@ -1196,8 +1197,10 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   };
   const kept: KeepOne[] = [];
   // Views a request installs (B11c): shape (keys and grammar, as a write), then binding (request, home, folder), then the
-  // limit per map; the stored entries are counted by the provider, which reads the map (R16, R44).
+  // limit per map; the stored entries are counted by the provider, which reads the map (R16, R44). A suggestion (B11f,
+  // R63) is checked the same way, its question as any question is (R71), and changes no schema until its yes (R68).
   const views: ViewInstall[] = [];
+  const suggested: ViewSuggestion[] = [];
   type ViewIn = z.output<typeof ViewShape>;
   const folderOf = (v: ViewIn): unknown => isRecord(v.definition.set) ? v.definition.set.folderId : undefined;
   const homeOf = (v: ViewIn): string => (v.home.kind === 'moc' ? v.home.fileId : v.home.rowId);
@@ -1206,7 +1209,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const rowsNow = (): TypeRow[] => (seen.types ?? []).map((row) => views.reduce((r, x) => (x.kind === 'type-row' && x.home === r.id
     ? formulaInstalled(r, x.definition) ?? r : r), row));
   const View = ViewShape.superRefine(inOrder<ViewIn>([
-    rule('viewKeys', (v) => v.column === undefined || v.home.kind === 'type-row'),
+    rule('viewKeys', (v) => (v.mode === 'install' ? [v.text, v.yes, v.no].every((x) => x === undefined) && (v.column === undefined || v.home.kind === 'type-row')
+      : [v.text, v.yes, v.no].every((x) => x !== undefined) && v.column === undefined)),
     rule('viewKeys', (v) => {
       const fault = viewFault(v.definition, { v: 1, rows: v.definition.kind === 'formula' ? rowsNow() : [...seen.types ?? []] }, 'write');
       return fault === null || `a view the grammar refuses: ${fault}`;
@@ -1219,17 +1223,21 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('viewBinding', (v) => v.home.kind !== 'moc' || seen.maps?.has(v.home.fileId) === true),
     rule('viewBinding', (v) => v.home.kind !== 'type-row' || v.definition.type === v.home.rowId || 'a formula whose home is not the type row it is for'),
     rule('viewBinding', (v) => v.home.kind !== 'moc' || typeof folderOf(v) === 'string' && seen.folderCandidates?.has(folderOf(v) as string) === true),
+    rule('askText', (v) => v.mode === 'install' || plain(v.text ?? '', ASK.text) && plain(v.yes ?? '', ASK.answer) && plain(v.no ?? '', ASK.answer)),
     rule('viewKeys', (v) => v.column === undefined || (Array.isArray(v.definition.outputs) && v.definition.outputs.some((o) => isRecord(o) && o.property === v.column))
       || 'a column that is not one of the formula\'s outputs'),
-    rule('viewLimit', (v) => !views.some((x) => x.kind === v.home.kind && x.home === homeOf(v) && x.definition.id === v.definition.id)),
+    rule('viewLimit', (v) => ![...views, ...suggested].some((x) => x.kind === v.home.kind && x.home === homeOf(v) && x.definition.id === v.definition.id)),
     rule('viewLimit', (v) => v.column === undefined || !views.some((x) => x.column !== undefined && x.requestId === requestOf(v)) || 'more than one column for one request'),
     rule('viewLimit', (v) => {
       const row = v.home.kind === 'type-row' ? rowsNow().find((r) => r.id === homeOf(v)) : undefined;
       const installed = row && (formulaInstalled(row, v.definition as ViewInstall['definition']) ?? row) as TypeRow & { views?: unknown[] };
       return (installed?.views?.length ?? 0) <= VIEW_LIMITS.perHome;
     }),
-  ], (v) => views.push({ requestId: requestOf(v), kind: v.home.kind, home: homeOf(v), definition: v.definition as ViewInstall['definition'],
-    ...(v.column === undefined ? {} : { column: v.column }) })));
+  ], (v) => {
+    const view = { requestId: requestOf(v), kind: v.home.kind, home: homeOf(v), definition: v.definition as ViewInstall['definition'] };
+    if (v.mode === 'propose') suggested.push({ ...view, text: (v.text ?? '').trim(), yes: (v.yes ?? '').trim(), no: (v.no ?? '').trim() });
+    else views.push({ ...view, ...(v.column === undefined ? {} : { column: v.column }) });
+  }));
   const inPairs = new Set<string>();
   const plain = (text: string, max: number): boolean => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
 
@@ -1378,6 +1386,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     (whole ? asked : askedThings).set(whole ? pile?.pileId ?? '' : a.fileId ?? '', said);
   }));
   const After = AfterShape.superRefine(inOrder<z.output<typeof AfterShape>>([
+    // A pile binds no request: a view is suggested only in "views" (R7, R72).
+    rule('askKeys', (a) => a.proposal.payload.kind === 'type-row' || 'a suggested view outside "views": a view is suggested only there, for a request of this run'),
     rule('askNotAdmitted', (a) => byPile.has(a.pileId)),
     rule('askTwice', (a) => !after.has(a.pileId)),
     rule('askText', (a) => plain(a.text, ASK.text) && plain(a.yes, ASK.answer) && plain(a.no, ASK.answer)),
@@ -1462,10 +1472,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   }).pipe(Body);
   return {
     schema,
-    intent: () => {
+    intent: (value) => {
       // A pile with a thing neither placed nor asked about waits whole for the next run.
       const held = new Set(piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
-      return { ok: true, held, filing: { newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}) } };
+      // The two-new budget goes in reply order (R73): the reply's own key order says which section came first.
+      const keys = isRecord(value) ? Object.keys(value) : [];
+      const suggestions = suggested.length ? { suggestions: { first: keys.indexOf('views') < keys.indexOf('askAfter'), views: suggested } } : {};
+      return { ok: true, held, filing: { ...suggestions, newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}) } };
     },
   };
 }
@@ -1477,7 +1490,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
 export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
   const reply = replySchema(took.taken.piles, seen);
   const parsed = reply.schema.safeParse(value);
-  if (parsed.success) return reply.intent();
+  if (parsed.success) return reply.intent(value);
   const [first] = parsed.error.issues;
   if (!first || !Object.hasOwn(REFUSALS, first.message)) {
     // Every part of the declaration names its issues; one that is not named is refused as not an intent, and said.
@@ -2090,8 +2103,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           return validatedPlan;
         }
       }
-      // A request whose targets were not selected stays in the inbox for a later run; one a checked view installs is taken.
-      const installing = new Set((intent.filing.views ?? []).map((v) => v.requestId));
+      // A request whose targets were not selected stays in the inbox for a later run; one a checked view installs or suggests is taken.
+      const installing = new Set([...intent.filing.views ?? [], ...intent.filing.suggestions?.views ?? []].map((v) => v.requestId));
       return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, took.taken.journal.filter((line) =>
         journal.includes(line) || installing.has(seen.requests?.get(line.fileId)?.id ?? '')));
     } finally { await rm(work, { recursive: true, force: true }); }

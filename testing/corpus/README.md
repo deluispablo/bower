@@ -200,14 +200,12 @@ ids that are never admitted. Case 4 (own text deletion) was dropped (TL-P4-48 Q3
 | c17-b11-skills-tally | C17 / B11 | model | TL-P4-39 F13/R5/R7; active typed skills tally; installed and computed through main |
 | c17-b11-monthly-money | C17 / B11 | model | TL-P4-39 F13; monthly money partition, missing/invalid amounts; installed and computed through main |
 | c17-b11-flat-formulas | C17 / B11 | model | TL-P4-39 F13/R5; raw formulas, unavailable divisor, personal exception; installed with one column and computed through main |
-| c17-b11-proposal-authority | C17 / B11 | model | TL-P4-39 F5/F7; suggestion survives filing/ignore, document is not authority |
+| c17-b11-proposal-authority | C17 / B11 | model | TL-P4-39 F5/F7; suggestion survives filing/ignore, document is not authority; asked as a B5 proposal through main |
 
-All four remain preparation fixtures. Proposed `replies.json` extends the future B11
-execution reply; today's strict schema rejects `views`. Request/note/folder selectors
-need the existing driver's step-aware extension. Type-table field spelling is a pending
-B5a specimen, not a second production format. `expected-view-results.json` is a separate
-hand-computed oracle, outside model input and not scored today. C17 registration and
-verdict selection remain upstream H1 work. See the B11 prep notes.
+All four have landed: each `replies.json` uses the landed `views` grammar, bound by the
+driver's request, note and folder selectors, and runs through main. The hand oracles live
+in the runner's B11 tests; no computed number is seeded in `expected.json`. C17
+registration and verdict selection remain upstream H1 work. See the B11 prep notes.
 
 ## B7 preparation cases — 2026-10-10
 

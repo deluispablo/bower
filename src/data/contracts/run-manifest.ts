@@ -800,7 +800,8 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
 /**
  * A views-set edit (B11 R43, coordinator ruling 1): re-authored from the bytes it read, so only the `bower_views` line
  * and the run's own link rewrite change, on a Bower map; its new entries pass the write grammar against the type table
- * it read, at most ten in all; every record it names is a request this run completes (its requests.json `done`).
+ * it read, at most ten in all; every record it names is a request this run completes (its requests.json `done`) or
+ * a yes this run archives (R64).
  */
 async function viewsSetOk(value: ManifestV2): Promise<boolean> {
   const done = new Set<string>();
@@ -815,13 +816,15 @@ async function viewsSetOk(value: ManifestV2): Promise<boolean> {
       // expected: an unreadable requests file proves no request.
     }
   }
-  const journal = new Set(value.capture.journal.map((j) => j.recordId));
+  const journal = new Map(value.capture.journal.map((j) => [j.recordId, j.fileIds]));
+  // A yes to a suggested view (B11f, R64) is its own record: an answer this run archives (moves out of the journal).
+  const archived = (id: string): boolean => value.operations.some((o) => o.effect.kind === 'move' && (journal.get(id) ?? []).includes(o.effect.before.fileId));
   for (const { effect: e } of value.operations) {
     if (e.kind !== 'edit-text') continue;
     const set = e.changes.find((c): c is Extract<Change, { kind: 'views-set' }> => c.kind === 'views-set');
     if (!set) continue;
     if (e.changes.some((c) => c.kind !== 'views-set' && c.kind !== 'link-rewrite') || e.beforeText === undefined || e.types === undefined
-      || !set.recordIds.length || !set.recordIds.every((id) => journal.has(id) && done.has(id))
+      || !set.recordIds.length || !set.recordIds.every((id) => journal.has(id) && (done.has(id) || archived(id)))
       || !await describes(e.beforeContent, e.beforeText)) return false;
     const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
     if (!authored.ok || authored.text !== e.text) return false;

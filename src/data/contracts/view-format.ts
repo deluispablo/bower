@@ -75,8 +75,11 @@ export function computedBy(row: TypeRow): Map<string, { id: string; type: unknow
   return computed;
 }
 
-/** `null` when the declaration is valid against the table, else one short sentence. */
-export function viewFault(definition: unknown, table: TypeTable, mode: 'write' | 'read' = 'write'): string | null {
+/**
+ * `null` when the declaration is valid against the table, else one short sentence. With no table (a suggestion, R66)
+ * only its shape is checked, at every depth: keys, required fields, limits; its types wait for the install (R64).
+ */
+export function viewFault(definition: unknown, table: TypeTable | null, mode: 'write' | 'read' = 'write'): string | null {
   try {
     check(definition, table, mode);
     return null;
@@ -86,7 +89,7 @@ export function viewFault(definition: unknown, table: TypeTable, mode: 'write' |
   }
 }
 
-function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
+function check(d: unknown, table: TypeTable | null, mode: 'write' | 'read'): void {
   need(isObject(d), 'A view must be one object.');
   need(new TextEncoder().encode(JSON.stringify(d)).length <= VIEW_LIMITS.bytes, 'The view is too long.');
   const closed = (v: unknown, keys: readonly string[]): Json => {
@@ -106,19 +109,28 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
   closed(d, ['v', 'id', 'kind', ...(d.kind === 'aggregate' ? ['title', 'set', 'groupBy', 'measures'] : ['type', 'outputs'])]);
   need(d.v === 1, 'The view uses an unsupported version.');
   need(slug(d.id), 'The view needs a short id of lowercase words.');
-  const rowOf = (type: unknown): TypeRow => {
+  // Without a table a row is null and a property's declaration unknown: every type check below then passes.
+  const rowOf = (type: unknown): TypeRow | null => {
+    if (!table) {
+      need(typeof type === 'string' && type !== '', 'The view needs its type.');
+      return null;
+    }
     const row = table.rows.find((candidate) => candidate.id === type);
     need(row, 'The view is for a type that does not exist.');
     return row;
   };
-  const declared = (row: TypeRow, key: unknown, computed?: Map<string, unknown>) => {
+  const declared = (row: TypeRow | null, key: unknown, computed?: Map<string, unknown>) => {
+    if (!row) {
+      need(typeof key === 'string' && key !== '', 'The view needs a property name.');
+      return null;
+    }
     const declaration = typeof key === 'string' ? propertyDeclaration(row, key) : undefined;
     need(declaration, 'The view uses a property the type does not declare.');
     need(!computed?.has(key as string), 'A formula never reads a computed property.');
     return declaration;
   };
 
-  const predicate = (value: unknown, row: TypeRow, depth: number, computed?: Map<string, unknown>): void => {
+  const predicate = (value: unknown, row: TypeRow | null, depth: number, computed?: Map<string, unknown>): void => {
     const op = isObject(value) ? value.op : undefined;
     if (op === 'all' || op === 'any' || op === 'not') {
       const p = node(value, ['op', 'of'], depth);
@@ -134,15 +146,16 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
     if (op === 'in') {
       const p = node(value, ['op', 'property', 'values'], depth);
       const declaration = declared(row, p.property, computed);
-      need(declaration.type !== 'list', 'Use "contains" for a list.');
+      need(declaration?.type !== 'list', 'Use "contains" for a list.');
       need(Array.isArray(p.values) && p.values.length > 0 && p.values.length <= VIEW_LIMITS.values, `An "in" holds 1 to ${VIEW_LIMITS.values} values.`);
-      need(p.values.every((item) => valueOk(declaration, item)), 'A condition compares with a value of another type.');
+      need(!declaration || p.values.every((item) => valueOk(declaration, item)), 'A condition compares with a value of another type.');
       return;
     }
     need(['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'contains'].includes(op as string), 'The view uses an unknown condition.');
     const p = node(value, ['op', 'property', 'value'], depth);
     const declaration = declared(row, p.property, computed);
-    if (op === 'contains') need(declaration.type === 'list' && valueOk({ type: 'text' }, p.value), '"contains" is for a list and one text value.');
+    if (!declaration) need(p.value !== undefined, 'A condition needs its value.');
+    else if (op === 'contains') need(declaration.type === 'list' && valueOk({ type: 'text' }, p.value), '"contains" is for a list and one text value.');
     else {
       need(declaration.type !== 'list', 'Use "contains" for a list.');
       need(op === 'eq' || op === 'ne' || ['number', 'money', 'date'].includes(declaration.type), 'Only numbers, money and dates can be ordered.');
@@ -159,9 +172,9 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
     need(Array.isArray(d.groupBy) && d.groupBy.length <= VIEW_LIMITS.groups, `A view groups by at most ${VIEW_LIMITS.groups} properties.`);
     for (const value of d.groupBy) {
       const group = node(value, ['property', 'bucket'], 0);
-      const { type } = declared(row, group.property);
+      const type = declared(row, group.property)?.type;
       need(type !== 'list' && type !== 'money', 'A view cannot group by a list or by money.');
-      need(group.bucket === undefined || (type === 'date' && ['week', 'month', 'quarter', 'year'].includes(group.bucket as string)),
+      need(group.bucket === undefined || ((!row || type === 'date') && ['week', 'month', 'quarter', 'year'].includes(group.bucket as string)),
         'Only a date groups by week, month, quarter or year.');
     }
     need(Array.isArray(d.measures) && d.measures.length > 0 && d.measures.length <= VIEW_LIMITS.measures, `A view has 1 to ${VIEW_LIMITS.measures} measures.`);
@@ -176,8 +189,8 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
       need(typeof measure.op === 'string' && Object.hasOwn(MEASURES, measure.op) && types, 'The view uses an unknown measure.');
       if (measure.op === 'count') need(measure.property === undefined, 'A count takes no property.');
       else {
-        const { type } = declared(row, measure.property);
-        need(types.includes(type), 'That measure does not fit the property\'s type.');
+        const type = declared(row, measure.property)?.type;
+        need(type === undefined || types.includes(type), 'That measure does not fit the property\'s type.');
         if (type === 'money') money.add(measure.property);
       }
       if (measure.op === 'top') {
@@ -191,22 +204,24 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
   }
 
   const row = rowOf(d.type);
-  const computed = computedBy(row);
-  const expression = (value: unknown, depth: number): string => {
+  const computed = row ? computedBy(row) : new Map<string, { id: string; type: unknown }>();
+  // Each expression's type, or undefined without a table, where no type is checked (ruling: shape only).
+  const expression = (value: unknown, depth: number): string | undefined => {
     const e = isObject(value) ? value : {};
     if (!('op' in e) && 'property' in e) {
-      const { type } = declared(row, node(value, ['property'], depth).property, computed);
-      need(['number', 'money', 'date'].includes(type), 'A formula reads only numbers, money and dates.');
+      const type = declared(row, node(value, ['property'], depth).property, computed)?.type;
+      need(type === undefined || ['number', 'money', 'date'].includes(type), 'A formula reads only numbers, money and dates.');
       return type;
     }
     if (!('op' in e) && 'number' in e) {
       const { number } = node(value, ['number'], depth);
       need(typeof number === 'number' && Number.isFinite(number) && Math.abs(number) <= 1e15, 'A formula number is at most 10^15.');
-      return 'number';
+      return row ? 'number' : undefined;
     }
     if (e.op === 'daysUntil') {
-      need(expression(node(value, ['op', 'value'], depth).value, depth + 1) === 'date', '"daysUntil" needs a date.');
-      return 'number';
+      const type = expression(node(value, ['op', 'value'], depth).value, depth + 1);
+      need(!row || type === 'date', '"daysUntil" needs a date.');
+      return row ? 'number' : undefined;
     }
     if (e.op === 'if') {
       const p = node(value, ['op', 'when', 'then', 'else'], depth);
@@ -218,6 +233,7 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
     need(e.op === 'dateDiff' || Object.hasOwn(ARITHMETIC, e.op as string), 'The formula uses an unknown operation.');
     const p = node(value, ['op', 'left', 'right'], depth);
     const types = `${expression(p.left, depth + 1)} ${expression(p.right, depth + 1)}`;
+    if (!row) return undefined;
     const type = e.op === 'dateDiff' ? (types === 'date date' ? 'number' : undefined) : ARITHMETIC[e.op as string]?.[types];
     need(type, 'The formula mixes types that do not go together.');
     return type;
@@ -233,8 +249,9 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
     need(['number', 'money', 'date'].includes(output.type as string), 'A computed property is a number, money or a date.');
     const by = computed.get(key);
     need(by === undefined || by.id === d.id, 'Another view already computes that property.');
-    need(by !== undefined || !Object.hasOwn(row.properties, key), 'A formula cannot replace a declared property.');
-    need(expression(output.expr, 1) === output.type, 'A computed property must have its formula\'s type.');
+    need(by !== undefined || !row || !Object.hasOwn(row.properties, key), 'A formula cannot replace a declared property.');
+    const type = expression(output.expr, 1);
+    need(!row || type === output.type, 'A computed property must have its formula\'s type.');
   }
   // A stored output whose type is missing or corrupt takes the candidate's type: the install repairs it (R60).
   const installed = [...computed].filter(([, by]) => by.id === d.id);
