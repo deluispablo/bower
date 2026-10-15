@@ -140,7 +140,8 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   const edit = (change: (i: Intent, id: Id) => unknown) => (_ctx: Context, id: Id): string => envelope(JSON.stringify(change(filed(id), id)));
   // One bad reply per refusal kind; the records make the compiler and the check below list every kind.
   type ViewKind = 'viewKeys' | 'viewBinding' | 'viewLimit';
-  const bad: Record<Exclude<RefusalKind, ViewKind>, (ctx: Context, id: Id) => string> = {
+  type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit';
+  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind>, (ctx: Context, id: Id) => string> = {
     notJson: () => envelope('Here is my plan: file everything.'),
     noText: () => envelope(null),
     notIntent: edit((i) => ({ ...i, v: 2 })),
@@ -193,13 +194,21 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     viewBinding: (v) => [{ ...(v as object), requestId: '$note:Projects/Job hunt/Past offer.md' }],
     viewLimit: (v) => [v, v],
   };
+  // B12a (AC2): a map needs a type, a request and a folder; one on the skills tally's offers, beside its view.
+  const MAP = { requestId: '$request:change-1', title: 'Offer skills', set: { type: 'offer', folderId: '$folder:Projects/Job hunt', recursive: true },
+    ops: [{ kind: 'property', key: 'skills', mode: 'union', value: ['SQL'] }] };
+  const mapBad: Record<MapKind, () => unknown[]> = {
+    mapKeys: () => [{ ...MAP, extra: 1 }],
+    mapBinding: () => [{ ...MAP, requestId: '$note:Projects/Job hunt/Past offer.md' }],
+    mapLimit: () => [MAP, MAP],
+  };
 
   const good = intentReply((_ctx, id) => filed(id));
 
   // The name stays the one earlier checks named; each kind is a test of its own inside it.
   describe('every validation refusal is retried once with its reason', () => {
     it('every refusal kind has a bad reply here', () => {
-      expect(Object.keys({ ...bad, ...viewBad }).sort()).toEqual(Object.keys(REFUSALS).sort());
+      expect(Object.keys({ ...bad, ...viewBad, ...mapBad }).sort()).toEqual(Object.keys(REFUSALS).sort());
     });
 
     // One test for each kind (vitest's test.for), so each takes its own few milliseconds and names itself when it fails.
@@ -227,6 +236,20 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
       const run = await runWithClaude(c, (call) => (inputs.push(call.input), (/Your reply was refused/.test(call.input) ? again : first)(call)));
       // Refused for this kind, told the reason once, and the second reply installs the view in its map.
+      const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
+      expect({ kind, retried: retried.includes(`(${kind})`) }).toEqual({ kind, retried: true });
+      expect({ kind, told: inputs.filter((i) => /Your reply was refused: .+\. Reply again/.test(i)).length }).toEqual({ kind, told: 1 });
+      expect({ kind, code: run.code, installed: /^bower_views: /m.test(run.after['Projects/Job hunt/Job hunt.md'] ?? '') }).toEqual({ kind, code: 0, installed: true });
+    });
+
+    it.for(Object.keys(mapBad) as MapKind[])('AC2 b12-set-properties-refusal-table: a %s refusal is retried once with its reason', async (kind) => {
+      const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c17-b11-skills-tally');
+      if (!c) throw new Error('no corpus case c17-b11-skills-tally');
+      const [tally] = JSON.parse(await readFile(resolve(ROOT, c.id, 'replies.json'), 'utf8')) as Array<{ views: unknown[] }>;
+      const inputs: string[] = [];
+      const [first, again] = [replySequence([{ ...tally, maps: mapBad[kind]() }]), replySequence([tally])];
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const run = await runWithClaude(c, (call) => (inputs.push(call.input), (/Your reply was refused/.test(call.input) ? again : first)(call)));
       const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
       expect({ kind, retried: retried.includes(`(${kind})`) }).toEqual({ kind, retried: true });
       expect({ kind, told: inputs.filter((i) => /Your reply was refused: .+\. Reply again/.test(i)).length }).toEqual({ kind, told: 1 });
