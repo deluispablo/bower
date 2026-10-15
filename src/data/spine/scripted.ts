@@ -3176,16 +3176,21 @@ const tryAgain = (attempt: Attempt): Ended => ({ kind: 'again', attempt });
  * no operation, no report row. Its report says nothing was ready yet (`materialize`).
  */
 async function nothingReadyPlan(rootId: string, opts: PlanOptions): Promise<RunPlan> {
-  const scope = { rootId };
-  const capture: ManifestCapture = { piles: [], members: [], journal: [], places: [] };
-  const captureId = (await canonical({ scope, runScope: opts.scope, capture })).hash;
-  const manifest: Manifest = {
-    v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
-    allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
-  };
+  const manifest = await emptyManifest(rootId, opts);
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId, RUNNER_WRITES, false);
   if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);
   return { path: 'b', manifest, needs: new Map() };
+}
+
+/** A manifest that captures and plans nothing: a run with nothing ready, or one held before its chain (runner `withProgress`). */
+export async function emptyManifest(rootId: string, opts: Pick<PlanOptions, 'scope' | 'allowWeb' | 'runId' | 'requestId' | 'requestedAt'>): Promise<Manifest> {
+  const scope = { rootId };
+  const capture: ManifestCapture = { piles: [], members: [], journal: [], places: [] };
+  const captureId = (await canonical({ scope, runScope: opts.scope, capture })).hash;
+  return {
+    v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
+    allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
+  };
 }
 
 /**
