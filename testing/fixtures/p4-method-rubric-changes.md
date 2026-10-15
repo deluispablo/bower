@@ -198,7 +198,7 @@ numeric evidence under R7, never an exception for model-authored numbers.
 | --- | --- | --- |
 | c17-b11-skills-tally | agrees | Points 1–8: reuse the typed offer/map, retain primary evidence and personal prose, filter active members and count distinct-note skills by script; no invented model count or extra source note (F13/R5/R7). |
 | c17-b11-monthly-money | agrees | Points 1–8: receipts fit Money, typed date/category/currency guide deterministic sums, missing/invalid totals stay honest and sourced content/history unchanged; no conversion or new taxonomy (F13/R7). |
-| c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, multiple columns await Q7 (F13/R5). |
+| c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, the one requested column replacing the fourth (F13/R5). |
 | c17-b11-proposal-authority | agrees | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes (F5/F7). |
 
 ## B7 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)

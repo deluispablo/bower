@@ -199,7 +199,7 @@ ids that are never admitted. Case 4 (own text deletion) was dropped (TL-P4-48 Q3
 | --- | --- | --- | --- |
 | c17-b11-skills-tally | C17 / B11 | model | TL-P4-39 F13/R5/R7; active typed skills tally; installed and computed through main |
 | c17-b11-monthly-money | C17 / B11 | model | TL-P4-39 F13; monthly money partition, missing/invalid amounts; installed and computed through main |
-| c17-b11-flat-formulas | C17 / B11 | model | TL-P4-39 F13/R5; raw formulas, unavailable divisor, personal exception; pending Q7 |
+| c17-b11-flat-formulas | C17 / B11 | model | TL-P4-39 F13/R5; raw formulas, unavailable divisor, personal exception; installed with one column and computed through main |
 | c17-b11-proposal-authority | C17 / B11 | model | TL-P4-39 F5/F7; suggestion survives filing/ignore, document is not authority |
 
 All four remain preparation fixtures. Proposed `replies.json` extends the future B11

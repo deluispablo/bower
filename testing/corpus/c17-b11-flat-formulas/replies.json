@@ -20,7 +20,6 @@
             {
               "property": "price_per_area",
               "type": "money",
-              "label": "Rent per square metre",
               "expr": {
                 "op": "/",
                 "left": {
@@ -34,7 +33,6 @@
             {
               "property": "days_left",
               "type": "number",
-              "label": "Days left",
               "expr": {
                 "op": "daysUntil",
                 "value": {
@@ -43,7 +41,8 @@
               }
             }
           ]
-        }
+        },
+        "column": "price_per_area"
       }
     ]
   }

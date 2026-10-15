@@ -423,7 +423,7 @@ type ComputedWrite = { id: string; path: string; values: Array<{ key: string; va
  * each Bower note of the type gets its computed lines, its records driving cleanup (R35, R49). Nothing is read for a
  * folder whose maps declare no views and whose notes have no type.
  */
-function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: RetrievalState, asOf: string) {
+function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: RetrievalState, asOf: string, writtenTable?: string) {
   const frozen = VaultIndex.build(inputs.folderId, (inputs.listing ?? []).map(file));
   const places = VaultIndex.build(inputs.folderId, state.listing ?? []);
   const readJson = async (path: string): Promise<string | null> => {
@@ -449,7 +449,8 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
       return { files: {}, views: {} };
     }
   });
-  const types = (): Promise<TypeTable> => table ??= readJson(SYSTEM.typeTable).then((text) => readTypeTable(text).table);
+  const types = (): Promise<TypeTable> => table ??= (writtenTable === undefined ? readJson(SYSTEM.typeTable) : Promise.resolve(writtenTable))
+    .then((text) => readTypeTable(text).table);
   // Keys a note writes on more than one line, by note; kept beside its evidence (`doubled`), so readers take the first (ruling 4).
   const doubled = new Map<string, Set<string>>();
   const valuesOf = (id: string, text: string): Record<string, string> | null => {
@@ -1088,7 +1089,10 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       const index = projectIndex(state.files);
       const asOf = timelineDate(manifest.requestedAt);
       if (!asOf) throw unavailable();
-      const figures = computedViews(drive, op.effect.inputs, state, asOf);
+      // A table this run wrote (a formula install, B11e R11) is the one maintain computes with; the listing froze the one before.
+      const tableWrite = manifest.operations.findLast((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.typeTable
+        && head.outcomes.some((outcome) => outcome.operationId === o.operationId && outcome.state === 'applied'));
+      const figures = computedViews(drive, op.effect.inputs, state, asOf, tableWrite?.effect.kind === 'write-runner-json' ? tableWrite.effect.text : undefined);
       const stamp = stampOf(head.runId, op.operationId);
       const subHead = (fileId: string) => ({ ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? { operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId } : o) });
       // Computed values first, each note in one edit under the maintain's stamp, so figures read them (B11 R51). A landed

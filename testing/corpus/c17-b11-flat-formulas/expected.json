@@ -13,8 +13,15 @@
   },
   "unchanged": [
     "Rules.md",
-    "Projects/Flat hunt/Flat hunt.md",
     "Projects/Flat hunt/Alex flat.md"
+  ],
+  "protectedRanges": [
+    {
+      "path": "Projects/Flat hunt/Flat hunt.md",
+      "range": {
+        "heading": "Notes"
+      }
+    }
   ],
   "notes": [
     {
@@ -24,17 +31,15 @@
         "days_left:"
       ],
       "excludes": [
-        "price_per_area: 123 EUR"
+        "price_per_area: {\"amount\":123,\"currency\":\"EUR\"}"
       ]
     }
   ],
   "report": {
     "filed": 0,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [
-      "Projects/Flat hunt/Amber flat.md",
-      "Projects/Flat hunt/Birch flat.md",
-      "Projects/Flat hunt/Cedar flat.md"
+      "Projects/Flat hunt/Flat hunt.md"
     ],
     "questionsExactly": 0
   }

@@ -236,7 +236,8 @@ function check(d: unknown, table: TypeTable, mode: 'write' | 'read'): void {
     need(by !== undefined || !Object.hasOwn(row.properties, key), 'A formula cannot replace a declared property.');
     need(expression(output.expr, 1) === output.type, 'A computed property must have its formula\'s type.');
   }
+  // A stored output whose type is missing or corrupt takes the candidate's type: the install repairs it (R60).
   const installed = [...computed].filter(([, by]) => by.id === d.id);
-  if (installed.length) need(installed.length === outputs.size && installed.every(([key, by]) => outputs.get(key) === by.type),
-    'A reinstalled formula keeps its computed properties.');
+  if (installed.length) need(installed.length === outputs.size && installed.every(([key, by]) => outputs.has(key)
+    && (!['number', 'money', 'date'].includes(by.type as string) || outputs.get(key) === by.type)), 'A reinstalled formula keeps its computed properties.');
 }

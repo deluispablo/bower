@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseNote, readTypeTable, typeRowOk } from '../../src/data/contracts/note-format';
+import { parseNote, readTypeTable, rewriteTypeTable, typeRowOk } from '../../src/data/contracts/note-format';
 import { parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
@@ -131,6 +131,7 @@ async function idle(f: Folder): Promise<CaseRun> {
   expect(phase(run), 'the idle run ends well').toBe('done');
   return run;
 }
+const HALF_FOR_BYTES = { ...FLATS, outputs: [{ ...PRICE, expr: { op: '/', left: { property: 'rent' }, right: { number: 2 } } }, DAYS] };
 const INSTALLED = { ...FLAT, properties: { ...FLAT.properties, price_per_area: { type: 'money' }, days_left: { type: 'number' } },
   table: ['rent', 'area', 'deadline', 'price_per_area'], views: [FLATS] };
 
@@ -359,6 +360,18 @@ describe('B11e formula installs through production main', () => {
     expect(rowOf(run)).toEqual(INSTALLED);
   });
 
+  it('AC31 b11-formula-bytes-entries: a reinstall rewrites only its entry; a later entry with its id goes, the others keep their bytes', () => {
+    const other = ' { "v": 1, "id": "flat-area", "kind": "formula", "type": "flat", "outputs": [] } ';
+    const stored = (views: string) => `{"v":1,"rows":[${JSON.stringify({ ...INSTALLED, views: undefined }).replace(/}$/, `,"views":[${views}]}`)}]}\n`;
+    const text = stored(`${JSON.stringify(FLATS)},${other},\n ${JSON.stringify({ ...FLATS, outputs: [] })} `);
+    const before = readTypeTable(text).table;
+    const row = before.rows[0];
+    if (!row) throw new Error('The made-up table has no row');
+    const next = { ...before, rows: [{ ...row, views: [HALF_FOR_BYTES, JSON.parse(other) as unknown] }] };
+    const written = rewriteTypeTable(text, before, next);
+    expect(written).toBe(stored(`${JSON.stringify(HALF_FOR_BYTES)},${other}`));
+  });
+
   it('AC34 b11-formula-crash-before-write: a crash before the table write is sent completes on redispatch with the table written once', async () => {
     const f = await folder();
     const tableId = await f.id(SYSTEM.typeTable);
@@ -400,12 +413,18 @@ describe('B11e formula installs through production main', () => {
   });
 
   it('AC34 b11-formula-manifest-invalid-sibling: an install beside an invalid stored formula on the same row is written and accepted; that entry keeps its bytes', async () => {
-    const table = brokenTable([BROKEN]);
+    // Stored as a person may format it: whitespace inside the invalid entry and inside an untouched declaration (R40, R59).
+    const spaced = JSON.stringify(BROKEN, null, 1);
+    const declaration = '"area_left": { "type": "number" }';
+    const table = brokenTable([BROKEN]).replace(JSON.stringify(BROKEN), spaced).replace('"area_left":{"type":"number"}', declaration);
+    expect(table).toContain(spaced);
+    expect(table).toContain(declaration);
     const f = await folder(table);
     const run = await press(f, (request) => install(request));
     expect(phase(run)).toBe('done');
     expect(rowOf(run)?.views, 'installed beside it').toEqual([BROKEN, FLATS]);
-    expect(run.after[SYSTEM.typeTable], 'the invalid entry, byte for byte').toContain(JSON.stringify(BROKEN));
+    expect(run.after[SYSTEM.typeTable], 'the invalid entry, byte for byte').toContain(`[${spaced},`);
+    expect(run.after[SYSTEM.typeTable], 'an untouched declaration, byte for byte').toContain(declaration);
     const stored = JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
     expect((await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(stored)), f.root, RUNNER_WRITES)).ok, 'the guard checks only what the write adds').toBe(true);
   });
@@ -517,6 +536,83 @@ describe('B11e formula installs through production main', () => {
     expect(run.after[MAP], 'the same figures').toBe(first.after[MAP]);
     expect(retrieval(run).views?.[`${mapId}/flat-count`], 'the figures\' record stays').toBeDefined();
     expect(retrieval(run).views?.[`${await f.id(AMBER)}/flat-metrics`], 'beside the new formula record').toBeDefined();
+  });
+
+  // Round-3 rulings (binding like acceptance): the requested column stays where it is; the guard checks against the verified row it replaced.
+  const HALF = { ...FLATS, outputs: [{ ...PRICE, expr: { op: '/', left: { property: 'rent' }, right: { number: 2 } } }, DAYS] };
+  it('AC31 b11-formula-fifth-column: a reinstall whose output is already the fifth column keeps the table as stored and installs the formula', async () => {
+    const wide = { ...INSTALLED, properties: { ...INSTALLED.properties, agent: { type: 'text' } }, table: ['rent', 'area', 'deadline', 'agent', 'price_per_area'] };
+    const f = await folder(`${JSON.stringify({ v: 1, rows: [OFFER, wide] }, null, 2)}\n`);
+    const run = await press(f, (request) => install(request, HALF));
+    expect(phase(run)).toBe('done');
+    expect(run.calls, 'never refused').toEqual(['selection', 'execution']);
+    expect(rowOf(run)?.table, 'no move and no duplicate').toEqual(wide.table);
+    expect(rowOf(run)?.views).toEqual([HALF]);
+    expect(computed(run.after[AMBER], 'price_per_area')).toEqual({ amount: 500, currency: 'EUR' });
+  });
+
+  /** A reinstall of a new expression over the installed row, its stored manifest, and resealed edits of the written flat row. */
+  async function reinstalled() {
+    const f = await folder(`${JSON.stringify({ v: 1, rows: [OFFER, INSTALLED] }, null, 2)}\n`);
+    const run = await press(f, (request) => install(request, HALF, {}));
+    expect(phase(run)).toBe('done');
+    const stored = JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
+    const ok = async (m: Manifest) => (await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), f.root, RUNNER_WRITES)).ok;
+    expect(await ok(stored), 'the stored reinstall is accepted').toBe(true);
+    const edit = (change: (row: Record<string, unknown>) => void) => (t: string) => {
+      const table = JSON.parse(t) as { rows: Array<Record<string, unknown>> };
+      const row = table.rows.find((r) => r.id === 'flat');
+      if (!row) throw new Error('The written table has no flat row');
+      change(row);
+      return JSON.stringify(table);
+    };
+    /** The written row looks valid on its own: only the verified row before the write tells the mutation apart. */
+    const looksValid = (change: (t: string) => string) => typeRowOk((JSON.parse(change(JSON.stringify({ v: 1, rows: [rowOf(run)] }))) as { rows: unknown[] }).rows[0]);
+    return { stored, ok, edit, looksValid };
+  }
+  it('AC34 b11-formula-manifest-before-row: a resealed formula taking over raw area, or a reinstall adding outputs, is refused against the verified row it replaced', async () => {
+    const { stored, ok, edit, looksValid } = await reinstalled();
+    const TAKE = { v: 1, id: 'flat-take', kind: 'formula', type: 'flat', outputs: [{ property: 'area', type: 'number', expr: { number: 50 } }] };
+    const takeover = edit((row) => { row.views = [...row.views as unknown[], TAKE]; });
+    const YEARLY = { property: 'rent_year', type: 'money', expr: { op: '*', left: { property: 'rent' }, right: { number: 12 } } };
+    const grown = edit((row) => {
+      row.views = [{ ...HALF, outputs: [...HALF.outputs, YEARLY] }];
+      row.properties = { ...row.properties as object, rent_year: { type: 'money' } };
+    });
+    expect(looksValid(takeover), 'the taken-over row alone looks valid').toBe(true);
+    expect(looksValid(grown), 'the grown row alone looks valid').toBe(true);
+    expect(await ok(await resealed(stored, takeover)), 'a new formula over the raw area').toBe(false);
+    expect(await ok(await resealed(stored, grown)), 'a reinstall adding an output').toBe(false);
+  });
+  it('AC34 b11-formula-manifest-retyped-input: a resealed install that retypes a raw input its formula reads is refused on the row it writes', async () => {
+    const f = await folder();
+    const run = await press(f, (request) => install(request));
+    expect(phase(run)).toBe('done');
+    const stored = JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
+    const ok = async (m: Manifest) => (await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), f.root, RUNNER_WRITES)).ok;
+    expect(await ok(stored)).toBe(true);
+    const retyped = (t: string) => t.split('"area":{"type":"number"}').join('"area":{"type":"date"}');
+    expect(retyped(JSON.stringify(rowOf(run))), 'only the raw declaration changes').not.toBe(JSON.stringify(rowOf(run)));
+    expect(await ok(await resealed(stored, retyped)), 'rent divided by a date').toBe(false);
+  });
+  it('AC34 b11-formula-manifest-untouched-broken: a resealed install that retypes an input an untouched installed formula reads is refused', async () => {
+    const f = await folder(`${JSON.stringify({ v: 1, rows: [OFFER, INSTALLED] }, null, 2)}\n`);
+    const run = await press(f, (request) => install(request, AREA, {}));
+    expect(phase(run)).toBe('done');
+    expect(rowOf(run)?.views).toEqual([FLATS, AREA]);
+    const stored = JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
+    const ok = async (m: Manifest) => (await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), f.root, RUNNER_WRITES)).ok;
+    expect(await ok(stored)).toBe(true);
+    // The new formula reads only area; the untouched one's money output would come from a number.
+    const retyped = (t: string) => t.split('"rent":{"type":"money"}').join('"rent":{"type":"number"}');
+    expect(retyped(JSON.stringify(rowOf(run))), 'only the raw declaration changes').not.toBe(JSON.stringify(rowOf(run)));
+    expect(await ok(await resealed(stored, retyped)), 'the installed formula broken by the write').toBe(false);
+  });
+  it('AC34 b11-formula-manifest-before-row-twin (guard): a resealed reinstall changing only the expression is accepted', async () => {
+    const { stored, ok, edit, looksValid } = await reinstalled();
+    const quarter = edit((row) => { row.views = [{ ...HALF, outputs: [{ ...PRICE, expr: { op: '/', left: { property: 'rent' }, right: { number: 4 } } }, DAYS] }]; });
+    expect(looksValid(quarter)).toBe(true);
+    expect(await ok(await resealed(stored, quarter)), 'the same outputs, another expression').toBe(true);
   });
 });
 
