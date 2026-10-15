@@ -630,10 +630,15 @@ function blankCode(line: string): string {
 }
 
 interface Replacement { at: number; length: number; to: string; unlinked?: boolean }
+/** The text whose ending citation may fall back to words (b9a): none, but for a Bower Timeline line or entry. */
+type Cited = (line: string) => string;
+const NOT_CITED: Cited = () => '';
+const TIMELINE_LINE: Cited = (line) => parseTimelineLine(line)?.text ?? '';
+const renameMap = (renames: readonly Rename[]): Map<string, string> => new Map(renames.map((item) => [item.from.toLowerCase(), item.to]));
 /** Tokens on one line in [start, end): replace the trimmed target; an unwritable citation carries words. */
-function tokens(text: string, start: number, end: number, renames: ReadonlyMap<string, string>, out: Replacement[]): void {
+function tokens(text: string, start: number, end: number, renames: ReadonlyMap<string, string>, out: Replacement[], cited = NOT_CITED): void {
   const line = blankCode(text.slice(start, end));
-  const { citation } = splitCitation(parseTimelineLine(line)?.text ?? line);
+  const { citation } = splitCitation(cited(line));
   for (const match of line.matchAll(/\[\[([^\]\r\n]*)\]\]/g)) {
     const name = (match[1] ?? '').split('|')[0] ?? '';
     const to = renames.get(linkTarget(name));
@@ -647,15 +652,31 @@ function tokens(text: string, start: number, end: number, renames: ReadonlyMap<s
     out.push({ at: start + match.index + 2 + lead, length: head.trim().length, to });
   }
 }
-/** Lines of a range, skipping fenced code as ownership/2 defines it. */
-function fenced(text: string, start: number, end: number, renames: ReadonlyMap<string, string>, out: Replacement[]): void {
+/**
+ * Lines of a range, skipping fenced code as ownership/2 defines it. With `timeline` (a Bower note's Timeline: the v2
+ * payload, or the layout's last `## Timeline`), the lines after its own unfenced `## Timeline` heading, up to the next
+ * unfenced heading, read as Timeline lines.
+ */
+function fenced(text: string, start: number, end: number, renames: ReadonlyMap<string, string>, out: Replacement[], timeline: Span | null = null): void {
   let fence: Fence | null = null;
+  let inside = false;
   for (const line of linesOf(text, start, end)) {
     const previous = fence;
     fence = fenceAfter(line.text, fence);
     if (previous || fence) continue;
-    tokens(text, line.start, line.end, renames, out);
+    const heading = HEADING.test(line.text);
+    if (heading) inside = timeline !== null && line.start === timeline.start && line.text === '## Timeline';
+    tokens(text, line.start, line.end, renames, out, inside && !heading ? TIMELINE_LINE : NOT_CITED);
   }
+}
+/**
+ * One generated or carried Timeline entry's text with `renames` applied before it is written (scripted, keep-one
+ * carried lines and model citations): its ending citation falls back to words as its Timeline line's would (b9a).
+ */
+export function relinkEntry(text: string, renames: readonly Rename[]): string {
+  const out: Replacement[] = [];
+  tokens(text, 0, text.length, renameMap(renames), out, (line) => line);
+  return [...out].sort((a, b) => b.at - a.at).reduce((next, item) => next.slice(0, item.at) + item.to + next.slice(item.at + item.length), text);
 }
 /** Frontmatter values: after a key's first `:`, or the whole line (YAML list items); never `bower_format`. */
 function values(text: string, renames: ReadonlyMap<string, string>, out: Replacement[], fetched?: FetchedOwnership): void {
@@ -670,20 +691,22 @@ function relink(text: string, change: Extract<Change, { kind: 'link-rewrite' }>,
   const bytes = encoder.encode(text);
   const own = fetched ? fetched.context.read(fetched.fileId, bytes) : parseOwnership(bytes);
   if (own.status === 'invalid') return { refused: own.reason };
-  const renames = new Map(change.renames.map((item) => [item.from.toLowerCase(), item.to]));
+  const renames = renameMap(change.renames);
   const out: Replacement[] = [];
+  // Only a Bower note's Timeline lines may lose a link to words (b9a); a person's own keep theirs.
+  const bower = own.status !== 'plain' && byBower(text, fetched);
   if (own.status === 'v2') {
     values(text, renames, out, fetched);
-    for (const payload of Object.values(own.payloads)) {
+    for (const [region, payload] of Object.entries(own.payloads)) {
       const span = spanOf(bytes, payload);
-      fenced(text, span.start, span.end, renames, out);
+      fenced(text, span.start, span.end, renames, out, bower && region === 'timeline' ? span : null);
     }
   } else if (own.status === 'plain') fenced(text, 0, text.length, renames, out);
   else {
     const legacy = sectionsOf(text, fetched);
     if (!legacy) return { refused: 'invariant' };
     values(text, renames, out, fetched);
-    fenced(text, legacy.frontEnd, text.length, renames, out);
+    fenced(text, legacy.frontEnd, text.length, renames, out, bower ? legacy.timeline : null);
   }
   // One simultaneous pass: each target is replaced once, right to left so earlier offsets hold.
   let next = text;
