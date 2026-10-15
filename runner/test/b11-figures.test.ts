@@ -453,8 +453,9 @@ describe('B11b figures when things go wrong', () => {
     const first = await press(f);
     expect(figures(first.after[MAP])).toBe(`${BASE(4)}\n${SKILLS_BLOCK}`);
     expect((JSON.parse(first.after[SYSTEM.retrieval] ?? '{}') as { files: Record<string, unknown> }).files[await f.id(DIARY)], 'known to run past the prefix').toMatchObject({ incomplete: true });
-    // Without the index Bower reads every prefix again; the long note's same version is still known to run past it.
-    await f.drive.trash(await f.id(SYSTEM.index));
+    // A stored entry is reused at its version even without the index (cold-discovery-progress R3), so the person's
+    // edit is what makes Bower read the long note again.
+    f.drive.touch(await f.id(DIARY));
     const traffic: Observation[] = [];
     const run = await press(f, undefined, [], (fetch) => {
       let seen = 0;
