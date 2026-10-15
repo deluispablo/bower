@@ -12,7 +12,7 @@
  */
 import { createOwnershipContext, parseOwnership, type AboutRegion, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal, relinkEntry } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { formulaInstalled, parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
@@ -1713,9 +1713,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // Carried lines append after the note's rewrite, so their preserved citations must follow it too.
   // So must a model line's citation, named before the renames (R18).
   if (renames.length) for (const line of [...keeping.flatMap((x) => x.lines), ...citing]) {
-    const rewritten = applyChanges(new TextEncoder().encode(line.entry.text), [{ kind: 'link-rewrite', recordIds: [], renames }]);
-    if (!rewritten.ok) continue;
-    line.entry.text = asLineText(rewritten.text);
+    line.entry.text = asLineText(relinkEntry(line.entry.text, renames));
     if (line.what !== null) line.what = citedAsWords(line.entry.text);
   }
   const binned = new Set(keeping.map((x) => x.other.id));

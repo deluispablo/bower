@@ -142,6 +142,67 @@ describe('B9a format', () => {
     }
   });
 
+  it('AC1 b9a-fallback-scope: with two Timeline headings, a citation under the earlier one keeps its link (ruling, round 3)', () => {
+    const shaped = timelineLine({ date, text: 'Uncertain: The visit may be affected. (also from [[Old]])', source: 'Later listing.txt' });
+    const plainLine = timelineLine({ date, text: 'The visit is booked.', source: 'Booking.txt' });
+    const rename = [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'One · Two' }] }] as Parameters<typeof applyChanges>[1];
+    const earlier = BOWER + shaped + '\n\n## Timeline\n' + plainLine + '\n';
+    const kept = applyChanges(new TextEncoder().encode(earlier), rename);
+    expect(kept.ok).toBe(true);
+    if (kept.ok) expect(kept.text, 'the Bower Timeline section is the last heading').toBe(earlier.replace('[[Old]]', '[[One · Two]]'));
+    // Under the last heading, the same line is Bower's and falls back to words.
+    const last = BOWER + plainLine + '\n\n## Timeline\n' + shaped + '\n';
+    for (const value of [last, last.replaceAll('\n', '\r\n')]) {
+      const words = applyChanges(new TextEncoder().encode(value), rename);
+      expect(words.ok).toBe(true);
+      if (words.ok) expect(words.text, JSON.stringify(value.slice(0, 6))).toBe(value.replace('[[Old]]', 'One, Two'));
+    }
+  });
+
+  it('AC1 b9a-fallback-scope: in an ownership/2 note, a Timeline-shaped citation under a heading inside the Timeline payload keeps its link (attempt 2)', () => {
+    const shaped = timelineLine({ date, text: 'Uncertain: The visit may be affected. (also from [[Old]])', source: 'Later listing.txt' });
+    const raw = serializeNote({ template: 'concept', byBower: true, summary: 'Alex records garden visits.', status: 'active', tags: ['gardening'],
+      properties: [{ key: 'type', label: 'Type', value: 'concept' }, { key: 'created', label: 'Created', value: '2026-10-02' },
+        { key: 'updated', label: 'Updated', value: '2026-10-02' }, { key: 'source', label: 'Source', value: 'Garden bulletin' },
+        { key: 'related', label: 'Related', value: 'Gardening', link: 'Gardening' }],
+      currentState: ['Alex visits in spring.'], body: 'Alex keeps notes.',
+      timeline: [{ date, text: 'Uncertain: The garden may close. (also from [[Old]])', source: 'Notice.txt' }] });
+    const end = '<!-- bower:ownership/2 end timeline -->';
+    expect(raw).toContain(end);
+    const stored = raw.replace(end, `## Notes\n${shaped}\n${end}`);
+    const rename = [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'One · Two' }] }] as Parameters<typeof applyChanges>[1];
+    const renamed = applyChanges(new TextEncoder().encode(stored), rename);
+    expect(renamed.ok).toBe(true);
+    if (!renamed.ok) return;
+    // The payload's own Timeline line falls back to words; the line under the heading is the person's and keeps its link.
+    expect(renamed.text).toBe(stored.replace('[[Old]]', 'One, Two').replace('[[Old]]', '[[One · Two]]'));
+  });
+
+  it('AC1 b9a-fallback-scope: an ownership/2 Timeline payload that starts with another heading keeps its link (attempt 3)', () => {
+    const shaped = timelineLine({ date, text: 'Uncertain: The visit may be affected. (also from [[Old]])', source: 'Later listing.txt' });
+    const raw = serializeNote({ template: 'concept', byBower: true, summary: 'Alex records garden visits.', status: 'active', tags: ['gardening'],
+      properties: [{ key: 'type', label: 'Type', value: 'concept' }, { key: 'created', label: 'Created', value: '2026-10-02' },
+        { key: 'updated', label: 'Updated', value: '2026-10-02' }, { key: 'source', label: 'Source', value: 'Garden bulletin' },
+        { key: 'related', label: 'Related', value: 'Gardening', link: 'Gardening' }],
+      currentState: ['Alex visits in spring.'], body: 'Alex keeps notes.', timeline: [{ date, text: 'The visit is booked.', source: 'Booking.txt' }] });
+    const begin = '<!-- bower:ownership/2 begin timeline -->\n## Timeline\n';
+    expect(raw).toContain(begin);
+    const stored = raw.replace(begin, `<!-- bower:ownership/2 begin timeline -->\n## Notes\n${shaped}\n`);
+    const rename = [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'One · Two' }] }] as Parameters<typeof applyChanges>[1];
+    const renamed = applyChanges(new TextEncoder().encode(stored), rename);
+    expect(renamed.ok).toBe(true);
+    if (renamed.ok) expect(renamed.text, 'only the real Timeline heading opens the fallback').toBe(stored.replace('[[Old]]', '[[One · Two]]'));
+  });
+
+  it('AC1 b9a-fallback-scope: a fenced heading inside Timeline does not end it for a later Bower Timeline line (attempt 3)', () => {
+    const shaped = timelineLine({ date, text: 'Uncertain: The visit may be affected. (also from [[Old]])', source: 'Later listing.txt' });
+    const stored = BOWER + '```\n## Notes\n```\n' + shaped + '\n';
+    const rename = [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'One · Two' }] }] as Parameters<typeof applyChanges>[1];
+    const renamed = applyChanges(new TextEncoder().encode(stored), rename);
+    expect(renamed.ok).toBe(true);
+    if (renamed.ok) expect(renamed.text, 'a fenced line is an example, never a heading').toBe(stored.replace('[[Old]]', 'One, Two'));
+  });
+
   it('AC4 b9-v2-literal: a framed ownership/2 note keeps old marker text literal and takes a canonical line in its Timeline', () => {
     const old = '[!contradiction] Opening hours are undecided ^[inferred]';
     const raw = serializeNote({ template: 'concept', byBower: true, summary: 'Alex records garden visits.', status: 'active', tags: ['gardening'],
