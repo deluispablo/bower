@@ -3,11 +3,15 @@
   "rows": [
     {
       "id": "concept",
+      "match": ["concept"],
+      "template": "concept",
       "properties": {},
       "table": []
     },
     {
       "id": "source",
+      "match": ["source"],
+      "template": "source",
       "properties": {},
       "table": []
     }

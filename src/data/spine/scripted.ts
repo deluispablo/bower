@@ -511,7 +511,7 @@ export interface MapOp { targetId: string; key: string; mode: 'set' | 'union' | 
  * could not be read, so its membership is not known and the request waits whole (ruling 3). `move`: the member's new
  * folder, its new name, or both, made by one ordinary move after its edit (B12 R26).
  */
-export interface MapRequest { requestId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[]; move?: { parentId?: string; name?: string } }>; pending?: true }
+export interface MapRequest { requestId: string; title: string; folderId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[]; move?: { parentId?: string; name?: string } }>; pending?: true }
 
 /**
  * One view a request installs (B11c, B11e), checked by the provider as a write: an aggregate in a Bower map (`home` its
@@ -766,10 +766,10 @@ function flowItems(line: string): Array<{ start: number; end: number; value: str
  * A target's front-matter lines once a map's ops apply, in the set's order (B12 R10-R13, R16, R55, R57, R58): each key
  * once, in the order the ops first name it, through the one scalar writer. A `union` or a tag `add` appends to a stored
  * flow list (its bytes kept), a tag `remove` takes that item and its separator, a `set` replaces the line, and any other
- * stored list is written again as one inline list in its place. [] when every op already holds; null when the target
- * is refused: two values for one key, more than 10 items or 3 tags, or a value that cannot be read or written back.
+ * stored list is written again as one inline list in its place. [] when every op already holds; the reason (as the
+ * result note words it) when the target is refused: two values for one key, more than 10 items or 3 tags, or a value that cannot be read or written back.
  */
-function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[], vocabulary: readonly string[]): Array<{ key: string; line: string }> | null {
+function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[], vocabulary: readonly string[]): Array<{ key: string; line: string }> | string {
   const out: Array<{ key: string; line: string }> = [];
   const decoded = (key: string, line: string) => row ? propertyValue(row, key, frontValues(`---\n${line}\n---\n`)?.[key]) : 'invalid';
   /** A key's stored value from its first line, as the author replaces it; a block list by the items read, never as one text. */
@@ -793,10 +793,11 @@ function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[],
     if (key === 'tags') {
       const adds = [...new Set(mine.filter((o) => o.mode === 'add').map((o) => String(o.value)))].filter((t) => !items.includes(t));
       const removes = new Set(mine.filter((o) => o.mode === 'remove').map((o) => String(o.value)));
-      if (mine.some((o) => o.mode === 'add' && removes.has(String(o.value)))) return null;
+      if (mine.some((o) => o.mode === 'add' && removes.has(String(o.value)))) return MAP_CONFLICT;
       const result = [...items.filter((t) => !removes.has(t)), ...adds];
       if (result.length === items.length && result.every((t, i) => t === items[i])) continue;
-      if (result.length > NOTE_TAGS_MAX || result.some((t) => !vocabulary.includes(t))) return null;
+      if (result.length > NOTE_TAGS_MAX) return MAP_TAGS;
+      if (result.some((t) => !vocabulary.includes(t))) return MAP_UNREADABLE;
       if (!flow) { out.push({ key, line: inline(key, result) }); continue; }
       let line = flow;
       for (const item of flowItems(flow).filter((x) => removes.has(x.value)).reverse()) {
@@ -811,22 +812,23 @@ function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[],
     }
     const declaration = row?.properties[key];
     const was = storedValue(key, stored, items);
-    if (!row || !declaration || computedBy(row).has(key) || was === 'invalid' || new Set(mine.map((o) => o.mode)).size > 1) return null;
+    if (new Set(mine.map((o) => o.mode)).size > 1) return MAP_CONFLICT;
+    if (!row || !declaration || computedBy(row).has(key) || was === 'invalid') return MAP_UNREADABLE;
     let line: string;
     if (mine[0]?.mode === 'union') {
       const adds = [...new Set(mine.flatMap((o) => (Array.isArray(o.value) ? o.value.map(String) : [])))].filter((i) => !items.includes(i));
       if (!adds.length) continue;
-      if (items.length + adds.length > 10) return null;
+      if (items.length + adds.length > 10) return MAP_LIST;
       line = flow ? append(flow, adds) : inline(key, [...items, ...adds]);
     } else {
-      if (mine.some((o) => !sameJson(o.value, mine[0]?.value))) return null;
+      if (mine.some((o) => !sameJson(o.value, mine[0]?.value))) return MAP_CONFLICT;
       const value = mine[0]?.value;
       line = Array.isArray(value) ? inline(key, value.map(String)) : `${key}: ${typeof value === 'string' ? summaryScalar(value) : JSON.stringify(value)}`;
       const now = decoded(key, line);
       if (typeof was === 'object' && typeof now === 'object' && sameJson(was.value, now.value)) continue;
     }
     // R57: a written value reads back as one its property holds.
-    if (typeof decoded(key, line) !== 'object') return null;
+    if (typeof decoded(key, line) !== 'object') return MAP_UNREADABLE;
     out.push({ key, line });
   }
   return out;
@@ -1638,7 +1640,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   };
   const plannedFile = (path: string): void => {
     planned.set(path, { path, type: 'file', kind: kindOf(path), modified: 0, created: 0 });
+    madeFiles.push(path);
   };
+  /** Every file path the plan gives, for the result note's link wording (R72). */
+  const madeFiles: string[] = [];
   const date = timelineDate(opts.requestedAt);
   // Note edits (TL-P2-20), one edit-text per note at most, planned on the bytes read now; applyChanges is the only
   // author. A hub note a full run brings up to date gets its Timeline line, and so does a note a thing is merged
@@ -2211,7 +2216,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const folder = ix.file(to);
       if (folder?.folder) places.set(folder.id, folder);
       const name = freeName(planned, to, merge.title);
-      planned.set(join(to, name), { path: join(to, name), type: 'file', kind: kindOf(name), modified: 0, created: 0 });
+      plannedFile(join(to, name));
       filing.push({ thing, to, name, merge });
       continue;
     }
@@ -2497,6 +2502,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // member gets one link fix waiting for those moves (built below), and a note that cannot take it (a Source) leaves
   // the members it links to unavailable (R28).
   const mapMoves: Array<{ requestId: string; file: DriveFile; parentId: string; name: string }> = [];
+  const outcomes: Array<{ m: MapRequest; reasons: ReadonlyMap<string, string>; updated: string[] }> = [];
   const mapFixes = new Map<string, { read: NonNullable<Awaited<ReturnType<typeof readNote>>>; renames: Array<Rename & { fileId: string }>; requestIds: string[] }>();
   const linkReads = new Map<string, Awaited<ReturnType<typeof readNote>>>();
   /** Where a member goes, or null when it is not a note or is already there under that name (R60). */
@@ -2521,10 +2527,13 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   for (const m of maps.filter((x) => mapRequests.has(x.requestId))) {
     const out = new Set(mapOwned.unavailable.get(m.requestId) ?? []);
+    /** Why each member that is not done is not, in the words of the result note. */
+    const reasons = new Map<string, string>([...out].map((id) => [id, MAP_OLDER]));
     const unavailable = (id: string, why: string): void => {
       if (out.has(id)) return;
       out.add(id);
-      console.error(new BowerError('conflict', why), ix.pathOf(id) ?? id);
+      reasons.set(id, why);
+      console.error(new BowerError('conflict', `${why.charAt(0).toUpperCase()}${why.slice(1)}.`), ix.pathOf(id) ?? id);
     };
     const order = (id: string): number => m.members.indexOf(id);
     const notes = new Map<string, (NonNullable<Awaited<ReturnType<typeof readNote>>> & { text: string; row?: TypeRow }) | null>();
@@ -2563,7 +2572,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
           notes.set(targetId, read && own ? { ...read, text, row: nextTable.rows.find((r) => r.id === frontValues(text)?.type) } : null);
         }
         const note = notes.get(targetId);
-        const lines = note ? mapLines(note.text, note.row, ops, grownTags.tags) : null;
+        const made = note ? mapLines(note.text, note.row, ops, grownTags.tags) : MAP_NOT_OWN;
+        const lines = typeof made === 'string' ? null : made;
         const existing = edits.find((e) => e.file.id === targetId);
         const first = (c: Change): boolean => c.kind === 'state-rewrite' || c.kind === 'link-rewrite' || c.kind === 'views-set';
         const changes: Change[] = lines ? [...(existing?.changes ?? []).filter(first), ...lines.map(({ key, line }): Change => ({ kind: 'property-set', recordIds: [m.requestId], key, line })),
@@ -2573,7 +2583,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
           if (result?.ok) planned.set(targetId, { note, changes, text: result.text });
           continue;
         }
-        for (const id of members) out.add(id);
+        for (const id of members) {
+          out.add(id);
+          if (!reasons.has(id)) reasons.set(id, typeof made === 'string' ? made : MAP_UNREADABLE);
+        }
         refused = true;
       }
     }
@@ -2605,8 +2618,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     for (const [targetId, { note, changes, text }] of planned) {
       const existing = edits.find((e) => e.file.id === targetId);
-      if (existing) Object.assign(existing, { changes, text, types: typeText ?? '', tags: mapTags });
-      else edits.push({ file: note.file, path: note.path, before: note.before, bytes: note.bytes, changes, text, after: [], keeps: [], rows: [], types: typeText ?? '', tags: mapTags });
+      if (existing) Object.assign(existing, { changes, text, types: typeText ?? '', tags: mapTags, rows: existing.rows.length ? existing.rows : [{ what: MAP_UPDATED }] });
+      else edits.push({ file: note.file, path: note.path, before: note.before, bytes: note.bytes, changes, text, after: [], keeps: [], rows: [{ what: MAP_UPDATED }], types: typeText ?? '', tags: mapTags });
       places.set(targetId, note.file);
       edited.add(targetId);
     }
@@ -2623,7 +2636,47 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       places.set(id, read.file);
       edited.add(id);
     }
+    if (m.members.length) outcomes.push({ m, reasons: new Map([...reasons, ...m.members.filter((id) => !m.results.some((r) => r.memberId === id)).map((id) => [id, MAP_NO_CHANGE] as const)]),
+      updated: [...planned.keys()].filter((id) => !m.members.includes(id)) });
   }
+  // A settled map's result note (B12c R32, R69-R77, R85): in its set's folder, named after every name the run gives (the
+  // members' moves first, then the requests oldest first), linked by title or, when another note has it, by place.
+  const resultNotes = new Map<string, { to: string; name: string; text: string; what: string; key: string }>();
+  const finalPath = new Map(mapMoves.map((mv) => [mv.file.id, join(ix.pathOf(mv.parentId) ?? '', mv.name)] as const));
+  for (const path of finalPath.values()) plannedFile(path);
+  // Worded once the plan has reserved every other name (words notes, comparisons, filings, renames): each counts toward a title's ambiguity.
+  const renderResultNotes = async (): Promise<void> => {
+  const titles = new Map<string, number>();
+  const titleOf = (path: string): string => displayName(nameOf(path)).toLowerCase();
+  const count = (path: string): void => { if (path.endsWith('.md')) titles.set(titleOf(path), (titles.get(titleOf(path)) ?? 0) + 1); };
+  for (const [path, entry] of outcomes.length ? ix.entries() : []) if (entry.type === 'file' && !path.startsWith(`${SYSTEM.dir}/`) && !path.startsWith('Inbox/')) count(finalPath.get(ix.idOf(path) ?? '') ?? path);
+  // Every file the plan creates or renames into place, once; a member's final path is already counted for its id above.
+  for (const path of new Set(madeFiles)) if (!path.startsWith(`${SYSTEM.dir}/`) && ![...finalPath.values()].includes(path)) count(path);
+  const linkTo = (path: string): string => `[[${(titles.get(titleOf(path)) ?? 0) > 1 ? path.slice(0, -'.md'.length) : displayName(nameOf(path))}]]`;
+  const reserved: Array<(typeof outcomes)[number] & { key: string; to: string; name: string }> = [];
+  for (const { m, reasons, updated } of [...outcomes].sort((a, b) => (requestAt.get(a.m.requestId) ?? 0) - (requestAt.get(b.m.requestId) ?? 0) || (a.m.requestId < b.m.requestId ? -1 : 1))) {
+    const key = await resultNoteKey(m.requestId);
+    // A note the request's earlier attempt created stands as written; this run only completes the bookkeeping (R85).
+    if (listing.some((f) => !f.trashed && !f.folder && f.appProperties?.bowerItem === key)) continue;
+    const to = ix.pathOf(m.folderId) ?? '';
+    if (!generatedPlace(to)) continue;
+    destination(to);
+    const name = freeName(planned, to, generatedName(`Request - ${m.title}`));
+    plannedFile(join(to, name));
+    count(join(to, name));
+    reserved.push({ m, reasons, updated, key, to, name });
+  }
+  for (const { m, reasons, updated, key, to, name } of reserved) {
+    const pathOf = (id: string): string => finalPath.get(id) ?? ix.pathOf(id) ?? '';
+    const unavailable = m.members.filter((id) => reasons.has(id));
+    const words = lines.find((l) => l.rec.kind === 'request' && l.rec.id === m.requestId)?.rec;
+    const what = `What Bower did for "${m.title}".`;
+    const body = ['## Notes', `Asked: "${(words?.text ?? words?.what ?? '').replace(/\s+/g, ' ').trim()}"`, '', `Done: ${m.members.length - unavailable.length}`, `Unavailable: ${unavailable.length}`,
+      ...(updated.length ? [`Updated: ${updated.map((id) => linkTo(pathOf(id))).join(', ')}`] : []), '',
+      ...m.members.map((id) => `- ${linkTo(pathOf(id))}: ${reasons.has(id) ? `unavailable, ${reasons.get(id)}` : 'done'}`)].join('\n');
+    resultNotes.set(m.requestId, { to, name, key, what, text: serializeNote({ summary: what, properties: [{ key: 'type', label: 'Type', value: 'request' }], tags: [], currentState: [], body, timeline: [], byBower: true }) });
+  }
+  };
   for (const { pileId, folder, words } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);
     destination(to);
@@ -2680,6 +2733,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(join(to, name));
     compared.set(l.rec.id, { to, name, text: comparisonNote(read, what, noteDate), what });
   }
+  await renderResultNotes();
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
   // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
   const answered = answeredAskings(journal.map((l) => l.rec));
@@ -2989,7 +3043,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   return {
     kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
-    generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
+    generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes,
   };
@@ -3003,7 +3057,7 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
 export async function build(decided: Decided): Promise<Ended> {
   const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents, path: decided.ix.pathOf(fileId), name: decided.ix.byId(fileId)?.name });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
-    generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
+    generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes } = decided;
 
@@ -3330,10 +3384,11 @@ export async function build(decided: Decided): Promise<Ended> {
     const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answers.get(l.rec.id) ?? REQUEST_DONE }));
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
     const notes: string[] = [];
-    for (const l of asked) {
-      const note = compared.get(l.rec.id);
+    // A map's result note (R32) is keyed by its request and waits for everything the request changes; the requests row waits for it.
+    for (const l of asked) for (const [note, key, after] of [[compared.get(l.rec.id), () => newKey('note'), []], [resultNotes.get(l.rec.id), () => resultNotes.get(l.rec.id)?.key ?? '',
+      [...new Set([...need(l.rec.id).edits, ...need(l.rec.id).derived])]]] as const) {
       if (!note) continue;
-      const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' });
+      const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: key(), text: note.text, content: await utf8(note.text), purpose: 'generated' }, [...after]);
       reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), created: [{ path: join(note.to, note.name), what: note.what }] } });
       notes.push(op);
     }
@@ -3761,9 +3816,17 @@ const VIEWS_WAIT = 'Bower could not set up those figures yet; it tries again nex
 const VIEWS_REPLACED = "Bower replaced a map's figures it could not read.";
 const VIEW_STALE = 'That suggested view no longer fits, so Bower did not set it up.';
 /** Why a map's member stays where it is, its operations unmade (B12 R28, R29, R65). */
-const MAP_NAME_THERE = 'A note with that name is already there.';
-const MAP_NAME_CLAIMED = 'Another note in this request takes that name.';
-const MAP_LINK_REFUSED = 'A note that links to it cannot be updated.';
+const MAP_NAME_THERE = 'a note with that name is already there';
+const MAP_NAME_CLAIMED = 'another note in this request takes that name';
+const MAP_LINK_REFUSED = 'a note that links to it cannot be updated';
+const MAP_UPDATED = 'Updated for your request.';
+const MAP_NOT_OWN ='Bower changes details only on its own notes';
+const MAP_NO_CHANGE = 'no change was given for it';
+const MAP_LIST = 'the list would pass 10 items';
+const MAP_TAGS = 'its tags would pass 3';
+const MAP_CONFLICT = 'two notes asked for different values';
+const MAP_UNREADABLE = 'its current value cannot be read';
+const MAP_OLDER = 'an older request is changing this note';
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
 
@@ -3919,6 +3982,11 @@ function carriedLines(other: ParsedNote, kept: ParsedNote): EditEntry[] {
   for (const line of other.body.split('\n')) add(line, null);
   for (const t of other.timeline) add(`From ${t.date}: ${t.text}`, t.source ?? null);
   return out;
+}
+
+/** A map request's result note key: from its record id alone, so every run of the request finds the note it made (R78, R85, R86). */
+export async function resultNoteKey(requestId: string): Promise<string> {
+  return `result-${(await sha256(new Blob([new TextEncoder().encode(`bower-result-note\n${requestId}`)]))).slice(0, 32)}`;
 }
 
 export async function runKeys(runId: string): Promise<(kind: string) => string> {

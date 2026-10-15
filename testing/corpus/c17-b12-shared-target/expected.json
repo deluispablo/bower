@@ -31,9 +31,10 @@
       "path": "Projects/Job hunt/Request - Gather offer skills.md",
       "contains": [
         "Done: 2",
-        "Pending: 0",
         "Unavailable: 0",
-        "[[Career profile]]"
+        "Updated: [[Career profile]]",
+        "- [[Ferrowick offer]]: done",
+        "- [[Mallowick offer]]: done"
       ]
     }
   ],
@@ -41,7 +42,8 @@
   "report": {
     "filed": 0,
     "created": [
-      "Projects/Job hunt/Request - Gather offer skills.md"
+      "Projects/Job hunt/Request - Gather offer skills.md",
+      "Bower health.md"
     ],
     "updated": [
       "Areas/Career/Career profile.md"

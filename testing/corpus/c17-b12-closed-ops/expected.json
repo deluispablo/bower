@@ -49,8 +49,9 @@
       "path": "Projects/Job hunt/Request - Organise offers.md",
       "contains": [
         "Done: 2",
-        "Pending: 0",
-        "Unavailable: 0"
+        "Unavailable: 0",
+        "- [[Ferrowick offer]]: done",
+        "- [[Mallowick offer]]: done"
       ]
     }
   ],
@@ -58,7 +59,8 @@
   "report": {
     "filed": 0,
     "created": [
-      "Projects/Job hunt/Request - Organise offers.md"
+      "Projects/Job hunt/Request - Organise offers.md",
+      "Bower health.md"
     ],
     "updatedAtLeast": 2,
     "questionsExactly": 0

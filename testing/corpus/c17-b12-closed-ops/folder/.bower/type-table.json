@@ -3,30 +3,14 @@
   "rows": [
     {
       "id": "offer",
+      "match": ["job offer"],
+      "template": "concept",
       "properties": {
-        "company": {
-          "type": "text"
-        },
-        "country": {
-          "type": "enum",
-          "values": [
-            "Saltmere",
-            "Lindenwick"
-          ]
-        },
-        "review_state": {
-          "type": "enum",
-          "values": [
-            "new",
-            "reviewed"
-          ]
-        }
+        "company": { "type": "text" },
+        "country": { "type": "enum", "values": ["Saltmere", "Lindenwick"] },
+        "review_state": { "type": "enum", "values": ["new", "reviewed"] }
       },
-      "table": [
-        "company",
-        "country",
-        "review_state"
-      ]
+      "table": ["company", "country", "review_state"]
     }
   ]
 }

@@ -6,19 +6,14 @@
     "maps": [
       {
         "requestId": "$request:change-1",
-        "setId": "$set:change-1",
-        "results": [
-          {
-            "memberId": "$note:Resources/Gardening/Garden methods.md",
-            "ops": [
-              {
-                "kind": "tag",
-                "targetId": "$note:Resources/Gardening/Garden methods.md",
-                "mode": "add",
-                "value": "gardening"
-              }
-            ]
-          }
+        "title": "Tag garden concepts",
+        "set": {
+          "type": "concept",
+          "folderId": "$folder:Resources/Gardening",
+          "recursive": false
+        },
+        "ops": [
+          { "kind": "tag", "mode": "add", "value": "gardening" }
         ]
       }
     ]

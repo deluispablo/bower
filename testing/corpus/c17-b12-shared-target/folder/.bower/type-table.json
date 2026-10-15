@@ -3,27 +3,21 @@
   "rows": [
     {
       "id": "offer",
+      "match": ["job offer"],
+      "template": "concept",
       "properties": {
-        "skills": {
-          "type": "list",
-          "itemType": "text"
-        }
+        "skills": { "type": "list" }
       },
-      "table": [
-        "skills"
-      ]
+      "table": ["skills"]
     },
     {
       "id": "career-profile",
+      "match": ["career profile"],
+      "template": "concept",
       "properties": {
-        "skills": {
-          "type": "list",
-          "itemType": "text"
-        }
+        "skills": { "type": "list" }
       },
-      "table": [
-        "skills"
-      ]
+      "table": ["skills"]
     }
   ]
 }
