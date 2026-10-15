@@ -110,6 +110,15 @@ describe('B9a format', () => {
     expect(after && entryOk({ date: after.date, text: after.text, source: after.source ?? null })).toBe(true);
   });
 
+  it('AC1 b9a-fallback-scope: a person\'s own sentence ending in a citation keeps its link through the same rename', () => {
+    const own = 'I keep the first draft here (also from [[Old]])';
+    const stored = '---\nby: bower\n---\n\n## Notes\n' + own + '\n\n## Timeline\n';
+    const renamed = applyChanges(new TextEncoder().encode(stored), [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'One · Two' }] }]);
+    expect(renamed.ok).toBe(true);
+    if (!renamed.ok) return;
+    expect(renamed.text, 'only a Bower Timeline line falls back to words').toBe(stored.replace('[[Old]]', '[[One · Two]]'));
+  });
+
   it('AC4 b9-v2-literal: a framed ownership/2 note keeps old marker text literal and takes a canonical line in its Timeline', () => {
     const old = '[!contradiction] Opening hours are undecided ^[inferred]';
     const raw = serializeNote({ template: 'concept', byBower: true, summary: 'Alex records garden visits.', status: 'active', tags: ['gardening'],
