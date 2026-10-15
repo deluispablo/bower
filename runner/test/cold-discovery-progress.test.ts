@@ -1,12 +1,15 @@
 /** Cold discovery keeps its reading progress across runs (B12 open question 1, B11 open question 3), through production main. */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { RUNNER_WRITES, SYSTEM, type RetrievalFile } from '../../src/data/vault/layout';
+import { FOLDER_TEMPLATE } from '../../src/data/contracts/folder-template';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCase } from '../src/corpus';
+import { RunnerDrive } from '../src/drive';
 import { HEALTH_NAME } from '../src/lint';
 import { LedgerExhausted, RunTiming } from '../src/timing';
 import { empty, fileIntent, folder, note, phaseAwareClaude, reply, report, run, select, setup, type Base } from './b1-planning-support';
@@ -31,19 +34,24 @@ const MAP_TEXT = '---\nby: bower\ntype: moc\nsummary: Alex keeps old records her
 const LOOKALIKE = 'Archive/Lookalike.md';
 const LOOKALIKE_TEXT = '---\nsummary: Alex writes about front matter.\n---\n\nAlex pasted this block:\n---\nby: bower\ntype: moc\nsummary: Not the real summary.\n---\n';
 const edit = async (b: Base, id: string, text: string): Promise<void> => { await b.drive.writeText(id, text, (await b.drive.get(id)).modifiedTime); };
-const cold = (n = 204, extra: Record<string, string> = {}): Promise<Base> => setup({ folder: { ...folder, ...archive(n), ...extra } });
+/** Bower's report files every new folder starts with, so the run's own writes are the only ones (FOLDER_TEMPLATE). */
+const reports = Object.fromEntries(FOLDER_TEMPLATE.filter((f) => f.path.startsWith(`${SYSTEM.dir}/`) && f.path.endsWith('.json') && f.path !== SYSTEM.questions)
+  .map((f) => [f.path, f.content]));
+const cold = (n = 204, extra: Record<string, string> = {}): Promise<Base> => setup({ folder: { ...folder, ...reports, ...archive(n), ...extra } });
 
-const feedOnly = (b: Base, press: number): AdmissionManifest => ({ v: 1, id: `feed-only-${press}`, rootId: b.root, scope: 'all', at: AT, piles: [], journal: [] });
+/** Each press is asked for a moment after the last, as `runOnDrive`'s own admissions are, so its report may follow. */
+const feedOnly = (b: Base, press: number): AdmissionManifest => ({ v: 1, id: `feed-only-${press}`, rootId: b.root, scope: 'all', at: AT + press - 1, piles: [], journal: [] });
 async function admitted(b: Base, press: number): Promise<AdmissionManifest> {
-  const a = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all', clock: () => AT, newId: () => `cold-${press}` });
+  const a = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all', clock: () => AT + press - 1, newId: () => `cold-${press}` });
   return a.kind === 'manifest' ? a.manifest : feedOnly(b, press);
 }
 type Around = (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
 type Result = Awaited<ReturnType<typeof run>>;
-/** One press with the inbox pile: the model, when reached, files it under the job hunt. */
-async function press(b: Base, n: number, around?: Around): Promise<Result> {
+/** One press with the inbox pile: the model, when reached, files it under the job hunt; `turns` counts its calls so far. */
+async function press(b: Base, n: number, around?: Around, turns = { count: 0 }): Promise<Result> {
   const values: unknown[] = [];
   return run(b, values, { press: n, admission: await admitted(b, n), ...(around ? { around } : {}), beforeReply: async (turn, frame) => {
+    turns.count = turn;
     values[turn - 1] = frame.value.selection === undefined ? select(b) : fileIntent(b);
   } });
 }
@@ -61,12 +69,39 @@ const url = (input: RequestInfo | URL): URL => new URL(typeof input === 'string'
 const prefixed = (r: Result): string[] => r.traffic.filter((t) => t.method === 'GET' && t.range && t.url.searchParams.get('alt') === 'media')
   .map((t) => t.url.pathname.split('/').at(-1) ?? '');
 const personFiles = (r: CaseRun): Record<string, string> => Object.fromEntries(Object.entries(r.after).filter(([path]) => !path.startsWith('.bower/')));
+/** Every file's text by path, as the folder holds it now. */
+const contents = async (b: Base): Promise<Record<string, string>> => Object.fromEntries(await Promise.all((await b.drive.listAll(b.root))
+  .filter((f) => !f.folder).map(async (f) => [b.drive.pathOf(f.id, b.root), await b.drive.readText(f.id)] as const)));
+/** A held run's one write is the retrieval state: no other runner file, no log, no health note, no person file (R7, R10). */
+const onlyProgress = (r: CaseRun, seeded: Record<string, string>): void => {
+  for (const path of RUNNER_WRITES.filter((p) => p !== SYSTEM.retrieval)) expect(r.after[path], `${path} is neither written nor created`).toBe(seeded[path]);
+  expect(Object.keys(r.after).filter((p) => p.startsWith('.bower/log')), 'no log').toEqual([]);
+  expect(r.after[HEALTH_NAME], 'no health note from a partial view').toBeUndefined();
+  expect(personFiles(r), 'every person file and the pile stay byte-identical').toEqual(personFiles({ ...r, after: seeded }));
+};
 const sameNotes = (a: CaseRun, b: CaseRun): void => {
   const strip = (s: RetrievalFile | null) => Object.fromEntries(Object.entries(s?.files ?? {}).map(([id, n]) => [id, { ...n, version: undefined }]));
   expect(strip(stateOf(a))).toEqual(strip(stateOf(b)));
 };
 /** The retrieval files on the folder by name, live or not yet listed by path (a second create would show two). */
 const retrievalFiles = async (b: Base): Promise<number> => (await b.drive.listAll(b.root)).filter((f) => f.name === 'retrieval.json').length;
+/** Ids whose prefix discovery or maintenance asks for, inside maintenance's ledger (never the provider's link reads). */
+function maintenanceReads() {
+  const context = new AsyncLocalStorage<boolean>();
+  const ids = new Set<string>();
+  const maintenance = RunTiming.prototype.maintenance;
+  const prefix = RunnerDrive.prototype.readPrefix;
+  const spies = [
+    vi.spyOn(RunTiming.prototype, 'maintenance').mockImplementation(function<T>(this: RunTiming, task: () => Promise<T>, items?: number): Promise<T> {
+      return context.run(true, () => maintenance.call(this, task, items)) as Promise<T>;
+    }),
+    vi.spyOn(RunnerDrive.prototype, 'readPrefix').mockImplementation(function(this: RunnerDrive, file, cold) {
+      if (context.getStore()) ids.add(file.id);
+      return prefix.call(this, file, cold);
+    }),
+  ];
+  return { ids, stop: () => { for (const spy of spies) spy.mockRestore(); context.disable(); } };
+}
 /** Every maintenance send and refusal, observed beside the production meter. */
 function ledgerProbe() {
   let refused = 0;
@@ -83,8 +118,7 @@ function ledgerProbe() {
 describe('cold discovery keeps its reading progress', () => {
   it('AC1 cold-discovery-progress-held: a cold run over 204 notes keeps what it read and holds the model', async () => {
     const b = await cold();
-    const seeded = Object.fromEntries(await Promise.all((await b.drive.listAll(b.root)).filter((f) => !f.folder)
-      .map(async (f) => [b.drive.pathOf(f.id, b.root), await b.drive.readText(f.id)] as const)));
+    const seeded = await contents(b);
     const first = await press(b, 1);
     const state = stateOf(first);
     expect(state, 'the held run keeps its reading progress in the one retrieval state').not.toBeNull();
@@ -117,10 +151,28 @@ describe('cold discovery keeps its reading progress', () => {
     while (runs < BOUND && !last?.frames.length) last = await press(b, ++runs);
     expect(last?.frames.length, `the model is reached within ${BOUND} runs`).toBe(2);
     expect(report(last as Result).filed, 'the pile is filed on that run').toHaveLength(1);
-    const index = String((last?.frames[0]?.value as { index?: string } | undefined)?.index ?? '');
-    for (const i of [0, 101, 203]) expect(index, 'the model sees every note in the index').toContain(`[[Record ${String(i).padStart(3, '0')}]]`);
+    // The selection index is cut at 32,000 characters by design, so discovery is judged by the retrieval state (ruling).
+    expect(last?.frames[0]?.value.selection, 'a selection frame reaches the model').toBeUndefined();
+    const records = (await b.drive.listAll(b.root)).filter((f) => f.name.startsWith('Record ')).map((f) => f.id);
+    expect(records).toHaveLength(204);
+    for (const id of records) expect(known(last as Result), 'the model is reached with every note discovered').toContain(id);
     expect(last?.after[SYSTEM.index], 'the completing run writes the index').toContain('[[Record 203]]');
     expect(last?.after[HEALTH_NAME], 'and the health note').toBeDefined();
+  });
+
+  it(`AC1 cold-discovery-progress-stale-question: a folder over the ledger with an open question whose thing left the inbox still reaches the model within ${BOUND} runs`, async () => {
+    const b = await cold();
+    const questions = (await b.drive.listAll(b.root)).find((f) => f.name === 'questions.json')?.id ?? '';
+    // The question's thing left the inbox: a plan with nothing taken would still close it (R7, R21).
+    await edit(b, questions, `${JSON.stringify({ v: 1, questions: [{ id: 'q-stale', text: 'Where does the old offer go?', yes: 'Projects', no: 'Leave it',
+      askedAt: AT - 60_000, subject: 'GONE_FILE_ID' }] })}\n`);
+    const held: Result[] = [];
+    let last: Result | undefined;
+    for (let n = 1; n <= BOUND && !last?.frames.length; n++) held.push(last = await press(b, n));
+    expect(stateOf(held[0] as Result), 'the held run keeps its reading progress despite the stale question').not.toBeNull();
+    expect(held[0]?.after[SYSTEM.questions], 'a held run leaves the questions as they were').toContain('q-stale');
+    expect(last?.frames.length, `the model is reached within ${BOUND} runs`).toBe(2);
+    expect(report(last as Result).filed, 'the pile is filed on that run').toHaveLength(1);
   });
 
   it('AC1 cold-discovery-progress-each-once: across the runs each note prefix is fetched exactly once', async () => {
@@ -201,15 +253,11 @@ describe('cold discovery keeps its reading progress', () => {
     const changes = b.id(SYSTEM.changes);
     await b.drive.createText(changes, 'ask-1.json', JSON.stringify({ v: 1, id: 'ask-1', device: 'device-1', at: AT, kind: 'request',
       what: 'Asked Bower: "Keep my records tidy."', text: 'Keep my records tidy.' }));
-    const seeded = Object.fromEntries(await Promise.all((await b.drive.listAll(b.root)).filter((f) => !f.folder)
-      .map(async (f) => [b.drive.pathOf(f.id, b.root), await b.drive.readText(f.id)] as const)));
+    const seeded = await contents(b);
     const first = await press(b, 1);
     expect(stateOf(first), 'progress is kept').not.toBeNull();
     expect(first.frames, 'no model call').toHaveLength(0);
-    for (const path of RUNNER_WRITES.filter((p) => p !== SYSTEM.retrieval)) expect(first.after[path], `${path} is neither written nor created`).toBe(seeded[path]);
-    expect(Object.keys(first.after).filter((p) => p.startsWith('.bower/log')), 'no log').toEqual([]);
-    expect(first.after[HEALTH_NAME], 'no health note from a partial view').toBeUndefined();
-    expect(personFiles(first), 'every person file and the pile stay byte-identical').toEqual(personFiles({ ...first, after: seeded }));
+    onlyProgress(first, seeded);
     expect(first.after[`${SYSTEM.changes}/ask-1.json`], 'the request waits unarchived').toBeDefined();
   });
 
@@ -219,6 +267,9 @@ describe('cold discovery keeps its reading progress', () => {
     expect(warm.frames, 'the small folder completes in one run').toHaveLength(2);
     const stored = stateOf(warm);
     expect(stored?.health, 'the warm state names its health note').toBeTruthy();
+    expect((stored as { listing?: unknown } | null)?.listing, 'a complete run keeps its listing').toBeDefined();
+    // The person damages the stored listing: it is dropped as today (ruling 3), and the progress is still kept.
+    await edit(b, (await b.drive.listAll(b.root)).find((f) => f.name === 'retrieval.json')?.id ?? '', JSON.stringify({ ...stored, listing: [{ id: 42 }] }));
     const archiveId = b.id('Archive');
     for (let i = 100; i < 500; i++) await b.drive.createText(archiveId, `Record ${i}.md`, note(`Alex keeps record ${i}.`));
     const held = await idle(b, 2);
@@ -227,7 +278,8 @@ describe('cold discovery keeps its reading progress', () => {
     expect(known(held).length, 'not all 400 fit one run').toBeLessThan(Object.keys(stored?.files ?? {}).length + 400);
     expect(state?.health, 'the stored health id is kept').toBe(stored?.health);
     expect(state?.cursor, 'the cursor waits until discovery completes, so no change is skipped').toBe(stored?.cursor);
-    expect({ ...state, files: {} }, 'every other stored key is kept as read').toEqual({ ...stored, files: {} });
+    expect((state as { listing?: unknown } | null)?.listing, 'the malformed listing is dropped, as today').toBeUndefined();
+    expect({ ...state, files: {} }, 'every other stored key is kept as read').toEqual({ ...stored, listing: undefined, files: {} });
     for (const [id, entry] of Object.entries(stored?.files ?? {})) expect(state?.files[id], 'every earlier entry is kept exactly').toEqual(entry);
     expect(held.after[SYSTEM.index], 'the index is not rewritten from a partial view').toBe(warm.after[SYSTEM.index]);
   });
@@ -235,6 +287,9 @@ describe('cold discovery keeps its reading progress', () => {
   it('AC3 cold-discovery-progress-exhausted-later: a run that meets the ledger after its discovery completed keeps every note it read; the next run reads no other prefix', async () => {
     const b = await cold(40);
     const refused = b.id(record(5));
+    const seeded = await contents(b);
+    const turns = { count: 0 };
+    let atExhaustion = -1;
     let reads = 0;
     const first = await press(b, 1, (next) => async (input, init) => {
       const u = url(input);
@@ -242,15 +297,20 @@ describe('cold discovery keeps its reading progress', () => {
         reads++;
         // Discovery's read is refused, so the note owes its check; maintenance's read of it then meets the ledger.
         if (reads === 1) return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
-        if (reads === 2) throw new LedgerExhausted(0);
+        if (reads === 2) { atExhaustion = turns.count; throw new LedgerExhausted(0); }
       }
       return next(input, init);
-    });
+    }, turns);
     expect(reads, 'maintenance came to the owed read after discovery').toBe(2);
+    expect(first.frames.length, 'no model call follows the exhaustion (ruling 1)').toBe(atExhaustion);
+    onlyProgress(first, seeded);
     expect(Object.keys(first.after).filter((p) => p.startsWith('Inbox/') && p.endsWith('Offer.txt')), 'the pile waits').toHaveLength(1);
     expect(known(first).length, 'the run keeps every note it read').toBeGreaterThanOrEqual(43);
-    const second = await press(b, 2);
-    expect(prefixed(second).filter((id) => id !== refused), 'the next run reads no other prefix again').toEqual([]);
+    const asked = maintenanceReads();
+    const second = await press(b, 2).finally(() => asked.stop());
+    // The provider's link reads of matched notes (claude.ts) are no discovery read, and are not counted (ruling).
+    expect(asked.ids.has(refused), 'the probe sees the refused note read again inside the ledger').toBe(true);
+    expect(prefixed(second).filter((id) => id !== refused && asked.ids.has(id)), 'the next run\'s discovery reads no other prefix again').toEqual([]);
     expect(report(second).filed).toHaveLength(1);
   });
 
@@ -330,16 +390,16 @@ describe('cold discovery keeps its reading progress', () => {
     const drive = transport.fixedDrive();
     const root = await seedCase(drive, c);
     const gardening = (await drive.listAll(root)).find((f) => f.folder && f.name === 'Gardening')?.id ?? '';
-    let reached: { index: string; filed: number; after: Record<string, string> } | undefined;
+    let reached: { filed: number; after: Record<string, string> } | undefined;
     for (let n = 1; n <= BOUND && !reached; n++) {
       const a = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT + n, newId: () => `large-${n}` });
       if (a.kind !== 'manifest') throw new Error(`Not admitted: ${a.cause}`);
-      let index = '';
+      let selected = false;
       const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-        const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { index?: string; sources?: Array<{ itemId: string }>;
+        const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string }>;
           piles?: Array<{ things: Array<{ fileId: string; name: string }> }> };
         if (phase === 'selection') {
-          index = frame.index ?? '';
+          selected = true;
           return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: gardening, wants: [] })), asks: [] });
         }
         return reply({ ...empty, things: (frame.piles ?? []).flatMap((p) => p.things).map((t) => ({ fileId: t.fileId, to: 'Resources/Gardening', name: t.name,
@@ -347,11 +407,16 @@ describe('cold discovery keeps its reading progress', () => {
       }, () => ({ drive, root, admission: a.manifest }), true);
       const r = await runOnDrive(c, drive, root, { claude: spawn, admission: a.manifest, pacing: { baseMs: 0, sleep: async () => {} },
         answerStart: { scope: 'all', requestId: `large-run-${n}` } }, n);
-      if (index) reached = { index, filed: report(r as Result).filed.length, after: r.after };
+      if (selected) reached = { filed: report(r as Result).filed.length, after: r.after };
       else expect(Object.keys(r.after).some((p) => p.startsWith('Inbox/') && p.endsWith('Garden notice.txt')), 'a held run leaves the notice in the inbox').toBe(true);
     }
     expect(reached, `the large case reaches the model within ${BOUND} runs`).toBeDefined();
-    for (const i of ['001', '100', '201']) expect(reached?.index, 'every Reading note is in the model\'s index').toContain(`[[Reading ${i}]]`);
+    // The selection index is cut at 32,000 characters by design (seeing all 201 is B12), so discovery is judged by the
+    // retrieval state the reaching run writes (ruling).
+    const readings = (await drive.listAll(root)).filter((f) => !f.folder && /^Reading \d{3}\.md$/.test(f.name)).map((f) => f.id);
+    expect(readings).toHaveLength(201);
+    const files = (JSON.parse(reached?.after[SYSTEM.retrieval] ?? 'null') as RetrievalFile | null)?.files ?? {};
+    for (const id of readings) expect(Object.keys(files), 'the model is reached with every Reading note discovered').toContain(id);
     expect(reached?.filed, 'the notice is filed').toBe(1);
     expect(Object.keys(reached?.after ?? {}).some((p) => p.startsWith('Resources/Gardening/') && p.endsWith('Garden notice.txt'))).toBe(true);
   });

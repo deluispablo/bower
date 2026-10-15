@@ -16,6 +16,8 @@ import { driveEffects, type Effects, type Settled } from '../../src/data/spine/e
 import { filingMove, materialize, refreshed, wordsNotes } from '../../src/data/spine/report';
 import { limiter, READ_AHEAD } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
+import { runKeys } from '../../src/data/spine/scripted';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { happened, reserveFor, stampOf, type Holder } from '../../src/data/spine/write-once';
 import { BowerError } from '../../src/data/types';
 import { isFormulaRecord, isRunnerPath, SYSTEM, isHidden, isRunnerFile, type FormulaOutput, type RetrievalFile, type ViewRecord } from '../../src/data/vault/layout';
@@ -306,13 +308,58 @@ function projectIndex(files: Notes): string {
 }
 
 /** An ignored-feed cursor advance is an ordinary manifest write, never maintenance. */
-async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, old: DriveFile, state: RetrievalFile, cursor: string): Promise<RunManifest> {
-  if (state.cursor === cursor) return manifest;
-  const text = JSON.stringify({ ...state, cursor });
-  const bytes = new TextEncoder().encode(await drive.readListedText(old));
-  const effect: EffectV2 = { kind: 'write-runner-json', before: seen(old), path: SYSTEM.retrieval,
-    beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: old.modifiedTime },
-    text, content: { encoding: 'utf8', size: new TextEncoder().encode(text).length, sha256: await rawHash(text) } };
+async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, ix: VaultIndex, old: DriveFile, state: RetrievalFile, cursor: string): Promise<RunManifest> {
+  return state.cursor === cursor ? manifest : retrievalWrite(drive, manifest, ix, old, JSON.stringify({ ...state, cursor }));
+}
+
+/**
+ * A run that ends on the ledger before its chain keeps what it read (R6-R8): the state as read and validated, `files`
+ * gaining this run's entries, its cursor and every other key unchanged; never charged to maintenance's ledger (R13).
+ * Its manifest captures nothing and plans nothing else, with no model and no scripted plan (R7, R19): what the run
+ * took, its questions and its requests wait for a run that completes discovery.
+ */
+export async function withProgress(drive: RunnerDrive, run: { rootId: string; runId: string; allowWeb: boolean; taken: AdmissionManifest },
+  refreshed: Awaited<ReturnType<typeof refreshPlanning>>): Promise<RunManifest> {
+  const { ix, old, state, snapshot, lints, cursor } = refreshed;
+  const scope = { rootId: run.rootId };
+  const capture = { piles: [], members: [], journal: [], places: [] };
+  const manifest: RunManifest = { v: 1, kind: 'run-manifest', scope, runId: run.runId, requestId: run.taken.id, runScope: run.taken.scope,
+    allowWeb: run.allowWeb, requestedAt: run.taken.at, captureId: (await canonical({ scope, runScope: run.taken.scope, capture })).hash,
+    capture, reportPlan: [], operations: [] };
+  const files: Notes = {};
+  // Stored entries stay as stored, under their path now; a note binned or gone loses its entry (R8, R11).
+  for (const [id, stored] of Object.entries(state?.files ?? {})) {
+    const path = ix.pathOf(id);
+    if (path !== undefined && !isHidden(path) && path.split('/')[0] !== 'Inbox') files[id] = { ...stored, path };
+  }
+  for (const [id, note] of Object.entries(snapshot)) {
+    if (files[id]?.version === note.version) continue;
+    const entry: MaintenanceNote = { ...note, ...(lints[id] ? { lint: lints[id] } : {}) };
+    // A map's text and members come only from a completing run's whole snapshot (R15).
+    delete entry.moc;
+    delete entry.members;
+    files[id] = entry;
+  }
+  // A cold folder keeps its bootstrap token, taken before its listing, so the next feed misses no change (R8, R9).
+  return retrievalWrite(drive, manifest, ix, old, JSON.stringify(state ? { ...state, files } : { v: 1, folderId: run.rootId, account: run.rootId, cursor, files }));
+}
+
+/** The retrieval state as an ordinary manifest write: an update at the version read, else a create with a reserved id. */
+async function retrievalWrite(drive: RunnerDrive, manifest: RunManifest, ix: VaultIndex, old: DriveFile | undefined, text: string): Promise<RunManifest> {
+  const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: await rawHash(text) };
+  let effect: EffectV2;
+  if (old) {
+    const bytes = new TextEncoder().encode(await drive.readListedText(old));
+    effect = { kind: 'write-runner-json', before: seen(old), path: SYSTEM.retrieval,
+      beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: old.modifiedTime },
+      text, content };
+  } else {
+    const own = ix.file(SYSTEM.dir);
+    if (!own?.folder) throw unavailable();
+    // The engine reserves the create's id and stamps it, so a redispatch never makes a second file (R17).
+    effect = { kind: 'create-text', parent: { fileId: own.id }, name: 'retrieval.json',
+      createKey: (await runKeys(manifest.runId))('runner'), text, content, purpose: 'runner-json' };
+  }
   const ordinal = manifest.operations.length;
   const operationId = (await canonical({ runId: manifest.runId, captureId: manifest.captureId, ordinal, effect })).hash;
   const operation = { operationId, ordinal, dependsOn: [], effect };
@@ -658,23 +705,29 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
   };
 }
 
-/** The index's ordinary prefix supplies summary and per-version owner/type, without a discovery read. */
+/**
+ * The index's ordinary prefix supplies summary and per-version owner/type, without a discovery read. Reads stop when
+ * maintenance's ledger refuses (`exhausted`): what completed is kept, the rest waits for the next run.
+ */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false,
-  lints: Record<string, LintEvidence> = {}): Promise<Notes> {
+  lints: Record<string, LintEvidence> = {}): Promise<{ snapshot: Notes; exhausted?: LedgerExhausted }> {
   const limit = limiter(prefix ? READ_AHEAD : 1, (error) => error instanceof LedgerExhausted);
+  let exhausted: LedgerExhausted | undefined;
   // A projection left by partial maintenance already has a listed snapshot; catch-up needs only Range reads.
   const cold = prefix && !ix.file(SYSTEM.index);
   // The health note is never a lint subject, an inbound edge or an indexed note (R23).
-  const entries = await Promise.all(notesIn(ix).filter(({ file: f }) => f.id !== state?.health).map(({ path, file: f }) => limit(async (): Promise<Array<readonly [string, MaintenanceNote]>> => {
+  const notes = notesIn(ix).filter(({ file: f }) => f.id !== state?.health);
+  const one = async ({ path, file: f }: (typeof notes)[number]): Promise<Array<readonly [string, MaintenanceNote]>> => {
     const cached = state?.files[f.id];
     const same = cached?.version === f.modifiedTime;
     // Malformed or absent lint evidence is rebuilt from one read of this version (R26).
     const evidence = same && lintEvidenceOk(cached.lint) ? cached.lint : undefined;
     let text: string | null;
     try {
-      // Old state is readable without probing unchanged files. A missing projection already needs each prefix.
+      // A stored entry holding what a read of its version gives (its owner too) is reused with or without the
+      // projection (R3); an older entry without one needs its prefix when the projection is missing.
       const map = VaultIndex.isHub(path, f.name) && cached?.type === undefined;
-      text = same && !prefix && !map ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, cold);
+      text = same && !map && (!prefix || cached.owner !== undefined) ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, cold);
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (error instanceof BowerError && error.code === 'not-found') {
@@ -700,13 +753,21 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
       ...(Array.isArray(cached?.members) && cached.members.every((id) => typeof id === 'string')
         ? { members: [...new Set(cached.members)] } : {}) };
     return [[f.id, entry]];
-  })));
+  };
+  // Reads queue in path order (R4), so a run the ledger stops leaves the rest of the frontier for the next one; the
+  // snapshot keeps the listing's order.
+  const queued = new Map([...notes].sort((a, b) => a.path.localeCompare(b.path)).map((n) => [n.file.id, limit(() => one(n)).catch((error: unknown) => {
+    if (!(error instanceof LedgerExhausted)) throw error;
+    exhausted = error;
+    return [];
+  })] as const));
+  const entries = await Promise.all(notes.map(({ file: f }) => queued.get(f.id) ?? []));
   const snapshot: Notes = Object.fromEntries(entries.flat());
   for (const [id, members] of mocMembership(snapshot)) {
     const note = snapshot[id];
     if (note?.moc) note.members = members;
   }
-  return snapshot;
+  return { snapshot, ...(exhausted ? { exhausted } : {}) };
 }
 
 /** The index refresh is read-only; maintain declares and persists these same observations later. */
@@ -751,8 +812,10 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   const pathOfChange = (change: { fileId: string; removed?: boolean; file?: DriveFile }): string | undefined => ix.pathOf(change.fileId)
     ?? previous.pathOf(change.fileId) ?? state?.files[change.fileId]?.path;
   // The existing dot-path rule judges the resolved full path, including newly discovered descendants.
-  // Bower's own health write is no change of the person's (R21, R23).
-  const changes = (feed?.changes ?? notes.map(({ file }) => ({ fileId: file.id, file }))).filter((c) => {
+  // Bower's own health write is no change of the person's (R21, R23). A state no complete run wrote (no listing and no
+  // index: only reading progress) has never been discovered, so every note is new, as with no state at all.
+  const discovered = !!state?.listing || !!ix.file(SYSTEM.index);
+  const changes = (feed && discovered ? feed.changes : notes.map(({ file }) => ({ fileId: file.id, file }))).filter((c) => {
     const path = pathOfChange(c);
     return path !== undefined && !isHidden(path) && c.fileId !== state?.health;
   }).map((c) => c.fileId);
@@ -760,8 +823,8 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   // Its current and its previous path each count, so a rename away, a Bin, a create or an edit all refresh.
   const tableChanged = !!feed?.changes.some((c) => ix.pathOf(c.fileId) === SYSTEM.typeTable || previous.pathOf(c.fileId) === SYSTEM.typeTable);
   const lints: Record<string, LintEvidence> = {};
-  const snapshot = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index), lints);
-  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, tableChanged, snapshot, lints, drop };
+  const { snapshot, exhausted } = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index), lints);
+  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, tableChanged, snapshot, lints, drop, exhausted };
 }
 
 export async function planningIndex(drive: RunnerDrive, rootId: string,
@@ -786,6 +849,8 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   }
   const rootId = manifest.scope.rootId;
   const refreshed = prepared ?? await refreshPlanning(drive, rootId);
+  // Unfinished discovery declares nothing from a partial view (R6, R10); the run keeps its progress (`withProgress`).
+  if (refreshed.exhausted) throw refreshed.exhausted;
   let { listing, snapshot } = refreshed;
   // Maintenance freezes each note with its lint evidence; the planner saw the same notes without it.
   snapshot = Object.fromEntries(Object.entries(snapshot).map(([id, note]) => {
@@ -821,7 +886,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       .some((row) => rowViews(row).length > 0));
   };
   if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && !await formulasOwed() && await healthKept()) {
-    return old ? cursorOnly(drive, manifest, old, state, cursor) : manifest;
+    return old ? cursorOnly(drive, manifest, ix, old, state, cursor) : manifest;
   }
   // Evidence absent, malformed or unreadable before is rebuilt from one read of this version (R26).
   const reads = limiter(READ_AHEAD, (error) => error instanceof LedgerExhausted);

@@ -63,7 +63,7 @@ import { repairRules } from './rules-repair';
 import { LedgerExhausted, RunTiming } from './timing';
 import { boundHot } from './hot';
 import { VaultIndex } from '../../src/data/vault/vault-index';
-import { refreshPlanning, planningIndex, withMaintenance, maintenanceEffects } from './index';
+import { refreshPlanning, planningIndex, withMaintenance, withProgress, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -430,10 +430,23 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
             + admitted.taken.journal.length;
           const refreshed = await timing.maintenance(() => refreshPlanning(drive, rootId), items);
           drive.planReads().handoff(rootId, refreshed.listing);
+          // Held when maintenance's ledger ends discovery or declaration (R6, R7): any plan is dropped and nothing is
+          // admitted; the run's one write is what it read, outside the ledger. The model's own limits still end the run
+          // as before.
+          const held = (exhausted: LedgerExhausted): Promise<RunManifest> => {
+            console.log(`${exhausted.count} items left in the inbox for the next run.`);
+            return withProgress(drive, { rootId, runId, allowWeb, taken: admitted.taken }, refreshed);
+          };
+          if (refreshed.exhausted) return held(refreshed.exhausted);
           const index = await planningIndex(drive, rootId, refreshed);
           const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: refreshed.snapshot, prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
           const manifest = await provider(admitted);
-          return timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed));
+          try {
+            return await timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed));
+          } catch (error) {
+            if (!(error instanceof LedgerExhausted)) throw error;
+            return held(error);
+          }
         };
       },
       timing,
