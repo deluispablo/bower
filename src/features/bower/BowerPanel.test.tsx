@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
+import { BowerError } from '@/data/types';
 import { loadingSources } from '@/testing/loading-sources';
 import { BowerPanel } from './BowerPanel';
 import { RightPanel } from '@/features/note/RightPanel';
@@ -160,5 +161,91 @@ describe('what failed is found once, and focus stays with the person', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Bower' })));
     expect(document.activeElement).not.toBe(document.body);
+  });
+});
+
+/**
+ * rules-original-ui (spec docs/design/specs/2026-10-10-rules-original.md, TL-P4-53): the panel's rules summary never
+ * claims a number while the person's own rules text is there, and opens the rules note first.
+ */
+describe('rules-original-ui: the panel\'s rules summary', () => {
+  afterEach(cleanup);
+  const rules = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `r${i + 1}`, text: `Rule number ${i + 1} for Alex.`, since: Date.UTC(2026, 9, 3) }));
+  const setup = (prose: string | 'pending' | Error, list: ReturnType<typeof rules>) => {
+    const never = (): Promise<never> => new Promise(() => undefined);
+    const sources = loadingSources();
+    const vault = new Proxy({}, {
+      get: (_t, k) => {
+        if (k === 'driveLinks') return false;
+        if (k === 'subscribe') return () => () => undefined;
+        if (k === 'rules') return async () => list;
+        if (k === 'rulesProse') return async () => {
+          if (prose === 'pending') return never();
+          if (prose instanceof Error) throw prose;
+          return prose;
+        };
+        if (k === 'requests' || k === 'questions' || k === 'failedChanges') return async () => [];
+        return never;
+      },
+    });
+    render(
+      <MemoryRouter>
+        <DataProvider sources={{ ...sources, vault: vault as typeof sources.vault, runs: { ...sources.runs, subscribe: () => () => undefined } }}>
+          <BowerPanel />
+        </DataProvider>
+      </MemoryRouter>,
+    );
+  };
+  /** The rules list: the one after the rules heading. */
+  const rulesList = (): HTMLElement => {
+    const list = screen.getByText('Rule number 1 for Alex.').closest('ul');
+    if (!list) throw new Error('no rules list');
+    return list;
+  };
+
+  it('AC6 rules-original-panel-prose: "Rules" with no number, the rules note first, then up to 4 rules', async () => {
+    setup('Alex keeps paper letters for a year.', rules(5));
+    await screen.findByText('Rule number 1 for Alex.');
+    // expected: a missing link is the assertion below, not a query error.
+    const link = await screen.findByRole('link', { name: 'Your rules note' }).catch(() => null);
+    expect(link, 'a link "Your rules note"').not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^\d+ rules?$/ })).toBeNull();
+    const items = within(rulesList()).getAllByRole('listitem');
+    expect(items).toHaveLength(5);
+    expect(link?.getAttribute('href')).toBe('/note/Rules.md');
+    if (link) expect(items[0]?.contains(link)).toBe(true);
+    expect(items.slice(1).map((i) => i.textContent)).toEqual(rules(4).map((r) => r.text));
+  });
+
+  it('AC6 rules-original-panel-prose-no-rules: with the prose and no rules added, "Rules" and the link, never "0 rules"', async () => {
+    setup('Alex keeps paper letters for a year.', []);
+    // expected: a missing link is the assertion below, not a query error.
+    expect(await screen.findByRole('link', { name: 'Your rules note' }).catch(() => null), 'a link "Your rules note"').not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
+    expect(screen.queryByText(/^0 rules$/)).toBeNull();
+  });
+
+  it('AC7 rules-original-panel-none: without prose, today\'s count and list', async () => {
+    setup('', rules(2));
+    expect(await screen.findByRole('heading', { name: '2 rules' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Your rules note' })).toBeNull();
+    expect(within(rulesList()).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('R8 rules-original-panel-unknown: while the prose read is on its way, or after it failed, no number is claimed', async () => {
+    setup('pending', rules(2));
+    await screen.findByText('Rule number 1 for Alex.');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole('heading', { name: '2 rules' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
+    cleanup();
+    setup(new BowerError('unknown', 'Bower could not read your rules note.'), rules(2));
+    await screen.findByText('Rule number 1 for Alex.');
+    // expected: a missing alert is the assertion below, not a query error.
+    expect(await screen.findAllByRole('alert').catch(() => [])).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Bower could not read your rules note.');
+    expect(screen.queryByRole('heading', { name: '2 rules' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
   });
 });
