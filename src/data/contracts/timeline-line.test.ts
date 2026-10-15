@@ -130,6 +130,18 @@ describe('B9a format', () => {
     }
   });
 
+  it('AC1 b9a-fallback-scope: a Timeline-shaped bullet under a later heading, and the person\'s prose inside Timeline, keep their link', () => {
+    const shaped = timelineLine({ date, text: 'Uncertain: The visit may be affected. (also from [[Old]])', source: 'Later listing.txt' });
+    const plainLine = timelineLine({ date, text: 'The visit is booked.', source: 'Booking.txt' });
+    const rename = [{ kind: 'link-rewrite', recordIds: [], renames: [{ from: 'Old', to: 'One · Two' }] }] as Parameters<typeof applyChanges>[1];
+    for (const stored of [BOWER + plainLine + '\n\n## Notes\n' + shaped + '\n', BOWER + plainLine + '\nI keep the first draft here (also from [[Old]])\n']) {
+      const renamed = applyChanges(new TextEncoder().encode(stored), rename);
+      expect(renamed.ok).toBe(true);
+      if (!renamed.ok) continue;
+      expect(renamed.text, 'only a Bower Timeline line in its section falls back to words').toBe(stored.replace('[[Old]]', '[[One · Two]]'));
+    }
+  });
+
   it('AC4 b9-v2-literal: a framed ownership/2 note keeps old marker text literal and takes a canonical line in its Timeline', () => {
     const old = '[!contradiction] Opening hours are undecided ^[inferred]';
     const raw = serializeNote({ template: 'concept', byBower: true, summary: 'Alex records garden visits.', status: 'active', tags: ['gardening'],
