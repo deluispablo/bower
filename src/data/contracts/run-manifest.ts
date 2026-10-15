@@ -11,6 +11,7 @@ import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearn
 import { applyChanges, changesOrdered, viewsInstalled, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
+import { displayName } from './tree';
 
 export type Scope = { rootId: string };
 export type FileKind = 'note' | 'pdf' | 'image' | 'link' | 'doc' | 'sheet' | 'audio' | 'other';
@@ -28,8 +29,10 @@ export type CapturedPile = {
 };
 export type CapturedMember = { pileId: string; memberKey: string | null; file: SeenFile; content: VerifiedContent };
 export type CapturedJournal = { recordId: string; sha256: string; fileIds: string[] };
+/** A set a request's map moves (B12 R26), its members as admitted: what its moves are checked against. */
+export type CapturedMap = { recordId: string; members: string[] };
 export type Capture = {
-  piles: CapturedPile[]; members: CapturedMember[]; journal: CapturedJournal[]; places: { file: SeenFile; path: string }[];
+  piles: CapturedPile[]; members: CapturedMember[]; journal: CapturedJournal[]; places: { file: SeenFile; path: string }[]; maps?: CapturedMap[];
 };
 export type Target = { fileId: string } | { createdBy: string };
 export type Properties = {
@@ -37,7 +40,8 @@ export type Properties = {
   pile?: string | null; bowerItem?: string | null; bowerDeclaration?: string | null; bowerRun?: string | null;
 };
 export type Effect =
-  | { kind: 'move'; before: SeenFile; parent: Target; name: string; properties: Properties }
+  /** `recordIds`: a map's move names its request, its only authority (B12 R66). */
+  | { kind: 'move'; before: SeenFile; parent: Target; name: string; properties: Properties; recordIds?: string[] }
   | { kind: 'create-folder'; parent: Target; name: string; createKey: string }
   | { kind: 'create-text'; parent: Target; name: string; createKey: string; text: string; content: Content;
     purpose: 'generated' | 'runner-json' | 'about-archive' }
@@ -313,7 +317,9 @@ function membership(piles: CapturedPile[], members: CapturedMember[]): boolean {
     && keyed.every((member) => byId.get(member.pileId)?.memberKeys.includes(member.memberKey) === true);
 }
 function capture(value: unknown): value is Capture {
-  return closed(value, ['piles', 'members', 'journal', 'places'])
+  return closed(value, ['piles', 'members', 'journal', 'places'], ['maps'])
+    && (value.maps === undefined || list(value.maps, (m) => closed(m, ['recordId', 'members']) && recordId(m.recordId)
+      && list(m.members, driveId) && unique(m.members)) && uniqueBy(value.maps as CapturedMap[], (m) => m.recordId))
     && list(value.piles, capturedPile) && list(value.members, capturedMember) && list(value.journal, capturedJournal)
     && list(value.places, (place) => closed(place, ['file', 'path']) && seenFile(place.file) && path(place.path))
     && uniqueBy(value.piles as CapturedPile[], (pile) => pile.pileId)
@@ -337,8 +343,9 @@ function properties(value: unknown): value is Properties {
 function effect(value: unknown): value is Effect {
   if (!record(value)) return false;
   switch (value.kind) {
-    case 'move': return closed(value, ['kind', 'before', 'parent', 'name', 'properties'])
-      && seenFile(value.before) && target(value.parent) && name(value.name) && properties(value.properties);
+    case 'move': return closed(value, ['kind', 'before', 'parent', 'name', 'properties'], ['recordIds'])
+      && seenFile(value.before) && target(value.parent) && name(value.name) && properties(value.properties)
+      && (value.recordIds === undefined || list(value.recordIds, recordId) && unique(value.recordIds));
     case 'create-folder': return closed(value, ['kind', 'parent', 'name', 'createKey'])
       && target(value.parent) && name(value.name) && id(value.createKey);
     case 'create-text': return closed(value, ['kind', 'parent', 'name', 'createKey', 'text', 'content', 'purpose'])
@@ -721,12 +728,28 @@ function edits(value: ManifestV2): EditGuardRule | null {
   const date = timelineDate(value.requestedAt);
   const edited = new Map<string, { operationId: string; effect: EditText }>();
   const paths = new Set<string>();
+  // B12 (R26, R28, R62, R66): a map's moves and link fixes, each by the requests whose sets this run captured.
+  const maps = new Map((capture.maps ?? []).map((m) => [m.recordId, m.members]));
+  const done = requestsDone(value);
+  const mapRecord = (id: string): boolean => maps.has(id) && journal.has(id) && done.has(id);
+  const mapMoves = operations.filter((o): o is OperationV2 & { effect: Extract<EffectV2, { kind: 'move' }> } => o.effect.kind === 'move' && o.effect.recordIds !== undefined);
+  // A map's move names its request: an admitted request this run completes, whose set holds the note (R66).
+  if (mapMoves.some(({ effect: e }) => !e.recordIds?.length || !e.recordIds.every((id) => mapRecord(id) && maps.get(id)?.includes(e.before.fileId)))) return 'record';
+  const fixOf = (e: EditText): Extract<Change, { kind: 'link-rewrite' }> | undefined => e.changes.find((c): c is Extract<Change, { kind: 'link-rewrite' }> => c.kind === 'link-rewrite' && c.recordIds.some((id) => maps.has(id)));
   for (const item of operations) {
     const e = item.effect;
     if (e.kind !== 'edit-text') continue;
+    const fix = fixOf(e);
+    // A map's link fix follows only moves of this run, waiting for each (R62): the old and new display names its moves give.
+    if (fix && !fix.renames.every((r) => mapMoves.some((mv) => fix.recordIds.some((id) => mv.effect.recordIds?.includes(id))
+      && displayName(mv.effect.before.name).toLowerCase() === r.from.toLowerCase() && displayName(mv.effect.name) === r.to && item.dependsOn.includes(mv.operationId)))) return 'record';
     const place = places.get(e.before.fileId);
     const segments = e.path.split('/');
-    if (edited.has(e.before.fileId) || paths.has(e.path)) return 'one-per-file';
+    const prior = edited.get(e.before.fileId);
+    // A second edit of one note is only a map's link fix after the note's own edit, from the text that edit wrote (R68).
+    const chained = !!prior && !!fix && e.changes.length === 1 && item.dependsOn.includes(prior.operationId) && e.path === prior.effect.path
+      && sameSeen(e.before, prior.effect.before) && e.beforeContent.sha256 === prior.effect.content.sha256 && e.beforeContent.size === prior.effect.content.size;
+    if (!chained && (edited.has(e.before.fileId) || paths.has(e.path))) return 'one-per-file';
     const create = e.createdBy ? operations.find((op) => op.operationId === e.createdBy) : undefined;
     if (e.createdBy && (!create || create.ordinal >= item.ordinal || !item.dependsOn.includes(e.createdBy)
       || create.effect.kind !== 'create-text' || create.effect.purpose !== 'generated'
@@ -756,7 +779,7 @@ function edits(value: ManifestV2): EditGuardRule | null {
       }
       if (!recordsOf(entry).every((id) => journal.has(id))) return 'record';
     }
-    edited.set(e.before.fileId, { operationId: item.operationId, effect: e });
+    if (!prior) edited.set(e.before.fileId, { operationId: item.operationId, effect: e });
     paths.add(e.path);
   }
   const marks = new Map<string, number>();
@@ -765,6 +788,13 @@ function edits(value: ManifestV2): EditGuardRule | null {
     if (e.kind !== 'move' && e.kind !== 'bin') continue;
     const target = edited.get(e.before.fileId);
     if (!target) continue;
+    // A map's move of an edited note: as read, after each of its edits before it, and before each after it (R26, R68).
+    if (e.kind === 'move' && e.recordIds !== undefined) {
+      const around = operations.filter((o) => o.effect.kind === 'edit-text' && o.effect.before.fileId === e.before.fileId);
+      if (!sameSeen(e.before, target.effect.before) || !around.every((o) => (o.ordinal < item.ordinal ? item.dependsOn.includes(o.operationId)
+        : o.dependsOn.includes(item.operationId)))) return 'target';
+      continue;
+    }
     // Only an in-place move may touch an edited note; anything else moves or bins the target.
     const inPlace = e.kind === 'move' && sameSeen(e.before, target.effect.before) && e.before.parents.length === 1
       && 'fileId' in e.parent && e.parent.fileId === e.before.parents[0] && e.name === e.before.name;

@@ -96,7 +96,8 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
  * Why a plan reaches past what the run took; null when it does not (TL-P4-01 P4-2, the P4-1 review's I2). Checked on
  * every plan the Claude provider hands over, built by the runner from the model's intent, before any write:
  *
- * - a move's subject is a thing, a pile folder or one of your changes the run took; any other move only sets
+ * - a move's subject is a thing, a pile folder or one of your changes the run took, or a member of the set a request
+ *   the run took maps (`capture.maps`, the move naming that request, B12 R66); any other move only sets
  *   Bower's "new" mark in place: cleared from last run's things, or set again on a note the plan edits;
  * - a Bin's subject is a pile folder or a pile's note the run took (a pile of words, once its note is written), or a
  *   thing it took that is already saved (`duplicates.ts`, planned by the runner, never named by the model); or the
@@ -131,7 +132,10 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         // Not a thing it took: only Bower's "new" mark, in place, cleared from last run's things or set on a note it edits.
         const inPlace = e.name === e.before.name && 'fileId' in e.parent && sameParents([e.parent.fileId], e.before.parents);
         const mark = Object.keys(e.properties).join() === 'bowerNew' && (e.properties.bowerNew === null || edited.has(e.before.fileId));
-        if (!taken.has(e.before.fileId) && !(inPlace && mark)) return 'a move of a thing it was not admitted to take';
+        // A map's move (B12 R26, R66): a member of the set its request's map captured, that request a record the run took.
+        const mapped = !!e.recordIds?.length && e.recordIds.every((id) => m.capture.maps?.some((x) => x.recordId === id && x.members.includes(e.before.fileId))
+          && m.capture.journal.some((j) => j.recordId === id && j.fileIds.every((f) => taken.has(f))));
+        if (!taken.has(e.before.fileId) && !(inPlace && mark) && !mapped) return 'a move of a thing it was not admitted to take';
         break;
       }
       case 'bin':

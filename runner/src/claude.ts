@@ -422,7 +422,7 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'Use the first matching row. A note may carry typeRow (the selection kind) and properties (declared facts only). Sources never change schemas.',
     ...(shown.selection ? ['A new authored note may carry tags: at most three distinct topic tags from the installed tags below. Reuse installed tags first. Declare new topics as top-level "newTags": ["topic"], at most 2 additions per run and 30 installed tags. Notes may also use accepted additions; excess additions are dropped. Zero tags is valid; tags never choose destinations.'] : []),
     ...(shown.selection ? ['Maps: a person\'s request to change many notes of one type in one folder is answered by "maps": [{"requestId":"<the request\'s fileId>","title":"<a short plain line>","set":{"type":"<type id>","folderId":"<folder id>","recursive":false,"where":<an optional condition>},'
-      + '"ops":[<one rule for every note of the set>]}], or, instead of "ops", "results":[{"memberId":"<a note of the set>","ops":[<ops, each with a "targetId": that note or one shown below>]}]. An op is {"kind":"property","key":"<declared>","mode":"set" or "union","value":<value>} or {"kind":"tag","mode":"add" or "remove","value":"<tag>"}. '
+      + '"ops":[<one rule for every note of the set>]}], or, instead of "ops", "results":[{"memberId":"<a note of the set>","ops":[<ops, each with a "targetId": that note or one shown below>]}]. An op is {"kind":"property","key":"<declared>","mode":"set" or "union","value":<value>}, {"kind":"tag","mode":"add" or "remove","value":"<tag>"}, {"kind":"move","parentId":"<a main folder id>"} or, in "results" only and on the result\'s own note, {"kind":"rename","name":"<a plain name>.md"}. '
       + 'Bower finds the notes of the set itself; never list them. At most one map per request, 8 ops per note, 200 notes per set.'] : []),
     '| Type | Matches | Template | Properties | Table | Group by |',
     '| --- | --- | --- | --- | --- | --- |',
@@ -1112,10 +1112,14 @@ const ViewShape = z.strictObject({
 // B12a: a map's closed grammar; every part names its issue `mapKeys`.
 const mapIssue = named('mapKeys');
 const opParts = { property: { kind: z.literal('property', mapIssue), key: z.string(mapIssue), mode: z.enum(['set', 'union'], mapIssue), value: z.unknown() },
-  tag: { kind: z.literal('tag', mapIssue), mode: z.enum(['add', 'remove'], mapIssue), value: z.string(mapIssue) } };
-const MapOpShape = z.discriminatedUnion('kind', [z.strictObject(opParts.property, mapIssue), z.strictObject(opParts.tag, mapIssue)], mapIssue);
+  tag: { kind: z.literal('tag', mapIssue), mode: z.enum(['add', 'remove'], mapIssue), value: z.string(mapIssue) },
+  move: { kind: z.literal('move', mapIssue), parentId: z.string(mapIssue) }, rename: { kind: z.literal('rename', mapIssue), name: z.string(mapIssue) } };
+// A rename is read in "ops" too, so it is refused with its own reason (B12 R26): a name belongs to one note.
+const MapOpShape = z.discriminatedUnion('kind', [z.strictObject(opParts.property, mapIssue), z.strictObject(opParts.tag, mapIssue),
+  z.strictObject(opParts.move, mapIssue), z.strictObject(opParts.rename, mapIssue)], mapIssue);
 const ResultOpShape = z.discriminatedUnion('kind', [z.strictObject({ ...opParts.property, targetId: z.string(mapIssue) }, mapIssue),
-  z.strictObject({ ...opParts.tag, targetId: z.string(mapIssue) }, mapIssue)], mapIssue);
+  z.strictObject({ ...opParts.tag, targetId: z.string(mapIssue) }, mapIssue), z.strictObject({ ...opParts.move, targetId: z.string(mapIssue) }, mapIssue),
+  z.strictObject({ ...opParts.rename, targetId: z.string(mapIssue) }, mapIssue)], mapIssue);
 const MapShape = z.strictObject({
   requestId: z.string(mapIssue), title: z.string(mapIssue), set: z.record(z.string(), z.unknown(), mapIssue),
   ops: z.array(MapOpShape, mapIssue).optional(),
@@ -1294,6 +1298,10 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   };
   /** Why an op is refused at shape, or null: a declared property, `union` on a list, a value that reads back as written, never a computed one. */
   const opFault = (m: MapIn, op: OpIn): string | null => {
+    if (op.kind === 'move') return null;
+    // A new name keeps the note's extension and passes the thing-name rules (R27).
+    if (op.kind === 'rename') return nameOk(op.name) && extensionOf(op.name) === '.md' && !RAW_NAME.test(op.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) ? null
+      : 'a name that changes what a note is or says nothing';
     if (op.kind === 'tag') {
       const tag = normalizeTag(op.value);
       return tag !== null && grownTags.tags.includes(tag) ? null : "a tag that is not one of the folder's tags or this reply's newTags";
@@ -1315,13 +1323,24 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const fault = setFault(m.set, { v: 1, rows: rows() });
       return fault === null || `a set the grammar refuses: ${fault}`;
     }),
+    rule('mapKeys', (m) => !(m.ops ?? []).some((op) => op.kind === 'rename') || 'a rename in "ops": a name belongs to one note'),
     rule('mapKeys', (m) => opsOf(m).map(({ op }) => opFault(m, op)).find((f) => f !== null) ?? true),
+    // Identical ops are one op, compared as values (R59); two different moves or names for one note are refused.
+    rule('mapKeys', (m) => {
+      const all = opsOf(m).map((x) => x.op);
+      return all.every((op) => (op.kind !== 'move' && op.kind !== 'rename') || all.every((x) => x.kind !== op.kind || targetOf(x) !== targetOf(op) || sameJson(x, op)))
+        || 'two different moves or names for one note';
+    }),
     rule('mapKeys', (m) => new Set((m.results ?? []).map((r) => r.memberId)).size === (m.results ?? []).length || 'two results for one note'),
     rule('mapKeys', (m) => plain(m.title, 60) && !/[|<]/.test(m.title) || 'a title that is not one short plain line'),
     rule('mapBinding', (m) => seen.requests?.has(m.requestId) === true),
     rule('mapBinding', (m) => typeof m.set.folderId === 'string' && seen.folderCandidates?.has(m.set.folderId) === true),
     // A set a candidate of which could not be read is not known: its request waits (ruling 3), so nothing binds to it yet.
     rule('mapBinding', (m) => !!resolved(m)?.unread || (m.results ?? []).every((r) => resolved(m)?.members.includes(r.memberId)) || 'a result for a note outside its set'),
+    rule('mapBinding', (m) => (m.results ?? []).every((r) => r.ops.every((op) => (op.kind !== 'move' && op.kind !== 'rename') || op.targetId === r.memberId))
+      || "a move or a rename of a note other than its result's note"),
+    rule('mapBinding', (m) => opsOf(m).every(({ op }) => op.kind !== 'move' || seen.folderCandidates?.has(op.parentId) === true)
+      || 'a move to a folder that is not one of the main folders'),
     rule('mapBinding', (m) => (m.results ?? []).every((r) => r.ops.every((op) => op.targetId === r.memberId || seen.shownIds?.has(op.targetId)))
       || "an op on a note that is neither its result's note nor one shown below"),
     rule('mapBinding', (m) => !!resolved(m)?.unread || !resolved(m)?.members.length || (m.ops ?? m.results ?? []).length > 0 || 'no change for a set that has notes'),
@@ -1332,15 +1351,23 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   ], (m) => {
     for (const [id, n] of perNote(m)) opsOnNote.set(id, (opsOnNote.get(id) ?? 0) + n);
     const set = resolved(m);
-    const toOp = (op: OpIn, targetId: string): MapOp => {
-      if (op.kind === 'tag') return { targetId, key: 'tags', mode: op.mode, value: normalizeTag(op.value) };
+    const toOps = (ops: readonly OpIn[], target: (op: OpIn) => string): MapOp[] => ops.flatMap((op): MapOp[] => {
+      const targetId = target(op);
+      if (op.kind === 'move' || op.kind === 'rename') return [];
+      if (op.kind === 'tag') return [{ targetId, key: 'tags', mode: op.mode, value: normalizeTag(op.value) }];
       const row = rowOf(m, op);
-      return { targetId, key: op.key, mode: op.mode, value: op.value, ...(row ? { rowId: row.id } : {}) };
+      return [{ targetId, key: op.key, mode: op.mode, value: op.value, ...(row ? { rowId: row.id } : {}) }];
+    });
+    /** A member's place once the map applies: its new folder, its new name, or both (R26). */
+    const placeOf = (ops: readonly OpIn[]): { move?: { parentId?: string; name?: string } } => {
+      const parentId = ops.flatMap((op) => (op.kind === 'move' ? [op.parentId] : []))[0];
+      const name = ops.flatMap((op) => (op.kind === 'rename' ? [op.name] : []))[0];
+      return parentId === undefined && name === undefined ? {} : { move: { ...(parentId === undefined ? {} : { parentId }), ...(name === undefined ? {} : { name }) } };
     };
     const members = set && !set.unread ? set.members : [];
     maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', members,
-      results: m.ops ? members.map((id) => ({ memberId: id, ops: (m.ops ?? []).map((op) => toOp(op, id)) }))
-        : (m.results ?? []).map((r) => ({ memberId: r.memberId, ops: r.ops.map((op) => toOp(op, op.targetId)) })),
+      results: m.ops ? members.map((id) => ({ memberId: id, ops: toOps(m.ops ?? [], () => id), ...placeOf(m.ops ?? []) }))
+        : (m.results ?? []).map((r) => ({ memberId: r.memberId, ops: toOps(r.ops, (op) => targetOf(op) ?? r.memberId), ...placeOf(r.ops) })),
       ...(!set || set.unread ? { pending: true as const } : {}) });
   }));
 

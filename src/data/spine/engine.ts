@@ -470,6 +470,18 @@ export function driveEffects(drive: RunDrive, context?: OwnershipContext, mainte
       return { ...op, effect: { ...op.effect, before,
         beforeContent: { ...op.effect.beforeContent, observedModifiedTime: before.modifiedTime } } };
     }
+    if (op.effect.kind === 'edit-text') {
+      // A map's link fix after its note's own edit or move (B12 R68): fenced on what the last of them confirmed, whose
+      // bytes the fix was planned on; the read below still checks them.
+      const fileId = op.effect.before.fileId;
+      const last = manifest.operations.filter((o) => o.ordinal < op.ordinal && (o.effect.kind === 'move' || o.effect.kind === 'edit-text')
+        && o.effect.before.fileId === fileId && waitsOn(manifest, op.operationId, o.operationId)).at(-1);
+      const confirmed = last && head.outcomes.find((r) => r.operationId === last.operationId);
+      if (!last) return op;
+      if (confirmed?.state !== 'applied') throw new BowerError('unknown', UNRESOLVED);
+      const before = confirmed.evidence.file;
+      return { ...op, effect: { ...op.effect, before, beforeContent: { ...op.effect.beforeContent, observedModifiedTime: before.modifiedTime } } };
+    }
     if (op.effect.kind !== 'move') return op;
     const fileId = op.effect.before.fileId;
     const previous = manifest.operations.filter((o) => o.ordinal < op.ordinal && o.effect.kind === 'move'

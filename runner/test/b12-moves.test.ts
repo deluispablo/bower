@@ -124,6 +124,7 @@ describe('B12b a request moves and renames the notes of a set', () => {
   it('AC11 b12-moves-closed-ops: each member gets its own edit, then one move with its final name; every link follows its landed move', async () => {
     const f = await folder();
     const amberId = await f.id(AMBER);
+    const birchId = await f.id(BIRCH);
     const run = await press(f, both);
     expect(run.after[FINAL_AMBER], 'amber: in Saltmere, named for its company, reviewed, shortlisted, its link to birch renamed').toBe(done(BASE[AMBER] ?? '', RENAMED));
     expect(run.after[FINAL_BIRCH]).toBe(done(BASE[BIRCH] ?? '', RENAMED));
@@ -131,7 +132,7 @@ describe('B12b a request moves and renames the notes of a set', () => {
     expect(run.after[BIRCH]).toBeUndefined();
     expect(run.after[SHORTLIST], 'the person\'s note: only its links change, every other byte stays').toBe(done(SHORT, RENAMED));
     const m = manifestOf(run);
-    const birchMove = opsOn(m, 'move', await f.id(BIRCH))[0];
+    const birchMove = opsOn(m, 'move', birchId)[0];
     const amberEdits = opsOn(m, 'edit-text', amberId);
     const kinds = (o: Op | undefined) => ((o?.effect.changes ?? []) as Array<{ kind: string }>).map((c) => c.kind);
     const edit = amberEdits.find((o) => !kinds(o).includes('link-rewrite'));
@@ -254,6 +255,48 @@ describe('B12b a request moves and renames the notes of a set', () => {
     expect(phase(run)).toBe('done');
   });
 
+  it('AC12 b12-moves-taken-title (recursive set): two members share a title; one only changes folder and keeps it, so the other\'s rename leaves bare links as they are', async () => {
+    const twin = offer('Saltwick', 'Saltmere', 'Offer birch');
+    const f = await folder({ [`${SALT}/Offer amber.md`]: twin });
+    const twinId = await f.id(`${SALT}/Offer amber.md`);
+    const amberId = await f.id(AMBER);
+    const run = await press(f, async (ctx) => ({ ...empty, maps: [{ requestId: ctx.request, title: 'Organise offers', set: { ...set(ctx), recursive: true }, results: [
+      { memberId: amberId, ops: [{ kind: 'move', targetId: amberId, parentId: await ctx.id(LIND) }] },
+      { memberId: twinId, ops: [{ kind: 'rename', targetId: twinId, name: 'Saltwick offer.md' }] }] }] }),
+    { words: 'Move the amber offer into Lindenwick and name the Saltmere one for its company.' });
+    expect(refusals()).toEqual([]);
+    expect(run.after[`${LIND}/Offer amber.md`], 'the folder-only move lands, its title kept').toBe(BASE[AMBER]);
+    expect(run.after[`${SALT}/Saltwick offer.md`], 'the rename lands').toBe(twin);
+    expect(run.after[SHORTLIST], 'a bare link may mean the note that kept the title: it stays').toBe(SHORT);
+    expect(run.after[BIRCH]).toBe(BASE[BIRCH]);
+    expect(phase(run)).toBe('done');
+    expect(archived(run, 'press-1')).toBe(true);
+  });
+
+  it.each([['amber\'s request is older', true], ['birch\'s request is older', false]] as const)(
+    'AC13 b12-moves-same-name (two requests): reservations span the run; %s, so its member takes the name and the younger one stays unmade', async (_name, amberOlder) => {
+      const f = await folder();
+      const words = 'Move birch into Saltmere as Shared offer.';
+      // `other-1` is the older request when amber's map answers it (R52: by record `at`).
+      const other = (await f.drive.createText(await f.id(SYSTEM.changes), 'other-1.json', JSON.stringify({ v: 1, id: 'other-1', device: 'device-1',
+        at: amberOlder ? DAY - 1 : DAY + 100, kind: 'request', what: `Asked Bower: "${words}"`, text: words }))).id;
+      const into = async (ctx: Ctx, path: string) => {
+        const id = await ctx.id(path);
+        return [{ memberId: id, ops: [{ kind: 'move', targetId: id, parentId: await ctx.id(SALT) }, { kind: 'rename', targetId: id, name: 'Shared offer.md' }] }];
+      };
+      const run = await press(f, async (ctx) => ({ ...empty, maps: [
+        { requestId: ctx.request, title: 'Organise birch', set: set(ctx), results: await into(ctx, BIRCH) },
+        { requestId: other, title: 'Organise amber', set: set(ctx), results: await into(ctx, AMBER) }] }), { words: 'Move amber into Saltmere as Shared offer.' });
+      expect(refusals()).toEqual([]);
+      const named = Object.keys(run.after).filter((path) => path.endsWith('/Shared offer.md'));
+      expect(named, 'one note takes the name: no overwrite, no duplicate').toEqual([`${SALT}/Shared offer.md`]);
+      const [winner, loser, loserText, winnerOld] = amberOlder ? [BASE[AMBER], BIRCH, BASE[BIRCH] ?? '', 'Offer amber'] : [BASE[BIRCH], AMBER, BASE[AMBER] ?? '', 'Offer birch'];
+      expect(run.after[`${SALT}/Shared offer.md`]).toBe(winner);
+      expect(run.after[loser], 'the younger request\'s member stays unmade; only its link to the winner follows').toBe(loserText.replace(`[[${winnerOld}]]`, '[[Shared offer]]'));
+      expect(vi.mocked(console.error).mock.calls.flat().map(String).some((line) => line.includes('Another note in this request takes that name.')), 'its reason').toBe(true);
+      expect(phase(run)).toBe('done');
+    });
+
   it('AC13 b12-moves-name-taken: a folder already holding that name leaves that member where it is; the other moves', async () => {
     const taken = offer('Other', 'Saltmere', 'Offer birch');
     const f = await folder({ [FINAL_AMBER]: taken });
@@ -262,6 +305,19 @@ describe('B12b a request moves and renames the notes of a set', () => {
     expect(run.after[AMBER], 'the member that cannot take the name stays, none of its operations made; only its link to birch follows')
       .toBe(BASE[AMBER]?.replace('[[Offer birch]]', '[[Mallowick offer]]'));
     expect(run.after[FINAL_BIRCH]).toBeDefined();
+    expect(phase(run)).toBe('done');
+    expect(archived(run, 'press-1'), 'done or unavailable: the request is settled').toBe(true);
+  });
+
+  it('AC12 b12-moves-source-referrer: a Source linking to a member keeps its bytes; that member stays, its operations unmade, with its reason; the other moves', async () => {
+    const source = '---\nby: bower\ntype: source\nsummary: Workshop notes.\n---\n\n## Notes\nAlex heard about [[Offer amber]] here.\n';
+    const f = await folder({ 'Resources/Workshop.md': source });
+    const run = await press(f, both);
+    expect(run.after['Resources/Workshop.md'], 'a Source\'s prose is never rewritten').toBe(source);
+    expect(run.after[AMBER], 'amber stays, none of its operations made; only its link to birch follows').toBe(BASE[AMBER]?.replace('[[Offer birch]]', '[[Mallowick offer]]'));
+    expect(run.after[FINAL_BIRCH], 'birch is edited and moved; amber kept its name, so birch\'s link stays').toBe(done(BASE[BIRCH] ?? ''));
+    expect(run.after[SHORTLIST]).toBe(SHORT.replace('[[Offer birch]]', '[[Mallowick offer]]'));
+    expect(vi.mocked(console.error).mock.calls.flat().map(String).some((line) => line.includes('A note that links to it cannot be updated.')), 'the exact unavailable reason').toBe(true);
     expect(phase(run)).toBe('done');
     expect(archived(run, 'press-1'), 'done or unavailable: the request is settled').toBe(true);
   });
@@ -453,10 +509,60 @@ describe('B12b guard and recovery', () => {
         return next(input, init);
       } });
     expect(run.after[FINAL_AMBER], 'amber\'s move did not land').toBeUndefined();
-    expect(run.after[AMBER], 'amber stays; its link to birch follows birch\'s landed move').toBe(BASE[AMBER]?.replace('[[Offer birch]]', '[[Mallowick offer]]'));
-    expect(run.after[FINAL_BIRCH], 'birch moved; its link to amber stays on amber\'s current name').toBe(BASE[BIRCH]);
-    expect(run.after[SHORTLIST]).toBe(SHORT.replace('[[Offer birch]]', '[[Mallowick offer]]'));
+    // A link fix waits, whole, for every move it follows and for its own note's move (engine.ts dependency rule; ruling c).
+    expect(run.after[AMBER], 'amber stays, its bytes exact: its own link fix waits for its own move').toBe(BASE[AMBER]);
+    expect(run.after[FINAL_BIRCH], 'birch moved; its link fix follows amber\'s move, which failed').toBe(BASE[BIRCH]);
+    expect(run.after[SHORTLIST], 'the shared link fix waits whole: no partial fix').toBe(SHORT);
     expect(archived(run, 'press-1'), 'a move that did not land keeps the request waiting').toBe(false);
+    // The next run retries amber as an ordinary waiting part of the request; links to amber follow its landed move.
+    // Links to birch, which moved in the run before, keep its old name (no carry-over; B8's lint reports them).
+    const next = await press(f, async (ctx) => resultsMap({ ...ctx, request: run.request }, [await only(ctx, AMBER, SALT, 'Ferrowick offer.md')]), { words: 'Update these notes.' });
+    expect(next.after[FINAL_AMBER], 'amber moves; its link to birch stays as written').toBe(BASE[AMBER]);
+    expect(next.after[FINAL_BIRCH], 'birch\'s link to amber follows amber now').toBe(BASE[BIRCH]?.replace('[[Offer amber]]', '[[Ferrowick offer]]'));
+    expect(next.after[SHORTLIST], 'only the link to amber follows').toBe(SHORT.replace('[[Offer amber]]', '[[Ferrowick offer]]'));
+    expect(archived(next, 'press-1'), 'the retried part settles the request').toBe(true);
+  });
+
+  it('AC14 b12-moves-ack-lost-partial: one move fails and one lands with its answer lost: redispatch writes nothing again, calls no model, and the shared link fix waits', async () => {
+    const f = await folder();
+    const amberId = await f.id(AMBER);
+    const birchId = await f.id(BIRCH);
+    const shortId = await f.id(SHORTLIST);
+    const only = async (ctx: Ctx, path: string, to: string, name: string) => {
+      const id = await ctx.id(path);
+      return { memberId: id, ops: [{ kind: 'move', targetId: id, parentId: await ctx.id(to) }, { kind: 'rename', targetId: id, name }] };
+    };
+    // Amber's move fails by `stillAsSeen`: the person renames it during the run, after the reply was built.
+    let answer: unknown;
+    let crashed = false;
+    const first = await press(f, async (ctx) => {
+      answer ??= resultsMap(ctx, [await only(ctx, AMBER, SALT, 'Ferrowick offer.md'), await only(ctx, BIRCH, LIND, 'Mallowick offer.md')]);
+      if ((await f.drive.get(amberId)).name !== 'Amber, by Alex.md') await f.drive.update(amberId, { name: 'Amber, by Alex.md' });
+      return answer;
+    }, { words: 'Move each offer into its country folder and name it for its company.', around: (next) => async (input, init) => {
+      if (crashed && url(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
+      if (init?.method === 'PATCH' && url(input).pathname === `/drive/v3/files/${birchId}` && url(input).searchParams.has('addParents')) {
+        const response = await next(input, init);
+        crashed = response.ok;
+        throw new TypeError('Made-up lost answer after the write.');
+      }
+      return next(input, init);
+    } });
+    expect(crashed, 'birch\'s move reached Drive').toBe(true);
+    const writes: string[] = [];
+    const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A redispatch must not call a model.'); });
+    const resumed = await redispatchCase(f.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} }, around: (next) => async (input, init) => {
+      const at = url(input).pathname;
+      if (init?.method === 'PATCH' && [amberId, birchId, shortId].some((id) => at.endsWith(`/files/${id}`))) writes.push(at);
+      return next(input, init);
+    } });
+    expect(phase(resumed)).toBe('done');
+    expect(model).not.toHaveBeenCalled();
+    expect(writes, 'no write is sent again, and no link fix is written').toEqual([]);
+    expect(resumed.after[`${HUNT}/Amber, by Alex.md`], 'amber keeps the person\'s name and its bytes').toBe(BASE[AMBER]);
+    expect(resumed.after[FINAL_BIRCH], 'birch is moved once; its link fix waits for amber\'s move').toBe(BASE[BIRCH]);
+    expect(resumed.after[SHORTLIST], 'the shared link fix waits whole').toBe(SHORT);
+    expect(archived(resumed, 'press-1'), 'the request waits').toBe(false);
   });
 
   it('AC14 b12-moves-person-renamed: a member the person renames during the run keeps the person\'s name; the request waits', async () => {
@@ -484,11 +590,11 @@ describe('B12b guard and recovery', () => {
     expect(refusals(), 'the reply is not refused').toEqual([]);
     expect(phase(first)).toBe('done');
     expect(first.after[FINAL_AMBER]).toBeUndefined();
-    // Amber's version changed under the person's rename: neither its own edit nor its link fix lands (R20, R31, R68).
+    // Amber's version changed under the person's rename: neither its own edit, its move nor its link fix lands (R20, R31).
     expect(first.after[`${HUNT}/Amber, by Alex.md`], 'the person\'s name stays, its bytes too').toBe(BASE[AMBER]);
     expect(first.after[BIRCH], 'birch\'s move succeeds').toBeUndefined();
     expect(first.after[FINAL_BIRCH], 'birch is edited and moved; its link to amber follows no move that failed').toBe(done(BASE[BIRCH] ?? ''));
-    expect(first.after[SHORTLIST], 'links to birch follow birch; links to amber stay').toBe(SHORT.replace('[[Offer birch]]', '[[Mallowick offer]]'));
+    expect(first.after[SHORTLIST], 'the shared link fix waits whole for amber\'s move, which failed (ruling c)').toBe(SHORT);
     expect(archived(first, 'press-1'), 'the request waits').toBe(false);
   });
 
