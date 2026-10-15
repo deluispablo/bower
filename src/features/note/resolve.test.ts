@@ -24,6 +24,17 @@ describe('the reader', () => {
     expect(resolve('Areas/Career/Career profile')).toBe('Areas/Career/Career profile.md');
     expect(resolve('archive/career profile')).toBe('Archive/Career profile.md');
     expect(resolve('Areas/Career/Career profile#Goals')).toBe('Areas/Career/Career profile.md');
+    expect(resolve(' Archive/Career profile^intro ')).toBe('Archive/Career profile.md');
+  });
+
+  it('AC1 an exact place wins over a shared title, as Obsidian resolves a link path first, in either tree order', () => {
+    const root = file('Career profile.md');
+    const archive: TreeNode = { path: 'Archive', name: 'Archive', type: 'folder', modified: 0, children: [file('Archive/Career profile.md')] } as TreeNode;
+    for (const tree of [[root, archive], [archive, root]]) {
+      const resolve = resolverFor(tree, []);
+      expect(resolve('Career profile')).toBe('Career profile.md');
+      expect(resolve('Archive/Career profile')).toBe('Archive/Career profile.md');
+    }
   });
 
   it('AC2 a bare title and a former name resolve as before, and a place that names no note resolves to null', () => {
