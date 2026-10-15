@@ -3,7 +3,7 @@ import { sha256Hex } from '../../src/data/contracts/hashes';
 import { frontValues, indexedFront, lintFacts, noteRefusal, propertyValue, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
 import type { TypeRow, TypeTable } from '../../src/data/contracts/types';
 import { computedBy, VIEW_LIMITS } from '../../src/data/contracts/view-format';
-import { evaluateAggregate, evaluateFormulas, EVALUATOR_VERSION, storedFormulas, storedViews, viewBlock } from './views';
+import { evaluateAggregate, evaluateFormulas, EVALUATOR_VERSION, inSetFolder, setMembers, storedFormulas, storedViews, viewBlock, type SetNote } from './views';
 import { lintEvidenceOk } from '../../src/data/contracts/run-manifest';
 import { failureKind } from '../../src/data/drive/transport';
 import { PREFIX_BYTES } from '../../src/data/drive/drive-api';
@@ -565,22 +565,24 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
         // A binned folder takes its figure and record with it (R35).
         if (!row || folder === undefined || view.set.folderId !== inputs.folderId && !places.byId(view.set.folderId)?.folder) continue;
         // A map is never a member, even one whose indexed prefix could not tell its type.
-        const inFolder = Object.entries(state.files).filter(([, n]) => !n.moc && (folder === '' ? view.set.recursive || !n.path.includes('/')
-          : n.path.startsWith(`${folder}/`) && (view.set.recursive || !n.path.slice(folder.length + 1).includes('/'))));
+        const inFolder = Object.entries(state.files).filter(([, n]) => !n.moc && inSetFolder(n.path, folder, view.set.recursive));
         const members = inFolder.filter(([, n]) => n.type === view.set.type);
         // Counted from the listing before any read (R31); a note whose type cannot be told may be a member (R29).
         const over = members.length > VIEW_LIMITS.notes;
         let notes: Array<{ id: string; properties: Record<string, string> }> | 'unreadable' = [];
-        if (!over) for (const [id, n] of inFolder) {
-          // No type at all: its read was refused, so it may be a member (R29); null is a readable note without one.
-          if (n.type === undefined) notes = 'unreadable';
-          if (n.type !== view.set.type && (typeof n.type === 'string' || n.type === undefined || !n.incomplete)) continue;
-          const properties = await propertiesOf(id, n);
-          if (properties === null) notes = 'unreadable';
-          else if (properties.type === view.set.type) {
-            evidence.set(id, properties);
-            if (notes !== 'unreadable') notes.push({ id, properties });
+        if (!over) {
+          const candidates: SetNote[] = [];
+          for (const [id, n] of inFolder) {
+            // No type at all: its read was refused, so it may be a member (R29); null is a readable note without one.
+            if (n.type === undefined) candidates.push({ id, path: n.path, properties: null });
+            if (n.type !== view.set.type && (typeof n.type === 'string' || n.type === undefined || !n.incomplete)) continue;
+            const properties = await propertiesOf(id, n);
+            candidates.push({ id, path: n.path, properties });
+            if (properties?.type === view.set.type) evidence.set(id, properties);
           }
+          // The figure counts every member, its `where` applied by the evaluator (R27).
+          const set = setMembers({ type: view.set.type }, row, candidates);
+          notes = set.unread ? 'unreadable' : set.members.map((id) => ({ id, properties: evidence.get(id) ?? {} }));
         }
         blocks.push(viewBlock(view, row, over ? members.map(([id]) => ({ id, properties: {} })) : notes));
         records.set(`${mapId}/${view.id}`, { hash: (await canonical(view)).hash, evaluator: EVALUATOR_VERSION, asOf,

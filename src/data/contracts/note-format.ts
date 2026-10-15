@@ -71,7 +71,7 @@ const SCALAR_ESCAPES: Readonly<Record<string, string>> = {
 };
 
 /** Decode the quoted scalars the one writer emits; preserve unknown legacy escapes. */
-function scalarOf(value: string): string {
+export function scalarOf(value: string): string {
   if (!/^(["']).*\1$/s.test(value)) return value;
   const inner = value.slice(1, -1);
   if (value[0] === "'") return inner.replace(/''/g, "'");
@@ -123,8 +123,11 @@ const SUMMARY_TYPES = [
   /^\d{4}-\d{1,2}-\d{1,2}$/,
 ];
 
-/** One physical line, without trimming or folding the summary's text; in a flow list (`flow`), flow indicators quote too. */
-function summaryScalar(value: string, flow = false): string {
+/**
+ * The one scalar and list-item writer (B12 R49): one physical line, without trimming or folding the summary's text; in a
+ * flow list (`flow`), flow indicators quote too.
+ */
+export function summaryScalar(value: string, flow = false): string {
   const quote = value !== value.trim() || (flow && /[,[\]{}]/.test(value)) ||
     /^[-?:,[\]{}#&*!|>'"%@`]/.test(value) || /:[ \t]|:$|[ \t]#|['"\\]/.test(value) ||
     /[\p{Cc}\p{Cs}\u2028\u2029\ufeff\ufffe\uffff]/u.test(value) || SUMMARY_TYPES.some((type) => type.test(value));
@@ -218,9 +221,19 @@ function templateProjection(bytes: Uint8Array, ownership: ReturnType<typeof owne
   return { kind, body, tasks: ['', ...headings].flatMap((heading) => bySection.get(heading) ?? []) };
 }
 
+/**
+ * A scalar decoded, or kept as written when its decoded text would not read back the same once trimmed and decoded again
+ * (edge spaces, or text that looks quoted itself): `propertyValue` decodes it then, so no quoted value loses a byte (B12 R55).
+ */
+const keptScalar = (value: string): string => {
+  const decoded = scalarOf(value);
+  return scalarOf(decoded.trim()) === decoded ? decoded : value;
+};
+
 /** The properties between the fences: `key: value` lines, and the YAML block lists Obsidian writes for tags. */
-function frontOf(block: string, duplicates?: Set<string>): Map<string, string> {
+function frontOf(block: string, duplicates?: Set<string>, values = false): Map<string, string> {
   const front = new Map<string, string>();
+  const blocks = new Map<string, string[]>();
   let listKey: string | null = null;
   for (const line of block.split('\n')) {
     // A YAML block list, as Obsidian writes tags: "tags:" then "  - a" lines.
@@ -228,8 +241,11 @@ function frontOf(block: string, duplicates?: Set<string>): Map<string, string> {
     if (item && listKey) {
       const prev = front.get(listKey) ?? '';
       const raw = (item[1] ?? '').trim();
-      const value = listKey === 'tags' ? raw : scalarOf(raw);
-      front.set(listKey, prev ? `${prev}, ${value}` : value);
+      const value = listKey === 'tags' && !values ? raw : scalarOf(raw);
+      // For `propertyValue`, the items as one flow list, so an item's own comma never splits it (B12 R58).
+      const items = [...blocks.get(listKey) ?? [], value];
+      blocks.set(listKey, items);
+      front.set(listKey, values ? `[${items.map((i) => summaryScalar(i, true)).join(', ')}]` : prev ? `${prev}, ${value}` : value);
       continue;
     }
     const i = line.indexOf(':');
@@ -238,20 +254,23 @@ function frontOf(block: string, duplicates?: Set<string>): Map<string, string> {
     const value = line.slice(i + 1).trim();
     listKey = value ? null : key;
     if (front.has(key)) duplicates?.add(key);
-    front.set(key, key === 'tags' ? value : scalarOf(value));
+    blocks.delete(key);
+    front.set(key, key === 'tags' ? value : values ? keptScalar(value) : scalarOf(value));
   }
   return front;
 }
 
 /**
- * B11 (R29): a note's raw front-matter values from its text or read prefix; `null` when its front matter is not all there.
- * `duplicates` collects the keys written on more than one line (coordinator ruling 4).
+ * B11 (R29): a note's raw front-matter values from its text or read prefix, for `propertyValue` (a quoted one its trim
+ * would change kept quoted, B12 R55; a block list as one flow list of its items, R58); `null` when its front matter is
+ * not all there. `duplicates` collects the keys
+ * written on more than one line (coordinator ruling 4).
  */
 export function frontValues(raw: string, duplicates?: Set<string>): Record<string, string> | null {
   const text = raw.replace(/\r\n/g, '\n');
   if (!text.startsWith('---\n')) return {};
   const close = text.indexOf('\n---', 3);
-  return close < 0 ? null : Object.fromEntries(frontOf(text.slice(4, close), duplicates));
+  return close < 0 ? null : Object.fromEntries(frontOf(text.slice(4, close), duplicates, true));
 }
 
 export type IndexedFront = { summary: string; owner: 'bower' | 'person'; type: string | null; links?: string[]; incomplete?: boolean };
@@ -617,13 +636,16 @@ export function propertyDeclaration(row: TypeRow, key: string): TypeRow['propert
 }
 /**
  * The one decode of a stored front-matter value, for the Table and the view engine (B11 AC5): the raw text trimmed;
- * numbers and money by `JSON.parse`, as the Table always read them (R24); lists through the legacy scan (R19).
+ * numbers and money by `JSON.parse`, as the Table always read them (R24); lists through the legacy scan (R19); any other
+ * value's quoted scalar decoded after the trim (`frontValues` keeps one whose edge spaces a trim would lose), so a quoted
+ * value keeps its edge spaces (B12 R55); a value of spaces only is missing (R57).
  */
 export function propertyValue(row: TypeRow, key: string, raw: string | undefined): { value: PropertyValue } | 'missing' | 'invalid' {
   const text = raw?.trim() ?? '';
-  if (!text) return 'missing';
   const declaration = propertyDeclaration(row, key);
-  let value: unknown = text;
+  const scalar = ['list', 'number', 'money'].includes(declaration?.type ?? '') ? text : scalarOf(text);
+  if (!scalar.trim()) return 'missing';
+  let value: unknown = scalar;
   if (declaration?.type === 'list') {
     const scan = listScan(text);
     if (scan.open || scan.items.includes('')) return 'invalid';

@@ -3,12 +3,12 @@ import { isMonthlyLogPath } from './log-format';
 import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, type MocRegion, parseOwnership } from './ownership-format';
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
-import { readTagList, TAG_LIST_MAX } from './tag-format';
-import { parseNote, readTypeTable, typeRowOk, typeTableOk } from './note-format';
-import { VIEW_LIMITS, viewFault } from './view-format';
+import { NOTE_TAGS_MAX, readTagList, TAG_LIST_MAX } from './tag-format';
+import { frontValues, parseNote, propertyValue, readTypeTable, scalarList, typeRowOk, typeTableOk } from './note-format';
+import { VIEW_LIMITS, computedBy, viewFault } from './view-format';
 import { BowerError, type TypeRow, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote, consolidationOk } from './observations';
-import { applyChanges, viewsInstalled, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
+import { applyChanges, changesOrdered, viewsInstalled, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
 
@@ -94,7 +94,12 @@ export type Change =
    * B11 (R51, R56): a Bower note's computed front-matter lines, each `value` the line's text or null to remove every line
    * of that key. Maintain's own edit, derived at write time and never sealed in a manifest (R43), so it names no record.
    */
-  | { kind: 'computed-set'; recordIds: []; values: Array<{ key: string; value: string | null }> };
+  | { kind: 'computed-set'; recordIds: []; values: Array<{ key: string; value: string | null }> }
+  /**
+   * B12 (R10): one front-matter key of a Bower note that a map request sets, `line` the new line without its end (null
+   * removes the key); one change per key in an edit, in the order the map gives them.
+   */
+  | { kind: 'property-set'; recordIds: string[]; key: string; line: string | null };
 /**
  * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
  * (optional, `keep-one-note-merge`): the whole file as read, described by `beforeContent`, so an undo can put it back
@@ -106,6 +111,8 @@ export type EditText = {
   changes: Change[]; text: string; content: Content; beforeText?: string;
   /** A views-set edit's type table as the run read it, so the guard checks the installed entries as a write (R43). */
   types?: string;
+  /** A property-set edit's tag list as the run read it (B12 R54), so the guard holds its tags to B7's vocabulary. */
+  tags?: string;
 };
 /** Lint evidence of one checked note version (B8): its links, stored tag count and whether its parsed summary is set; absent means not checked. */
 export type LintEvidence = { links: string[]; tags: number; summary: boolean };
@@ -157,7 +164,7 @@ export type ManifestV2 = Omit<Manifest, 'v' | 'operations'> & { v: 2; operations
 export type ManifestRefusal = RecordJsonFailure['reason'] | 'shape' | 'scope' | 'content' | 'capture-id' | 'order' | 'operation-id' | 'report';
 export type ManifestResult = { ok: true; value: Manifest; sha256: string } | { ok: false; reason: ManifestRefusal };
 /** Which TL-P2-20 rule an `edit` refusal broke, for the log; the public reason stays `edit`. */
-export type EditGuardRule = 'target' | 'one-per-file' | 'rules-path' | 'encoding' | 'size' | 'unchanged' | 'date' | 'record' | 'mark' | 'archive' | 'views';
+export type EditGuardRule = 'target' | 'one-per-file' | 'rules-path' | 'encoding' | 'size' | 'unchanged' | 'date' | 'record' | 'mark' | 'archive' | 'views' | 'properties';
 /** `edit`: a v2 edit breaks a TL-P2-20 rule; `version`: a manifest version later than this build reads. */
 export type ManifestV2Refusal = ManifestRefusal | 'edit' | 'version';
 export type ManifestV2Result = { ok: true; value: Manifest | ManifestV2; sha256: string }
@@ -354,7 +361,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'property-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -409,6 +416,8 @@ function change(value: unknown): value is Change {
       && value.add.length + value.remove.length > 0;
     case 'views-set': return closed(value, ['kind', 'recordIds', 'previous', 'text']) && recordIds(value.recordIds)
       && (value.previous === null || text(value.previous)) && text(value.text);
+    case 'property-set': return closed(value, ['kind', 'recordIds', 'key', 'line']) && recordIds(value.recordIds) && text(value.key)
+      && (value.line === null || text(value.line));
     default: return false;
   }
 }
@@ -416,11 +425,10 @@ function change(value: unknown): value is Change {
 const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.length + ABOUT_REGIONS.indexOf(c.region)
   : c.kind === 'template-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
   : c.kind === 'moc-rewrite' ? CHANGE_ORDER.length + MOC_REGIONS.indexOf(c.region) : CHANGE_ORDER.indexOf(c.kind);
-const canonical = (changes: Change[]): boolean => changes.length > 0
-  && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
+const canonical = (changes: Change[]): boolean => changesOrdered(changes, changeOrder);
 function editText(value: unknown): value is EditText {
-  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText', 'createdBy', 'types']) && value.kind === 'edit-text'
-    && (value.types === undefined || text(value.types))
+  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText', 'createdBy', 'types', 'tags']) && value.kind === 'edit-text'
+    && (value.types === undefined || text(value.types)) && (value.tags === undefined || text(value.tags))
     && seenFile(value.before) && (value.createdBy === undefined || hash(value.createdBy))
     && path(value.path) && verifiedContent(value.beforeContent)
     && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
@@ -793,17 +801,12 @@ export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: stri
   if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
   const admitted = await admit(parsed.value, expectedRootId, (value): value is ManifestV2 => finalized ? manifestV2(value) : manifestOf(value, 2, operationV2), writes, finalized);
   if (!admitted.ok) return admitted;
-  const broken = edits(admitted.value) ?? (await viewsSetOk(admitted.value) ? null : 'views');
+  const broken = edits(admitted.value) ?? (await viewsSetOk(admitted.value) ? null : 'views') ?? (await propertySetOk(admitted.value) ? null : 'properties');
   return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
 }
 
-/**
- * A views-set edit (B11 R43, coordinator ruling 1): re-authored from the bytes it read, so only the `bower_views` line
- * and the run's own link rewrite change, on a Bower map; its new entries pass the write grammar against the type table
- * it read, at most ten in all; every record it names is a request this run completes (its requests.json `done`) or
- * a yes this run archives (R64).
- */
-async function viewsSetOk(value: ManifestV2): Promise<boolean> {
+/** The ids of the requests a manifest completes: its requests.json `done` rows (an unreadable file proves none). */
+function requestsDone(value: ManifestV2): Set<string> {
   const done = new Set<string>();
   for (const { effect: e } of value.operations) {
     const requests = e.kind === 'write-runner-json' && e.path === '.bower/requests.json'
@@ -816,6 +819,49 @@ async function viewsSetOk(value: ManifestV2): Promise<boolean> {
       // expected: an unreadable requests file proves no request.
     }
   }
+  return done;
+}
+
+/**
+ * A property-set edit (B12 R22, R54, R57; the views-set pattern): re-authored from the bytes it read, so only its keys'
+ * lines change, on a Bower note that is not a Source (the author refuses any other); each key is `tags`, held to B7's
+ * vocabulary (the list it read, or this run's tag-list write) and at most three on the note, or a key the note's row
+ * declares and no formula computes, its line reading back as a value the property holds; every record it names is a
+ * request this run completes.
+ */
+async function propertySetOk(value: ManifestV2): Promise<boolean> {
+  const done = requestsDone(value);
+  const journal = new Set(value.capture.journal.map((j) => j.recordId));
+  const grown = value.operations.flatMap(({ effect: e }) => (e.kind === 'write-runner-json' && e.path === '.bower/tags.json'
+    || e.kind === 'create-text' && e.name === 'tags.json' && targetPath(value, e.parent) === '.bower' ? readTagList(e.text).tags : []));
+  for (const { effect: e } of value.operations) {
+    if (e.kind !== 'edit-text') continue;
+    const sets = e.changes.filter((c): c is Extract<Change, { kind: 'property-set' }> => c.kind === 'property-set');
+    if (!sets.length) continue;
+    if (e.beforeText === undefined || e.types === undefined || !await describes(e.beforeContent, e.beforeText)
+      || sets.some((c) => c.line === null || !c.recordIds.length || !c.recordIds.every((id) => journal.has(id) && done.has(id)))) return false;
+    const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
+    if (!authored.ok || authored.text !== e.text) return false;
+    const type = frontValues(e.beforeText)?.type;
+    const row = readTypeTable(e.types).table.rows.find((r) => r.id === type);
+    const vocabulary = new Set([...readTagList(e.tags ?? null).tags, ...grown]);
+    for (const c of sets) {
+      const raw = frontValues(`---\n${c.line ?? ''}\n---\n`)?.[c.key];
+      if (c.key === 'tags' ? scalarList(raw ?? '').length > NOTE_TAGS_MAX || scalarList(raw ?? '').some((tag) => !vocabulary.has(tag))
+        : !row || !Object.hasOwn(row.properties, c.key) || computedBy(row).has(c.key) || typeof propertyValue(row, c.key, raw) !== 'object') return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * A views-set edit (B11 R43, coordinator ruling 1): re-authored from the bytes it read, so only the `bower_views` line
+ * and the run's own link rewrite change, on a Bower map; its new entries pass the write grammar against the type table
+ * it read, at most ten in all; every record it names is a request this run completes (its requests.json `done`) or
+ * a yes this run archives (R64).
+ */
+async function viewsSetOk(value: ManifestV2): Promise<boolean> {
+  const done = requestsDone(value);
   const journal = new Map(value.capture.journal.map((j) => [j.recordId, j.fileIds]));
   // A yes to a suggested view (B11f, R64) is its own record: an answer this run archives (moves out of the journal).
   const archived = (id: string): boolean => value.operations.some((o) => o.effect.kind === 'move' && (journal.get(id) ?? []).includes(o.effect.before.fileId));

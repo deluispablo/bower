@@ -45,7 +45,7 @@ export type Authors = { splice: (text: string, at: number, insert: string) => st
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'computed-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
+const ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'views-set', 'computed-set', 'property-set', 'timeline-append', 'rules-wording', 'profile-rewrite', 'moc-rewrite', 'template-rewrite', 'about-append', 'about-rewrite'];
 const RULE_LINE = /^- (.*?)(?:\s*<!-- since (\d{4}-\d{2}-\d{2}) -->)?\s*$/;
 const WORDS_LINE = /^\s+\*You wrote: "(.*)"\*\s*$/;
 const SUMMARY_LINE = /^summary: \d+ rules? Bower follows in every tidy-up\.$/;
@@ -156,13 +156,20 @@ function fieldsOk(change: Change): boolean {
     case 'rules-wording': return change.add.length + change.remove.length > 0 && change.add.every(ruleAddOk) && change.remove.every(ruleRemoveOk);
     case 'views-set': return (change.previous === null || typeof change.previous === 'string') && typeof change.text === 'string';
     case 'computed-set': return computedOk(change);
+    case 'property-set': return change.recordIds.length > 0 && (change.key === 'tags' || propertyKeyOk(change.key))
+      && (change.line === null || change.line.startsWith(`${change.key}:`) && !controls(change.line));
   }
 }
+/** A key a map may set as a property (B12): a plain key that is none of Bower's own nor a technical one (tags go as tags). */
+export const propertyKeyOk = (key: string): boolean => /^[a-z][a-z0-9_]*$/.test(key) && !key.startsWith('bower_')
+  && !(BOWER_KEYS as readonly string[]).includes(key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key);
 const changeOrder = (c: Change): number => c.kind === 'about-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.length + ABOUT_REGIONS.indexOf(c.region)
   : c.kind === 'template-rewrite' ? ORDER.length + MOC_REGIONS.length + TEMPLATE_REGIONS.indexOf(c.region)
   : c.kind === 'moc-rewrite' ? ORDER.length + MOC_REGIONS.indexOf(c.region) : ORDER.indexOf(c.kind);
-const ordered = (changes: readonly Change[]): boolean => changes.length > 0
-  && changes.every((item, i) => i === 0 || changeOrder(changes[i - 1] ?? item) < changeOrder(item));
+/** In the contract's order, one of each kind, but `property-set`: one per key (B12 R10). */
+export const changesOrdered = (changes: readonly Change[], order: (c: Change) => number = changeOrder): boolean => changes.length > 0
+  && changes.every((item, i) => i === 0 || order(changes[i - 1] ?? item) < order(item) || item.kind === 'property-set' && changes[i - 1]?.kind === 'property-set')
+  && new Set(changes.flatMap((c) => (c.kind === 'property-set' ? [c.key] : []))).size === changes.filter((c) => c.kind === 'property-set').length;
 
 /** The renames a run's moves and renames imply, as the resolver's `formerNames` follows them (chains, `taken`). */
 export function renamesFor(changes: readonly ChangeEntry[], taken: ReadonlySet<string> = new Set()): Rename[] {
@@ -995,7 +1002,7 @@ export function viewsInstalled(previous: string | null, entries: ReadonlyArray<{
   return previous !== null && stored !== null && sameJson(stored, JSON.parse(text)) ? null : { text, replaced: previous !== null && stored === null };
 }
 /** Equal as JSON values (R42): object key order aside, array order kept. */
-function sameJson(a: unknown, b: unknown): boolean {
+export function sameJson(a: unknown, b: unknown): boolean {
   if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => sameJson(x, b[i]));
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return a === b;
   const x = a as Record<string, unknown>;
@@ -1050,12 +1057,26 @@ const computedOk = (change: Extract<Change, { kind: 'computed-set' }>): boolean 
   && change.values.every(({ key, value }) => /^[a-z][a-z0-9_]*$/.test(key) && !key.startsWith('bower_')
     && !(BOWER_KEYS as readonly string[]).includes(key) && !(TECHNICAL_PROPERTIES as readonly string[]).includes(key)
     && (value === null || value.trim() !== '' && !controls(value)));
+/** A key's front-matter lines: each `key:` line, with the item lines under it when it heads a block list (B12 R58). */
+function keyLines(lines: readonly Line[], key: string): Line[][] {
+  const out: Line[][] = [];
+  lines.forEach((l, i) => {
+    if (keyOf(l.text) !== key) return;
+    const own = [l];
+    if (!l.text.slice(l.text.indexOf(':') + 1).trim()) for (const item of lines.slice(i + 1)) {
+      if (!/^\s*-(?:\s|$)/.test(item.text)) break;
+      own.push(item);
+    }
+    out.push(own);
+  });
+  return out;
+}
 /**
- * The one computed-set author, only on a Bower note and only in its front matter: a key's first line takes the value
- * (readers take the first) and its later lines go; a key with no line gets one, last, in the note's own line ending; a
- * null value removes every line of the key (coordinator ruling 4).
+ * The one front-matter line author (computed-set, property-set), only on a Bower note: a key's first line (with its block
+ * items) takes the new line (readers take the first) and its later lines go; a key with no line gets one, last, in the
+ * note's own line ending; a null line removes every line of the key (coordinator ruling 4).
  */
-function setComputed(text: string, change: Extract<Change, { kind: 'computed-set' }>, fetched?: FetchedOwnership): Step {
+function setFrontLines(text: string, wanted: ReadonlyArray<{ key: string; line: string | null }>, fetched?: FetchedOwnership): Step {
   if (!byBower(text, fetched)) return { refused: 'not-bower' };
   const lines = frontmatterLines(text, fetched);
   const end = lines.at(-1);
@@ -1063,10 +1084,12 @@ function setComputed(text: string, change: Extract<Change, { kind: 'computed-set
   const eol = eolOf(text);
   const edits: Array<{ start: number; end: number; text: string }> = [];
   const added: string[] = [];
-  for (const { key, value } of change.values) {
-    const line = value === null ? null : `${key}: ${value}`;
-    const own = lines.filter((l) => keyOf(l.text) === key);
-    own.forEach((l, i) => edits.push(i === 0 && line !== null ? { start: l.start, end: l.end, text: line } : { start: l.start, end: l.after, text: '' }));
+  for (const { key, line } of wanted) {
+    const own = keyLines(lines, key);
+    own.forEach((l, i) => {
+      const [first, last = first] = [l[0], l.at(-1)];
+      if (first && last) edits.push(i === 0 && line !== null ? { start: first.start, end: last.end, text: line } : { start: first.start, end: last.after, text: '' });
+    });
     if (!own.length && line !== null) added.push(line);
   }
   if (added.length) edits.push({ start: end.after, end: end.after, text: (end.after === end.end ? eol : '') + added.map((l) => l + eol).join('') });
@@ -1074,13 +1097,42 @@ function setComputed(text: string, change: Extract<Change, { kind: 'computed-set
   for (const edit of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, edit.start) + edit.text + out.slice(edit.end);
   return { text: out, added: [], rules: null };
 }
-/** Only front-matter lines of the change's keys differ between the two texts. */
-const computedHold = (before: string, after: string, change: Extract<Change, { kind: 'computed-set' }>): boolean => {
-  const keys = new Set(change.values.map((v) => v.key));
-  const strip = (t: string): string => [...frontmatterLines(t)].reverse()
-    .reduce((out, l) => (keys.has(keyOf(l.text) ?? '') ? out.slice(0, l.start) + out.slice(l.after) : out), t);
+const setComputed = (text: string, change: Extract<Change, { kind: 'computed-set' }>, fetched?: FetchedOwnership): Step =>
+  setFrontLines(text, change.values.map(({ key, value }) => ({ key, line: value === null ? null : `${key}: ${value}` })), fetched);
+/** Only front-matter lines of these keys differ between the two texts. */
+const frontHold = (before: string, after: string, keys: ReadonlySet<string>): boolean => {
+  const strip = (t: string): string => {
+    const lines = frontmatterLines(t);
+    return [...keys].flatMap((key) => keyLines(lines, key).flat()).sort((a, b) => b.start - a.start)
+      .reduce((out, l) => out.slice(0, l.start) + out.slice(l.after), t);
+  };
   return strip(before) === strip(after);
 };
+
+// ---------------------------------------------------------------------------------------------
+// property-set (B12 R10-R12, R58)
+// ---------------------------------------------------------------------------------------------
+
+/** A key's stored line as one value: a flow or bare value as written, a block list as its items, one per line. */
+export function frontLine(text: string, key: string): { line: string; items?: string[] } | null {
+  const own = keyLines(frontmatterLines(text), key)[0];
+  const first = own?.[0];
+  if (!first) return null;
+  return own.length > 1 || !first.text.slice(first.text.indexOf(':') + 1).trim()
+    ? { line: first.text, items: own.slice(1).map((l) => l.text.replace(/^\s*-\s?/, '').trim()) } : { line: first.text };
+}
+/** A map's property or tag line on a Bower note that is not a Source (R17): the one front-matter line author's. */
+function setProperty(text: string, change: Extract<Change, { kind: 'property-set' }>, fetched?: FetchedOwnership): Step {
+  let role: string | null;
+  try { role = bowerNoteRole(text, fetched); }
+  catch (error) {
+    // expected: an unreadable note is not Bower's.
+    console.error('A note could not be read for its properties:', error);
+    return { refused: 'not-bower' };
+  }
+  if (role === 'source') return { refused: 'not-bower' };
+  return setFrontLines(text, [{ key: change.key, line: change.line }], fetched);
+}
 
 export type MocSnapshot = { text: string; regions: Record<MocRegion, string> };
 
@@ -1184,7 +1236,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
   }
   const own = fetched ? fetched.context.read(fetched.fileId, before) : parseOwnership(before);
   if (own.status === 'invalid') return refuse(own.reason);
-  if (!ordered(changes)) return refuse('order');
+  if (!changesOrdered(changes)) return refuse('order');
   if (!changes.every(fieldsOk)) return refuse('field');
   const note = parseNote(fetched?.path ?? 'note.md', text, fetched);
   const role = bowerNoteRole(text, fetched);
@@ -1200,7 +1252,7 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
     // Intermediate text is generated, even when it carries the source file id.
     const step = change.kind === 'about-append' ? appendAbout(current, change.text) : change.kind === 'state-rewrite' ? rewriteState(current, change, source)
       : change.kind === 'link-rewrite' ? relink(current, change, source) : change.kind === 'views-set' ? setViews(current, change, source)
-        : change.kind === 'computed-set' ? setComputed(current, change, source)
+        : change.kind === 'computed-set' ? setComputed(current, change, source) : change.kind === 'property-set' ? setProperty(current, change, source)
         : change.kind === 'timeline-append' ? appendLines(current, change, authors, source) : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? rewriteRegion(current, change, source) : wordRules(current, change, authors, source);
     source = fetched;
     if ('refused' in step) return refuse(step.refused);
@@ -1211,7 +1263,8 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
         || decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end))
           !== decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end))) return refuse('invariant');
     }
-    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : change.kind === 'views-set' ? viewsHold(current, step.text) : change.kind === 'computed-set' ? computedHold(current, step.text, change) : holds(current, step.text, change, step);
+    const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : change.kind === 'views-set' ? viewsHold(current, step.text) : change.kind === 'computed-set' ? frontHold(current, step.text, new Set(change.values.map((v) => v.key)))
+      : change.kind === 'property-set' ? frontHold(current, step.text, new Set([change.key])) : holds(current, step.text, change, step);
     if (step.text !== current && !kept) return refuse('invariant');
     current = step.text;
   }
