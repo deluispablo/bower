@@ -533,3 +533,45 @@ describe('addendum 9 re-plan', () => {
     b.dispose();
   });
 });
+
+describe('undo-drops-reserved-create (DEFECT_LOG 67): a rule line that landed with its answer and read-back lost', () => {
+  it('AC1 undo-drops-reserved-create: taken out against a cached listing, no rule listed, one line file, its inverse sent, and Rules.md lacks it after a tidy-up', async () => {
+    const v = tab();
+    await v.rules();
+    await v.tree();
+    const words = 'scans of letters go in documents';
+    // The create lands, then its answer is lost; the read-back by id is lost once too.
+    const create = drive.createText.bind(drive);
+    const get = drive.get.bind(drive);
+    let lose = 1;
+    let landedId = '';
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      const made = await create(...a);
+      if (LINE.test(a[1]) && lose > 0) {
+        lose -= 1;
+        landedId = made.id;
+        throw driveError('offline');
+      }
+      return made;
+    };
+    let getLost = 1;
+    drive.get = async (...a: Parameters<FakeDrive['get']>) => {
+      if (a[0] === landedId && getLost > 0) {
+        getLost -= 1;
+        throw driveError('offline');
+      }
+      return get(...a);
+    };
+    const r = await v.addRule(words);
+    await v.settled();
+    expect(landedId, 'the line landed in Drive').not.toBe('');
+    await v.removeRule(r.id);
+    await v.settled();
+    expect((await tab().rules()).some((x) => x.yourWords === words || x.text === words)).toBe(false);
+    expect(linesInDrive().filter((l) => l.id === r.id), 'one file for the line, never a second').toHaveLength(1);
+    // The line had an id reserved, so the Undo is the inverse forward line, never a drop (TL-P4-27 addendum 2 (1)).
+    expect(linesInDrive().filter((l) => l.undoes === r.id)).toHaveLength(1);
+    expect((await tidyUp(drive, root, 'instructions')).phase).toBe('done');
+    expect(rulesText().toLowerCase()).not.toContain(words);
+  });
+});
