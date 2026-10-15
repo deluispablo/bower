@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "Move rename property and tag complete 2 members with 0 unresolved members",
   "covers": "model",
-  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50; pending scripted proof",
+  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50",
   "scope": "instructions",
   "allowWeb": false,
   "inbox": [],

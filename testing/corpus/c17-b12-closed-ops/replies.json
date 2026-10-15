@@ -6,62 +6,30 @@
     "maps": [
       {
         "requestId": "$request:change-1",
-        "setId": "$set:change-1",
+        "title": "Organise offers",
+        "set": {
+          "type": "offer",
+          "folderId": "$folder:Projects/Job hunt",
+          "recursive": false,
+          "where": { "op": "eq", "property": "status", "value": "active" }
+        },
         "results": [
           {
             "memberId": "$note:Projects/Job hunt/Offer amber.md",
             "ops": [
-              {
-                "kind": "move",
-                "targetId": "$note:Projects/Job hunt/Offer amber.md",
-                "parentId": "$folder:Projects/Job hunt/Saltmere"
-              },
-              {
-                "kind": "rename",
-                "targetId": "$note:Projects/Job hunt/Offer amber.md",
-                "name": "Ferrowick offer.md"
-              },
-              {
-                "kind": "property",
-                "targetId": "$note:Projects/Job hunt/Offer amber.md",
-                "key": "review_state",
-                "mode": "set",
-                "value": "reviewed"
-              },
-              {
-                "kind": "tag",
-                "targetId": "$note:Projects/Job hunt/Offer amber.md",
-                "mode": "add",
-                "value": "shortlist"
-              }
+              { "kind": "move", "targetId": "$note:Projects/Job hunt/Offer amber.md", "parentId": "$folder:Projects/Job hunt/Saltmere" },
+              { "kind": "rename", "targetId": "$note:Projects/Job hunt/Offer amber.md", "name": "Ferrowick offer.md" },
+              { "kind": "property", "targetId": "$note:Projects/Job hunt/Offer amber.md", "key": "review_state", "mode": "set", "value": "reviewed" },
+              { "kind": "tag", "targetId": "$note:Projects/Job hunt/Offer amber.md", "mode": "add", "value": "shortlist" }
             ]
           },
           {
             "memberId": "$note:Projects/Job hunt/Offer birch.md",
             "ops": [
-              {
-                "kind": "move",
-                "targetId": "$note:Projects/Job hunt/Offer birch.md",
-                "parentId": "$folder:Projects/Job hunt/Lindenwick"
-              },
-              {
-                "kind": "rename",
-                "targetId": "$note:Projects/Job hunt/Offer birch.md",
-                "name": "Mallowick offer.md"
-              },
-              {
-                "kind": "property",
-                "targetId": "$note:Projects/Job hunt/Offer birch.md",
-                "key": "review_state",
-                "mode": "set",
-                "value": "reviewed"
-              },
-              {
-                "kind": "tag",
-                "targetId": "$note:Projects/Job hunt/Offer birch.md",
-                "mode": "add",
-                "value": "shortlist"
-              }
+              { "kind": "move", "targetId": "$note:Projects/Job hunt/Offer birch.md", "parentId": "$folder:Projects/Job hunt/Lindenwick" },
+              { "kind": "rename", "targetId": "$note:Projects/Job hunt/Offer birch.md", "name": "Mallowick offer.md" },
+              { "kind": "property", "targetId": "$note:Projects/Job hunt/Offer birch.md", "key": "review_state", "mode": "set", "value": "reviewed" },
+              { "kind": "tag", "targetId": "$note:Projects/Job hunt/Offer birch.md", "mode": "add", "value": "shortlist" }
             ]
           }
         ]

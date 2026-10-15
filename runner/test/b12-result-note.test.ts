@@ -68,15 +68,16 @@ type Folder = Awaited<ReturnType<typeof folder>>;
 type Ctx = { request: string; hunt: string; id: (path: string) => Promise<string>; things?: Array<{ fileId: string; name: string }> };
 const empty = { kind: 'tidy-intent', v: 1, things: [] };
 
-async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, o: { words?: string; around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch; pile?: number } = {}) {
+async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, o: { words?: string; around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch; pile?: number; extra?: Record<string, string> } = {}) {
   f.press++;
   const words = o.words ?? WORDS;
-  if (o.pile) {
+  if (o.pile || o.extra) {
     const pile = await f.drive.createFolder(await f.id('Inbox'), `Pile ${f.press}`, { pile: `pile-${f.press}` });
     await f.drive.createText(pile.id, PILE_NOTE, 'File these letters with my job hunt.\n');
-    for (let i = 1; i <= o.pile; i++) await f.drive.createText(pile.id, `Letter ${String(i).padStart(3, '0')}.txt`, `Alex received letter ${i}.\n`);
+    for (const [name, text] of Object.entries(o.extra ?? {})) await f.drive.createText(pile.id, name, text);
+    for (let i = 1; i <= (o.pile ?? 0); i++) await f.drive.createText(pile.id, `Letter ${String(i).padStart(3, '0')}.txt`, `Alex received letter ${i}.\n`);
   }
-  const scope = o.pile ? 'all' : 'instructions';
+  const scope = o.pile || o.extra ? 'all' : 'instructions';
   const request = await f.drive.createText(await f.id(SYSTEM.changes), `press-${f.press}.json`, JSON.stringify({ v: 1,
     id: `press-${f.press}`, device: 'device-1', at: DAY + f.press, kind: 'request', what: `Asked Bower: "${words}"`, text: words }));
   const admission = await planAdmission(fakeRead(f.drive), f.root, { scope, clock: () => DAY + f.press, newId: () => `b12-admission-${f.press}` });
@@ -100,6 +101,14 @@ const union = async (ctx: Ctx, path: string, value: string[]) => ({ memberId: aw
 const shared = async (ctx: Ctx) => resultsMap(ctx, [await union(ctx, FERRO, ['SQL', 'TypeScript']), await union(ctx, MALLO, ['dbt', 'SQL'])]);
 const url = (input: RequestInfo | URL): URL => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 const bodyOf = async (init?: RequestInit) => (init?.body == null ? '' : await new Response(init.body).text());
+/** The name in the metadata part of a multipart upload that creates a file; never a body that merely mentions it. */
+async function createdName(input: RequestInfo | URL, init?: RequestInit): Promise<string | null> {
+  if (init?.method !== 'POST' || url(input).pathname !== '/upload/drive/v3/files') return null;
+  const meta = /\r\n\r\n(\{[^\r\n]*\})\r\n/.exec(await bodyOf(init))?.[1];
+  try { return meta ? (JSON.parse(meta) as { name?: string }).name ?? null : null; } catch { return null; }
+}
+const manifestStored = async (f: Folder) => (await f.drive.listAll(f.root)).some((x) => /^manifest-[0-9a-f]{64}\.json$/.test(x.name));
+const noteStored = async (f: Folder) => (await f.drive.listAll(f.root)).some((x) => x.name === 'Request - Review offers.md');
 const archived = (run: CaseRun, id: string) => !Object.keys(run.after).some((path) => path.startsWith(`${SYSTEM.changes}/`)
   && !path.startsWith(`${SYSTEM.archive}/`) && path.endsWith(`${id}.json`));
 /** A request record written before the press, older or younger by `at`; its Drive id. */
@@ -138,6 +147,8 @@ function scored(f: Folder, run: CaseRun, report: Record<string, unknown>) {
 describe('B12c one result note per settled request', () => {
   it('AC15 b12-result-note-written: a settled request writes one Bower note in its set\'s folder with every member\'s outcome', async () => {
     const f = await folder();
+    // A first run on a cold folder also writes the health note; one idle run first, so the report names only this request's rows.
+    await press(f, () => empty, { words: 'Update these notes.' });
     const run = await press(f, shared);
     const text = run.after[NOTE] ?? '';
     expect(notes(run), 'one result note, named for the map\'s title').toEqual([NOTE]);
@@ -220,6 +231,25 @@ describe('B12c one result note per settled request', () => {
     expect(run.after[NOTE] ?? '').toContain('- [[Projects/Job hunt/Ferrowick offer]]: done\n');
     expect(run.after[NOTE] ?? '', 'a title only one note has stays a plain link').toContain('- [[Mallowick offer]]: done\n');
     expect(run.after['Areas/Career/Ferrowick offer.md']).toBe(other);
+  });
+
+  it('AC15 b12-result-note-created-title: a member whose title the result note being created shares is linked by its place', async () => {
+    const sub = `${HUNT}/Sub/Request - Review offers.md`;
+    const f = await folder({ [sub]: offer('Subwick') });
+    const run = await press(f, (ctx) => ({ ...empty, maps: [{ requestId: ctx.request, title: 'Review offers', set: { ...set(ctx), recursive: true }, ops: [REVIEWED] }] }),
+      { words: 'Mark the active offers in Job hunt as reviewed.' });
+    expect(notes(run).sort(), 'the note takes the free name in the set\'s folder').toEqual([NOTE, sub].sort());
+    expect(run.after[NOTE] ?? '', 'the link opens the member, not the note being created').toContain('- [[Projects/Job hunt/Sub/Request - Review offers]]: done\n');
+    expect(run.after[NOTE] ?? '').toContain('- [[Ferrowick offer]]: done\n');
+  });
+
+  it('AC15 b12-result-note-mixed-run-title: a note the same run files with the title of an updated note makes that link a place link', async () => {
+    const f = await folder();
+    const incoming = '---\nby: bower\ntype: concept\nsummary: Another career profile.\n---\n\n## Notes\nAlex sent this.\n';
+    const run = await press(f, async (ctx) => ({ ...(await shared(ctx)), things: (ctx.things ?? []).filter((t) => t.name === 'Career profile.md')
+      .map((t) => ({ fileId: t.fileId, to: HUNT, name: 'Career profile.md' })) }), { extra: { 'Career profile.md': incoming } });
+    expect(run.after[`${HUNT}/Career profile.md`], 'the run filed the second Career profile').toBeDefined();
+    expect(run.after[NOTE] ?? '', 'the link opens the note that was updated').toContain('Updated: [[Areas/Career/Career profile]]\n');
   });
 
   it('AC15 b12-result-note-empty-set (guard): a set with no notes settles with no result note; its requests row says it was done', async () => {
@@ -345,13 +375,15 @@ describe('B12c one result note per settled request', () => {
     const state = { reached: false };
     const first = await press(f, shared, { around: (next) => async (input, init) => {
       if (state.reached && url(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
-      if (init?.method === 'POST' && url(input).pathname === '/upload/drive/v3/files' && (await bodyOf(init)).includes('Request - Review offers.md')) {
+      if (await createdName(input, init) === 'Request - Review offers.md') {
+        expect(await manifestStored(f), 'the frozen manifest exists before the interruption').toBe(true);
         state.reached = true;
         throw new TypeError('Made-up crash before the result note.');
       }
       return next(input, init);
     } });
     expect(state.reached, 'main came to the result note').toBe(true);
+    expect(await noteStored(f), 'the note was not created').toBe(false);
     const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A redispatch must not call a model.'); });
     const resumed = await redispatchCase(f.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });
     expect(phase(resumed)).toBe('done');
@@ -365,9 +397,9 @@ describe('B12c one result note per settled request', () => {
     let crashed = false;
     const first = await press(f, shared, { around: (next) => async (input, init) => {
       if (crashed && url(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
-      if (init?.method === 'POST' && url(input).pathname === '/upload/drive/v3/files' && (await bodyOf(init)).includes('Request - Review offers.md')) {
+      if (await createdName(input, init) === 'Request - Review offers.md') {
         const response = await next(input, init);
-        crashed = response.ok;
+        crashed = response.ok && await noteStored(f);
         throw new TypeError('Made-up lost answer after the result note.');
       }
       return next(input, init);

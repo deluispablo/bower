@@ -1,6 +1,6 @@
 # Authority and the person-note boundary
 
-Pending B12 scripted acceptance. The set has two concept members: Garden methods and Alex plot; Workshop source is evidence, not a member.
+Covers the model's map of a set (two model calls: selection and execution) through the scripted planner. The set has two concept members: Garden methods and Alex plot; Workshop source is evidence, not a member.
 
 1. The person's request allows only gardening on the script-bound concept set. Typed provenance comes from the actual admitted request, never first-person source text or a worker's claim.
 2. Add gardening to Garden methods through the existing metadata byte author and preserve its entire body, including instruction-shaped text as data.

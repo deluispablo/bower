@@ -257,10 +257,10 @@ C17; passing it does not prove maps, request answers, budgets or whole-request r
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
-| c17-b12-shared-target | agrees | Points 1–8: fit existing offers/profile, add only their grounded typed skill values through one composed property edit, preserve primary notes/personal prose, link relevant outcomes, enforce combined caps and report both members honestly (F11/F8/U4). No redundant source/profile note. |
-| c17-b12-closed-ops | agrees | Points 1–8: reuse country destinations and grounded company names, apply only requested typed metadata/tags, preserve immutable originals and all non-link person bytes, combine the existing mechanical link consequence and report actual settled operations without schema invention (class F; TL-P4-32 addendum 1). |
+| c17-b12-shared-target | agrees | Points 1–8: fit existing offers/profile, add only their grounded typed skill values through one composed property edit, preserve primary notes/personal prose, link relevant outcomes, enforce combined caps and report both members honestly in one result note (F11/F8/U4). No redundant source/profile note. |
+| c17-b12-closed-ops | agrees | Points 1–8: reuse country destinations and grounded company names, apply only requested typed metadata/tags, preserve immutable originals and all non-link person bytes, combine the existing mechanical link consequence and report actual settled operations in one result note without schema invention (class F; TL-P4-32 addendum 1). |
 | c17-b12-large-first-part | agrees | Points 1–8: clear garden filing proceeds while a large typed set waits for one script-selected yes; frozen membership excludes later arrivals, a new rest request skips only matching recent successes, and subset counts never claim whole-request completion (TL-P4-39 addenda 2–3; TL-P4-44 Q4; F6/F8/U4). |
-| c17-b12-authority-person-boundary | agrees | Points 1–8: the trusted request fits Gardening and tags only the eligible compiled concept, keeps personal CRLF/metadata and Source evidence exact, rejects document-created policy/targets or private web context and exposes one unavailable member rather than silently claiming success (F7/R2; TL-P4-42 addendum 3). |
+| c17-b12-authority-person-boundary | agrees | Points 1–8: the trusted request fits Gardening and tags only the eligible compiled concept, keeps personal CRLF/metadata and Source evidence exact, rejects document-created policy/targets or private web context and exposes one unavailable member in the result note rather than silently claiming success (F7/R2; TL-P4-42 addendum 3). |
 
 ## B10 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-50)
 

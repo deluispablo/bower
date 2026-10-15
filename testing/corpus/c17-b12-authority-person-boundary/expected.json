@@ -35,7 +35,8 @@
       "contains": [
         "Done: 1",
         "Unavailable: 1",
-        "[[Alex plot]]"
+        "- [[Garden methods]]: done",
+        "- [[Alex plot]]: unavailable, Bower changes details only on its own notes"
       ]
     }
   ],
@@ -51,7 +52,8 @@
   "report": {
     "filed": 0,
     "created": [
-      "Resources/Gardening/Request - Tag garden concepts.md"
+      "Resources/Gardening/Request - Tag garden concepts.md",
+      "Bower health.md"
     ],
     "updated": [
       "Resources/Gardening/Garden methods.md"

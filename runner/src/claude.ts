@@ -55,7 +55,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, TypeRow } from '../../src/data/contracts/types';
-import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
@@ -1365,7 +1365,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return parentId === undefined && name === undefined ? {} : { move: { ...(parentId === undefined ? {} : { parentId }), ...(name === undefined ? {} : { name }) } };
     };
     const members = set && !set.unread ? set.members : [];
-    maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', members,
+    maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', title: m.title, folderId: typeof m.set.folderId === 'string' ? m.set.folderId : '', members,
       results: m.ops ? members.map((id) => ({ memberId: id, ops: toOps(m.ops ?? [], () => id), ...placeOf(m.ops ?? []) }))
         : (m.results ?? []).map((r) => ({ memberId: r.memberId, ops: toOps(r.ops, (op) => targetOf(op) ?? r.memberId), ...placeOf(r.ops) })),
       ...(!set || set.unread ? { pending: true as const } : {}) });
@@ -1826,8 +1826,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
       const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
       if (stray) return refuse(stray);
-      // A map's edits count to the 1,000 (R23).
-      timing.requireOperations(manifest.operations.length + 1, count, manifest.operations.filter(({ effect: e }) => e.kind === 'edit-text' && e.changes.some((c) => c.kind === 'property-set')).length);
+      // Every operation of a map counts to the 1,000: by the request's record id on it, its result note by the key made from that id (R23, R86).
+      const mapIds = new Set((filing.maps ?? []).map((m) => m.requestId));
+      const noteKeys = new Set(await Promise.all([...mapIds].map(resultNoteKey)));
+      const ofMap = (ids: readonly string[] | undefined): boolean => !!ids?.some((id) => mapIds.has(id));
+      timing.requireOperations(manifest.operations.length + 1, count, manifest.operations.filter(({ effect: e }) => e.kind === 'create-text' ? noteKeys.has(e.createKey)
+        : e.kind === 'move' ? ofMap(e.recordIds) : e.kind === 'edit-text' && e.changes.some((c) => 'recordIds' in c && ofMap(c.recordIds))).length);
       console.log(`The Claude provider planned ${manifest.operations.length} operations ${by}.`);
       return manifest;
     };
