@@ -135,7 +135,7 @@ const remember = (frame: Frame) => observation(frame, REMOTE);
 const fileOffer = (frame: Frame) => ({ ...EMPTY, things: frame.piles.flatMap((p) => p.things)
   .filter((t) => t.name === OFFER).map((t) => ({ fileId: t.fileId, to: 'Projects/Job hunt', name: OFFER,
     note: { name: 'Ferrowick offer.md', summary: 'Ferrowick offers Alex a developer role.',
-      body: 'Ferrowick offers Alex a developer role.\n\nRelated: [[Job hunt]].' } })) });
+      body: 'Ferrowick offers Alex a developer role.\n\nSee also [[Job hunt]]: the offer belongs to the job hunt.' } })) });
 const rememberAndFile = (frame: Frame) => ({ ...fileOffer(frame), observations: remember(frame).observations });
 const inboxWords = (run: CaseRun) => Object.entries(run.after)
   .filter(([path]) => path.startsWith('Inbox/') && path.endsWith(PILE_NOTE)).map(([, text]) => text.trim());
