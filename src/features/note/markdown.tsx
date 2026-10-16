@@ -64,7 +64,9 @@ interface MarkdownProps {
 }
 
 export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
-  const lines = text.split('\n');
+  // CommonMark leaves HTML comments out of a reader that renders no HTML. shortcut: single-line comments only (the
+  // data layer counts task lines one by one), a comment over several lines stays as text.
+  const lines = text.split('\n').map((l) => l.replace(/<!--.*?-->/g, ''));
   let task = -1;
   const blocks: ReactNode[] = [];
   let i = 0;
