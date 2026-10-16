@@ -12,7 +12,6 @@ import { isRoot, nameOf } from '../../src/data/contracts/tree';
 
 export const HEALTH_NAME = 'Bower health.md';
 
-const placeLink = (path: string): string => `[[${path.replace(/\.md$/i, '')}]]`;
 const title = (path: string): string => nameOf(path).replace(/\.md$/i, '');
 const and = (items: string[]): string => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`;
 /** The existing resolver (R25): a bare title or a folder path suffix, with or without `.md`. */
@@ -32,7 +31,16 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   after: Readonly<Record<string, { path: string }>>): string {
   const sorted = Object.entries(notes).map(([id, note]) => ({ ...note, id })).sort((a, b) => a.path.localeCompare(b.path));
   const placed = new Map(sorted.map((note) => [note.path, after[note.id]?.path]));
-  const link = (path: string): string => placeLink(placed.get(path) ?? path);
+  // A title two notes share is shown as their places, so the duplicate-name line can tell them apart (R3).
+  // Counted over every visible .md file: the checked notes leave out some places (the Inbox).
+  const shared = new Map<string, number>();
+  for (const path of new Set([...files, ...sorted.map((note) => note.path)].filter((p) => /\.md$/i.test(p)))) {
+    shared.set(title(path).toLowerCase(), (shared.get(title(path).toLowerCase()) ?? 0) + 1);
+  }
+  const link = (path: string): string => {
+    const place = (placed.get(path) ?? path).replace(/\.md$/i, '');
+    return (shared.get(title(path).toLowerCase()) ?? 0) > 1 ? `[[${place}]]` : `[[${place}|${title(path)}]]`;
+  };
   const targets = files.flatMap(keys);
   const notePaths = sorted.map((note) => ({ path: note.path, keys: keys(note.path) }));
   const unchecked = sorted.filter((note) => !note.lint);
@@ -55,27 +63,28 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   const byName = new Map<string, string[]>();
   for (const note of sorted) byName.set(title(note.path).toLowerCase(), [...(byName.get(title(note.path).toLowerCase()) ?? []), note.path]);
   const duplicates = [...byName.values()].map((paths) => paths.filter((path) => placed.get(path))).filter((paths) => paths.length > 1)
-    .map((paths) => `- Duplicate name: ${and(paths.map(link))} share the name ${title(paths[0] ?? '')}.`);
+    .map((paths) => `- Duplicate name: ${and(paths.map(link))} share the name ${title(paths[0] ?? '')}, so a link to ${title(paths[0] ?? '')} may open either.`);
   const bower = sorted.filter((note) => note.owner === 'bower' && note.lint && placed.get(note.path));
   const summaries = bower.filter((note) => note.lint?.summary === false)
-    .map((note) => `- Missing summary: ${link(note.path)} has no summary.`);
+    .map((note) => `- Missing summary: ${link(note.path)} has no summary, so nothing says what it is at a glance.`);
   const dated = bower.filter((note) => (title(note.path).match(/\d{4}-\d{2}-\d{2}/g) ?? []).some(dateOk))
-    .map((note) => `- Date in the name: ${link(note.path)} has a date in its name.`);
+    .map((note) => `- Date in the name: ${link(note.path)} has a date in its name; dates belong in the note's properties.`);
   const long = bower.filter((note) => note.lint?.summary === true && !validSummary(note.summary))
-    .map((note) => `- Long summary: ${link(note.path)} has a summary longer than one line of 200 characters.`);
+    .map((note) => note.summary.length > 200 ? `- Long summary: ${link(note.path)} has a summary over 200 characters.`
+      : `- Summary to fix: ${link(note.path)} has a summary Bower cannot show on one line.`);
   const bySummary = new Map<string, string[]>();
   for (const note of bower.filter((n) => n.lint?.summary === true)) {
     const key = note.summary.trim().toLowerCase();
     bySummary.set(key, [...(bySummary.get(key) ?? []), note.path]);
   }
   const sharedSummaries = [...bySummary.values()].filter((paths) => paths.length > 1)
-    .map((paths) => `- Duplicate summary: ${and(paths.map(link))} share the same summary.`);
+    .map((paths) => `- Duplicate summary: ${and(paths.map(link))} have the same summary, so it does not tell them apart.`);
   const tags = bower.filter((note) => (note.lint?.tags ?? 0) > NOTE_TAGS_MAX)
     .map((note) => `- Too many tags: ${link(note.path)} has ${note.lint?.tags ?? 0}; Bower keeps ${NOTE_TAGS_MAX} at most.`);
   // An orphan needs the whole inbound graph; About me and Rules are the notes the app opens directly, never linked to.
   const orphans = unchecked.length ? [] : bower.filter((note) => !inbound.has(note.path) && !isRoot(note.path)
-    && !isHub(note.path, nameOf(note.path), note.type ?? undefined)).map((note) => `- Orphan: no other note links to ${link(note.path)}.`);
-  const notChecked = unchecked.filter((note) => placed.get(note.path)).map((note) => `- Not checked yet: ${link(note.path)}. Bower will check it next time.`);
+    && !isHub(note.path, nameOf(note.path), note.type ?? undefined)).map((note) => `- Nothing links to ${link(note.path)}.`);
+  const notChecked = unchecked.filter((note) => placed.get(note.path)).map((note) => `- Waiting: ${link(note.path)}. Bower will check it next time.`);
   const findings = [...broken, ...duplicates, ...sharedSummaries, ...summaries, ...long, ...dated, ...tags, ...orphans];
   const lines = [...notChecked, ...findings];
   return '---\nsummary: What Bower found when it checked the links and names in your notes.\nby: bower\n---\n\n## Bower\'s note\n'

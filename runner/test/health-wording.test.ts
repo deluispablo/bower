@@ -44,6 +44,11 @@ describe('health-wording: the health note in plain words', () => {
     expect(lines.join('\n'), 'a unique title is never shown as its place').not.toContain(`[[${GARDEN}/Plot diary]]`);
   });
 
+  it('AC2 health-titles-inbox: a title shared with an Inbox file (not a checked note) is named by its place', () => {
+    const lines = health([hub, note(`${GARDEN}/Mint.md`, { lint: { links: ['Missing plan'], tags: 1, summary: true } })], ['Inbox/Mint.md']);
+    expect(lines).toContain(`- Broken link in [[${GARDEN}/Mint]]: no note is called Missing plan.`);
+  });
+
   it('AC3 health-lines: each finding ends with its reason or next step, in these words', () => {
     const lines = health([
       hub,
@@ -63,6 +68,17 @@ describe('health-wording: the health note in plain words', () => {
     ]));
     // One finding is one line, and every line ends with a full stop after its reason.
     for (const line of lines) expect(line, line).toMatch(/^- [^\n]+\.$/);
+  });
+
+  it('R4 health-summary-to-fix: a short summary Bower cannot show on one line is not called long', () => {
+    const lines = health([hub, note(`${GARDEN}/Odd.md`, { summary: 'Alex keeps this.' })]);
+    expect(lines).toContain(`- Summary to fix: ${titled(`${GARDEN}/Odd`)} has a summary Bower cannot show on one line.`);
+    expect(lines.join('\n')).not.toMatch(/Long summary/);
+  });
+
+  it('R4 health-broken-target: a broken link target keeps its literal text, extension included', () => {
+    const lines = health([hub, note(`${GARDEN}/Plot diary.md`, { lint: { links: ['Mulch notice.txt'], tags: 1, summary: true } })]);
+    expect(lines).toContain(`- Broken link in ${titled(`${GARDEN}/Plot diary`)}: no note is called Mulch notice.txt.`);
   });
 
   it('AC4 health-nothing-links: a Bower note no other note links to says so in plain words', () => {
