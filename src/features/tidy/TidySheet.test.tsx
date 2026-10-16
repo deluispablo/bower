@@ -7,6 +7,7 @@ import { BowerError, type Question, type RunState } from '@/data/types';
 import type { QuestionAnswer } from '@/data/contracts/questions';
 import { loadingSources } from '@/testing/loading-sources';
 import { useUi } from '@/app/ui-store';
+import { usePrefs } from '@/app/prefs';
 import { Home } from '@/features/home/Home';
 import { Dock } from '@/ui/Dock';
 import { useToasts } from '@/ui/toast';
@@ -107,7 +108,7 @@ describe('Q1b tidy questions', () => {
     const message = 'You chose "File them". Bower will do this as soon as the current tidy-up ends.';
     // TL-P4-55: messages-wait-for-sheets owns this Dock behavior; assert the signed observable outcome.
     expect(screen.queryByText(message)).toBeNull();
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Hide. Tell me when it ends' })); await settle();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Hide this' })); await settle();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getAllByText(message)).toHaveLength(1);
   });
@@ -145,7 +146,7 @@ describe('Q1b tidy questions', () => {
     expect(answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', true);
     expect(sheet.textContent).not.toContain('Where should these papers go?');
     expect(main?.textContent).not.toContain('Where should these papers go?');
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Hide. Tell me when it ends' })); await settle();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Hide this' })); await settle();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("G'day, Alex");
     expect(screen.queryByText('Where should these papers go?')).toBeNull();
   });
@@ -240,5 +241,50 @@ describe('Q1b tidy questions', () => {
       expect(described.length).toBeGreaterThan(0);
       for (const id of described) expect(document.getElementById(id)).toHaveTextContent('Use 1,000 characters at most.');
     }
+  });
+});
+
+// design-tidy-report: the running sheet's button says what it does, and a line says how the end will be told,
+// truthfully for this device: in the app, plus a notification only when the person turned them on and the browser allows.
+describe('design-tidy-report: hiding the running sheet', () => {
+  const OFF = 'Bower tells you here when it ends.';
+  const ON = 'Bower tells you here when it ends, or with a notification if you are in another app.';
+  beforeEach(() => {
+    vi.useFakeTimers(); vi.setSystemTime(AT + 1000);
+    useUi.setState({ tidyOpen: true, tidyReportRunId: null });
+  });
+  afterEach(() => {
+    cleanup();
+    usePrefs.setState({ notifyRuns: false });
+    useUi.setState({ tidyOpen: false }); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks();
+  });
+
+  it('AC2 progress-hide-this: "Hide this", with the line saying the end shows here', async () => {
+    const { sheet } = await fixture([]);
+    expect(within(sheet).queryByRole('button', { name: 'Hide this' }), 'a button "Hide this"').not.toBeNull();
+    expect(within(sheet).queryByRole('button', { name: /Tell me when it ends/ })).toBeNull();
+    expect(within(sheet).queryByText(OFF, { exact: true })).not.toBeNull();
+    expect(within(sheet).queryByText(ON, { exact: true })).toBeNull();
+  });
+
+  it('AC2 progress-hide-notified: with notifications on and allowed, the line adds the notification', async () => {
+    usePrefs.setState({ notifyRuns: true });
+    vi.stubGlobal('Notification', { permission: 'granted' });
+    const { sheet } = await fixture([]);
+    expect(within(sheet).queryByText(ON, { exact: true })).not.toBeNull();
+    cleanup();
+    // Turned on in Bower but blocked in the browser: no notification can come, so none is promised.
+    vi.stubGlobal('Notification', { permission: 'denied' });
+    const again = await fixture([]);
+    expect(within(again.sheet).queryByText(OFF, { exact: true })).not.toBeNull();
+  });
+
+  it('R7 progress-hide-done: a finished run shows no hide line', async () => {
+    const done: RunState = { ...going, phase: 'done', phaseAt: AT + 500, finishedAt: AT + 500,
+      report: { filed: [], created: [], updated: [{ path: 'Areas/Home/Papers.md', what: 'Papers received' }], setAside: [], questions: [] } };
+    useUi.setState({ tidyReportRunId: done.id });
+    const { sheet } = await fixture([], { run: done });
+    expect(within(sheet).queryByText(OFF, { exact: true })).toBeNull();
+    expect(within(sheet).getByRole('button', { name: 'Done' })).toBeVisible();
   });
 });
