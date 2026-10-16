@@ -4541,3 +4541,18 @@ describe('a write resent after a rate limit', () => {
     expect(drive.pathOf(id, root)).toBe('Areas/Lemon tart.md');
   });
 });
+
+describe('audit-move-destination', () => {
+  it('AC1 audit-move-destination-refuses-a-folder-in-the-bin: a move into a folder binned elsewhere writes nothing', async () => {
+    const tart = 'Resources/Cooking/Lemon tart.md';
+    await vault.tree();
+    const id = await idOf(tart);
+    const cooking = await idOf('Resources/Cooking');
+    // Binned outside Bower after the listing: the folder itself, and a folder whose parent went to the Bin.
+    await drive.trash(await idOf('Projects'));
+    await drive.trash(await idOf('Areas'));
+    await expect.soft(vault.move(tart, 'Projects')).rejects.toMatchObject({ code: 'not-found', message: 'That folder is no longer there.' });
+    await expect.soft(vault.move(tart, 'Areas/Documents')).rejects.toMatchObject({ code: 'not-found', message: 'That folder is no longer there.' });
+    expect((await drive.get(id)).parents).toEqual([cooking]);
+  });
+});
