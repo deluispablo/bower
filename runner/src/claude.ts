@@ -601,7 +601,13 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
     if (room <= 0) break;
     // The canonical projection already represents maps; only an explicit target needs their complete text.
     if (!selected && !named.has(f.id) && !first.has(f.id) && (await read.indexedFront?.(f))?.type === 'moc') continue;
-    const text = await read.readText(f.id);
+    // A note Drive refuses to give for good is not shown, so a line on it is refused as for any unseen note; retries still stop the run.
+    const text = await read.readText(f.id).catch((error: unknown) => {
+      if (failureKind(error) !== 'permanent') throw error;
+      console.error(error);
+      return null;
+    });
+    if (text === null) continue;
     const shown = bounded(text, Math.min(CONTEXT_BOUNDS.perNote, room));
     if (shown.text === null) break;
     room -= shown.text.length;
@@ -1850,15 +1856,24 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     if (answers.length) shown.answers = answersShown(answers, shown.piles);
     const indexed: Record<string, MaintenanceNote> = { ...setup.retrieval };
     const metadata: Record<string, { summary: string; type?: string | null; links?: string[] }> = {};
+    // A note Drive refuses to give for good is left out of every read of this run (discovery names it); retries and waits still stop the run.
+    const leftOut = new Set<string>();
+    const refusedRead = <T>(id: string, got: () => Promise<T>): Promise<T | undefined> => got().catch((error: unknown) => {
+      if (failureKind(error) !== 'permanent') throw error;
+      console.error(error);
+      leftOut.add(id); Reflect.deleteProperty(indexed, id);
+      return undefined;
+    });
     for (const file of listing) {
       const path = ix.pathOf(file.id);
       if (file.folder || !path?.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) continue;
-      const prefix = await setup.prefixes?.(file, !!file.appProperties?.profile);
+      const prefix = await refusedRead(file.id, async () => setup.prefixes?.(file, !!file.appProperties?.profile));
+      const front = leftOut.has(file.id) ? undefined : await refusedRead(file.id, async () => read.indexedFront?.(file));
+      if (leftOut.has(file.id)) continue;
       if (file.appProperties?.profile && prefix) {
         shown.profileSources ??= {};
         shown.profileSources[file.id] = profileSources(prefix);
       }
-      const front = await read.indexedFront?.(file);
       if (!indexed[file.id]) indexed[file.id] = { path, version: file.modifiedTime, summary: front?.summary ?? '(no summary)',
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
       const entry = indexed[file.id];
@@ -1903,8 +1918,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       await captureMaps(matched);
       for (const id of matched) {
         const file = ix.byId(id); const path = ix.pathOf(id);
-        if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path)) continue;
-        const text = await setup.prefixes?.(file, true);
+        if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path) || leftOut.has(id)) continue;
+        const text = await refusedRead(id, async () => setup.prefixes?.(file, true));
         if (text) {
           metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: indexedFront(text, true).links };
         }
@@ -1951,7 +1966,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
       kinds: shown.types.map((row) => row.id),
-      candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
+      candidates: [...Object.keys(shown.indexed), ...leftOut], folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
       pinned: Object.fromEntries(sources.map((s) => [s.itemId,
         answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
     const indexCut = (): boolean => /index cut:/.test(shown.index ?? '');
@@ -1963,6 +1978,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       result.value.items = result.value.items.filter((item) => !cut || typeof item.destination === 'string');
       result.allowedTargets = Object.fromEntries(Object.entries(result.allowedTargets).filter(([id]) => result.value.items.some((item) => item.itemId === id)));
       for (const item of result.value.items) {
+        // A note left out this run is simply not read; a line on it is refused by the reply check.
+        item.wants = item.wants.filter((id) => !leftOut.has(id));
         const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates.map((c) => c.id) ?? [];
         if (item.wants.some((id) => !candidates.includes(id))) return { ok: false };
         if (item.basis && !sourceBasisOk(item.basis, item.itemId, sources.find((s) => s.itemId === item.itemId)?.words)) return { ok: false };
