@@ -314,7 +314,8 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   if (end.state === 'failed') {
     console.error(end.why);
     await seen.retain?.(clock());
-    await status.post('failed', { failure: UNREADABLE });
+    // A plan refused after its chain was read changed nothing: the ordinary failure; records never read claim nothing (I1).
+    await status.post('failed', { failure: seen.chain === null ? UNREADABLE : B_FAILURE });
     return { phase: 'failed', why: end.why };
   }
 
