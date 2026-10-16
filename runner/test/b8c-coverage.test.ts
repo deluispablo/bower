@@ -215,6 +215,20 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     expect(second.after[HEALTH], 'the same health note').toBe(first.after[HEALTH]);
     expect(lineAbout(second, LOOSE)).toEqual([couldNotRead(LOOSE)]);
   });
+  it('AC2 b8c-unreadable-hub-decided: a refused hub (no stored type) is not asked for again while it is unchanged', async () => {
+    const base = await folder();
+    const hub = `${GARDEN}/Gardening.md`;
+    base.refused.add(hub);
+    const first = await base.press(1);
+    expect(base.noteReads().filter((path) => path === hub).length, 'Drive was asked for it').toBeGreaterThan(0);
+    expect(lineAbout(first, `${GARDEN}/Gardening`)).toEqual([couldNotRead(`${GARDEN}/Gardening`)]);
+    base.refused.clear();
+    base.traffic.length = 0;
+    const second = await base.press(2);
+    expect(second.code).toBe(0);
+    expect(base.noteReads().filter((path) => path === hub), 'an unchanged refused hub is never asked for again').toEqual([]);
+    expect(lineAbout(second, `${GARDEN}/Gardening`)).toEqual([couldNotRead(`${GARDEN}/Gardening`)]);
+  });
   it('AC3 guard: once the note changes, Bower reads its new version and checks it', async () => {
     const base = await folder();
     base.refused.add(`${LOOSE}.md`);
@@ -231,10 +245,53 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     expect(about, 'checked now').not.toMatch(/could not read|- Waiting: /i);
     expect(about, 'its findings return').toMatch(/Missing summary|Too many tags/);
   });
+  it('AC1 b8c-unreadable-edited-map: a refused new version of an indexed Bower map finishes without a whole read', async () => {
+    const hub = `${GARDEN}/Gardening`;
+    const base = await folder((files) => {
+      files[`${hub}.md`] = '---\nsummary: Alex keeps gardening information here.\nby: bower\ntype: moc\n---\n\n# Gardening\n\n- [[Plot diary]]\n';
+    });
+    const warm = await base.press(1);
+    expect(warm.code).toBe(0);
+    const id = base.idOf(warm, `${hub}.md`);
+    const stored = JSON.parse(warm.after[RETRIEVAL] ?? '{}') as { files: Record<string, MaintenanceNote> };
+    expect(stored.files[id], 'the previous version was indexed as a Bower map').toMatchObject({ owner: 'bower', type: 'moc' });
+    const changed = `${warm.after[`${hub}.md`]}\nAlex adds a gardening thought.\n`;
+    const edited = await base.drive.writeText(id, changed, (await base.drive.get(id)).modifiedTime);
+    base.refused.add(`${hub}.md`);
+    base.traffic.length = 0;
+    const refused = await base.press(2);
+    expect(refused.code, 'a refused map does not fail maintenance').toBe(0);
+    expect(refused.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(base.noteReads().filter((path) => path === `${hub}.md`), 'only the refused prefix, never a whole read').toHaveLength(1);
+    expect(refused.after[`${hub}.md`], 'the edited map stays exact').toBe(changed);
+    expect(lineAbout(refused, hub)).toEqual([couldNotRead(hub)]);
+    const saved = JSON.parse(refused.after[RETRIEVAL] ?? '{}') as { files: Record<string, MaintenanceNote> };
+    expect(saved.files[id]).toMatchObject({ version: edited.modifiedTime, lint: 'unreadable' });
+    base.refused.clear();
+    base.traffic.length = 0;
+    const next = await base.press(3);
+    expect(next.code).toBe(0);
+    expect(base.noteReads().filter((path) => path === `${hub}.md`), 'the refused version stays decided').toEqual([]);
+    expect(next.after[HEALTH]).toBe(refused.after[HEALTH]);
+  });
   it('AC4 b8c-unreadable-contract: one rule for stored lint evidence accepts \'unreadable\' and nothing else new', () => {
     expect(lintEvidenceOk('unreadable'), 'a manifest and retrieval accept the refusal record').toBe(true);
     for (const other of ['refused', 'Unreadable', '', null]) expect(lintEvidenceOk(other), String(other)).toBe(false);
     expect(lintEvidenceOk({ links: [], tags: 0, summary: true }), 'read evidence as before').toBe(true);
+  });
+  it('AC1 b8c-unreadable-duplicate-title: an unread note sharing a title keeps its duplicate-name finding and names itself by place', () => {
+    const unreadable: unknown = 'unreadable';
+    const note = (path: string, lint: unknown): MaintenanceNote => ({ path, version: '2026-10-01T09:00:00.000Z', summary: 'Alex keeps a diary.',
+      coverage: { kind: 'prefix', bytes: 100 }, lint: lint as MaintenanceNote['lint'] });
+    const a = `${GARDEN}/Plot diary`;
+    const b = 'Projects/Plot diary';
+    const notes = [note(`${a}.md`, unreadable), note(`${b}.md`, { links: [], tags: 1, summary: true })];
+    const out = renderHealth(Object.fromEntries(notes.map((n, i) => [`id${i}`, n])), notes.map((n) => n.path),
+      Object.fromEntries(notes.map((n, i) => [`id${i}`, { path: n.path }]))).split('\n').filter((line) => line.startsWith('- '));
+    expect(out, 'the could-not-read line, then the duplicate-name finding').toEqual([
+      `- Could not read [[${a}]]: Bower will try again when it changes.`,
+      `- Duplicate name: [[${b}]] and [[${a}]] share the name Plot diary, so a link to Plot diary may open either.`,
+    ]);
   });
   it('AC5 b8c-unreadable-render: the could-not-read line follows the waiting lines, and an unread note blocks orphan claims', () => {
     // Typed loosely so the red compiles on the base, where lint holds read evidence only.

@@ -46,7 +46,7 @@ describe('a refused read of an edited note', () => {
         const sources = (frame.value.sources ?? []) as Array<{ candidates?: Array<{ id: string }> }>;
         expect(sources.flatMap((s) => s.candidates ?? []).map((c) => c.id), 'it is no candidate').not.toContain(id);
       }
-      expect(r.after[HEALTH_NAME] ?? '', 'the health note names it as not checked').toContain('Not checked: Bower could not read [[Resources/Careers/Applications]]');
+      expect(r.after[HEALTH_NAME] ?? '', 'the health note names it as could not read').toContain('- Could not read [[Resources/Careers/Applications|Applications]]: Bower will try again when it changes.');
     });
 
   // Answers worth asking again are never refusals, a 403 rate limit included (transport.ts `DRIVE_REASONS`).

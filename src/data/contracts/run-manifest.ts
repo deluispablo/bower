@@ -123,7 +123,7 @@ export type EditText = {
 };
 /** Lint evidence of one checked note version (B8): its links, stored tag count and whether its parsed summary is set; absent means not checked. */
 export type LintEvidence = { links: string[]; tags: number; summary: boolean };
-export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[]; lint?: LintEvidence };
+export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[]; lint?: LintEvidence | 'unreadable' };
 export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[] };
 /** `health`: the id of Bower's health note (TL-P4-50 Q6), kept in retrieval; a target of kind `health` names it. */
 export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent; kind?: string; declaration?: MaintenanceDeclaration }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string; health?: string } };
@@ -1215,9 +1215,9 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
   return true;
 }
 
-/** One rule for stored lint evidence, in a manifest and in retrieval: anything else is no evidence (R26). */
-export function lintEvidenceOk(value: unknown): value is LintEvidence {
-  return closed(value, ['links', 'tags', 'summary']) && list(value.links, text) && integer(value.tags) && typeof value.summary === 'boolean';
+/** One rule for stored lint evidence, in a manifest and in retrieval: read evidence or the refusal record; anything else is no evidence (R26). */
+export function lintEvidenceOk(value: unknown): value is LintEvidence | 'unreadable' {
+  return value === 'unreadable' || closed(value, ['links', 'tags', 'summary']) && list(value.links, text) && integer(value.tags) && typeof value.summary === 'boolean';
 }
 
 /** Maintenance names must agree with captured identity and cannot alias protected memory. */
