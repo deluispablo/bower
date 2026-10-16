@@ -30,7 +30,8 @@ describe('runner data errors', () => {
       { component: BowerScreen, source: 'vault', read: 'rules', good: [] },
       { component: BowerScreen, source: 'vault', read: 'requests', good: [] },
       { component: BowerScreen, source: 'runs', read: 'current', good: null },
-      { component: BowerPanel, source: 'vault', read: 'questions', good: [] },
+      // On Home the panel leaves the questions and their error to Home, so this case reads them on a note.
+      { component: BowerPanel, source: 'vault', read: 'questions', good: [], path: '/note/Projects/Flat.md' },
       { component: BowerPanel, source: 'vault', read: 'rules', good: [] },
       { component: BowerPanel, source: 'vault', read: 'requests', good: [] },
       { component: BowerPanel, source: 'runs', read: 'current', good: null },
@@ -48,7 +49,7 @@ describe('runner data errors', () => {
       };
       if (c.component === TidySheet) useUi.getState().setTidy(true);
       const Component = c.component;
-      render(<MemoryRouter><DataProvider sources={sources}><main id="main" tabIndex={-1}><Component /></main></DataProvider></MemoryRouter>);
+      render(<MemoryRouter initialEntries={['path' in c ? c.path : '/']}><DataProvider sources={sources}><main id="main" tabIndex={-1}><Component /></main></DataProvider></MemoryRouter>);
       await waitFor(() => expect(screen.queryByRole('alert'), `${c.component.name}: ${c.read}`).not.toBeNull());
       expect(screen.getByRole('alert')).toHaveTextContent(MESSAGE);
       const retry = screen.getByRole('button', { name: 'Try again' });

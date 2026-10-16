@@ -58,12 +58,10 @@ const sleepFor = (ms: number): Promise<void> => new Promise((done) => setTimeout
 /** What became of a dispatch: accepted; lost to the network or a 5xx after the retries (worth a quick look); or refused (a 4xx, or no token). */
 export type DispatchOutcome = 'sent' | 'lost' | 'refused';
 
-/** Sends the dispatch; resolves whether GitHub accepted it. Never throws, never logs a secret. */
-export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike, sleep: (ms: number) => Promise<void> = sleepFor): Promise<boolean> {
-  return (await dispatchOutcome(input, fetchImpl, sleep)) === 'sent';
-}
-
-/** `dispatchTidy` with the reason it failed: only a `lost` dispatch may succeed on a quick try again. */
+/**
+ * Sends the dispatch; resolves what became of it: only a `lost` dispatch may succeed on a quick try again.
+ * Never throws, never logs a secret.
+ */
 export async function dispatchOutcome(input: TidyDispatch, fetchImpl: FetchLike, sleep: (ms: number) => Promise<void> = sleepFor): Promise<DispatchOutcome> {
   if (input.token === undefined) {
     console.error('tidy dispatch is not configured: no GitHub token');

@@ -87,6 +87,8 @@ function Folder({ path }: { path: string }) {
   });
   const node = tree ? findNode(tree, path) : null;
   const children = useMemo(() => sortNodes(node?.children ?? [], sort), [node, sort]);
+  // The table sorts its own rows; a new list on each render would make it read every note again.
+  const tableItems = useMemo(() => (node?.children ?? []).filter((c) => !c.hub), [node]);
   const hub = children.find((c) => c.hub);
   const changeView = (v: View): void => {
     setView(v);
@@ -177,7 +179,7 @@ function Folder({ path }: { path: string }) {
           ))}
         </ul>
       ) : (
-        <FolderTable items={children.filter((c) => !c.hub)} />
+        <FolderTable items={tableItems} />
       )}
     </div>
   );

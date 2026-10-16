@@ -231,8 +231,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     try {
       return await finishSignIn(c);
     } catch (err) {
-      // A refused request is not a failed sign-in: the person is told to wait, not sent back.
-      if (err instanceof HttpError && (err.code === 'rate-limited' || err.cause instanceof RateLimitUnavailable)) throw err;
+      // A missing limiter fails closed (500); a refused request lands on the sign-in like any failure.
+      if (err instanceof HttpError && err.cause instanceof RateLimitUnavailable) throw err;
       return backToSignIn('failed', err);
     }
   });

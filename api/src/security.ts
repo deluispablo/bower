@@ -124,27 +124,15 @@ export const requireJsonBody: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-/** The origin of a `Referer` URL, or `undefined` if it is not a URL. */
-function refererOrigin(referer: string | undefined): string | undefined {
-  if (referer === undefined) return undefined;
-  try {
-    return new URL(referer).origin;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * CSRF check for state-changing session routes: the request's `Origin`
- * header (or, when a browser sends none, the origin of its `Referer`) must
- * equal `APP_ORIGIN`. Anything else, including neither header, is a 403
- * `forbidden`. Complements the `SameSite=Lax` session cookie. Runner and
- * admin routes (bearer keys, no cookie) and `GET` routes do not use it.
+ * header must equal `APP_ORIGIN` (browsers send it on every request that is
+ * not GET or HEAD, Fetch standard; OWASP checks it first). Anything else,
+ * including none, is a 403 `forbidden`. Complements the `SameSite=Lax` session
+ * cookie. Runner and admin routes (bearer keys, no cookie) and `GET` routes do not use it.
  */
 export const requireSameOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const origin =
-    c.req.header('origin') ?? refererOrigin(c.req.header('referer'));
-  if (origin !== c.get('env').APP_ORIGIN) {
+  if (c.req.header('origin') !== c.get('env').APP_ORIGIN) {
     throw new HttpError(403, 'forbidden');
   }
   await next();

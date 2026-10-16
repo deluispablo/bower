@@ -17,9 +17,15 @@ export interface ModelStats {
   wallMs: number;
   apiMs: number;
   turns: number;
+  /** The whole input: uncached, cache writes and cache reads (the Messages API's total_input_tokens). */
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 }
+
+/** A model call's role, named at its call site (c12-measure). */
+export type CallKind = 'selection' | 'execution' | 'consolidation' | 'judge';
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -55,6 +61,8 @@ export class RunTiming {
   private checkpointWrites = 0;
   private readonly began: number;
   model: ModelStats | null = null;
+  /** One line per model call, in call order. */
+  private readonly calls: string[] = [];
   private inputFingerprint: string | null = null;
   private sectionHashes: SectionHashes | null = null;
   private readonly traffic = new Map<Phase, Traffic>();
@@ -73,12 +81,16 @@ export class RunTiming {
 
   /** Both semantic steps and retries spend the same 80% allowance. */
   remainingModelMs(): number { return Math.max(0, 900_000 * 0.8 - (this.clock() - this.began)); }
-  addModel(stats: ModelStats): void {
+  /** A model call's numbers (null: it gave no JSON result), summed for the run line; with a kind, also a line of its own. */
+  addModel(stats: ModelStats | null, kind?: CallKind): void {
+    if (kind) this.calls.push(`model-call: kind=${kind} in=${stats?.inputTokens ?? 0} cached=${stats?.cacheReadTokens ?? 0} out=${stats?.outputTokens ?? 0} ms=${Math.max(0, Math.round(stats?.wallMs ?? 0))}`);
+    if (!stats) return;
     const previous = this.model;
     this.model = previous ? {
       wallMs: previous.wallMs + stats.wallMs, apiMs: previous.apiMs + stats.apiMs,
       turns: previous.turns + stats.turns, inputTokens: previous.inputTokens + stats.inputTokens,
       outputTokens: previous.outputTokens + stats.outputTokens,
+      cacheReadTokens: previous.cacheReadTokens + stats.cacheReadTokens, cacheWriteTokens: previous.cacheWriteTokens + stats.cacheWriteTokens,
     } : stats;
   }
   /** B1d's one ledger (B12 R23): 200 ordinary operations, and 1,000 in all with a map's (`mapped` of the `count`). */
@@ -151,7 +163,10 @@ export class RunTiming {
     this.spent.set(phase, (this.spent.get(phase) ?? 0) + ms);
   }
 
-  /** The one line, in whole milliseconds; `end` is how the run ended (done, saving, failed or stopped). */
+  /**
+   * The one run line, in whole milliseconds, then one line per model call (joined with `\n`, so a reader matching the
+   * run line by its `timing:` prefix still finds it); `end` is how the run ended (done, saving, failed or stopped).
+   */
   line(end: 'done' | 'saving' | 'failed' | 'stopped'): string {
     const ms = (n: number): number => Math.max(0, Math.round(n));
     const m = this.model;
@@ -167,7 +182,8 @@ export class RunTiming {
       `apply=${own('apply')} checkpoints=${own('checkpoints')}/${this.checkpointWrites} report=${own('report')} status=${own('status')}`,
       // New fields go last: Drive calls/bytes per phase (`runner`: outside every phase), then the runner's region.
       `drive=${[...PHASES, 'runner' as const].map((p) => `${p}:${this.traffic.get(p)?.calls ?? 0}/${this.traffic.get(p)?.bytes ?? 0}`).join(',')} region=${this.region}`,
-    ].join(' ');
+      `cache=${m?.cacheReadTokens ?? 0}/${m?.cacheWriteTokens ?? 0}`,
+    ].join(' ') + this.calls.map((c) => `\n${c}`).join('');
   }
 
   private _formatSections(): string {

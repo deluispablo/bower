@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
-import { backoffPace, dispatchTidy } from '../src/github.js';
+import { backoffPace, dispatchOutcome } from '../src/github.js';
 import type { Person } from '../src/person.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import type { RunReply } from '../src/process.js';
@@ -24,7 +24,7 @@ const API = 'https://api.example.com';
 /** The GitHub every alarm of this file reaches: presses admit at the wall clock, and the runtime fires the alarm. */
 const gh = pretendGitHubForFile(env);
 
-// The 200 and 400 ms waits between tries are pinned through dispatchTidy's own `sleep`; here they take no time.
+// The 200 and 400 ms waits between tries are pinned through dispatchOutcome's own `sleep`; here they take no time.
 beforeEach(() => { backoffPace.scale = 0; });
 afterEach(() => { backoffPace.scale = 1; });
 beforeEach(async () => {
@@ -322,21 +322,21 @@ describe('dispatch retries', () => {
         return Promise.resolve();
       };
       const lost = scripted([null, null, null]);
-      expect(await dispatchTidy(input, lost.fetchImpl, sleep)).toBe(false);
+      expect(await dispatchOutcome(input, lost.fetchImpl, sleep)).toBe('lost');
       expect(lost.calls).toHaveLength(3);
       expect(waits).toHaveLength(2);
       expect(waits[0]).toBeGreaterThan(0);
       expect(waits[1] ?? 0).toBeGreaterThanOrEqual(waits[0] ?? 0);
       // A blip that clears on the second try is accepted; a 5xx is retried too.
       const blip = scripted([null]);
-      expect(await dispatchTidy(input, blip.fetchImpl, sleep)).toBe(true);
+      expect(await dispatchOutcome(input, blip.fetchImpl, sleep)).toBe('sent');
       expect(blip.calls).toHaveLength(2);
       const flaky = scripted([503, 502]);
-      expect(await dispatchTidy(input, flaky.fetchImpl, sleep)).toBe(true);
+      expect(await dispatchOutcome(input, flaky.fetchImpl, sleep)).toBe('sent');
       expect(flaky.calls).toHaveLength(3);
       // A 4xx is never retried.
       const refused = scripted([404]);
-      expect(await dispatchTidy(input, refused.fetchImpl, sleep)).toBe(false);
+      expect(await dispatchOutcome(input, refused.fetchImpl, sleep)).toBe('refused');
       expect(refused.calls).toHaveLength(1);
     } finally {
       log.mockRestore();

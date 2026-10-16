@@ -17,6 +17,12 @@ import { useBackCloses } from '@/ui/back';
 import { focusMain, returnFocusTo } from '@/ui/focus';
 import { useIsDesktop } from '@/ui/media';
 
+// The palette's one matching rule: every word of the search, in any order, whatever the case.
+const words = (search: string): string[] => search.toLowerCase().split(/\s+/).filter(Boolean);
+const hasWords = (text: string, ws: string[]): boolean => ws.every((w) => text.toLowerCase().includes(w));
+const label = (f: TreeNode): string => (f.type === 'folder' ? f.name : thingName(f.name));
+const valueOf = (f: TreeNode): string => `${label(f)} :: ${f.path}`;
+
 /** ⌘K: every action and every note, by typing. */
 export function Palette() {
   const { paletteOpen, setPalette, setTidy, collapseAll, setRightTab } = useUi();
@@ -60,8 +66,13 @@ export function Palette() {
     walk((tree ?? []).filter((n) => n.path !== 'Inbox'));
     return out;
   }, [tree]);
-  const named = new Set(files.map((f) => f.path));
-  const textHits = inside.q === q.trim() ? inside.hits.filter((h) => !named.has(h.path) || !displayName(nameOf(h.path)).toLowerCase().includes(inside.q.toLowerCase())) : [];
+  // Match first, then cap (cmdk FAQ: filter yourself past a few thousand items); Inside notes checks the same list.
+  const listed = useMemo(() => {
+    const ws = words(q);
+    return ws.length ? files.filter((f) => hasWords(valueOf(f), ws)).slice(0, 400) : [];
+  }, [files, q]);
+  const named = new Set(listed.map((f) => f.path));
+  const textHits = inside.q === q.trim() ? inside.hits.filter((h) => !named.has(h.path) || !hasWords(displayName(nameOf(h.path)), words(inside.q))) : [];
 
   // What had the keyboard when the palette opened (WAI-ARIA APG: on close, focus returns to the opener).
   const opener = useRef<HTMLElement | null>(null);
@@ -118,13 +129,13 @@ export function Palette() {
             loop
             filter={(value, search) => {
               // Every word must match; actions come before notes and folders.
-              const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+              const ws = words(search);
               const v = value.toLowerCase();
-              if (!words.every((w) => v.includes(w))) return 0;
+              if (!hasWords(v, ws)) return 0;
               const action = v.startsWith('action ');
               if (v.startsWith('inside ')) return 0.3;
               const name = v.split(' :: ')[0] ?? v;
-              return (action ? 2 : 1) * (words.every((w) => name.includes(w)) ? 1 : 0.5);
+              return (action ? 2 : 1) * (hasWords(name, ws) ? 1 : 0.5);
             }}
           >
             <div className={s.inputRow}>
@@ -152,12 +163,12 @@ export function Palette() {
                   </Command.Item>
                 ))}
               </Command.Group>
-              {q.trim().length > 0 && (
+              {listed.length > 0 && (
                 <Command.Group heading="Notes and folders" className={s.group}>
-                  {files.slice(0, 400).map((f) => (
-                    <Command.Item key={f.path} value={`${f.type === 'folder' ? f.name : thingName(f.name)} :: ${f.path}`} onSelect={run(() => nav(routeFor(f)))} className={s.item}>
+                  {listed.map((f) => (
+                    <Command.Item key={f.path} value={valueOf(f)} onSelect={run(() => nav(routeFor(f)))} className={s.item}>
                       <Icon name={f.type === 'folder' ? 'folder' : f.kind === 'note' ? 'note' : 'file'} size={18} />
-                      <span className={s.label}>{f.type === 'folder' ? f.name : thingName(f.name)}</span>
+                      <span className={s.label}>{label(f)}</span>
                       <span className={s.path}>{crumbs(parentOf(f.path))}</span>
                     </Command.Item>
                   ))}

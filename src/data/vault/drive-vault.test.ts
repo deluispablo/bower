@@ -4541,3 +4541,46 @@ describe('a write resent after a rate limit', () => {
     expect(drive.pathOf(id, root)).toBe('Areas/Lemon tart.md');
   });
 });
+
+describe('audit-move-destination', () => {
+  it('AC1 audit-move-destination-refuses-a-folder-in-the-bin: a move into a folder binned elsewhere writes nothing', async () => {
+    const tart = 'Resources/Cooking/Lemon tart.md';
+    await vault.tree();
+    const id = await idOf(tart);
+    const cooking = await idOf('Resources/Cooking');
+    // Binned outside Bower after the listing: the folder itself, and a folder whose parent went to the Bin.
+    await drive.trash(await idOf('Projects'));
+    await drive.trash(await idOf('Areas'));
+    await expect.soft(vault.move(tart, 'Projects')).rejects.toMatchObject({ code: 'not-found', message: 'That folder is no longer there.' });
+    await expect.soft(vault.move(tart, 'Areas/Documents')).rejects.toMatchObject({ code: 'not-found', message: 'That folder is no longer there.' });
+    expect((await drive.get(id)).parents).toEqual([cooking]);
+  });
+
+  /** The destination's read by id fails once with `failure`; every other read goes through. Nothing is written. */
+  async function destinationReadFails(failure: BowerError): Promise<unknown> {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await vault.tree();
+    const projects = await idOf('Projects');
+    const get = drive.get.bind(drive);
+    drive.get = async (id, opts) => {
+      if (id !== projects) return get(id, opts);
+      drive.get = get;
+      throw failure;
+    };
+    const before = await drive.snapshot();
+    const e = await vault.move('Resources/Cooking/Lemon tart.md', 'Projects').then(() => null, (x: unknown) => x);
+    expect(await drive.snapshot()).toBe(before);
+    return e;
+  }
+
+  it('AC1 audit-move-destination-unanswered-read: a destination read with no answer is not read, never a folder gone, and writes nothing', async () => {
+    const e = await destinationReadFails(driveError('offline'));
+    expect(notRead(e)).toBe(true);
+    expect(notAsSeenReason(e)).toBeNull();
+  });
+
+  it('AC1 audit-move-destination-auth-read: a destination read refused for sign-in is thrown as it is and writes nothing', async () => {
+    const signedOut = driveError('auth');
+    expect(await destinationReadFails(signedOut)).toBe(signedOut);
+  });
+});

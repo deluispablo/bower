@@ -29,9 +29,7 @@
     "API_ORIGIN": "https://app.example.com",
     "APP_VERSION": "0.1.0",
     "GITHUB_REPO": "OWNER/REPO",
-    "VAPID_SUBJECT": "mailto:you@example.com",
     "DAILY_RUN_LIMIT": "100",
-    "DEFAULT_MAX_TURNS": "60",
     "TEMPLATE_FOLDER_NAME": "Bower"
   }
 }

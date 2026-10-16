@@ -4,7 +4,6 @@
   "findings": [
     "duplicates src/data/contracts/run-phases.ts RUN_STEPS=ACTIVE_PHASES",
     "exports api/src/env.ts OPTIONAL_SECRETS",
-    "exports api/src/github.ts dispatchTidy",
     "exports src/data/contracts/hashes.ts EMPTY_SHA256",
     "exports src/data/contracts/note-edit.ts undoChanges",
     "exports src/data/contracts/note-edit.ts undoEdit",

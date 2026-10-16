@@ -3,10 +3,10 @@
  *
  * A ticket is the only credential the runner holds: 32 random bytes, base64url, minted per attempt
  * (`Person.mintTicket`) and sent in the dispatch payload. The person object keeps only its SHA-256.
- * Adapted from the original app's `api/src/run-ticket.ts` (random 32 bytes, SHA-256 kept, constant-time
- * compare), with the hash kept in the person object instead of KV. A bearer credential stored as a hash
- * and compared in constant time is the usual pattern for opaque tokens (RFC 6750; OWASP, "Password
- * Storage" for high-entropy secrets: a fast hash suffices).
+ * Adapted from the original app's `api/src/run-ticket.ts` (random 32 bytes, SHA-256 kept), with the hash
+ * kept in the person object instead of KV. A bearer credential stored as a hash is the usual pattern for
+ * opaque tokens (RFC 6750; OWASP, "Password Storage" for high-entropy secrets: a fast hash suffices); it is
+ * looked up by that hash, which leaks nothing usable, so no constant-time compare follows (Paragon IE, "split tokens").
  *
  * A run id carries the person object's id, so a runner call reaches the right object with
  * `idFromString` and no lookup table.
@@ -17,14 +17,22 @@
 import { sha256Hex } from '../../src/data/contracts/hashes.js';
 import { base64UrlEncode } from './crypto.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
+import { QUEUED_STALE_MS } from './process.js';
 import type { RunReply } from './process.js';
 import type { PublicQuestion } from '../../src/data/contracts/questions.js';
 
 /** Random bytes in a ticket. */
 const TICKET_BYTES = 32;
 
-/** How long a ticket works after it is minted. */
-export const TICKET_TTL_MS = 60 * 60 * 1000;
+/** The workflow's `timeout-minutes: 30` (`runner/workflows/tidy.yml`). */
+const JOB_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * How long a ticket works after it is minted: an attempt may wait queued two stale windows (the alarm's one grace
+ * for a live queued job), then run to the job's timeout; one more minute for the last report, since a ticket
+ * expires at its instant.
+ */
+export const TICKET_TTL_MS = 2 * QUEUED_STALE_MS + JOB_TIMEOUT_MS + 60 * 1000;
 
 /** A Durable Object id as `id.toString()` writes it: 64 lowercase hex digits. */
 const PERSON_ID_HEX = /^[0-9a-f]{64}$/;

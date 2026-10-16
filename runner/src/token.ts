@@ -1,7 +1,8 @@
 /**
  * The runner's Drive token, from the Worker's `GET /runner/runs/:id/token`
  * with the run's ticket (TL-P3-18). The token is kept until shortly before
- * `expiresAt`; `grant()` always asks the Worker again. The attempt check
+ * `expiresAt`; `grant()` asks the Worker again, or joins the request already in flight (`fresh=1` after a Drive 401,
+ * RFC 6750 section 3.1). The attempt check
  * before each fenced write is `attempt()`, `GET /runner/runs/:id/attempt`:
  * answered by the person object alone, with no Google call (TL-P4-04). A 410 `gone` from either route (Delete me,
  * or Google access revoked or unreadable) drops the kept token.
@@ -67,6 +68,8 @@ export class RunnerToken {
   private readonly fetchFn: Fetch;
   private readonly now: () => number;
   private kept: TokenGrant | null = null;
+  /** The token request in flight, shared by parallel callers (single flight, as `LiveRuns.refreshing`). */
+  private inflight: { fresh: boolean; grant: Promise<TokenGrant> } | null = null;
 
   private readonly attemptUrl: string;
 
@@ -81,18 +84,32 @@ export class RunnerToken {
   /** The Drive access token; `fresh` asks the Worker for a new one (after a 401 from Drive). */
   async token(fresh: boolean): Promise<string> {
     if (!fresh && this.kept && this.kept.expiresAt - MARGIN_MS > this.now()) return this.kept.accessToken;
-    return (await this.grant()).accessToken;
+    return (await this.grant(fresh)).accessToken;
   }
 
-  /** Asks the Worker now, and keeps the token it gives. */
-  async grant(): Promise<TokenGrant> {
-    const grant = asGrant(await this.ask(this.url, 'token'));
-    if (!grant) {
-      console.error('The token route answered no token');
-      throw new BowerError('unknown', "Bower's server didn't answer. It will try again.");
-    }
-    this.kept = grant;
-    return grant;
+  /**
+   * Asks the Worker, and keeps the token it gives. A plain call joins any request in flight; a fresh one joins only a
+   * fresh one, since a plain answer may be the token Drive refused.
+   */
+  grant(fresh = false): Promise<TokenGrant> {
+    if (this.inflight && (this.inflight.fresh || !fresh)) return this.inflight.grant;
+    const flight = {
+      fresh,
+      grant: this.ask(fresh ? `${this.url}?fresh=1` : this.url, 'token').then((body) => {
+        const grant = asGrant(body);
+        if (!grant) {
+          console.error('The token route answered no token');
+          throw new BowerError('unknown', "Bower's server didn't answer. It will try again.");
+        }
+        // Only the request still in flight keeps its token: a plain one overtaken by a fresh one never replaces it.
+        if (this.inflight === flight) this.kept = grant;
+        return grant;
+      }).finally(() => {
+        if (this.inflight === flight) this.inflight = null;
+      }),
+    };
+    this.inflight = flight;
+    return flight.grant;
   }
 
   /** The run's current attempt, asked now; the Worker answers it from the person object alone, with no Google call. */
