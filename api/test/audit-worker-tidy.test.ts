@@ -25,6 +25,12 @@ describe('audit-worker-tidy', () => {
     expect(TICKET_TTL_MS).toBeGreaterThanOrEqual(2 * QUEUED_STALE_MS + 30 * 60_000);
   });
 
+  it('AC1 audit-worker-tidy-ticket-ttl-boundary: a last report at the end of the longest wait still finds its ticket live', () => {
+    // Review gap: a ticket expires at its instant (`findTicket`: expires_at <= now), so the window must be exceeded, not met.
+    expect(personSource).toMatch(/row\.expires_at <= now \? \{ kind: 'unknown' \}/);
+    expect(TICKET_TTL_MS).toBeGreaterThan(2 * QUEUED_STALE_MS + 30 * 60_000);
+  });
+
   it('AC2 audit-worker-tidy-unused-settings: no push, admin or turn settings are read or configured', () => {
     const source = Object.fromEntries(Object.entries(base).filter(([key]) => !UNUSED.includes(key)));
     const env = assertEnv(source) as unknown as Record<string, unknown>;

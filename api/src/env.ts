@@ -1,3 +1,4 @@
+import { encryptionKeyBytes } from './crypto.js';
 import { HttpError } from './errors.js';
 import type { Person, PersonAccount } from './person.js';
 
@@ -24,14 +25,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
   TOKEN_ENC_KEY: string;
-  /**
-   * Not required at this stage (TL-P3-06): each becomes required with the
-   * entry that first uses it (dispatch, admin, push).
-   */
+  /** Not required at this stage (TL-P3-06): without it a dispatch is refused. */
   GITHUB_TOKEN?: string;
-  ADMIN_KEY?: string;
-  VAPID_PUBLIC_KEY?: string;
-  VAPID_PRIVATE_KEY?: string;
   /**
    * Optional: when set, `verifySession` also accepts a session cookie
    * signed with this value, giving a `SESSION_SECRET` rotation a grace
@@ -45,11 +40,9 @@ export interface Env {
   APP_ORIGIN: string;
   API_ORIGIN: string;
   GITHUB_REPO: string;
-  VAPID_SUBJECT: string;
 
   // Vars with a default (applied by assertEnv when absent).
   DAILY_RUN_LIMIT: string;
-  DEFAULT_MAX_TURNS: string;
   TEMPLATE_FOLDER_NAME: string;
 
   // Pre-existing var (#6), unrelated to this issue's contract; passed
@@ -87,16 +80,12 @@ export const REQUIRED_SECRETS = [
 export const OPTIONAL_SECRETS = [
   'SESSION_SECRET_PREVIOUS',
   'GITHUB_TOKEN',
-  'ADMIN_KEY',
-  'VAPID_PUBLIC_KEY',
-  'VAPID_PRIVATE_KEY',
 ] as const satisfies readonly (keyof Env)[];
 
 const REQUIRED_VARS = [
   'APP_ORIGIN',
   'API_ORIGIN',
   'GITHUB_REPO',
-  'VAPID_SUBJECT',
 ] as const satisfies readonly (keyof Env)[];
 
 /** The shortest `SESSION_SECRET` accepted: the SHA-256 output size (RFC 2104). */
@@ -104,7 +93,6 @@ const MIN_SESSION_SECRET_BYTES = 32;
 
 const DEFAULTS = {
   DAILY_RUN_LIMIT: '100',
-  DEFAULT_MAX_TURNS: '60',
   TEMPLATE_FOLDER_NAME: 'Bower',
 } as const satisfies Partial<Record<keyof Env, string>>;
 
@@ -142,15 +130,6 @@ function optionalString(
   return requireString(source, key);
 }
 
-/** Decodes base64 and returns the byte length, or `null` if it isn't valid base64. */
-function decodedByteLength(base64: string): number | null {
-  try {
-    return atob(base64).length;
-  } catch {
-    return null;
-  }
-}
-
 /** A non-negative integer, as Cloudflare gives us vars: a plain string. */
 function requireCount(value: string, key: keyof Env): string {
   if (!/^\d+$/.test(value)) {
@@ -168,9 +147,8 @@ function rateLimiter(value: unknown): RateLimit | undefined {
  * Validates the Worker's bindings and returns them typed as `Env`, throwing
  * `HttpError(500, 'internal')` whose cause (logged, never sent) names the first
  * missing secret or var-without-a-default, or the first value that fails its own
- * validation (`TOKEN_ENC_KEY`'s and `SESSION_SECRET`'s length, the numeric vars' format). Vars with a default
- * (`DAILY_RUN_LIMIT`, `DEFAULT_MAX_TURNS`, `TEMPLATE_FOLDER_NAME`) fall back
- * to it when absent.
+ * validation (`TOKEN_ENC_KEY` as `encryptionKeyBytes` checks it, `SESSION_SECRET`'s length, the numeric var's format).
+ * Vars with a default (`DAILY_RUN_LIMIT`, `TEMPLATE_FOLDER_NAME`) fall back to it when absent.
  *
  * Cheap (string checks plus one base64 decode), so it is called on every
  * request via middleware rather than cached per isolate — simpler, and an
@@ -190,8 +168,10 @@ export function assertEnv(env: unknown): Env {
   }
 
   const tokenEncKey = requireString(source, 'TOKEN_ENC_KEY');
-  if (decodedByteLength(tokenEncKey) !== 32) {
-    misconfigured('invalid TOKEN_ENC_KEY: must be base64 for exactly 32 bytes');
+  try {
+    encryptionKeyBytes(tokenEncKey);
+  } catch (err) {
+    misconfigured(`invalid TOKEN_ENC_KEY: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // RFC 2104: an HMAC key shorter than the hash output (32 bytes for SHA-256) weakens it.
@@ -210,12 +190,6 @@ export function assertEnv(env: unknown): Env {
       : DEFAULTS.DAILY_RUN_LIMIT,
     'DAILY_RUN_LIMIT',
   );
-  const defaultMaxTurns = requireCount(
-    typeof source.DEFAULT_MAX_TURNS === 'string'
-      ? source.DEFAULT_MAX_TURNS
-      : DEFAULTS.DEFAULT_MAX_TURNS,
-    'DEFAULT_MAX_TURNS',
-  );
   const templateFolderName =
     typeof source.TEMPLATE_FOLDER_NAME === 'string' &&
     source.TEMPLATE_FOLDER_NAME.length > 0
@@ -231,22 +205,17 @@ export function assertEnv(env: unknown): Env {
     SESSION_SECRET: sessionSecret,
     TOKEN_ENC_KEY: tokenEncKey,
     GITHUB_TOKEN: optionalString(source, 'GITHUB_TOKEN'),
-    ADMIN_KEY: optionalString(source, 'ADMIN_KEY'),
-    VAPID_PUBLIC_KEY: optionalString(source, 'VAPID_PUBLIC_KEY'),
-    VAPID_PRIVATE_KEY: optionalString(source, 'VAPID_PRIVATE_KEY'),
     SESSION_SECRET_PREVIOUS: optionalString(source, 'SESSION_SECRET_PREVIOUS'),
 
     APP_ORIGIN: requireString(source, 'APP_ORIGIN'),
     API_ORIGIN: requireString(source, 'API_ORIGIN'),
     GITHUB_REPO: requireString(source, 'GITHUB_REPO'),
-    VAPID_SUBJECT: requireString(source, 'VAPID_SUBJECT'),
 
     AUTH_RATE_LIMIT: rateLimiter(source.AUTH_RATE_LIMIT),
     DRIVE_RATE_LIMIT: rateLimiter(source.DRIVE_RATE_LIMIT),
     VAULT_RATE_LIMIT: rateLimiter(source.VAULT_RATE_LIMIT),
 
     DAILY_RUN_LIMIT: dailyRunLimit,
-    DEFAULT_MAX_TURNS: defaultMaxTurns,
     TEMPLATE_FOLDER_NAME: templateFolderName,
 
     APP_VERSION:

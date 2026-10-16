@@ -49,9 +49,6 @@ Run each from `api/`, and paste the value at the prompt: `npx wrangler secret pu
 | `TOKEN_ENC_KEY` | yes | Encrypts each person's stored Google refresh token. Exactly 32 bytes, standard base64: `openssl rand -base64 32`. |
 | `GITHUB_TOKEN` | for tidy-ups | Lets the Worker start a run in the instance repository. See the next section. |
 | `SESSION_SECRET_PREVIOUS` | only while rotating | The old `SESSION_SECRET`, so existing sessions keep working for a while. See "Rotation". |
-| `ADMIN_KEY` | not used yet | Reserved for an admin route. Leave unset. |
-| `VAPID_PUBLIC_KEY` | not used yet | Reserved for push messages. Leave unset. |
-| `VAPID_PRIVATE_KEY` | not used yet | Reserved for push messages. Leave unset. |
 
 ### Variables (`--var` or `api/wrangler.jsonc`)
 
@@ -63,9 +60,7 @@ Variables are not secret. `deploy-staging.sh` passes the first four with `--var`
 | `API_ORIGIN` | `--var` | `<staging origin>` too, since staging is one origin; builds the OAuth redirect address. |
 | `APP_VERSION` | `--var` | The short commit SHA deployed; `/health` reports it. |
 | `GITHUB_REPO` | `--var` | The instance repository as `OWNER/NAME`; `BOWER_GITHUB_REPO` overrides the default for one deploy. |
-| `VAPID_SUBJECT` | config | A contact URI for push, here `mailto:you@example.com`. |
 | `DAILY_RUN_LIMIT` | config | Tidy-ups allowed per person per day. Default 100. |
-| `DEFAULT_MAX_TURNS` | config | The longest a run may go on. Default 60. |
 | `TEMPLATE_FOLDER_NAME` | config | The name of the folder Bower creates. Default `Bower`. |
 
 To list what is set without showing values, run `npx wrangler secret list` from `api/`.
