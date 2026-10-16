@@ -508,3 +508,49 @@ describe('a resend of a write to an existing file', () => {
     expect(seen.landed).toBe(1);
   });
 });
+
+describe('audit-write-speed', () => {
+  it('AC1 audit-write-speed-no-relist-after-write: a create, a move, a Bin and a restore keep full-text search inside the folder without listing it again', async () => {
+    type Wire = ReturnType<typeof file> & { trashed?: boolean };
+    const store = new Map<string, Wire>([['d1', file('d1', 'Place', 'ROOT', true)], ['n1', file('n1', 'Note.md', 'd1')]]);
+    let lists = 0;
+    const s = stub((c) => {
+      if (c.method === 'POST') {
+        // A folder is created by a JSON body naming its parent; a note by a multipart upload (into d1 here).
+        const made = c.url.pathname.includes('/upload/') ? file('n2', 'New.md', 'd1') : file('d2', 'Later', (JSON.parse(String(c.body)) as { parents: string[] }).parents[0] ?? 'ROOT', true);
+        store.set(made.id, made);
+        return json(made);
+      }
+      if (c.method === 'PATCH') {
+        const id = c.url.pathname.split('/').at(-1) ?? '';
+        const was = store.get(id);
+        if (!was) return json({ error: { code: 404 } }, 404);
+        const body = JSON.parse(String(c.body)) as { trashed?: boolean };
+        const to = c.url.searchParams.get('addParents');
+        const next: Wire = { ...was, ...(to ? { parents: [to] } : {}), ...(body.trashed !== undefined ? { trashed: body.trashed } : {}) };
+        store.set(id, next);
+        return json(next);
+      }
+      const q = c.url.searchParams.get('q') ?? '';
+      const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
+      const full = q.startsWith('fullText');
+      if (!full) lists++;
+      return json({ files: [...store.values()].filter((f) => !f.trashed && parents.includes(f.parents[0]) && (!full || !f.mimeType.endsWith('folder'))) });
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    await d.listAll('ROOT');
+    const listed = lists;
+    const found = async (): Promise<string[]> => (await d.fullText('ROOT', 'word')).map((f) => f.id).sort();
+    await d.createText('d1', 'New.md', 'word');
+    expect(await found()).toEqual(['n1', 'n2']);
+    await d.createFolder('ROOT', 'Later');
+    await d.update('n1', { addParent: 'd2', removeParent: 'd1' });
+    expect(await found()).toEqual(['n1', 'n2']);
+    expect(s.calls.filter((c) => c.url.searchParams.get('q')?.startsWith('fullText')).at(-1)?.url.searchParams.get('q')).toContain("'d2' in parents");
+    await d.trash('n2');
+    expect(await found()).toEqual(['n1']);
+    await d.untrash('n2');
+    expect(await found()).toEqual(['n1', 'n2']);
+    expect(lists, 'the folder is listed once, and each write updates what was listed').toBe(listed);
+  });
+});

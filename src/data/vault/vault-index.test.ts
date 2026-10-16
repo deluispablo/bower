@@ -93,3 +93,26 @@ describe('reading what this device has seen', () => {
     spy.mockRestore();
   });
 });
+
+describe('audit-write-speed', () => {
+  it('AC2 audit-write-speed-linear-reindex: a folder of many things is indexed without copying its list once per thing', () => {
+    const many = 2000;
+    const files = [dir('d', 'Big', 'R'), ...Array.from({ length: many }, (_, i) => f(`n${i}`, `Note ${i}.md`, 'd'))];
+    // A spread of an array calls its iterator: counted (by hand, since a spy itself spreads), a list copied per child
+    // shows as one call per child.
+    const original = Array.prototype[Symbol.iterator];
+    let calls = 0;
+    let ix: VaultIndex;
+    Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+      calls++;
+      return original.call(this);
+    };
+    try {
+      ix = VaultIndex.build('R', files);
+    } finally {
+      Array.prototype[Symbol.iterator] = original;
+    }
+    expect(ix.pathOf(`n${many - 1}`)).toBe(`Big/Note ${many - 1}.md`);
+    expect(calls).toBeLessThan(many / 10);
+  });
+});
