@@ -63,8 +63,9 @@ describe('the note sections', () => {
     // Duplicate headings: the last one wins, as every reader has read them.
     const twice = sectionsOf('---\nsummary: S\n---\n## Timeline\n- 1 Oct · old\n\n## Timeline\n- 2 Oct · new\n');
     expect(twice).toMatchObject({ status: 'legacy', timeline: '## Timeline\n- 2 Oct · new\n' });
-    // A byte-order mark in front of the fence leaves the legacy reading plain, and frames a v2 note.
-    expect(sectionsOf(`\ufeff${LEGACY}`)).toMatchObject({ status: 'plain', front: null, current: null });
+    // A byte-order mark in front of the fence is not text: the legacy reading frames the same sections, three bytes
+    // later, as it frames a v2 note (bom-front-matter; was plain).
+    expect(sectionsOf(`\ufeff${LEGACY}`)).toEqual({ ...sectionsOf(LEGACY), frontEnd: 3 + '---\nsummary: S\nby: bower\n---\n'.length });
     expect(sectionsOf(`\ufeff${V2}`)).toMatchObject({ status: 'v2', front: 'summary: S\nbower_format: ownership/2\n', timeline: '## Timeline\n- 1 Oct · x\n' });
   });
 });
