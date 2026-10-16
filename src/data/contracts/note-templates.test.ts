@@ -22,7 +22,7 @@ it('B6a templates: b6-five-template-shapes declares exactly five ordered section
     properties: [], tags: [], currentState: [], body: 'Grounded words.', timeline: [] });
   expect(parseNote('Gardening.md', raw).body).toBe('Grounded words.');
   const templates = await declarations();
-  expect(Object.keys(templates).sort()).toEqual(['area', 'concept', 'moc', 'profile', 'project', 'source']);
+  expect(Object.keys(templates).sort()).toEqual(['area', 'concept', 'document', 'moc', 'profile', 'project', 'source']);
   expect(Object.fromEntries(Object.entries(templates).map(([key, value]) => [key, value.sections]))).toEqual({
     source: ['Summary', 'Key points', 'Related', 'Transcript'],
     concept: ['Current state', 'Notes', 'Related', 'Timeline'],
@@ -30,5 +30,7 @@ it('B6a templates: b6-five-template-shapes declares exactly five ordered section
     area: ['Standard to maintain', 'Current state', 'Notes', 'Timeline'],
     moc: ['Overview', 'Notes', 'Sources'],
     profile: ['Profile', 'My notes', 'Timeline'],
+    // C08 (c08-document-format): a request's document, Bower's region first, then the person's My notes.
+    document: ['Document', 'My notes', 'Timeline'],
   });
 });
