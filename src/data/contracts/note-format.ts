@@ -215,7 +215,7 @@ function templateProjection(bytes: Uint8Array, ownership: ReturnType<typeof owne
     tasks.push(index === undefined ? { region: 'bower' } : { region: 'personal', index });
     bySection.set(section, tasks);
   });
-  const headings = NOTE_TEMPLATES[kind].sections.filter((heading) => heading !== 'Current state' && heading !== 'Timeline');
+  const headings = NOTE_TEMPLATES[kind].sections.filter((heading) => !['Current state', 'Timeline', 'Document'].includes(heading));
   const body = [trimLines(sections.get('') ?? ''), ...headings
     .map((heading) => `## ${heading}\n${trimLines(sections.get(heading) ?? '')}`)].filter(Boolean).join('\n\n');
   return { kind, body, tasks: ['', ...headings].flatMap((heading) => bySection.get(heading) ?? []) };
@@ -443,9 +443,9 @@ export function serializeNote(n: NoteFile): string {
       || (n.typeRow !== undefined && (!typeRowOk(n.typeRow, true) || n.typeRow.template !== n.template))
       || (property('type') !== undefined && property('type')?.value !== (n.typeRow?.id ?? n.template))
       || !dateOk(property('created')?.value ?? '') || !dateOk(property('updated')?.value ?? '')
-      || !validSummary(property('source')?.link ?? property('source')?.value ?? '')
-      || !links.length || links.length > 5 || links.length !== [...relatedText.matchAll(/\[\[([^\]|]+)\]\]/g)].length
-      || !/^\[\[[^\]|\r\n]+\]\](?:,\s*\[\[[^\]|\r\n]+\]\])*$/.test(relatedText)
+      || (n.template === 'document' ? related !== undefined || property('source') !== undefined || !documentBodyOk(n.body)
+        : !validSummary(property('source')?.link ?? property('source')?.value ?? '') || !links.length || links.length > 5 || links.length !== [...relatedText.matchAll(/\[\[([^\]|]+)\]\]/g)].length
+          || !/^\[\[[^\]|\r\n]+\]\](?:,\s*\[\[[^\]|\r\n]+\]\])*$/.test(relatedText))
       || (n.status !== undefined && !validSummary(n.status))
       || (n.template === 'source' && !validSummary(n.original ?? ''))) {
       throw new BowerError('unknown', 'Bower could not write this note safely.');
@@ -475,6 +475,24 @@ export function serializeNote(n: NoteFile): string {
   return source?.serialized === serialized ? source.raw : serialized;
 }
 
+/**
+ * A generated document is written verbatim, so no unfenced line may read as a heading or marker to the one parser
+ * (fenced, quoted, escaped and indented-heading examples stay text), and no fence or lone CR may stay open to damage the frame.
+ */
+function documentBodyOk(body: string): boolean {
+  if (/\r(?!\n)/.test(body)) return false;
+  let fence: Fence | null = null;
+  for (const raw of body.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const previous = fence;
+    fence = fenceAfter(line, fence);
+    if (previous || fence) continue;
+    const heading = /^## (.+)$/.exec(line)?.[1];
+    if (line.startsWith('<!-- bower:ownership') || heading && ['Current state', 'Document', 'My notes', 'Timeline'].includes(heading)) return false;
+  }
+  return !fence;
+}
+
 /** Writer and display reader use the declared sections and the shared fence grammar. */
 function templateSections(body: string, template: NoteTemplate, framed = false,
   onLine?: (section: string, line: string, byteOffset: number) => void): Map<string, string> {
@@ -482,6 +500,7 @@ function templateSections(body: string, template: NoteTemplate, framed = false,
   const contents = new Map<string, string>();
   let section = '';
   let fence: Fence | null = null;
+  let frame = '';
   let byteOffset = 0;
   for (const rawLine of body.split('\n')) {
     const offset = byteOffset;
@@ -489,9 +508,12 @@ function templateSections(body: string, template: NoteTemplate, framed = false,
     const line = framed ? rawLine.replace(/\r$/, '') : rawLine;
     const previous = fence;
     fence = fenceAfter(line, fence);
-    if (framed && !previous && !fence && /^<!-- bower:ownership\/2 (?:begin|end) [a-z-]+ -->$/.test(line)) continue;
+    const marker = framed && !previous && !fence ? /^<!-- bower:ownership\/2 (begin|end) ([a-z-]+) -->$/.exec(line) : null;
+    if (marker) { frame = marker[1] === 'begin' ? marker[2] ?? '' : ''; continue; }
     const heading = !previous && !fence ? /^## (.+)$/.exec(line)?.[1] : undefined;
-    if (heading && (shape.sections as readonly string[]).includes(heading)) section = heading;
+    // A heading names a region only in the frame that owns it, so the person's own `## Timeline` stays their text.
+    const home = heading === 'Current state' ? 'current' : heading === 'Timeline' ? 'timeline' : heading === 'Document' ? 'document' : frame;
+    if (heading && (shape.sections as readonly string[]).includes(heading) && (!framed || home === frame)) section = heading;
     else {
       contents.set(section, `${contents.get(section) ?? ''}${line}\n`);
       onLine?.(section, line, offset);
@@ -503,7 +525,7 @@ function templateSections(body: string, template: NoteTemplate, framed = false,
 /** Only this serializer writes headings/framing. */
 function templateBody(n: NoteFile, template: NoteTemplate): string[] {
   const shape = NOTE_TEMPLATES[template];
-  const contents = templateSections(n.body, template);
+  const contents = template === 'document' ? new Map<string, string>() : templateSections(n.body, template);
   const loose = trimLines(contents.get('') ?? '');
   if (loose) contents.set(shape.body, [loose, contents.get(shape.body) ?? ''].filter(Boolean).join('\n'));
   const related = n.properties.find((p) => p.key === 'related');
@@ -516,12 +538,13 @@ function templateBody(n: NoteFile, template: NoteTemplate): string[] {
   };
   const render = (heading: string): string => `## ${heading}\n${trimLines(contents.get(heading) ?? fallback[heading] ?? '')}\n`;
   const frame = (owner: string, text: string): string => `<!-- bower:ownership/2 begin ${owner} -->\n${text}<!-- bower:ownership/2 end ${owner} -->\n`;
-  const personal = shape.sections.filter((heading) => !['Current state', 'Timeline', 'Goal', 'Next steps', 'Standard to maintain'].includes(heading)).map(render).join('\n');
+  const personal = shape.sections.filter((heading) => !['Current state', 'Timeline', 'Document', 'Goal', 'Next steps', 'Standard to maintain'].includes(heading)).map(render).join('\n');
   const out: string[] = [];
   if (template === 'area') out.push(render('Standard to maintain'));
   if (template === 'project') out.push(frame('goal', render('Goal')), frame('next-steps', render('Next steps')));
-  out.push(frame('current', template !== 'source' && template !== 'moc' ? render('Current state') : ''),
-    frame('personal', template === 'profile' ? render('My notes') : template !== 'source' && template !== 'moc' ? personal : ''),
+  if (template === 'document') out.push(frame('document', `${n.body}\n`));
+  out.push(frame('current', template !== 'source' && template !== 'moc' && template !== 'document' ? render('Current state') : ''),
+    frame('personal', template === 'profile' || template === 'document' ? render('My notes') : template !== 'source' && template !== 'moc' ? personal : ''),
     frame('timeline', shape.timeline ? render('Timeline') : ''),
     frame('bower-note', template === 'source' ? personal : n.bowerNote ? n.bowerNote.text + '\n' : ''));
   if (template === 'profile') out.push(frame('profile', `${trimLines(contents.get('Profile') ?? '')}\n`));
@@ -582,7 +605,7 @@ function viewsOk(row: TypeRow, views: unknown[]): boolean {
 }
 function rowOk(v: unknown, stored: boolean): v is TypeRow & { views?: unknown } {
   if (!schemaObject(v) || (!stored && !schemaClosed(v, ['id', 'match', 'template', 'properties', 'table', 'group_by', 'profile', 'views']))
-    || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template) || (!stored && v.template === 'profile')
+    || !slug(v.id) || !schemaTexts(v.match) || !v.match.length || !schemaText(v.template) || (!stored && (v.template === 'profile' || v.template === 'document'))
     || !schemaObject(v.properties) || !schemaTexts(v.table) || (!stored && v.table.length > 4)
     || new Set(v.table).size !== v.table.length) return false;
   const properties = v.properties;
