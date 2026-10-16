@@ -83,11 +83,8 @@
 .tb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--text-muted); text-decoration: none; font-size: 13px; }
 .tb[aria-current='page'] { color: var(--brand-line); font-weight: 600; }
 .edge { position: fixed; left: 0; top: 0; bottom: var(--tab-h); width: 14px; z-index: 20; touch-action: pan-y; }
-.drawerScrim { position: fixed; inset: 0; z-index: 44; background: var(--scrim); animation: fadeIn 0.2s; }
-.drawer { position: fixed; left: 0; top: 0; bottom: 0; z-index: 45; width: min(340px, 88vw); display: flex; flex-direction: column; background: var(--bg-alt); box-shadow: 12px 0 40px rgba(0, 0, 0, 0.4); animation: slideIn 0.25s var(--ease-out); padding-top: env(safe-area-inset-top); }
+.drawerBody { display: contents; }
 .drawerHead { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px 6px 16px; }
-@keyframes slideIn { from { transform: translateX(-100%); } }
-@keyframes fadeIn { from { opacity: 0; } }
 
 /* ---------- skip link: off the top edge until it has focus, above every frame and layer, no transition */
 .skip { position: fixed; top: 8px; left: 8px; z-index: 120; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; background: var(--surface-strong); color: var(--brand-line); font-weight: 600; text-decoration: none; transform: translateY(calc(-100% - 16px)); }

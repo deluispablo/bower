@@ -6,11 +6,19 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Link, MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { DataProvider } from '@/data/provider';
+import type { TreeNode } from '@/data/types';
+import { loadingSources } from '@/testing/loading-sources';
 import { PhoneShell } from './PhoneShell';
 import { useUi } from './ui-store';
 import s from './shell.module.css';
 
-vi.mock('@/features/files/Explorer', () => ({ Explorer: () => <><button type="button">Open a folder</button><Link to="/files/folder">Folder</Link></> }));
+// The real Explorer for the navigation tests (its rows navigate from divs, not anchors); a small stand-in elsewhere.
+const real = vi.hoisted(() => ({ on: false }));
+vi.mock('@/features/files/Explorer', async (original) => {
+  const actual = await original<typeof import('@/features/files/Explorer')>();
+  return { Explorer: (p: { variant: 'drawer' }) => (real.on ? <actual.Explorer {...p} /> : <><button type="button">Open a folder</button><Link to="/files/folder">Folder</Link></>) };
+});
 vi.mock('@/features/tidy/RunChip', () => ({ RunChip: () => null }));
 vi.mock('@/ui/Dock', () => ({ Dock: () => null }));
 vi.mock('@/ui/back', () => ({ useBackCloses: () => undefined }));
@@ -115,6 +123,56 @@ test('AC4 drawer-navigation-heading: a link in the drawer closes it and the keyb
   settle();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Folder' })).toHaveFocus();
+});
+
+/** The real Explorer in the drawer, on the note Garden.md. */
+async function showRealOnGarden(): Promise<void> {
+  real.on = true;
+  const tree: TreeNode[] = [{ path: 'Projects', name: 'Projects', type: 'folder', modified: 0, created: 0, children: [
+    { path: 'Projects/Garden.md', name: 'Garden.md', type: 'file', kind: 'note', modified: 0, created: 0 },
+    { path: 'Projects/Plan.md', name: 'Plan.md', type: 'file', kind: 'note', modified: 0, created: 0 },
+  ] }];
+  const base = loadingSources();
+  const vault = new Proxy(base.vault, { get: (target, key) => (key === 'tree' ? async () => tree : Reflect.get(target, key)) });
+  render(
+    <MemoryRouter initialEntries={['/note/Projects/Garden.md']}>
+      <DataProvider sources={{ ...base, vault }}>
+        <Routes>
+          <Route element={<PhoneShell />}>
+            <Route path="/note/*" element={<h1>Note</h1>} />
+          </Route>
+        </Routes>
+      </DataProvider>
+    </MemoryRouter>,
+  );
+  openFromFilesTab();
+  await act(async () => {}); // the tree loads once the drawer has mounted it
+}
+afterEach(() => { real.on = false; });
+
+test('AC4 drawer-same-note-click: tapping the note already open closes the drawer', async () => {
+  await showRealOnGarden();
+  fireEvent.click(document.querySelector<HTMLElement>('[data-path="Projects/Garden.md"]') as HTMLElement);
+  settle();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Note' })).toHaveFocus();
+});
+
+test('AC4 drawer-same-note-enter: Enter on the note already open closes the drawer', async () => {
+  await showRealOnGarden();
+  const tree = screen.getByRole('tree');
+  tree.focus();
+  fireEvent.keyDown(tree, { key: 'Enter' });
+  settle();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Note' })).toHaveFocus();
+});
+
+test('AC4 drawer-other-note-click: tapping another note closes the drawer', async () => {
+  await showRealOnGarden();
+  fireEvent.click(document.querySelector<HTMLElement>('[data-path="Projects/Plan.md"]') as HTMLElement);
+  settle();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
 test('R6 drawer-swipe-opens: a swipe from the left edge still opens the drawer (guard)', () => {
