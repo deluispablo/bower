@@ -209,7 +209,7 @@ describe('rules-original-ui: the panel\'s rules summary', () => {
     return list;
   };
 
-  it('AC6 rules-original-panel-prose: "Rules" with no number, the rules note first, then up to 4 rules', async () => {
+  it('AC6 rules-original-panel-prose: "Rules" with no number, up to 4 rules, and the rules note as a link row (design-rules-block AC6)', async () => {
     setup('Alex keeps paper letters for a year.', rules(5));
     await settle();
     const link = screen.queryByRole('link', { name: 'Your rules note' });
@@ -217,10 +217,23 @@ describe('rules-original-ui: the panel\'s rules summary', () => {
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /^\d+ rules?$/ })).toBeNull();
     const items = within(rulesList()).getAllByRole('listitem');
-    expect(items).toHaveLength(5);
     expect(link?.getAttribute('href')).toBe('/note/Rules.md');
-    if (link) expect(items[0]?.contains(link)).toBe(true);
-    expect(items.slice(1).map((i) => i.textContent)).toEqual(rules(4).map((r) => r.text));
+    expect(items.map((i) => i.textContent)).toEqual(rules(4).map((r) => r.text));
+  });
+
+  it('AC6 design-rules-panel-link-row: the rules note is a link row after the rules, never a bullet, and not muted', async () => {
+    setup('Alex keeps paper letters for a year.', rules(2));
+    await settle();
+    const link = screen.queryByRole('link', { name: 'Your rules note' });
+    expect(link, 'a link "Your rules note"').not.toBeNull();
+    if (!link) return;
+    expect(link.closest('li'), 'not inside a list item').toBeNull();
+    expect(link.closest('ul'), 'not inside the rules list').toBeNull();
+    expect(link).not.toHaveClass('muted');
+    // In the rules section, after its list.
+    const section = screen.getByRole('heading', { name: 'Rules' }).closest('section');
+    expect(section?.contains(link)).toBe(true);
+    expect(!!(rulesList().compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it('AC6 rules-original-panel-prose-no-rules: with the prose and no rules added, "Rules" and the link, never "0 rules"', async () => {
@@ -276,7 +289,7 @@ describe('rules-original-ui: the panel\'s rules summary', () => {
     expect([proseCalls, ruleCalls]).toEqual([2, 2]);
     expect(screen.queryAllByRole('alert')).toEqual([]);
     expect(screen.queryByRole('link', { name: 'Your rules note' })).not.toBeNull();
-    expect(within(rulesList()).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(rulesList()).getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('R8 rules-original-panel-refresh: the heading and prose stay while the prose is read again and after that failed; a later success replaces them', async () => {

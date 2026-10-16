@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 import { expectAxeClean } from './axe';
 import { resize } from './viewport';
@@ -65,13 +65,99 @@ for (const width of [375, 1440]) {
       const heading = panel.getByRole('heading', { name: 'Rules', exact: true });
       await expect(heading).toBeVisible();
       await expect(panel.getByRole('heading', { name: /^\d+ rules?$/ })).toHaveCount(0);
-      const first = panel.locator('section', { has: page.getByRole('heading', { name: 'Rules', exact: true }) }).getByRole('listitem').first();
-      await expect(first.getByRole('link', { name: 'Your rules note', exact: true })).toBeVisible();
+      // The rules note is a link row of the section (design-rules-block AC6), not its first bullet.
+      await expect(panel.locator('section', { has: page.getByRole('heading', { name: 'Rules', exact: true }) }).getByRole('link', { name: 'Your rules note', exact: true })).toBeVisible();
       await expectAxeClean(page, { include: 'aside[aria-label="Right panel"]', wcag22: true });
     }
 
     await main.getByRole('link', { name: 'Open your rules note', exact: true }).click();
     await expect(page).toHaveURL(/\/note\/Rules\.md(?:\?|$)/);
     await expect(page.getByRole('heading', { level: 1, name: 'Rules', exact: true })).toBeVisible();
+  });
+}
+
+/** The text look of an element, as the browser computed it. */
+const look = (el: Locator): Promise<Record<string, string>> =>
+  el.evaluate((e) => {
+    const c = getComputedStyle(e);
+    return { family: c.fontFamily, size: c.fontSize, weight: c.fontWeight, color: c.color, decoration: c.textDecorationLine };
+  });
+
+// design-rules-block: the person's text leads; two equal group labels; the note's own headings read as bold text;
+// the rules added in Bower in the prose's weight; the foot link under its sentence. Real styles, no screenshots.
+for (const width of [375, 1440]) {
+  test(`design-rules-block: the rules block's hierarchy and foot link, at ${width}`, async ({ page }) => {
+    await resize(page, { width, height: width < 900 ? 812 : 900 });
+    const stub = await proseRead(page);
+    await page.goto('/bower?scenario=default&time=instant');
+    const main = page.getByRole('main');
+    const written = main.getByRole('region', { name: 'Written in your rules note', exact: true });
+    await expect(written).toBeVisible();
+    expect(stub.served, 'the prose read is stubbed').toBe(true);
+    const prose = await look(written.getByText('Alex keeps paper letters for a year, then scans them.', { exact: true }));
+    expect(Number(prose.weight), 'the person\'s text is regular weight').toBe(400);
+
+    // AC1: a rule added in Bower reads in the prose's weight and size, not bold.
+    const remove = main.getByRole('button', { name: /^Remove the rule: / }).first();
+    await expect(remove).toBeVisible();
+    const rule = await remove.evaluate((b) => {
+      const text = b.closest('li')?.firstElementChild;
+      const c = text ? getComputedStyle(text) : null;
+      return { size: c?.fontSize, weight: c?.fontWeight };
+    });
+    expect(rule).toEqual({ size: prose.size, weight: prose.weight });
+
+    // AC2: the two group labels look the same, and stand out from the text they label.
+    const labels = ['Written in your rules note', 'Added in Bower'].map((name) => main.getByRole('heading', { level: 3, name, exact: true }));
+    for (const label of labels) await expect(label).toBeVisible();
+    const [writtenLook, addedLook] = await Promise.all(labels.map(look));
+    expect(addedLook).toEqual(writtenLook);
+    expect(Number(writtenLook?.weight)).toBeGreaterThan(Number(prose.weight));
+
+    // AC3: the note's own heading reads as bold text of the prose, not as a heading of the page.
+    const inner = await look(written.getByRole('heading', { name: 'Rules', exact: true }));
+    expect({ family: inner.family, size: inner.size }).toEqual({ family: prose.family, size: prose.size });
+    expect(Number(inner.weight)).toBeGreaterThanOrEqual(600);
+
+    // AC4: "Open your rules note" sits under its sentence, left-aligned with it.
+    const sentence = await main.getByText(FOOT, { exact: true }).boundingBox();
+    const open = await main.getByRole('link', { name: 'Open your rules note', exact: true }).boundingBox();
+    expect(sentence && open).toBeTruthy();
+    if (sentence && open) {
+      expect(open.y, 'the link starts under the sentence').toBeGreaterThanOrEqual(sentence.y + sentence.height - 1);
+      expect(Math.abs(open.x - sentence.x), 'left edges line up').toBeLessThanOrEqual(1);
+    }
+    // Unchanged: each rule card keeps its date and Remove on one row.
+    const row = await remove.evaluate((b) => {
+      const date = b.parentElement?.firstElementChild?.getBoundingClientRect();
+      const own = b.getBoundingClientRect();
+      return date ? Math.abs(date.top + date.height / 2 - (own.top + own.height / 2)) < own.height / 2 && date.right <= own.left : false;
+    });
+    expect(row, 'date and Remove share a row').toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await expectAxeClean(page, { include: 'main', wcag22: true });
+
+    if (width < 900) return;
+    // AC5, AC6: in the panel each rule is two lines at most, its full text kept; the rules note is a link row.
+    const panel = page.getByRole('complementary', { name: 'Right panel', exact: true });
+    const section = panel.locator('section', { has: page.getByRole('heading', { name: 'Rules', exact: true }) });
+    const items = section.getByRole('listitem');
+    await expect(items.first()).toBeVisible();
+    const fit = await items.evaluateAll((lis) => lis.map((li) => {
+      const line = parseFloat(getComputedStyle(li).lineHeight);
+      return { text: li.textContent ?? '', lines: li.getBoundingClientRect().height / line };
+    }));
+    for (const item of fit) expect(item.lines, item.text).toBeLessThanOrEqual(2.05);
+    // Positive control: a rule long enough to need three lines at this width is there, whole, in the page.
+    const long = fit.find((i) => i.text.length > 100);
+    expect(long, 'a long rule in the panel').toBeTruthy();
+    if (long) await expect(main.getByText(long.text, { exact: true })).toBeVisible();
+    const noteLink = section.getByRole('link', { name: 'Your rules note', exact: true });
+    await expect(noteLink).toBeVisible();
+    expect(await noteLink.evaluate((a) => a.closest('li') === null)).toBe(true);
+    const answer = panel.getByRole('link', { name: 'Answer on Home', exact: true });
+    await expect(answer, 'the panel\'s other link row').toBeVisible();
+    expect(await look(noteLink)).toEqual(await look(answer));
+    await expectAxeClean(page, { include: 'aside[aria-label="Right panel"]', wcag22: true });
   });
 }
