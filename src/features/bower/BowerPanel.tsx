@@ -34,7 +34,7 @@ export function BowerPanel() {
       <section>
         <h2 className={s.ph}>Now</h2>
         {runState.error ? <LoadError state={runState} /> : run && (isRunning(run) || (!run.seen && run.phase !== 'failed')) ? (
-          <button type="button" className={s.panelCard} onClick={() => setTidy(true)}>
+          <button type="button" className={s.panelCard} onClick={() => setTidy(true, run.id)}>
             <strong>{runTitle(run)}</strong>
             <span className="muted">{runDetail(run)}</span>
           </button>
