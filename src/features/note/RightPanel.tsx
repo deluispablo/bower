@@ -120,11 +120,14 @@ function NotePanel({ path, tab }: { path: string; tab: 'links' | 'outline' }) {
 }
 
 export function LinkedList({ note }: { note: Note }) {
+  const both = new Set(note.links.filter((p) => note.backlinks.includes(p)));
+  const from = note.backlinks.filter((p) => !both.has(p));
   const row = (p: string) => (
     <li key={p}>
       <Link to={noteRoute(p)} className={s.link}>
         <span className={s.linkTitle}>{thingName(nameOf(p))}</span>
         <span className={s.linkPath}>{crumbs(parentOf(p))}</span>
+        {both.has(p) && <span className={s.linkPath}>Links both ways</span>}
       </Link>
     </li>
   );
@@ -133,7 +136,11 @@ export function LinkedList({ note }: { note: Note }) {
       <h3 className={s.h}>Links to</h3>
       {note.links.length ? <ul className={s.list}>{note.links.map(row)}</ul> : <p className={s.hint}>No links yet.</p>}
       <h3 className={s.h}>Linked from</h3>
-      {note.backlinks.length ? <ul className={s.list}>{note.backlinks.map(row)}</ul> : <p className={s.hint}>Nothing links here yet.</p>}
+      {from.length ? (
+        <ul className={s.list}>{from.map(row)}</ul>
+      ) : (
+        <p className={s.hint}>{note.backlinks.length ? 'No other notes link here.' : 'Nothing links here yet.'}</p>
+      )}
     </>
   );
 }

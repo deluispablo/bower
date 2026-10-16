@@ -35,6 +35,8 @@
 .body :global(.md-table) { overflow-x: auto; margin: 14px 0; }
 .body table { border-collapse: collapse; font-size: 16px; min-width: 60%; }
 .body th, .body td { text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line); }
+.body th, .body td { overflow-wrap: normal; }
+.body th, .body :global(.md-num) { white-space: nowrap; }
 .body th { color: var(--text-muted); font-weight: 600; }
 .wikilink { color: var(--brand-line); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--brand-line) 40%, transparent); }
 .wikilink:hover { border-bottom-color: currentColor; }
