@@ -39,6 +39,8 @@ export type CorpusBetween =
   /** A words pile the person adds before the press: `p-<press>-<n>`, `n` counting only that press's words steps. */
   | { kind: 'words'; line: string }
   | { kind: 'edit'; path: string; text: string }
+  /** A note the person adds (a later arrival) before the press, in a folder that is there. */
+  | { kind: 'create'; path: string; text: string }
   | { kind: 'move'; path: string; to: string }
   | { kind: 'answer'; question: { id: string } | QuestionSubjectExpectation; yes: boolean };
 
@@ -53,6 +55,8 @@ export type QuestionSubjectExpectation =
   | { kind: 'pair'; notes: [string, string] }
   | { kind: 'state'; note: string }
   | { kind: 'inbox'; path: string }
+  /** A large request's one question (B12d). */
+  | { kind: 'request' }
   | { kind: 'folder' };
 
 export interface CorpusCase {

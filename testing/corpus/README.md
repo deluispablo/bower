@@ -271,16 +271,18 @@ compatible plain-text storage recommendation, six lead questions and exact file 
 | --- | --- | --- | --- |
 | c17-b12-shared-target | C17 / B12 | model | TL-P4-39 F11/F8/U4; two members contribute to one list edit, combined caps; its result note accounts for both |
 | c17-b12-closed-ops | C17 / B12 | model | TL-P4-39 class F; move/rename/property/tag, dependent edit/move and shared mechanical link consequences; the result note lists final names |
-| c17-b12-large-first-part | C17 / B12 | model | TL-P4-39 addenda 2–3, TL-P4-44 Q4; 201→200 yes, late arrival exclusion and new rest with 30-day skipping |
+| c17-b12-large-first-part | C17 / B12 | model | TL-P4-39 addenda 2–3, TL-P4-44 Q4; 201→200 yes with no model call, the late arrival left out, Reading 201 listed as not included |
 | c17-b12-authority-person-boundary | C17 / B12 | model | TL-P4-39 F7/R2; no person/Source metadata, one done and one unavailable member in the result note |
 
-The three cases other than `c17-b12-large-first-part` are landed (b12-result-note): their
+All four are landed (b12-result-note, b12-large-part): their
 replies use `maps` with a `title` and a `set` whose folder is a `$folder:` selector, the
 type tables hold valid stored rows, and each runs through main with two model calls and
 scores clean, its result note `Request - <title>.md` and the health note in the report's
 created rows. Their hand `oracle.json` and `inventory.json` are gone: the oracles live in
-`runner/test/b12-*.test.ts`. `c17-b12-large-first-part` stays a preparation fixture until
-b12-large-part: its `$set:` and `$script:*` recipes and late-arrival.txt are not yet driven.
+`runner/test/b12-*.test.ts`. `c17-b12-large-first-part` asks with one rule for all (one model
+reply, on its second press: the first reads the 201 notes in, cold-discovery-progress), then a `create` between step adds the late arrival and a yes (the `request` question
+subject) writes the first part with no model call; both presses are scored. "Now the rest" is
+b12-recent's.
 
 ## B10 preparation cases — 2026-10-10
 

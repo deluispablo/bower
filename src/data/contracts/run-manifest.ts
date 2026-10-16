@@ -29,8 +29,11 @@ export type CapturedPile = {
 };
 export type CapturedMember = { pileId: string; memberKey: string | null; file: SeenFile; content: VerifiedContent };
 export type CapturedJournal = { recordId: string; sha256: string; fileIds: string[] };
-/** A set a request's map moves (B12 R26), its members as admitted: what its moves are checked against. */
-export type CapturedMap = { recordId: string; members: string[] };
+/**
+ * A set a request's map moves (B12 R26), its members as admitted: what its moves are checked against. `answer`: the yes
+ * that applies a held large request's frozen part (B12d R82), the only record that may name its changes.
+ */
+export type CapturedMap = { recordId: string; members: string[]; answer?: string };
 export type Capture = {
   piles: CapturedPile[]; members: CapturedMember[]; journal: CapturedJournal[]; places: { file: SeenFile; path: string }[]; maps?: CapturedMap[];
 };
@@ -318,8 +321,8 @@ function membership(piles: CapturedPile[], members: CapturedMember[]): boolean {
 }
 function capture(value: unknown): value is Capture {
   return closed(value, ['piles', 'members', 'journal', 'places'], ['maps'])
-    && (value.maps === undefined || list(value.maps, (m) => closed(m, ['recordId', 'members']) && recordId(m.recordId)
-      && list(m.members, driveId) && unique(m.members)) && uniqueBy(value.maps as CapturedMap[], (m) => m.recordId))
+    && (value.maps === undefined || list(value.maps, (m) => closed(m, ['recordId', 'members'], ['answer']) && recordId(m.recordId)
+      && (m.answer === undefined || recordId(m.answer)) && list(m.members, driveId) && unique(m.members)) && uniqueBy(value.maps as CapturedMap[], (m) => m.recordId))
     && list(value.piles, capturedPile) && list(value.members, capturedMember) && list(value.journal, capturedJournal)
     && list(value.places, (place) => closed(place, ['file', 'path']) && seenFile(place.file) && path(place.path))
     && uniqueBy(value.piles as CapturedPile[], (pile) => pile.pileId)
@@ -711,6 +714,19 @@ export function requestMoveKind(value: { runId: string; capture: Capture; operat
 }
 
 /**
+ * Whether a record may name a map's change of one note (B12 R66, R82): a request this run completes, and for a move
+ * a note of its captured set (`plain`: a property edit needs no capture); or the yes answering a held large request,
+ * for a note of its frozen part. A held request that was answered is never its own authority.
+ */
+function mapCites(maps: readonly CapturedMap[], journal: { has(id: string): boolean }, done: ReadonlySet<string>, id: string, fileId: string, plain: boolean): boolean {
+  if (!journal.has(id)) return false;
+  const yes = maps.find((m) => m.answer === id);
+  if (yes) return done.has(yes.recordId) && yes.members.includes(fileId);
+  const own = maps.find((m) => m.recordId === id);
+  return own ? own.answer === undefined && done.has(id) && (plain || own.members.includes(fileId)) : plain && done.has(id);
+}
+
+/**
  * TL-P2-20's rules across a v2 manifest: each target (rule 2, R3-7, ratification 5), one edit per file (rule 3),
  * the size limits (rule 6), records in capture.journal and archives held by every edit naming them (rule 7, R3-4),
  * Timeline dates from requestedAt, and the in-place `bowerNew` move only after an edit with a Timeline line (m3).
@@ -729,13 +745,13 @@ function edits(value: ManifestV2): EditGuardRule | null {
   const edited = new Map<string, { operationId: string; effect: EditText }>();
   const paths = new Set<string>();
   // B12 (R26, R28, R62, R66): a map's moves and link fixes, each by the requests whose sets this run captured.
-  const maps = new Map((capture.maps ?? []).map((m) => [m.recordId, m.members]));
+  const maps = capture.maps ?? [];
   const done = requestsDone(value);
-  const mapRecord = (id: string): boolean => maps.has(id) && journal.has(id) && done.has(id);
   const mapMoves = operations.filter((o): o is OperationV2 & { effect: Extract<EffectV2, { kind: 'move' }> } => o.effect.kind === 'move' && o.effect.recordIds !== undefined);
-  // A map's move names its request: an admitted request this run completes, whose set holds the note (R66).
-  if (mapMoves.some(({ effect: e }) => !e.recordIds?.length || !e.recordIds.every((id) => mapRecord(id) && maps.get(id)?.includes(e.before.fileId)))) return 'record';
-  const fixOf = (e: EditText): Extract<Change, { kind: 'link-rewrite' }> | undefined => e.changes.find((c): c is Extract<Change, { kind: 'link-rewrite' }> => c.kind === 'link-rewrite' && c.recordIds.some((id) => maps.has(id)));
+  // A map's move names its request: an admitted request this run completes, whose set holds the note (R66); or the yes of a held one (R82).
+  if (mapMoves.some(({ effect: e }) => !e.recordIds?.length || !e.recordIds.every((id) => mapCites(maps, journal, done, id, e.before.fileId, false)))) return 'record';
+  const fixOf = (e: EditText): Extract<Change, { kind: 'link-rewrite' }> | undefined => e.changes.find((c): c is Extract<Change, { kind: 'link-rewrite' }> => c.kind === 'link-rewrite'
+    && c.recordIds.some((id) => maps.some((m) => (m.answer ?? m.recordId) === id)));
   for (const item of operations) {
     const e = item.effect;
     if (e.kind !== 'edit-text') continue;
@@ -857,7 +873,7 @@ function requestsDone(value: ManifestV2): Set<string> {
  * lines change, on a Bower note that is not a Source (the author refuses any other); each key is `tags`, held to B7's
  * vocabulary (the list it read, or this run's tag-list write) and at most three on the note, or a key the note's row
  * declares and no formula computes, its line reading back as a value the property holds; every record it names is a
- * request this run completes.
+ * request this run completes, or the yes of a held large request whose frozen part holds the note (R82, `mapCites`).
  */
 async function propertySetOk(value: ManifestV2): Promise<boolean> {
   const done = requestsDone(value);
@@ -869,7 +885,7 @@ async function propertySetOk(value: ManifestV2): Promise<boolean> {
     const sets = e.changes.filter((c): c is Extract<Change, { kind: 'property-set' }> => c.kind === 'property-set');
     if (!sets.length) continue;
     if (e.beforeText === undefined || e.types === undefined || !await describes(e.beforeContent, e.beforeText)
-      || sets.some((c) => c.line === null || !c.recordIds.length || !c.recordIds.every((id) => journal.has(id) && done.has(id)))) return false;
+      || sets.some((c) => c.line === null || !c.recordIds.length || !c.recordIds.every((id) => mapCites(value.capture.maps ?? [], journal, done, id, e.before.fileId, true)))) return false;
     const authored = applyChanges(new TextEncoder().encode(e.beforeText), e.changes);
     if (!authored.ok || authored.text !== e.text) return false;
     const type = frontValues(e.beforeText)?.type;

@@ -195,6 +195,13 @@ async function addWords(drive: FakeDrive, root: string, line: string, pile: stri
 
 async function changeBetween(drive: FakeDrive, root: string, step: Exclude<CorpusBetween, { kind: 'answer' | 'words' }>): Promise<void> {
   const seen = await snapshot(drive, root);
+  if (step.kind === 'create') {
+    const name = step.path.split('/').pop() ?? step.path;
+    const parent = Object.entries(seen.pathsById).find(([, path]) => path === step.path.slice(0, -name.length - 1))?.[0];
+    if (!parent) throw new Error(`between: missing the folder of ${step.path}`);
+    await drive.createText(parent, name, step.text);
+    return;
+  }
   const id = Object.entries(seen.pathsById).find(([, path]) => path === step.path)?.[0];
   if (!id) throw new Error(`between: missing ${step.path}`);
   const file = await drive.get(id);
@@ -390,6 +397,7 @@ function matchesSubject(q: Question, want: QuestionSubjectExpectation, pathsById
       && JSON.stringify(subject.notes.map((id) => pathsById[id]).sort()) === JSON.stringify([...want.notes].sort());
     case 'state': return subject.kind === 'state' && pathsById[subject.id] === want.note;
     case 'inbox': return subject.kind === 'inbox' && pathsById[subject.id] === want.path;
+    case 'request': return subject.kind === 'request';
     case 'folder': return subject.kind === 'folder';
   }
 }

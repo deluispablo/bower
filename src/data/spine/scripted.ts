@@ -24,7 +24,7 @@ import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type Questi
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { md5Hex } from '../contracts/hashes';
-import { proposalOk, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
+import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
@@ -42,7 +42,7 @@ import { STAMP, stampOf } from './write-once';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../contracts/note-templates';
 import { typeRowOk, readTypeTable, propertyValuesOk, insertTypeRow, requestTableColumn, rewriteTypeTable, bowerNoteRole, frontValues, propertyValue, scalarList, scalarOf, summaryScalar, valueOk } from '../contracts/note-format';
 import { VIEW_LIMITS, computedBy, viewFault } from '../contracts/view-format';
-import type { TypeRow } from '../contracts/types';
+import type { RequestPart, TypeRow } from '../contracts/types';
 
 import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseObservations } from '../contracts/observations';
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
@@ -511,7 +511,21 @@ export interface MapOp { targetId: string; key: string; mode: 'set' | 'union' | 
  * could not be read, so its membership is not known and the request waits whole (ruling 3). `move`: the member's new
  * folder, its new name, or both, made by one ordinary move after its edit (B12 R26).
  */
-export interface MapRequest { requestId: string; title: string; folderId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[]; move?: { parentId?: string; name?: string } }>; pending?: true }
+export interface MapRequest {
+  requestId: string; title: string; folderId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[]; move?: { parentId?: string; name?: string } }>; pending?: true;
+  /**
+   * A set over 200 asks first (B12d R35): the question in the model's words and what it freezes with `members` (the first
+   * 200 in the set's order); nothing is applied and the request waits, held by that question.
+   */
+  ask?: Pick<Ask, 'text' | 'yes' | 'no'> & { set: RequestPart['set']; ops: RequestPart['ops']; total: number };
+  /**
+   * A yes applies that frozen part with no model (B12d R38, R82): `answer` the yes record, which names the changes;
+   * `members` the part's, then those left out after it; `notIncluded` each member that no longer matches or is not in the
+   * part, listed and never written (R88).
+   */
+  answer?: string;
+  notIncluded?: readonly string[];
+}
 
 /**
  * One view a request installs (B11c, B11e), checked by the provider as a write: an aggregate in a Bower map (`home` its
@@ -1035,9 +1049,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   /** Suggested views a yes installs (B11f), each by its answer's record id, as a request's install is by its request's. */
   const yesViews: ViewInstall[] = [];
   /** A yes that installs nothing (R8, R64, R69): its question settles, and it is said. */
-  const staleYes = (id: string, why: string): void => {
+  const staleYes = (id: string, why: string, message = VIEW_STALE): void => {
     proposalSettled.add(id);
-    console.error(new BowerError('conflict', VIEW_STALE), why);
+    console.error(new BowerError('conflict', message), why);
   };
   for (const q of questionState.questions) {
     if (!q.proposal) continue;
@@ -1091,7 +1105,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   // A yes to a suggestion whose question cannot be read (R69): nothing can be checked, so nothing is installed; the
   // list is replaced and the answer settles.
-  if (questionsBroken) for (const l of lines) if (l.rec.kind === 'answer' && l.rec.questionId?.startsWith('q-proposal-')) staleYes(l.rec.id, `${l.rec.questionId} cannot be read`);
+  if (questionsBroken) for (const l of lines) {
+    if (l.rec.kind === 'answer' && l.rec.questionId?.startsWith('q-proposal-')) staleYes(l.rec.id, `${l.rec.questionId} cannot be read`);
+    // A large request's yes whose frozen part cannot be read applies nothing, and the request is asked again (R87).
+    if (l.rec.kind === 'answer' && l.rec.questionId?.startsWith('q-request-')) staleYes(l.rec.id, `${l.rec.questionId} cannot be read`, REQUEST_STALE);
+  }
   const columnRequests = new Set<string>();
   if (types.writeAllowed && sys?.folder) for (const line of lines) {
     if (line.rec.kind !== 'request') continue;
@@ -1132,10 +1150,25 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // known waits whole (ruling 3).
   const maps = (opts.decisions.maps ?? []).filter((m) => !columnRequests.has(m.requestId) && !viewRequests.has(m.requestId)
     && lines.some((l) => l.rec.kind === 'request' && l.rec.id === m.requestId));
-  const mapWaits = new Set(maps.filter((m) => m.pending).map((m) => m.requestId));
-  const mapRequests = new Set(maps.filter((m) => !m.pending).map((m) => m.requestId));
+  // A large set's ask (B12d R35, R36) waits like an unknown set: nothing is applied and its request stays, held by its question.
+  const mapWaits = new Set(maps.filter((m) => m.pending || m.ask).map((m) => m.requestId));
+  const mapRequests = new Set(maps.filter((m) => !m.pending && !m.ask).map((m) => m.requestId));
+  // The answers to large requests' questions (B12d R38-R41, R87): a no settles its request; a yes whose frozen part the
+  // provider gave no map for (it no longer fits, or its request is gone) settles stale, as an unreadable suggestion's yes
+  // does, and its request is asked again from the set as it is then; a yes with its map waits for the part's writes.
+  const declinedRequests = new Set<string>();
+  const requestSettled = new Set<string>();
+  for (const q of questionState.questions) {
+    const line = q.request && latest.get(q.id);
+    const answer = line && journalAnswer(line.rec);
+    if (!q.request || !line || typeof answer !== 'boolean') continue;
+    const map = answer ? maps.find((m) => m.answer === line.rec.id) : undefined;
+    if (!answer) { declinedRequests.add(q.request.id); requestSettled.add(line.rec.id); }
+    else if (!map) staleYes(line.rec.id, `${q.id} no longer fits its request`, REQUEST_STALE);
+    else if (!map.pending) requestSettled.add(line.rec.id);
+  }
   // Every request in your changes counts, one this run leaves waiting too: the oldest owns a note (R52).
-  const mapOwned = mapsOwned(maps.filter((m) => !m.pending), snapshot.journalAll.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
+  const mapOwned = mapsOwned(maps.filter((m) => !m.pending && !m.ask), snapshot.journalAll.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
     && !viewRequests.has(l.rec.id) && !mapWaits.has(l.rec.id)), (text) => requestTargets(listing, ix, text).notes.map((n) => n.file.id));
   // A property asked for that is not a column becomes one, the first in reply order, once per row (R25, R56).
   const columned = new Set<string>();
@@ -1294,12 +1327,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }));
   let journal = lines.filter((l) => {
     if (l.rec.kind === 'request') return formulaWaits.has(l.rec.id) || mapWaits.has(l.rec.id) || mapOwned.waits.has(l.rec.id) ? false
-      : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id) || mapRequests.has(l.rec.id)
+      : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id) || mapRequests.has(l.rec.id) || declinedRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
     if (l.rec.kind !== 'answer') return true;
     if (proposalSettled.has(l.rec.id)) return true;
     const question = questionState.questions.find((q) => answersAsking(l.rec, q));
     if (question && subjectOf(question).kind === 'proposal') return false;
+    // A large request's answer goes with its request: a no now, a yes once its part is applied (R40).
+    if (question && subjectOf(question).kind === 'request') return requestSettled.has(l.rec.id);
     return d.settles?.(l.rec.questionId ?? '') ?? settled.has(l.rec.questionId ?? '');
   });
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
@@ -2198,7 +2233,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   if (unwritten) console.error(`${unwritten} of your changes wait for the next tidy-up: what they add could not be written now`);
   // Admission still refuses an empty instruction press. An already admitted runner must reach maintenance,
   // including when all its instruction lines remain held for the next run.
-  if (!all && !journal.length) {
+  // A large request asked about is something to do: its question is written, its request left waiting (B12d).
+  if (!all && !journal.length && !maps.some((m) => m.ask)) {
     if (opts.taken) return { kind: 'plan' as const, plan: await nothingReadyPlan(rootId, opts) };
     throw new BowerError('conflict', NOTHING_TO_READ);
   }
@@ -2576,7 +2612,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         const lines = typeof made === 'string' ? null : made;
         const existing = edits.find((e) => e.file.id === targetId);
         const first = (c: Change): boolean => c.kind === 'state-rewrite' || c.kind === 'link-rewrite' || c.kind === 'views-set';
-        const changes: Change[] = lines ? [...(existing?.changes ?? []).filter(first), ...lines.map(({ key, line }): Change => ({ kind: 'property-set', recordIds: [m.requestId], key, line })),
+        const changes: Change[] = lines ? [...(existing?.changes ?? []).filter(first), ...lines.map(({ key, line }): Change => ({ kind: 'property-set', recordIds: [m.answer ?? m.requestId], key, line })),
           ...(existing?.changes ?? []).filter((c) => !first(c))] : [];
         const result = note && lines?.length ? applyChanges(existing?.bytes ?? note.bytes, changes, fetched(targetId)) : null;
         if (note && lines && (!lines.length || result?.ok)) {
@@ -2636,7 +2672,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       places.set(id, read.file);
       edited.add(id);
     }
-    if (m.members.length) outcomes.push({ m, reasons: new Map([...reasons, ...m.members.filter((id) => !m.results.some((r) => r.memberId === id)).map((id) => [id, MAP_NO_CHANGE] as const)]),
+    if (m.members.length) outcomes.push({ m, reasons: new Map([...reasons, ...m.members.filter((id) => !m.results.some((r) => r.memberId === id)).map((id) => [id, MAP_NO_CHANGE] as const),
+      ...(m.notIncluded ?? []).map((id) => [id, MAP_LEFT] as const)]),
       updated: [...planned.keys()].filter((id) => !m.members.includes(id)) });
   }
   // A settled map's result note (B12c R32, R69-R77, R85): in its set's folder, named after every name the run gives (the
@@ -2667,13 +2704,16 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     reserved.push({ m, reasons, updated, key, to, name });
   }
   for (const { m, reasons, updated, key, to, name } of reserved) {
-    const pathOf = (id: string): string => finalPath.get(id) ?? ix.pathOf(id) ?? '';
-    const unavailable = m.members.filter((id) => reasons.has(id));
+    // A member out of Bin or the folder has no place now: its name from the listing, or none.
+    const pathOf = (id: string): string => finalPath.get(id) ?? ix.pathOf(id) ?? listing.find((f) => f.id === id)?.name ?? '';
+    const left = m.members.filter((id) => reasons.get(id) === MAP_LEFT);
+    const unavailable = m.members.filter((id) => reasons.has(id) && !left.includes(id));
     const words = lines.find((l) => l.rec.kind === 'request' && l.rec.id === m.requestId)?.rec;
     const what = `What Bower did for "${m.title}".`;
-    const body = ['## Notes', `Asked: "${(words?.text ?? words?.what ?? '').replace(/\s+/g, ' ').trim()}"`, '', `Done: ${m.members.length - unavailable.length}`, `Unavailable: ${unavailable.length}`,
+    const body = ['## Notes', `Asked: "${(words?.text ?? words?.what ?? '').replace(/\s+/g, ' ').trim()}"`, '', `Done: ${m.members.length - unavailable.length - left.length}`, `Unavailable: ${unavailable.length}`,
+      ...(left.length ? [`Not included: ${left.length}`] : []),
       ...(updated.length ? [`Updated: ${updated.map((id) => linkTo(pathOf(id))).join(', ')}`] : []), '',
-      ...m.members.map((id) => `- ${linkTo(pathOf(id))}: ${reasons.has(id) ? `unavailable, ${reasons.get(id)}` : 'done'}`)].join('\n');
+      ...m.members.map((id) => `- ${pathOf(id) ? linkTo(pathOf(id)) : 'a note that is gone'}: ${left.includes(id) ? MAP_LEFT : reasons.has(id) ? `unavailable, ${reasons.get(id)}` : 'done'}`)].join('\n');
     resultNotes.set(m.requestId, { to, name, key, what, text: serializeNote({ summary: what, properties: [{ key: 'type', label: 'Type', value: 'request' }], tags: [], currentState: [], body, timeline: [], byBower: true }) });
   }
   };
@@ -2748,7 +2788,17 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     suggested.push({ id: `q-proposal-${id}`, text: s.text, yes: s.yes, no: s.no, askedAt: opts.requestedAt, proposal: { id, payload: { kind: 'view', home, definition: s.definition } } });
   }
   const first = d.suggestions?.first ? suggested : [];
-  let toAsk = [...first, ...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles, ...(first.length ? [] : suggested)]
+  // A large request waits for one yes (B12d R35, R36): its question freezes the part a yes applies, asked oldest request
+  // first (R84), and once only while it is open.
+  const requestAsks = maps.filter((m) => m.ask && !m.pending).sort((a, b) => (requestAt.get(a.requestId) ?? 0) - (requestAt.get(b.requestId) ?? 0)
+    || (a.requestId < b.requestId ? -1 : a.requestId > b.requestId ? 1 : 0)).flatMap((m): Question[] => (m.ask ? [{ id: requestQuestionId(m.requestId), text: m.ask.text, yes: m.ask.yes,
+    no: m.ask.no, askedAt: opts.requestedAt, request: { id: m.requestId, title: m.title, set: m.ask.set, ops: m.ask.ops, members: [...m.members], total: m.ask.total } }] : []));
+  /** The ten-question bound is every question's: a request question that does not fit waits unasked (R43). */
+  const bound = (open: number, asks: Question[]): Question[] => {
+    let room = 10 - open - asks.filter((q) => !q.request).length;
+    return asks.filter((q) => !q.request || room-- > 0);
+  };
+  let toAsk = [...first, ...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles, ...(first.length ? [] : suggested), ...requestAsks]
     .filter((q, i, all) => (subjectOf(q).kind === 'inbox' || again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   // Immutable artifacts retain payload identity after a card closes, including declines.
   const knownPayloads = new Set<string>();
@@ -2794,7 +2844,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const pile = subjectPile(q, inbox, inboxHashes);
       return q.words === undefined || !pile || q.words === pile.text;
     });
-    fresh = toAsk.filter((q) => again.has(q.id) || !open.some((x) => sameThing(x, q)));
+    fresh = bound(open.length, toAsk.filter((q) => again.has(q.id) || !open.some((x) => sameThing(x, q))));
     // The same content uploaded again keeps its one question, now about the new file (so the reader still shows it).
     const retarget = (x: Question): Question => {
       const again = toAsk.find((q) => q.subject !== undefined && related(subjectKey(x), q.subject) === false && sameContent(x, q));
@@ -2809,7 +2859,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
   } else if (toAsk.length && sys?.folder) {
     // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
-    fresh = toAsk;
+    fresh = bound(0, toAsk);
     questionsList = fresh;
     questionsText = questionsJson(fresh, rounds);
   } else if (toAsk.length) {
@@ -2948,7 +2998,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   // The sets a map moves, as admitted (B12 R26): what `outsideAdmitted` and the guard check its moves against.
-  const capturedMaps = maps.filter((m) => mapMoves.some((mv) => mv.requestId === m.requestId)).map((m) => ({ recordId: m.requestId, members: [...m.members] }));
+  // A yes's map is always captured, by its frozen part's members that are written (B12d R82; it has no move); a moving map, by its set (R26).
+  const capturedMaps = maps.filter((m) => mapRequests.has(m.requestId) && (m.answer !== undefined || mapMoves.some((mv) => mv.requestId === m.requestId)))
+    .map((m) => ({ recordId: m.requestId, members: m.answer === undefined ? [...m.members] : m.results.map((r) => r.memberId), ...(m.answer === undefined ? {} : { answer: m.answer }) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces, ...(capturedMaps.length ? { maps: capturedMaps } : {}) };
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
@@ -3006,6 +3058,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * it used, when every one is there; the plain line only when nothing specific can be named.
    */
   const answerOf = (l: JournalLine): string => {
+    if (declinedRequests.has(l.rec.id)) return REQUEST_DECLINED;
     const scripted = d.request?.(l.rec.text ?? l.rec.what);
     const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
     // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
@@ -3046,6 +3099,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes,
+    yesMaps: maps.filter((m) => m.answer !== undefined && mapRequests.has(m.requestId)),
   };
 }
 type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
@@ -3059,7 +3113,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3273,6 +3327,13 @@ export async function build(decided: Decided): Promise<Ended> {
     const op = await add({ kind: 'edit-text', before: seen(read.file), path: read.path, beforeContent, changes, text: result.text, content: await utf8(result.text) }, [...new Set(after)]);
     for (const requestId of requestIds) derive(requestId, op);
   }
+  // A yes's part waits for its own writes before its question, its answer or its request settles (B12d R40): what names the
+  // answer names its request too.
+  for (const { answer = '', requestId } of yesMaps) {
+    const written = new Set([...need(answer).edits, ...need(answer).derived]);
+    derive(answer, ...[...written].filter((op) => !need(answer).derived.includes(op)));
+    derive(requestId, ...written);
+  }
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
   // The other note of each keep goes to the Bin (never deleted), once the kept note and every link to it are written;
   // the report says so in one line on the kept note, and the answer's question goes once it is done (R4-1).
@@ -3380,6 +3441,7 @@ export async function build(decided: Decided): Promise<Ended> {
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
   const asked = journal.filter((l) => l.rec.kind === 'request');
   let requestsOp: string | null = null;
+  const resultOps = new Map<string, string>();
   if (asked.length) {
     const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answers.get(l.rec.id) ?? REQUEST_DONE }));
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
@@ -3391,6 +3453,7 @@ export async function build(decided: Decided): Promise<Ended> {
       const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: key(), text: note.text, content: await utf8(note.text), purpose: 'generated' }, [...after]);
       reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), created: [{ path: join(note.to, note.name), what: note.what }] } });
       notes.push(op);
+      if (note === resultNotes.get(l.rec.id)) resultOps.set(l.rec.id, op);
     }
     // An answer that names what a request did is written once that is done (a lookup's Timeline line, a note).
     const answered = [...new Set([...asked.flatMap((l) => [...need(l.rec.id).edits, ...need(l.rec.id).derived]), ...notes])];
@@ -3406,12 +3469,14 @@ export async function build(decided: Decided): Promise<Ended> {
       requestsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.requests), createKey: newKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }, answered);
     }
   }
+  // The yes's question and archive also wait for its request's result note and requests row, so a refused one leaves the yes to reapply (R40).
+  for (const { answer = '', requestId } of yesMaps) derive(answer, ...[resultOps.get(requestId), requestsOp].flatMap((op) => op ?? []));
   let questionsOp: string | null = null;
   const questionsText = questionsList === null ? null : questionsJson(questionsList, rounds);
   if (questionsText !== null) {
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
-    const derived = [
+    const derived = [...new Set([
       ...journal.flatMap((l) => (l.rec.kind === 'answer' ? need(l.rec.id).derived : [])),
       ...[...stateAsks.keys()].flatMap((id) => {
         const edit = editOf.get(id);
@@ -3423,7 +3488,7 @@ export async function build(decided: Decided): Promise<Ended> {
       // A question about a saved copy (by its id, its pile's or its content) closes once its Bin is done: a refused Bin
       // leaves the thing in the inbox, and its question open (P4-17).
       ...savedBins.filter(({ s }) => closing.some((q) => related(subjectKey(q), s.file.id) || sameContent(q, { hash: s.file.md5Checksum }))).map(({ op }) => op),
-    ];
+    ])];
     if (questionsRead) {
       questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsRead.file), beforeContent: questionsRead.content, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
     } else if (sys?.folder) {
@@ -3815,6 +3880,11 @@ export const NOTE_NOT_WRITTEN = "Bower couldn't write its note.";
 const VIEWS_WAIT = 'Bower could not set up those figures yet; it tries again next time.';
 const VIEWS_REPLACED = "Bower replaced a map's figures it could not read.";
 const VIEW_STALE = 'That suggested view no longer fits, so Bower did not set it up.';
+/** What a request answered no says in requests.json (B12d R41), and what a yes whose part no longer fits logs (R87, R89). */
+export const REQUEST_DECLINED = 'You said no, so nothing was changed.';
+const REQUEST_STALE = 'That request no longer fits, so Bower did not apply it.';
+/** Why a stored member of a large request is not written, and what the result note says of it (R38, R88). */
+const MAP_LEFT = 'not included in this part';
 /** Why a map's member stays where it is, its operations unmade (B12 R28, R29, R65). */
 const MAP_NAME_THERE = 'a note with that name is already there';
 const MAP_NAME_CLAIMED = 'another note in this request takes that name';

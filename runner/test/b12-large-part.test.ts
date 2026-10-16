@@ -51,9 +51,11 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-async function folder(files: Record<string, string> = {}) {
+async function folder(given: Record<string, string> = {}) {
+  // The seed makes questions.json from the case's questions: one such file, never a second at its path.
+  const { [SYSTEM.questions]: asked, ...files } = given;
   const c: LoadedCase = { id: 'b12-large-part', capability: 'C05', title: 'Alex maps a large set', covers: 'model', source: 'new', scope: 'all',
-    allowWeb: false, dir: tmpdir(), folderBinary: {}, inboxBinary: {}, expected: {}, rubric: '', questions: [], journal: [], bowerOwned: [], inbox: [], inboxFiles: {},
+    allowWeb: false, dir: tmpdir(), folderBinary: {}, inboxBinary: {}, expected: {}, rubric: '', questions: asked ? (JSON.parse(asked) as { questions: LoadedCase['questions'] }).questions : [], journal: [], bowerOwned: [], inbox: [], inboxFiles: {},
     folder: { [SYSTEM.typeTable]: JSON.stringify(TABLE, null, 2), [SYSTEM.requests]: JSON.stringify({ v: 1, done: [] }), 'Rules.md': '# Rules\n',
       [`Resources/Gardening/Gardening.md`]: '---\nby: bower\ntype: moc\nsummary: Gardening notes.\n---\n\n## Notes\nGardening.\n', [OLD]: offer('Oldwick', '2026-09-01'), ...files } };
   const drive = fixedDrive();
@@ -124,7 +126,9 @@ const bodyOf = async (init?: RequestInit) => (init?.body == null ? '' : await ne
 const noModel = () => { throw new Error('A yes runs its stored part with no model call.'); };
 type Op = { operationId: string; dependsOn: string[]; effect: Record<string, unknown> & { kind: string } };
 type Manifest = { runId: string; captureId: string; operations: Op[] } & Record<string, unknown>;
-const manifestOf = (run: CaseRun): Manifest => JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as Manifest;
+/** The manifest of the run's own press (the latest run folder): an earlier press's manifest stays in the folder. */
+const manifestOf = (run: CaseRun): Manifest => JSON.parse(Object.entries(run.after).filter(([path]) => /\/manifest-[^/]+\.json$/.test(path))
+  .sort(([a], [b]) => Number(/b12-run-(\d+)\//.exec(b)?.[1] ?? 0) - Number(/b12-run-(\d+)\//.exec(a)?.[1] ?? 0))[0]?.[1] ?? '{}') as Manifest;
 const editsOf = (m: Manifest, fileId: string) => (m.operations ?? []).filter((o) => o.effect.kind === 'edit-text' && (o.effect.before as { fileId: string }).fileId === fileId);
 const rowsOf = (run: CaseRun) => (JSON.parse(run.after[SYSTEM.requests] ?? '{"done":[]}') as { done: Array<{ id: string; done?: string }> }).done;
 const EXISTING = { id: 'q-folder-1', text: 'Is the garden notice about the allotment?', yes: 'Yes', no: 'No', askedAt: DAY - 86_400_000 };
@@ -176,7 +180,15 @@ describe('B12d a set over 200 notes asks once; a yes runs exactly its stored fir
   }, 120_000);
 
   it('AC19 b12-large-part-other-work: the rest of the tidy-up runs while the request waits', async () => {
-    const { run } = await asked({ inbox: { name: 'Garden notice.txt', text: 'Alex can collect mulch at the amber gate.\n' } });
+    const f = await folder();
+    await grow(f);
+    // The reply files the notice and maps the request, as the model's one reply does.
+    const run = await press(f, (ctx) => {
+      const piles = (JSON.parse(ctx.frame.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> }).piles;
+      const notice = piles.flatMap((p) => p.things).find((t) => t.name === 'Garden notice.txt');
+      return { ...asking(ctx), things: [{ fileId: notice?.fileId, to: HUNT, name: 'Garden notice.txt',
+        note: { name: 'Garden notice.md', summary: 'Alex can collect mulch at the amber gate.', body: 'Alex can collect mulch at the amber gate.\n\nRelated: [[Gardening]].' } }] };
+    }, { inbox: { name: 'Garden notice.txt', text: 'Alex can collect mulch at the amber gate.\n' } });
     expect(questions(run).map((q) => q.id)).toEqual([`q-request-${run.record}`]);
     expect(Object.keys(run.after).filter((p) => p.endsWith('Garden notice.txt')).map((p) => p.startsWith('Inbox/')), 'the notice is filed, out of the inbox').toEqual([false]);
   }, 120_000);
@@ -379,6 +391,104 @@ describe('B12d a set over 200 notes asks once; a yes runs exactly its stored fir
     expect(questions(again).map((x) => [x.id, (x.request as { total?: number } | undefined)?.total]), 'asked again from the current set').toEqual([['q-request-held-1', 201]]);
   }, 120_000);
 
+  it('AC20 b12-large-part-malformed-part-shrunk: with the stored part unreadable and the set down to 200, a map the model replies with writes and settles nothing in that run', async () => {
+    const { f, q, heldId, run } = await seeded({}, { total: 199 });
+    const old = await f.id(OLD);
+    await f.drive.writeText(old, offer('Oldwick', '2026-09-01').replace('status: active', 'status: closed'), (await f.drive.get(old)).modifiedTime);
+    const yes = await press(f, (ctx, attempt) => (attempt === 0 ? asking({ ...ctx, request: heldId }, { question: undefined }) : empty), { answer: { question: q, yes: true } });
+    expect(reviewed(yes), 'no member is written').toEqual([]);
+    expect(archived(yes, run.record), 'the request stays pending').toBe(false);
+    expect(Object.keys(yes.after).some((p) => p.includes('/Request - ')), 'no result note').toBe(false);
+    expect(rowsOf(yes).filter((r) => r.id === run.record), 'no requests row').toEqual([]);
+  }, 120_000);
+
+  it.each([
+    ['its property is gone', { properties: {}, table: [] }],
+    ['its enum no longer holds the value', { properties: { review_state: { type: 'enum', values: ['new', 'done'] } } }],
+    ['its property is computed now', { views: [{ v: 1, id: 'calc', kind: 'formula', type: 'offer', outputs: [{ property: 'review_state', type: 'number', expr: { number: 1 } }] }] }],
+  ])('AC20 b12-large-part-yes-type-changed: %s since the ask: no member is written, the request stays pending and is asked again (R87, R89)', async (_why, change) => {
+    const { f, q, heldId, run } = await seeded();
+    const tableId = await f.id(SYSTEM.typeTable);
+    const write = async (row: Record<string, unknown>) => f.drive.writeText(tableId, JSON.stringify({ v: 1, rows: [{ ...TABLE.rows[0], ...row }] }, null, 2), (await f.drive.get(tableId)).modifiedTime);
+    await write(change);
+    const yes = await press(f, () => empty, { answer: { question: q, yes: true } });
+    expect(reviewed(yes), 'no member is written').toEqual([]);
+    expect(archived(yes, run.record), 'the request stays pending').toBe(false);
+    expect(questions(yes), 'the yes is settled and its question gone').toEqual([]);
+    expect(Object.keys(yes.after).some((p) => p.includes('/Request - ')), 'no result note').toBe(false);
+    await write({});
+    const again = await press(f, (ctx) => asking({ ...ctx, request: heldId }), { request: false });
+    expect(questions(again).map((x) => x.id), 'asked again from the current state').toEqual(['q-request-held-1']);
+  }, 120_000);
+
+  it('AC20 b12-large-part-yes-read-failed: a member that cannot be read now stops the run without consuming the yes; the retry completes the part', async () => {
+    const { f, q, run } = await seeded();
+    const target = await f.id(offerPath(6));
+    let failing = true;
+    const yes = await press(f, noModel, { answer: { question: q, yes: true }, around: (next) => async (input, init) => {
+      const at = url(input);
+      if (failing && at.pathname === `/drive/v3/files/${target}` && at.searchParams.get('alt') === 'media') return new Response('{"error":{"code":503,"message":"Made-up outage."}}', { status: 503 });
+      return next(input, init);
+    } });
+    expect(reviewed(yes), 'nothing is written').toEqual([]);
+    expect(archived(yes, run.record), 'the request waits').toBe(false);
+    expect(questions(yes).map((x) => x.id), 'the yes is not consumed: its question stays').toEqual([q.id]);
+    failing = false;
+    const retry = await press(f, noModel, { request: false });
+    expect(retry.calls, 'no model call').toEqual([]);
+    expect(reviewed(retry)).toHaveLength(200);
+    expect(questions(retry)).toEqual([]);
+    expect(archived(retry, run.record)).toBe(true);
+  }, 120_000);
+
+  it('AC20 b12-large-part-yes-requests-refused: Drive refuses the requests write: the yes is not consumed, its question stays, and the next run reapplies it with no model call (R40)', async () => {
+    const { f, run, q } = await seeded();
+    const requestsId = await f.id(SYSTEM.requests);
+    let refusing = true;
+    const yes = await press(f, noModel, { answer: { question: q, yes: true }, around: (next) => async (input, init) => {
+      if (refusing && init?.method === 'PATCH' && url(input).pathname === `/upload/drive/v3/files/${requestsId}`) return new Response('{"error":{"code":403,"message":"Made-up refusal."}}', { status: 403 });
+      return next(input, init);
+    } });
+    expect(archived(yes, run.record), 'the request waits').toBe(false);
+    expect(archived(yes, `answer-${f.press}`), 'the yes stays unconsumed').toBe(false);
+    expect(questions(yes).map((x) => x.id), 'its question stays').toEqual([q.id]);
+    refusing = false;
+    const next = await press(f, noModel, { request: false });
+    expect(next.calls, 'reapplied with no model call').toEqual([]);
+    expect(reviewed(next)).toHaveLength(200);
+    expect(questions(next)).toEqual([]);
+    expect(archived(next, run.record), 'the request settles').toBe(true);
+    expect(archived(next, `answer-${f.press - 1}`), 'the yes is consumed').toBe(true);
+    expect(rowsOf(next).filter((r) => r.id === run.record), 'one requests row').toHaveLength(1);
+    expect(Object.keys(next.after).filter((p) => /\/Request - [^/]*\.md$/.test(p)), 'one result note').toEqual([NOTE]);
+  }, 120_000);
+
+  it('AC20 b12-large-part-yes-cross-wired: with two yes answers admitted, an edit citing the other request\'s yes is refused; the matching one is admitted', async () => {
+    const { f, q } = await seeded();
+    const hunt = await f.id(HUNT);
+    const closed = [await f.drive.createText(hunt, 'Closed 1.md', offer('Closed 1').replace('status: active', 'status: closed')),
+      await f.drive.createText(hunt, 'Closed 2.md', offer('Closed 2').replace('status: active', 'status: closed'))];
+    await f.drive.createText(await f.id(SYSTEM.changes), 'held-2.json', JSON.stringify({ v: 1, id: 'held-2', device: 'device-1', at: DAY, kind: 'request', what: 'Asked Bower: "Mark closed offers."', text: 'Mark closed offers.' }));
+    const q2: Question = { id: 'q-request-held-2', text: QUESTION.text, yes: QUESTION.yes, no: QUESTION.no, askedAt: DAY,
+      request: { id: 'held-2', title: 'Review closed offers', set: { type: 'offer', folderId: hunt, recursive: false, where: { op: 'eq', property: 'status', value: 'closed' } }, ops: [REVIEWED], members: closed.map((c) => c.id), total: 2 } } as Question;
+    const file = await f.id(SYSTEM.questions);
+    await f.drive.writeText(file, `${JSON.stringify({ v: 1, questions: [q, q2] }, null, 2)}\n`, (await f.drive.get(file)).modifiedTime);
+    await f.drive.createText(await f.id(SYSTEM.changes), 'answer-b.json', JSON.stringify({ v: 1, id: 'answer-b', device: 'device-1', at: DAY + 5, kind: 'answer', what: 'Answered a question',
+      questionId: q2.id, askedAt: q2.askedAt, answer: true, text: 'yes' }));
+    const yes = await press(f, noModel, { answer: { question: q, yes: true } });
+    expect(reviewed(yes), '200 and the two closed offers').toHaveLength(202);
+    const stored = manifestOf(yes);
+    const ok = async (m: Manifest) => (await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), f.root, RUNNER_WRITES)).ok;
+    const first = await f.id(offerPath(1));
+    const cites = (m: Manifest, id: string) => ((editsOf(m, id)[0]?.effect.changes ?? []) as Array<{ recordIds: string[] }>).flatMap((c) => c.recordIds);
+    expect(cites(stored, first), 'each edit cites its own yes').toEqual([`answer-${f.press}`]);
+    expect(cites(stored, closed[0]?.id ?? ''), 'each edit cites its own yes').toEqual(['answer-b']);
+    expect(await ok(stored), 'the matching yes is admitted').toBe(true);
+    const wire = (ids: string[]) => (e: Record<string, unknown>) => { for (const c of e.changes as Array<Record<string, unknown>>) c.recordIds = ids; };
+    expect(await ok(await resealed(stored, first, wire(['answer-b']))), 'the other request\'s yes is refused').toBe(false);
+    expect(await ok(await resealed(stored, closed[0]?.id ?? '', wire([`answer-${f.press}`]))), 'and the other way').toBe(false);
+  }, 120_000);
+
   it('AC22 b12-large-part-public-status: a request question keeps its stored part through the status projection; its yes starts the stored instructions', async () => {
     const posts: Array<{ questions?: Question[] }> = [];
     const status = new RunnerStatus({ api: 'https://api.example.com', runId: 'run-1', ticket: 'made-up-ticket', attempt: 1, pacing: { baseMs: 0, sleep: async () => {} },
@@ -399,7 +509,7 @@ describe('B12d a set over 200 notes asks once; a yes runs exactly its stored fir
     await grow(f);
     const older = await f.drive.createText(await f.id(SYSTEM.changes), 'other-1.json', JSON.stringify({ v: 1, id: 'other-1', device: 'device-1', at: DAY - 1,
       kind: 'request', what: `Asked Bower: "${WORDS}"`, text: WORDS }));
-    const run = await press(f, (ctx) => ({ ...empty, maps: [asking({ ...ctx, request: older.id }).maps[0], { ...asking(ctx).maps[0], title: 'Review offers again' }] }),
+    const run = await press(f, (ctx) => ({ ...empty, maps: [{ ...asking(ctx).maps[0], title: 'Review offers again' }, asking({ ...ctx, request: older.id }).maps[0]] }),
       { words: 'Mark every active offer in Job hunt as reviewed again; ask me first.' });
     expect(questions(run).map((q) => q.id), 'one more question fits: the older request\'s').toEqual([...open.map((q) => q.id), 'q-request-other-1']);
     expect(archived(run, 'other-1')).toBe(false);
@@ -427,6 +537,26 @@ describe('B12d refusals', () => {
     expect(reviewed(run)).toHaveLength(2);
     expect(phase(run)).toBe('done');
   });
+
+  it.each([
+    ['a move with a question', async (ctx: Ctx) => ({ ops: [{ kind: 'move', parentId: await ctx.id('Resources/Gardening') }] })],
+    ['a move without a question', async (ctx: Ctx) => ({ ops: [{ kind: 'move', parentId: await ctx.id('Resources/Gardening') }], question: undefined })],
+    ['results with a rename and a move', async (ctx: Ctx) => {
+      const id = await ctx.id(offerPath(1));
+      return { ops: undefined, question: undefined, results: [{ memberId: id, ops: [{ kind: 'rename', targetId: id, name: 'Offer one.md' },
+        { kind: 'move', targetId: id, parentId: await ctx.id('Resources/Gardening') }] }] };
+    }],
+  ])('AC24 b12-large-part-large-move: %s for a set over 200 is refused once (mapLimit); the corrected property-only reply asks', async (_name, wrong) => {
+    const f = await folder();
+    await grow(f);
+    const run = await press(f, async (ctx, attempt) => asking(ctx, attempt === 0 ? await wrong(ctx) : {}));
+    expect(refusals().slice(0, 2), 'the move reason, never the hint to give a question').toEqual(['mapLimit',
+      'a move or rename for a set over 200 notes: only properties and tags can wait for one yes, so ask for a move or rename in a set of 200 notes or fewer']);
+    expect(refusals(), 'refused once').toHaveLength(2);
+    expect(questions(run).map((q) => q.text), 'the property-only reply asks').toEqual([QUESTION.text]);
+    expect(reviewed(run)).toEqual([]);
+    expect(phase(run)).toBe('done');
+  }, 120_000);
 
   it.each([
     ['a question of 201 characters', { ...QUESTION, text: `${'A'.repeat(200)}?` }],

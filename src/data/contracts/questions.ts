@@ -9,13 +9,14 @@
  * it has, and every reader narrows on it. It is derived from the question as `.bower/questions.json` holds it, so the
  * wire stays as the accepted app wrote it (P2's `q1` with no subject still reads, as the folder's own question).
  */
-import type { Pile, Question, Proposal } from './types';
+import type { Pile, Question, Proposal, RequestPart } from './types';
 import type { JournalRecord } from './journal-record';
 import { BowerError } from './types';
 import { typeRowOk } from './note-format';
 import { viewFault } from './view-format';
 import { EMPTY_MD5 } from './hashes';
-import { keepAlreadyBinned, STATE_READ } from './note-edit';
+import { keepAlreadyBinned, propertyKeyOk, STATE_READ } from './note-edit';
+import { normalizeTag } from './tag-format';
 import { displayName, nameOf, thingName } from './tree';
 
 /** The id prefixes Bower's questions carry, spelled here alone. */
@@ -27,7 +28,7 @@ export interface QuestionOption { id: string; label: string; action: { kind: 'fi
 export type PublicQuestion = Question;
 
 export function publicQuestion(q: Question): PublicQuestion {
-  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options, proposal } = q;
+  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options, proposal, request } = q;
   return { id, text, yes, no, askedAt,
     ...(about === undefined ? {} : { about }), ...(subject === undefined ? {} : { subject }),
     ...(hash === undefined ? {} : { hash }), ...(state === undefined ? {} : { state }),
@@ -35,9 +36,36 @@ export function publicQuestion(q: Question): PublicQuestion {
       ...(shown.stamp === undefined ? {} : { stamp: shown.stamp }) } }),
     ...(words === undefined ? {} : { words }),
     ...(proposal === undefined ? {} : { proposal: structuredClone(proposal) }),
+    ...(request === undefined ? {} : { request: structuredClone(request) }),
     ...(options === undefined ? {} : { options: options.map(({ id, label }) => ({ id, label })) }),
   };
 }
+
+/**
+ * The part a large request's question freezes (B12d R35, R42), the one contract of the app's reader, the status snapshot
+ * and the runner: closed keys; 1 to 200 distinct members and a total at least as many; a set the grammar accepts (its
+ * shape: its types are checked against the table when a yes applies it); 1 to 8 ops, each a property or a tag (a move is admitted only by the request itself, so it cannot wait for a yes).
+ */
+export function requestAskOk(value: unknown): value is RequestPart {
+  const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  // A journal record id or a Drive file id: any short text with no control character.
+  const name = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 1024 && [...v].every((c) => c.charCodeAt(0) > 0x1f && c.charCodeAt(0) !== 0x7f);
+  const closed = (v: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(v).every((k) => keys.includes(k));
+  const op = (v: unknown): boolean => object(v) && (v.kind === 'property' ? closed(v, ['kind', 'key', 'mode', 'value']) && typeof v.key === 'string' && propertyKeyOk(v.key)
+    && (v.mode === 'set' || v.mode === 'union') && v.value !== undefined
+    : v.kind === 'tag' && closed(v, ['kind', 'mode', 'value']) && (v.mode === 'add' || v.mode === 'remove') && typeof v.value === 'string' && normalizeTag(v.value) === v.value);
+  if (!object(value) || !closed(value, ['id', 'title', 'set', 'ops', 'members', 'total'])) return false;
+  const { id, title, set, ops, members, total } = value;
+  // setFault's own wrapper, with no table: only its shape (view-format.ts, `viewFault`).
+  return name(id) && typeof title === 'string' && title.trim() !== '' && title.length <= 60
+    && Array.isArray(members) && members.length >= 1 && members.length <= 200 && members.every(name) && new Set(members).size === members.length
+    && typeof total === 'number' && Number.isSafeInteger(total) && total >= members.length
+    && viewFault({ v: 1, id: 'set', kind: 'aggregate', title: 'Set', set, groupBy: [], measures: [{ id: 'n', label: 'Notes', op: 'count' }] }, null) === null
+    && Array.isArray(ops) && ops.length >= 1 && ops.length <= 8 && ops.every(op);
+}
+
+/** The id of a large request's question: one per request, by its record id. */
+export const requestQuestionId = (recordId: string): string => `${REQUEST}${recordId}`;
 
 /** Strict public snapshot writes; omission is the additive, legacy status wire. */
 export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
@@ -47,7 +75,7 @@ export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
     && Object.keys(v).every((k) => ['id', 'label'].includes(k))
     && typeof v.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.id) && text(v.label, 40);
   const card = (v: unknown): v is PublicQuestion => object(v)
-    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options', 'proposal'].includes(k))
+    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options', 'proposal', 'request'].includes(k))
     && text(v.id) && text(v.text, 200) && text(v.yes, 40) && text(v.no, 40)
     && typeof v.askedAt === 'number' && Number.isSafeInteger(v.askedAt) && v.askedAt >= 0
     && ['about', 'subject', 'hash', 'state'].every((k) => v[k] === undefined || text(v[k]))
@@ -59,7 +87,9 @@ export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
       && typeof v.shown.md5 === 'string' && /^[a-f0-9]{32}$/.test(v.shown.md5)
       && (v.shown.stamp === undefined || text(v.shown.stamp))))
     && (v.proposal === undefined || (proposalOk(v.proposal) && v.id === `q-proposal-${v.proposal.id}`
-      && ['subject', 'hash', 'state', 'shown', 'words', 'options'].every((k) => v[k] === undefined)))
+      && ['subject', 'hash', 'state', 'shown', 'words', 'options', 'request'].every((k) => v[k] === undefined)))
+    && (v.request === undefined || (requestAskOk(v.request) && v.id === requestQuestionId(v.request.id)
+      && ['subject', 'hash', 'state', 'shown', 'words', 'options', 'proposal'].every((k) => v[k] === undefined)))
     && (v.options === undefined || (Array.isArray(v.options) && v.options.length >= 2 && v.options.length <= 4
       && v.options.every(option) && new Set(v.options.map((o) => o.id)).size === v.options.length));
   return Array.isArray(value) && value.length <= 10 && value.every(card)
@@ -165,6 +195,7 @@ export function pileQuestion(pile: Pile, open: readonly Question[], rounds: read
 const ASK = 'q-ask-';
 const STATE = 'q-state-';
 const PAIR = 'q-pair-';
+const REQUEST = 'q-request-';
 /** Between a pair's two file ids in its question id: a Drive id never holds it ([A-Za-z0-9_-]). */
 const PAIR_SEP = '.';
 /** An older question about keeping one note, in its words (the corpus' and the first runner's): read, never written. */
@@ -179,6 +210,7 @@ const KEEP_ONE = /\bkeep one note\b/i;
  *   ids (`by: 'id'`, the ids in its question id, as a state question carries its note's); an older question that linked
  *   both notes in its words still reads, by those two names (`by: 'name'`), as a tolerant reader does
  *   (https://martinfowler.com/bliki/TolerantReader.html);
+ * - `request`: a large request waiting for one yes, by its record id (`requestAskOk`): a yes applies its frozen part;
  * - `folder`: the folder as a whole (a disagreement, the summaries rule, the accepted app's ones).
  */
 export type Subject =
@@ -186,10 +218,11 @@ export type Subject =
   | { kind: 'state'; id: string; mark?: string }
   | { kind: 'pair'; by: 'id' | 'name'; notes: readonly [string, string] }
   | { kind: 'proposal'; id: string }
+  | { kind: 'request'; id: string }
   | { kind: 'folder' };
 
 /** A question as far as its subject goes: its id, and what the wire may carry about it. */
-export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text' | 'askedAt' | 'proposal'>>;
+export type Asked = Pick<Question, 'id'> & Partial<Pick<Question, 'subject' | 'hash' | 'state' | 'text' | 'askedAt' | 'proposal' | 'request'>>;
 
 /** The id of the question asked about a pile, or about one thing by its file id: one each. */
 export const askId = (pileOrFileId: string): string => `${ASK}${pileOrFileId}`;
@@ -229,6 +262,7 @@ function namedPairOf(text: string | undefined): readonly [string, string] | null
 /** What a question is about. An older ask with no `subject` carries its pile's or thing's id in its own id. */
 export function subjectOf(q: Asked): Subject {
   if (q.proposal !== undefined) return { kind: 'proposal', id: q.proposal.id };
+  if (q.request !== undefined || q.id.startsWith(REQUEST)) return { kind: 'request', id: q.request?.id ?? q.id.slice(REQUEST.length) };
   if (q.id.startsWith(STATE)) return { kind: 'state', id: q.id.slice(STATE.length), ...(q.state !== undefined ? { mark: q.state } : {}) };
   const pair = pairOf(q.id);
   if (pair) return { kind: 'pair', by: 'id', notes: pair };
