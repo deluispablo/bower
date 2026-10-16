@@ -75,7 +75,7 @@ it('b1d-r6 A1 crossing prefixes are advisory for every note type', async () => {
         expect.soft(report(r).filed, `${type}: the unrelated offer still files`).toHaveLength(1);
         const indexed = r.frames[0]?.value.indexed as Record<string, unknown> | undefined;
         expect.soft(incomplete(indexed?.[id]), `${type}: the cut region is marked incomplete`).toBe(true);
-        expect.soft(media(r, id), `${type}: an unrelated cut prefix requires no full read`).toHaveLength(0);
+        expect.soft(media(r, id), `${type}: an unrelated cut prefix requires no planner read; only lint's one maintenance read (AC20)`).toHaveLength(1);
         expect.soft(r.after[path], `${type}: unrelated cut bytes stay intact`).toBe(text);
       }
     }

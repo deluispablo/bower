@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
 import { AT, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
-import { fixedDrive } from './drive-v3';
+import { fixedDrive, paging } from './drive-v3';
 import { empty, observe, pacing, type Observation } from './b23-hot-observe';
 
 const HEALTH = 'Bower health.md';
@@ -41,12 +41,15 @@ async function folder(edit: (files: Record<string, string>) => void = () => unde
 }
 
 describe('B8c coverage and the Bower-note checks through main', () => {
+  const pageSize = paging.size;
   beforeEach(() => {
+    // Listing pages cost maintenance calls; 234 notes must discover in one run, as the cold-discovery suites set it.
+    paging.size = 1000;
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(AT);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
-  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+  afterEach(() => { paging.size = pageSize; vi.useRealTimers(); vi.restoreAllMocks(); });
 
   const LONG = `${GARDEN}/Watering log`;
   const longNote = bowerNote('Alex logs watering.', `${'Alex waters the raised beds before work. '.repeat(140)}\nSee [[Lost seed list]] and [[Loose thought]].`);
@@ -87,10 +90,11 @@ describe('B8c coverage and the Bower-note checks through main', () => {
   it('AC21 b8c-cap-200-older-retrieval: an older retrieval file is caught up 200 notes a run, honestly counted', async () => {
     const base = await folder(bulk);
     const first = await base.press(1);
-    expect(first.code, 'the first run discovers the folder').toBe(0);
-    await base.forgetLint(first);
+    expect(first.code, 'the first run reads what its budget allows').toBe(0);
+    // 234 notes need two runs to discover (300 Drive calls each); the older file is left behind by the run that completes.
+    await base.forgetLint(await base.press(2));
     base.traffic.length = 0;
-    const second = await base.press(2);
+    const second = await base.press(3);
     expect(second.code, 'catching up never stops the run').toBe(0);
     expect(base.noteReads().length, 'lint reads at most 200 notes a run').toBeLessThanOrEqual(200);
     const health = lines(second);
@@ -100,7 +104,7 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     expect(left.join('\n'), 'a note the cap left is not claimed unreadable').not.toMatch(/could not read/i);
     expect(health.join('\n'), 'no orphan or clean claim on partial coverage').not.toMatch(/orphan|No findings in the checked notes/i);
     base.traffic.length = 0;
-    const third = await base.press(3);
+    const third = await base.press(4);
     expect(third.code).toBe(0);
     expect(base.noteReads().length, 'the next run reads only the notes still owed').toBe(total - 200);
     expect(lines(third).join('\n'), 'complete again').not.toMatch(/not checked/i);

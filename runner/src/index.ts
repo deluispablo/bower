@@ -438,7 +438,7 @@ const notesIn = (index: VaultIndex) => [...index.entries()].flatMap(([path]) => 
   return f && !f.folder && path.endsWith('.md') && path.split('/')[0] !== 'Inbox' ? [{ path, file: f }] : [];
 });
 
-// shortcut: a note longer than the prefix stays not checked, until b8c reads cut notes whole (R26).
+const NOTE_READS = 200;
 const cut = (f: DriveFile, text?: string): boolean => f.size !== undefined ? f.size > PREFIX_BYTES
   : text === undefined || new TextEncoder().encode(text).length >= PREFIX_BYTES - 3;
 const lintOf = (f: DriveFile, path: string, text: string | null): LintEvidence | undefined =>
@@ -709,9 +709,10 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
  * maintenance's ledger refuses (`exhausted`): what completed is kept, the rest waits for the next run.
  */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false,
-  lints: Record<string, LintEvidence> = {}): Promise<{ snapshot: Notes; exhausted?: LedgerExhausted }> {
+  lints: Record<string, LintEvidence> = {}): Promise<{ snapshot: Notes; read: number; exhausted?: LedgerExhausted }> {
   const limit = limiter(prefix ? READ_AHEAD : 1, (error) => error instanceof LedgerExhausted);
   let exhausted: LedgerExhausted | undefined;
+  let read = 0;
   // A projection left by partial maintenance already has a listed snapshot; catch-up needs only Range reads.
   const cold = prefix && !ix.file(SYSTEM.index);
   // The health note is never a lint subject, an inbound edge or an indexed note (R23).
@@ -726,7 +727,8 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
       // A stored entry holding what a read of its version gives (its owner too) is reused with or without the
       // projection (R3); an older entry without one needs its prefix when the projection is missing.
       const map = VaultIndex.isHub(path, f.name) && cached?.type === undefined;
-      text = same && !map && (!prefix || cached.owner !== undefined) ? await drive.keptPrefix(f) ?? null : await drive.readPrefix(f, cold);
+      if (same && !map && (!prefix || cached.owner !== undefined)) text = await drive.keptPrefix(f) ?? null;
+      else { read++; text = await drive.readPrefix(f, cold); }
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
       if (error instanceof BowerError && error.code === 'not-found') {
@@ -766,7 +768,7 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     const note = snapshot[id];
     if (note?.moc) note.members = members;
   }
-  return { snapshot, ...(exhausted ? { exhausted } : {}) };
+  return { snapshot, read, ...(exhausted ? { exhausted } : {}) };
 }
 
 /** The index refresh is read-only; maintain declares and persists these same observations later. */
@@ -822,8 +824,8 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   // Its current and its previous path each count, so a rename away, a Bin, a create or an edit all refresh.
   const tableChanged = !!feed?.changes.some((c) => ix.pathOf(c.fileId) === SYSTEM.typeTable || previous.pathOf(c.fileId) === SYSTEM.typeTable);
   const lints: Record<string, LintEvidence> = {};
-  const { snapshot, exhausted } = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index), lints);
-  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, tableChanged, snapshot, lints, drop, exhausted };
+  const { snapshot, read, exhausted } = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index), lints);
+  return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, tableChanged, snapshot, lints, read, drop, exhausted };
 }
 
 export async function planningIndex(drive: RunnerDrive, rootId: string,
@@ -870,7 +872,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   // still not checked is a coverage change it owes the person (TL-P4-50 Q7, R22, R26).
   const owed = (id: string, note: MaintenanceNote): boolean => {
     const f = files.get(id);
-    return !note.lint && !!f && !cut(f);
+    return !note.lint && !!f && f.size !== undefined;
   };
   const healthKept = async (): Promise<boolean> => !state?.health || !Object.entries(snapshot).some(([id, note]) => owed(id, note))
     && await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }) !== undefined;
@@ -889,11 +891,16 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   }
   // Evidence absent, malformed or unreadable before is rebuilt from one read of this version (R26).
   const reads = limiter(READ_AHEAD, (error) => error instanceof LedgerExhausted);
-  await Promise.all(Object.entries(snapshot).map(([id, note]) => reads(async () => {
+  // A run reads at most NOTE_READS notes for the index and lint together, lint's in path order; the notes left stay owed
+  // for the next run, and the index's own reads (a cold folder) are never refused.
+  const turn = Object.entries(snapshot).filter(([id, note]) => owed(id, note)).sort(([, a], [, b]) => a.path.localeCompare(b.path))
+    .slice(0, Math.max(0, NOTE_READS - refreshed.read));
+  await Promise.all(turn.map(([id, note]) => reads(async () => {
     const f = files.get(id);
-    if (!f || !owed(id, note)) return;
+    if (!f) return;
     try {
-      const lint = lintOf(f, note.path, await drive.readPrefix(f));
+      // A note past the prefix is read whole once per version through the shared read cache.
+      const lint = cut(f) ? lintFacts(note.path, await drive.readListedText(f)) ?? undefined : lintOf(f, note.path, await drive.readPrefix(f));
       if (lint) note.lint = lint;
     } catch (error) {
       if (!(error instanceof BowerError) || error.code !== 'not-found') unreadable(error);
