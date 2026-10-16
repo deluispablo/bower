@@ -86,7 +86,7 @@ export function BowerPanel() {
           <ul className={s.panelRules}>
             {asked.slice(0, 5).map((r) => (
               <li key={r.id}>
-                {r.text}
+                <span className={s.panelRuleText}>{r.text}</span>
                 <span className={s.waits}>Waits for the next tidy-up</span>
               </li>
             ))}
