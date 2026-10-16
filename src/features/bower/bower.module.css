@@ -11,12 +11,12 @@
 .bubbleSub { margin: 4px 0 8px; font-size: 14px; color: var(--text-muted) !important; }
 .rules { margin-top: 28px; }
 .h2 { font-size: 20px; margin-bottom: 6px; }
-.label { margin: 14px 0 6px; font-size: 14px; font-weight: 600; color: var(--text-muted); }
+.label { font-family: var(--font-body); margin: 14px 0 6px; font-size: 14px; font-weight: 600; color: var(--text-muted); }
 /* The person's own text keeps the note page's look: bullets, no rule cards. */
 .written { padding-left: 14px; border-left: 2px solid var(--line); border-radius: 0; overflow-wrap: anywhere; line-height: 1.6; }
 .written p { margin: 8px 0; }
-.written h2 { font-size: 18px; margin: 14px 0 6px; }
-.written h3 { font-size: 16px; margin: 12px 0 4px; }
+/* The note's own headings read as bold text of the prose (the note page keeps its look). */
+.written h2, .written h3 { font: inherit; font-weight: 600; color: var(--heading); margin: 12px 0 4px; }
 .written ul, .written ol { padding-left: 22px; }
 .written li { margin: 4px 0; }
 .written code { font-family: var(--font-mono); font-size: 0.85em; }
@@ -27,7 +27,8 @@
 .written :global(.md-done) span { color: var(--text-muted); text-decoration: line-through; }
 .ruleList { list-style: none; margin: 0; padding: 0; }
 .ruleList li { display: flex; flex-direction: column; padding: 11px 0; border-bottom: 1px solid var(--line); }
-.ruleText { color: var(--heading); font-weight: 600; }
+.ruleText { color: var(--heading); }
+.proseFoot { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .ruleFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel { display: flex; flex-direction: column; gap: 18px; }
 .ph { font-family: var(--font-body); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin-bottom: 6px; }
@@ -41,5 +42,6 @@
 .pending { background: var(--fresh); border-radius: 10px; padding: 11px 12px !important; border-bottom: 0 !important; margin-bottom: 6px; }
 .pendingNote { font-size: 14px; color: var(--brand-line); }
 
+.panelRuleText { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .waits { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
 .panelCardMain { display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }

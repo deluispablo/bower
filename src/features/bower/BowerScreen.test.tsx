@@ -193,6 +193,23 @@ describe('rules-original-ui: the Bower screen', () => {
     }
   });
 
+  it('AC2 design-rules-labels: "Written in your rules note" and "Added in Bower" are the two group headings of Your rules, one level under it', async () => {
+    setup(PROSE, [rule('r1', 'Receipts go to Money, by month.')]);
+    const region = await written();
+    expect(region, 'a region labelled "Written in your rules note"').not.toBeNull();
+    if (!region) return;
+    const yours = screen.getByRole('heading', { name: 'Your rules' });
+    const groups = ['Written in your rules note', 'Added in Bower'].map((name) => screen.queryByRole('heading', { level: 3, name }));
+    expect(groups.map((g) => g?.tagName ?? null), 'both labels are level 3 headings').toEqual(['H3', 'H3']);
+    const [written3, added3] = groups;
+    if (!written3 || !added3) return;
+    // Same look: one class for both labels, and the region is still named by the first.
+    expect(written3.className).toBe(added3.className);
+    expect(region.getAttribute('aria-labelledby')).toBe(written3.id);
+    expect(before(yours, written3) && before(written3, region) && before(region, added3)).toBe(true);
+    expect(before(added3, screen.getByRole('button', { name: /^Remove the rule: / }))).toBe(true);
+  });
+
   it('AC4 rules-original-screen-none: with no prose, or a source without the read, the section is exactly as today', async () => {
     for (const prose of ['', 'none'] as const) {
       setup(prose, [rule('r1', 'Receipts go to Money, by month.'), rule('r2', 'Scans of letters go in Documents.')]);
