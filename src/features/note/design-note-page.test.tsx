@@ -81,6 +81,28 @@ const under = (heading: string): Array<[string, boolean]> => {
   ]);
 };
 
+describe('design-note-page: heading level', () => {
+  const link = (t: string, l: string, k: string) => <a key={k} href={`#${t}`}>{l}</a>;
+  const levels = (text: string, headingLevel?: number) => {
+    const { container, unmount } = render(<Markdown text={text} link={link} {...(headingLevel ? { headingLevel } : {})} />);
+    const out = [...container.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((h) => `${h.tagName.toLowerCase()}:${h.textContent}`);
+    unmount();
+    return out;
+  };
+
+  it('AC1 markdown-heading-level: with headingLevel the shallowest heading takes that level and the others keep their depth, capped at h6; without it nothing changes', () => {
+    // Unchanged without the option: # and ## are h2, ### and #### are h3.
+    expect(levels('# A\n## B\n### C\n#### D')).toEqual(['h2:A', 'h2:B', 'h3:C', 'h3:D']);
+    // The note's top heading (## here) becomes h4, its children follow.
+    expect(levels('## Rules\n### Sub\n#### Deep', 4)).toEqual(['h4:Rules', 'h5:Sub', 'h6:Deep']);
+    // The shallowest present wins, even when a deeper heading comes first.
+    expect(levels('### Deep\n## Top', 4)).toEqual(['h5:Deep', 'h4:Top']);
+    // Skipped levels keep their gap; a level past h6 stays h6.
+    expect(levels('# A\n### B\n#### C', 4)).toEqual(['h4:A', 'h6:B', 'h6:C']);
+    expect(levels('# A\n#### B', 5)).toEqual(['h5:A', 'h6:B']);
+  });
+});
+
 describe('design-note-page: links to and linked from', () => {
   it('AC3 note-links-once: a note in both lists shows once, under Links to, marked "Links both ways"', () => {
     show(note(['Projects/Flat hunt/Flat 3.md', 'Projects/Flat hunt/Flat 7.md'], ['Projects/Flat hunt/Flat 7.md', 'About me.md']));

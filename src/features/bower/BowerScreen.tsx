@@ -218,7 +218,7 @@ export function BowerScreen() {
               Written in your rules note
             </h3>
             <div role="region" aria-labelledby="rules-written" className={s.written}>
-              <Markdown text={prose} link={link} />
+              <Markdown text={prose} link={link} headingLevel={4} />
             </div>
             <div className={s.proseFoot}>
               <span className="muted">Bower follows these too. To change them, edit the note.</span>

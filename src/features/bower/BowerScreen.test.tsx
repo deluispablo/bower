@@ -210,6 +210,16 @@ describe('rules-original-ui: the Bower screen', () => {
     expect(before(added3, screen.getByRole('button', { name: /^Remove the rule: / }))).toBe(true);
   });
 
+  it('AC2 rules-headings-order: the headings of the rules note sit below its group label, from level 4', async () => {
+    setup(`${PROSE}\n\n### Letters`, [rule('r1', 'Receipts go to Money, by month.')]);
+    const region = await written();
+    if (!region) throw new Error('a region labelled "Written in your rules note"');
+    const label = screen.getByRole('heading', { level: 3, name: 'Written in your rules note' });
+    const inner = [...region.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+    expect(inner.map((h) => `${h.tagName}:${h.textContent}`)).toEqual(['H4:Rules', 'H5:Letters']);
+    expect(before(label, inner[0] as Element)).toBe(true);
+  });
+
   it('AC4 rules-original-screen-none: with no prose, or a source without the read, the section is exactly as today', async () => {
     for (const prose of ['', 'none'] as const) {
       setup(prose, [rule('r1', 'Receipts go to Money, by month.'), rule('r2', 'Scans of letters go in Documents.')]);
