@@ -254,10 +254,15 @@ describe('ownership/2 raw byte authority', () => {
     if (parsed.status !== 'invalid') expect(parsed.tasks.map((t) => [t.index, t.label])).toEqual([[0, 'Example'], [2, 'Personal task']]);
     const result = togglePersonalTask(legacy, { ...request, index: 2 }); expect(result.kind).toBe('changed');
     if (result.kind === 'changed') expect(decode(result.bytes)).toBe(decode(legacy).replace('[ ] Personal task', '[x] Personal task'));
-    for (const text of ['---\nbower_format: ownership/2\n- [ ] Personal task\n', '\ufeff---\nby: bower\n---\n- [ ] Personal task\n']) {
+    for (const text of ['---\nbower_format: ownership/2\n- [ ] Personal task\n', '\ufeffJust my words.\n- [ ] Personal task\n']) {
       const value = parseOwnership(encode(text)); expect(value.status).toBe('plain');
       if (value.status !== 'invalid') expect(value.personal).toEqual({ start: 0, end: encode(text).length });
     }
+    // A byte-order mark before a closed front matter is not text (bom-front-matter): the note reads as legacy, its
+    // task indexed as without the mark.
+    const marked = parseOwnership(encode('\ufeff---\nby: bower\n---\n- [ ] Personal task\n'));
+    expect(marked.status).toBe('legacy');
+    if (marked.status !== 'invalid') expect(marked.tasks.map((t) => [t.index, t.label])).toEqual([[0, 'Personal task']]);
   });
 
   it('reparses each new source instead of accepting cached span authority', () => {
