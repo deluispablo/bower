@@ -19,7 +19,7 @@ import { tagListOk } from '../contracts/tag-format';
 import type { TypeTable } from '../contracts/types';
 import type { RunnerWrite } from '../contracts/run-manifest';
 import { isRunWire } from '../contracts/run-wire';
-import { isQuestionOption, proposalOk, type QuestionRound, isAnsweredRow } from '../contracts/questions';
+import { isQuestionOption, proposalOk, requestAskOk, requestQuestionId, type QuestionRound, isAnsweredRow } from '../contracts/questions';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';
@@ -120,7 +120,7 @@ const optional = (v: unknown, check: (x: unknown) => boolean): boolean => v === 
 const list = (v: unknown, check: (x: unknown) => boolean): boolean => Array.isArray(v) && v.every(check);
 /** A question's shown update (`Question.shown`): its lines, and the note's checksum and stamp as left. */
 const shown = (v: unknown): boolean => object(v) && Array.isArray(v.lines) && v.lines.every(text) && text(v.md5) && optional(v.stamp, text);
-const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown) && optional(v.words, text) && optional(v.proposal, (p) => proposalOk(p) && v.id === `q-proposal-${p.id}` && [v.subject, v.hash, v.state, v.shown, v.words, v.options].every((x) => x === undefined)) && optional(v.options, (o) => Array.isArray(o) && o.length >= 2 && o.length <= 4 && o.every(isQuestionOption) && new Set(o.map((x) => x.id)).size === o.length);
+const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text) && optional(v.state, text) && optional(v.shown, shown) && optional(v.words, text) && optional(v.proposal, (p) => proposalOk(p) && v.id === `q-proposal-${p.id}` && [v.subject, v.hash, v.state, v.shown, v.words, v.options, v.request].every((x) => x === undefined)) && optional(v.request, (r) => requestAskOk(r) && v.id === requestQuestionId(r.id) && [v.subject, v.hash, v.state, v.shown, v.words, v.options, v.proposal].every((x) => x === undefined)) && optional(v.options, (o) => Array.isArray(o) && o.length >= 2 && o.length <= 4 && o.every(isQuestionOption) && new Set(o.map((x) => x.id)).size === o.length);
 const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.title) && text(v.why);
 const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
 const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);

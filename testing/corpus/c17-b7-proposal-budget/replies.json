@@ -10,7 +10,7 @@
         "note": {
           "name": "Rain barrel guide.md",
           "summary": "Alex keeps rainwater for gardening.",
-          "body": "Alex keeps rainwater for gardening.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "body": "Alex keeps rainwater for gardening.\n\nSee also [[Gardening]] and [[Seed packet]]: the notes on the same garden.",
           "tags": [
             "gardening"
           ]
@@ -23,7 +23,7 @@
         "note": {
           "name": "Compost guide.md",
           "summary": "Alex adds compost to the garden soil.",
-          "body": "Alex adds compost to the garden soil.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "body": "Alex adds compost to the garden soil.\n\nSee also [[Gardening]] and [[Seed packet]]: the notes on the same garden.",
           "tags": [
             "gardening"
           ]
@@ -36,7 +36,7 @@
         "note": {
           "name": "Seed saving guide.md",
           "summary": "Alex saves seeds for gardening.",
-          "body": "Alex saves seeds for gardening.\n\nRelated: [[Gardening]] and [[Seed packet]].",
+          "body": "Alex saves seeds for gardening.\n\nSee also [[Gardening]] and [[Seed packet]]: the notes on the same garden.",
           "tags": [
             "gardening"
           ]
