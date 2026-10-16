@@ -30,11 +30,23 @@
       ]
     }
   ],
+  "tables": [
+    {
+      "path": "Projects/Garden day/Garden day readiness report.md",
+      "header": ["Work", "What is known", "What remains"],
+      "rows": [
+        ["Tables", "The committee can lend 4 tables.", "Alex must collect them on 2026-10-23."],
+        ["Water", "The shared tap works.", "Helpers must bring watering cans."],
+        ["Shelter", "The hall is unavailable on 2026-10-24.", "The committee has not confirmed the canopy."]
+      ]
+    }
+  ],
   "linksResolve": true,
   "report": {
     "filed": 1,
     "created": [
-      "Projects/Garden day/Garden day readiness report.md"
+      "Projects/Garden day/Garden day readiness report.md",
+      "Bower health.md"
     ],
     "updated": [],
     "setAside": 0,
