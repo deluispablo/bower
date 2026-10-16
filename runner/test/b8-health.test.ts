@@ -668,9 +668,9 @@ describe('B8b lint and the health note through main', () => {
     });
     const intent = { kind: 'tidy-intent', v: 1, things: [
       { fileId: '$file:Mulch notice.txt', to: 'Resources/Gardening', name: 'Mulch letter.txt', note: { name: 'Mulch collection.md',
-        summary: 'Mulch collection opens at the amber gate.', body: 'Alex can collect mulch at the amber gate.\n\nRelated: [[Gardening]].' } },
+        summary: 'Mulch collection opens at the amber gate.', body: 'Alex can collect mulch at the amber gate.\n\nSee also [[Gardening]]: the notes on the same garden.' } },
       { fileId: '$file:Seed swap.txt', to: 'Resources/Gardening', name: 'Seed day.txt', note: { name: 'Seed day notes.md',
-        summary: 'A seed swap on Saturday.', body: 'Alex can swap seeds on Saturday.\n\nRelated: [[Gardening]].' } }] };
+        summary: 'A seed swap on Saturday.', body: 'Alex can swap seeds on Saturday.\n\nSee also [[Gardening]]: the notes on the same garden.' } }] };
     const files = await base.drive.listAll(base.root);
     const seed = files.find((f) => f.name === 'Seed swap.txt');
     const archive = files.find((f) => f.folder && f.name === 'Archive' && f.parents[0] === base.root);

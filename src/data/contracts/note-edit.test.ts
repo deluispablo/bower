@@ -747,7 +747,7 @@ describe('note edits change only what the contract allows', () => {
       expectRefusal('---\nsummary: Mine\n---\nNotes.\n', [append(merged)], 'not-bower');
       expectRefusal('---\nby: alex\n---\nNotes.\n', [append(merged)], 'not-bower');
       expectRefusal('Just my notes.\n', [append(merged)], 'not-bower');
-      expectRefusal(`\ufeff${legacy('\n', 'Notes.', '')}`, [append(merged)], 'not-bower');
+      expectRefusal(`\ufeff${legacy('\n', 'Notes.', '').replace('by: bower\n', '')}`, [append(merged)], 'not-bower');
       expectRefusal(v2('\n', []).replace('ownership/2\n', 'ownership/3\n'), [append(merged)], 'unsupported-version');
       expectRefusal(v2('\n', []).replace(`${E('timeline')}\n`, ''), [append(merged)], 'damaged-boundary');
       expectRefusal(v2('\n', []).replace('summary: Lease\n', 'summary: Lease\r'), [append(merged)], 'damaged-boundary');

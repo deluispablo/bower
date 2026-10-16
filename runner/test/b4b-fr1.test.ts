@@ -135,7 +135,7 @@ const words = (frame: Frame) => ({ ...EMPTY, observations: [{ source: { pileId: 
   section: 'about-preferences', category: 'preference', text: REMOTE }] });
 const fileOffer = (frame: Frame) => ({ ...EMPTY, things: frame.piles.flatMap((p) => p.things)
   .filter((t) => t.name === OFFER).map((t) => ({ fileId: t.fileId, to: 'Projects/Job hunt', name: OFFER,
-    note: { name: 'Ferrowick offer.md', summary: 'Ferrowick offers Alex a developer role.', body: 'Ferrowick offers Alex a developer role.\n\nRelated: [[Job hunt]].' } })) });
+    note: { name: 'Ferrowick offer.md', summary: 'Ferrowick offers Alex a developer role.', body: 'Ferrowick offers Alex a developer role.\n\nSee also [[Job hunt]]: the offer belongs to the job hunt.' } })) });
 const inboxWords = (run: CaseRun) => Object.entries(run.after)
   .filter(([path]) => path.startsWith('Inbox/') && path.endsWith(PILE_NOTE)).map(([, text]) => text.trim());
 const questions = (run: CaseRun): Array<Omit<Question, 'options'> & { options?: QuestionOption[] }> => (JSON.parse(run.after[SYSTEM.questions] ?? '{"questions":[]}') as

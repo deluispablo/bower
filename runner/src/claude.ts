@@ -53,12 +53,12 @@ import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { answersAsking, checkedAnswer, journalAnswer, proposalOk, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
-import type { ChangeEntry, Proposal, Question, TypeRow } from '../../src/data/contracts/types';
+import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
+import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
 import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
-import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
+import { RUNNER_WRITES, SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { extract, readable } from './extract';
@@ -601,7 +601,13 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
     if (room <= 0) break;
     // The canonical projection already represents maps; only an explicit target needs their complete text.
     if (!selected && !named.has(f.id) && !first.has(f.id) && (await read.indexedFront?.(f))?.type === 'moc') continue;
-    const text = await read.readText(f.id);
+    // A note Drive refuses to give for good is not shown, so a line on it is refused as for any unseen note; retries still stop the run.
+    const text = await read.readText(f.id).catch((error: unknown) => {
+      if (failureKind(error) !== 'permanent') throw error;
+      console.error(error);
+      return null;
+    });
+    if (text === null) continue;
     const shown = bounded(text, Math.min(CONTEXT_BOUNDS.perNote, room));
     if (shown.text === null) break;
     room -= shown.text.length;
@@ -618,13 +624,96 @@ interface TakenAnswer {
   sourceId: string;
   yes: boolean;
   value: QuestionAnswer;
-  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options' | 'proposal'>;
+  question: Pick<Question, 'id' | 'text' | 'yes' | 'no' | 'subject' | 'options' | 'proposal' | 'request'>;
   /** For "Write it" (a question about a note's Current state): the note it is about, by that id: its file id and its path now. */
   note?: { fileId: string; path: string };
   /** For keeping one note (a pair question by file ids, c3-pair-ask): the two notes, by those ids, and their paths now. */
   pair?: { fileIds: readonly [string, string]; paths: readonly [string, string] };
   /** For "Write it": its question keeps the update it showed, which the plan writes with no model (`c3-state-mark`). */
   shown?: true;
+}
+
+/** A file's JSON; one that is not JSON offers nothing, and the plan says so when it reads it again. */
+function jsonOf(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    console.error('A file of your changes or questions is not valid JSON');
+    return null;
+  }
+}
+
+/**
+ * The request lines a large request's question (B12d) holds or settles, by journal file id: `held` while it has no answer
+ * (neither shown nor taken, R36), `answered` once it has one (taken, never shown). None when the list cannot be read: with
+ * no readable question the request is the model's again (R87).
+ */
+async function requestsAsked(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<{ held: Set<string>; answered: Set<string> }> {
+  const held = new Set<string>();
+  const answered = new Set<string>();
+  if (!took.taken.journal.length) return { held, answered };
+  const file = VaultIndex.build(run.rootId, await read.listAll(run.rootId)).file(SYSTEM.questions);
+  const value = file && !file.folder ? jsonOf(await read.readText(file.id)) : null;
+  // A file that fails validation still names the requests it holds: they stay held, none answered (R87).
+  const valid = isRunnerFile(SYSTEM.questions, value);
+  const listed = valid ? value.questions : isRecord(value) && Array.isArray(value.questions) ? value.questions.filter(isRecord) : [];
+  const requestOf = (q: unknown): string | undefined => (isRecord(q) && isRecord(q.request) && typeof q.request.id === 'string' ? q.request.id : undefined);
+  if (!listed.some((q) => requestOf(q) !== undefined)) return { held, answered };
+  const records: Array<{ fileId: string; rec: JournalRecord }> = [];
+  for (const line of took.taken.journal) {
+    const rec = jsonOf(await read.readText(line.fileId));
+    if (isJournalRecord(rec)) records.push({ fileId: line.fileId, rec });
+  }
+  for (const q of listed) {
+    const request = records.find((r) => r.rec.kind === 'request' && r.rec.id === requestOf(q));
+    if (!request) continue;
+    const yes = valid && records.some((r) => r.rec.kind === 'answer' && answersAsking(r.rec, q as Question) && typeof journalAnswer(r.rec) === 'boolean');
+    (yes ? answered : held).add(request.fileId);
+  }
+  return { held, answered };
+}
+
+/**
+ * B12 (R4, R5): a map's set and the notes its results name, each read whole through the read cache at its listed
+ * version, never retrieval's evidence; a read Drive refuses for good leaves that note unread (ruling 3).
+ */
+function mapsReader(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, indexed: Readonly<Record<string, MaintenanceNote>>, folders: readonly DriveFile[], types: readonly TypeRow[]) {
+  const sets = new Map<string, ReturnType<typeof setMembers>>();
+  const noteTypes = new Map<string, string | null>();
+  const wholeValues = async (id: string): Promise<Record<string, string> | null> => {
+    try { return frontValues(await read.readText(id)) ?? {}; } catch (error) {
+      if (!(error instanceof BowerError && error.code === 'not-found') && failureKind(error) !== 'permanent') throw error;
+      console.error(error);
+      return null;
+    }
+  };
+  const prepare = async (value: unknown): Promise<void> => {
+    for (const entry of isRecord(value) && Array.isArray(value.maps) ? value.maps.filter(isRecord) : []) {
+      const set = entry.set;
+      const row = isRecord(set) ? types.find((r) => r.id === set.type) : undefined;      if (isRecord(set) && row && typeof set.folderId === 'string' && folders.some((f) => f.id === set.folderId) && !sets.has(JSON.stringify(set))
+        && setFault(set, { v: 1, rows: [...types] }) === null) {
+        const folder = ix.pathOf(set.folderId) ?? '';
+        const candidates: SetNote[] = [];
+        for (const file of listing) {
+          const path = ix.pathOf(file.id);
+          const note = indexed[file.id];
+          // A map is never a member; a note whose current evidence tells another type is not read.
+          if (file.folder || !path?.endsWith('.md') || !inSetFolder(path, folder, set.recursive === true) || note?.type === 'moc' && note.owner === 'bower'
+            || typeof note?.type === 'string' && note.type !== set.type && !note.incomplete && note.version === file.modifiedTime) continue;
+          candidates.push({ id: file.id, path, properties: await wholeValues(file.id) });
+        }
+        sets.set(JSON.stringify(set), setMembers({ type: row.id, ...(isRecord(set.where) ? { where: set.where as Predicate } : {}) }, row, candidates));      }
+      for (const r of Array.isArray(entry.results) ? entry.results.filter(isRecord) : []) {
+        for (const id of [r.memberId, ...(Array.isArray(r.ops) ? r.ops.filter(isRecord).map((op) => op.targetId) : [])]) {
+          if (typeof id !== 'string' || noteTypes.has(id)) continue;
+          const file = ix.byId(id);
+          noteTypes.set(id, file && !file.folder && ix.pathOf(id)?.endsWith('.md') ? (await wholeValues(id))?.type ?? null : null);
+        }
+      }
+    }
+  };
+  return { sets, noteTypes, prepare };
 }
 
 /** Your answers a run took, and whether they are all it took of your changes and each one's question kept what it showed. */
@@ -643,16 +732,7 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
   const ix = VaultIndex.build(run.rootId, listing);
   const file = ix.file(SYSTEM.questions);
   if (!file || file.folder) return { answers: [], alone: false };
-  const json = (text: string): unknown => {
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      if (!(e instanceof SyntaxError)) throw e;
-      // A file that is not JSON offers no answer; the plan says so when it reads it again.
-      console.error('A file of your changes or questions is not valid JSON');
-      return null;
-    }
-  };
+  const json = jsonOf;
   const open = json(await read.readText(file.id)) as { questions?: unknown } | null;
   const questions = Array.isArray(open?.questions) ? (open.questions as Array<Record<string, unknown>>) : [];
   const text = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -664,7 +744,9 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const rec = isJournalRecord(value) ? value : null;
     const q = questions.find((x) => x.id === rec?.questionId);
     const shown = !!q && subjectOf({ id: typeof q.id === 'string' ? q.id : '' }).kind === 'state' && isRecord(q.shown) && Array.isArray(q.shown.lines);
-    if (rec?.kind !== 'answer' || !shown) others++;
+    // A large request's yes or no needs no model either (B12d): its frozen part is applied, or its request settled, by the plan.
+    const request = !!q && typeof q.id === 'string' && requestAskOk(q.request) && q.id === requestQuestionId(q.request.id);
+    if (rec?.kind !== 'answer' || !(shown || request)) others++;
     if (rec?.kind !== 'answer' || journalAnswer(rec) === undefined || typeof rec.id !== 'string') continue;
     if (!q || typeof q.id !== 'string' || typeof q.text !== 'string' || typeof q.askedAt !== 'number' || !answersAsking(rec, { id: q.id, askedAt: q.askedAt })) continue;
     let answerValue: QuestionAnswer;
@@ -682,7 +764,7 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
     const pairPaths = pairIds?.map((id) => ix.pathOf(id));
     const [pathA, pathB] = pairPaths ?? [];
     const answer: TakenAnswer = {
-      id: rec.id, sourceId: line.fileId, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}), ...(q.proposal === undefined ? {} : { proposal: q.proposal as Question['proposal'] }) },
+      id: rec.id, sourceId: line.fileId, yes: answerValue === true, value: answerValue, question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(Array.isArray(q.options) ? { options: q.options as Question['options'] } : {}), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}), ...(q.proposal === undefined ? {} : { proposal: q.proposal as Question['proposal'] }), ...(request ? { request: q.request as RequestPart } : {}) },
       ...(noteId !== undefined && notePath !== undefined ? { note: { fileId: noteId, path: notePath } } : {}),
       ...(pairIds && pathA !== undefined && pathB !== undefined ? { pair: { fileIds: pairIds, paths: [pathA, pathB] } } : {}),
       ...(shown ? { shown: true as const } : {}),
@@ -739,7 +821,9 @@ function answersShown(answers: readonly TakenAnswer[], piles: Shown['piles']): N
  * What the model is shown of what the run took: everything but the things already saved (`duplicates.ts`), which the
  * plan bins on its own, and a pile of nothing else with them. Decided from the listing the run reads anyway.
  */
-async function forModel(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<Admitted> {
+async function forModel(read: ScriptedRead, run: ScriptedRun, all: Admitted, aside: ReadonlySet<string> = new Set()): Promise<Admitted> {
+  // A request its large question settles is the plan's, never shown (B12d).
+  const took: Admitted = { ...all, taken: { ...all.taken, journal: all.taken.journal.filter((l) => !aside.has(l.fileId)) } };
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
   for (const line of took.taken.journal) {
@@ -904,6 +988,8 @@ export interface Seen {
   sets?: ReadonlyMap<string, ReturnType<typeof setMembers>>;
   noteTypes?: ReadonlyMap<string, string | null>;
   shownIds?: ReadonlySet<string>;
+  /** B12d: the requests (by the reply's `requestId`) whose frozen part a yes applies, so the set's size now is not limited. */
+  stored?: ReadonlySet<string>;
 }
 
 /**
@@ -1124,6 +1210,8 @@ const MapShape = z.strictObject({
   requestId: z.string(mapIssue), title: z.string(mapIssue), set: z.record(z.string(), z.unknown(), mapIssue),
   ops: z.array(MapOpShape, mapIssue).optional(),
   results: z.array(z.strictObject({ memberId: z.string(mapIssue), ops: z.array(ResultOpShape, mapIssue) }, mapIssue), mapIssue).optional(),
+  // A set over 200 asks first (B12d R35): the question in the model's words, checked as any question is.
+  question: z.strictObject({ text: z.string(named('askText', 'mapKeys')), yes: z.string(named('askText', 'mapKeys')), no: z.string(named('askText', 'mapKeys')) }, mapIssue).optional(),
 }, mapIssue);
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 type NoteIn = z.output<typeof NoteShape>;
@@ -1282,6 +1370,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   type MapIn = z.output<typeof MapShape>;
   type OpIn = z.output<typeof ResultOpShape> | z.output<typeof MapOpShape>;
   const rows = (): TypeRow[] => [...seen.types ?? []];
+  const stored = (m: MapIn): boolean => seen.stored?.has(m.requestId) === true;
   const setRow = (m: MapIn): TypeRow | undefined => rows().find((r) => r.id === m.set.type);
   const resolved = (m: MapIn) => seen.sets?.get(JSON.stringify(m.set));
   const opsOf = (m: MapIn): Array<{ memberId: string | null; op: OpIn }> => [...(m.ops ?? []).map((op) => ({ memberId: null, op })),
@@ -1333,6 +1422,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }),
     rule('mapKeys', (m) => new Set((m.results ?? []).map((r) => r.memberId)).size === (m.results ?? []).length || 'two results for one note'),
     rule('mapKeys', (m) => plain(m.title, 60) && !/[|<]/.test(m.title) || 'a title that is not one short plain line'),
+    rule('askText', (m) => m.question === undefined || plain(m.question.text, ASK.text) && plain(m.question.yes, ASK.answer) && plain(m.question.no, ASK.answer)),
     rule('mapBinding', (m) => seen.requests?.has(m.requestId) === true),
     rule('mapBinding', (m) => typeof m.set.folderId === 'string' && seen.folderCandidates?.has(m.set.folderId) === true),
     // A set a candidate of which could not be read is not known: its request waits (ruling 3), so nothing binds to it yet.
@@ -1345,7 +1435,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       || "an op on a note that is neither its result's note nor one shown below"),
     rule('mapBinding', (m) => !!resolved(m)?.unread || !resolved(m)?.members.length || (m.ops ?? m.results ?? []).length > 0 || 'no change for a set that has notes'),
     rule('mapLimit', (m) => !maps.some((x) => x.requestId === seen.requests?.get(m.requestId)?.id) || 'two maps for one request'),
-    rule('mapLimit', (m) => (resolved(m)?.members.length ?? 0) <= VIEW_LIMITS.notes
+    // A yes applies a part frozen at the ask (B12d R38), so the set's size now is not its limit.
+    rule('mapLimit', (m) => m.question === undefined || stored(m) || !!resolved(m)?.unread || (resolved(m)?.members.length ?? 0) > VIEW_LIMITS.notes
+      || 'a question for a set of 200 notes or fewer'),
+    // Only properties and tags wait for one yes (R90): a move or rename of a large set is asked in sets of 200 or fewer.
+    rule('mapLimit', (m) => !!resolved(m)?.unread || (resolved(m)?.members.length ?? 0) <= VIEW_LIMITS.notes || !opsOf(m).some(({ op }) => op.kind === 'move' || op.kind === 'rename')
+      || 'a move or rename for a set over 200 notes: only properties and tags can wait for one yes, so ask for a move or rename in a set of 200 notes or fewer'),
+    rule('mapLimit', (m) => stored(m) || (resolved(m)?.members.length ?? 0) <= VIEW_LIMITS.notes || (m.ops !== undefined && m.question !== undefined)
       || 'a set over 200 notes: give one rule for all of them in "ops" and a "question" to start with the first 200'),
     rule('mapLimit', (m) => [...perNote(m)].every(([id, n]) => (opsOnNote.get(id) ?? 0) + n <= 8) || 'more than 8 ops for one note'),
   ], (m) => {
@@ -1365,6 +1461,14 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return parentId === undefined && name === undefined ? {} : { move: { ...(parentId === undefined ? {} : { parentId }), ...(name === undefined ? {} : { name }) } };
     };
     const members = set && !set.unread ? set.members : [];
+    // A set over 200 asks first: nothing applies, the first 200 are what its question freezes (B12d R35).
+    const asks = m.question !== undefined && !stored(m) && members.length > VIEW_LIMITS.notes;
+    if (asks && m.question) {
+      maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', title: m.title, folderId: typeof m.set.folderId === 'string' ? m.set.folderId : '',
+        members: members.slice(0, VIEW_LIMITS.notes), results: [], ask: { text: m.question.text.trim(), yes: m.question.yes.trim(), no: m.question.no.trim(),
+          set: m.set as RequestPart['set'], ops: (m.ops ?? []) as RequestPart['ops'], total: members.length } });
+      return;
+    }
     maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', title: m.title, folderId: typeof m.set.folderId === 'string' ? m.set.folderId : '', members,
       results: m.ops ? members.map((id) => ({ memberId: id, ops: toOps(m.ops ?? [], () => id), ...placeOf(m.ops ?? []) }))
         : (m.results ?? []).map((r) => ({ memberId: r.memberId, ops: toOps(r.ops, (op) => targetOf(op) ?? r.memberId), ...placeOf(r.ops) })),
@@ -1804,16 +1908,62 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     console.error(hidden(`The Claude provider's plan for run ${run.runId} is refused: ${why}${tail}`, token));
     throw invalidReply ? new InvalidModelReply() : new BowerError('unknown', PLAN_REFUSED);
   };
-  return async (took) => {
-    if (took.taken.rootId !== run.rootId) return refuse('the admitted set is for another folder');
+  return async (admitted) => {
+    if (admitted.taken.rootId !== run.rootId) return refuse('the admitted set is for another folder');
     if (!token) return refuse('no Claude credential (CLAUDE_CODE_OAUTH_TOKEN is not set)');
+    // B12d (R36): a request its large question holds is not taken this run: not shown, not archived, not asked again.
+    const asked = await requestsAsked(read, run, admitted);
+    const took: Admitted = { ...admitted, taken: { ...admitted.taken, journal: admitted.taken.journal.filter((l) => !asked.held.has(l.fileId)) } };
     const { model, maxTurns } = claudeLimits(setup.env);
     // The model never sees a thing already saved: the plan bins it (`duplicates.ts`).
     const itemCount = took.taken.piles.reduce((n, p) => n + Math.max(1, thingsOf(p).length), 0);
     if (itemCount > 200) throw new LedgerExhausted(itemCount);
-    const shownTook = await forModel(read, run, took);
+    const shownTook = await forModel(read, run, took, asked.answered);
     const taken = await answersTaken(read, run, shownTook);
-    const answers = taken.answers;
+    // A large request's answer is the plan's (B12d): the model is shown the others.
+    const answers = taken.answers.filter((a) => a.question.request === undefined);
+    /**
+     * Each yes to a large request's question applies its frozen part (B12d R38, R81, R88, R89): the stored set and ops go through
+     * the reply's own checks against the folder as it is now, the set read whole; a part that no longer passes, or whose request
+     * is gone, gets no map and its yes settles stale (the plan). Only the part's members are written, those left out are listed.
+     */
+    const yesMaps = async (): Promise<MapRequest[]> => {
+      const yes = taken.answers.filter((a): a is TakenAnswer & { question: { request: RequestPart } } => a.yes && a.question.request !== undefined);
+      if (!yes.length) return [];
+      const listing = await read.listAll(run.rootId);
+      const ix = VaultIndex.build(run.rootId, listing);
+      const typeFile = ix.file(SYSTEM.typeTable);
+      const types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
+      const tagFile = ix.file(SYSTEM.tags);
+      const folders = listing.filter((f) => f.folder && MAIN_FOLDERS.includes((ix.pathOf(f.id) ?? '').split('/')[0] ?? ''));
+      const requests = new Map<string, { id: string; text: string }>();
+      for (const line of took.taken.journal) {
+        const rec = jsonOf(await read.readText(line.fileId));
+        if (isJournalRecord(rec) && rec.kind === 'request') requests.set(line.fileId, { id: rec.id, text: rec.text ?? rec.what });
+      }
+      const reader = mapsReader(read, listing, ix, setup.retrieval ?? {}, folders, types);
+      const out: MapRequest[] = [];
+      for (const a of yes) {
+        const part = a.question.request;
+        const fileId = [...requests].find(([, r]) => r.id === part.id)?.[0];
+        if (fileId === undefined) continue;
+        const value = { kind: 'tidy-intent', v: 1, things: [], maps: [{ requestId: fileId, title: part.title, set: part.set, ops: part.ops }] };
+        await reader.prepare(value);
+        const got = intentOf(value, took, { notes: new Set(), types, tagList: readTagList(tagFile ? await read.readText(tagFile.id) : null), folderCandidates: new Set(folders.map((f) => f.id)),
+          requests, sets: reader.sets, noteTypes: reader.noteTypes, stored: new Set([fileId]) });
+        const m = got.ok ? got.filing.maps?.[0] : undefined;
+        if (!got.ok || !m) { console.error(hidden(`The stored part of ${a.question.id} was refused (${got.ok ? 'no map' : `${got.kind}: ${got.why}`}); its yes settles with no change.`, token)); continue; }
+        if (m.pending) { out.push({ ...m, answer: a.id }); continue; }
+        const inPart = new Set(part.members);
+        const now = new Set(m.members);
+        const kept = part.members.filter((id) => now.has(id));
+        // Members after the part's last one in the set's order were left out by the 200; one before it came later (R88).
+        const after = kept.length ? m.members.slice(Math.max(...kept.map((id) => m.members.indexOf(id))) + 1).filter((id) => !inPart.has(id)) : [];
+        out.push({ ...m, members: [...part.members, ...after], results: m.results.filter((r) => inPart.has(r.memberId)), answer: a.id,
+          notIncluded: [...part.members.filter((id) => !now.has(id)), ...after] });
+      }
+      return out;
+    };
     const timing = setup.timing ?? new RunTiming();
     const count = itemCount + took.taken.journal.length;
     let tagList: ReturnType<typeof readTagList> | undefined;
@@ -1821,14 +1971,13 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, journal = took.taken.journal): Promise<RunManifest> => {
       const t = { ...took.taken, journal };
       const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context, tagList }, undefined, held);
-      const manifest: RunManifest = plan.manifest;
-      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES, false);
+      const manifest: RunManifest = plan.manifest;      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES, false);
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
       const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
       if (stray) return refuse(stray);
       // Every operation of a map counts to the 1,000: by the request's record id on it, its result note by the key made from that id (R23, R86).
-      const mapIds = new Set((filing.maps ?? []).map((m) => m.requestId));
-      const noteKeys = new Set(await Promise.all([...mapIds].map(resultNoteKey)));
+      const mapIds = new Set((filing.maps ?? []).flatMap((m) => [m.requestId, ...(m.answer === undefined ? [] : [m.answer])]));
+      const noteKeys = new Set(await Promise.all((filing.maps ?? []).map((m) => resultNoteKey(m.requestId))));
       const ofMap = (ids: readonly string[] | undefined): boolean => !!ids?.some((id) => mapIds.has(id));
       timing.requireOperations(manifest.operations.length + 1, count, manifest.operations.filter(({ effect: e }) => e.kind === 'create-text' ? noteKeys.has(e.createKey)
         : e.kind === 'move' ? ofMap(e.recordIds) : e.kind === 'edit-text' && e.changes.some((c) => 'recordIds' in c && ofMap(c.recordIds))).length);
@@ -1837,9 +1986,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     // Only your yes or no to "Write it" questions that kept the update they showed, and no pile: the plan writes that
     // update as shown, and the model is not asked (`c3-state-mark`, TL-P4-16 addendum 2).
-    if (taken.alone && !shownTook.taken.piles.length) {
+    // A yes to a large request runs the same way (B12d R39): its stored part is the plan's, whatever else waits for the next tidy-up.
+    if ((taken.alone || taken.answers.some((a) => a.question.request !== undefined && a.yes)) && !shownTook.taken.piles.length) {
       const listing = await read.listAll(run.rootId);
-      return plannedWith({ thing: () => null, words: () => null }, undefined, VaultIndex.build(run.rootId, listing).file(SYSTEM.dir)?.id, 'with no model, from the updates shown');
+      const maps = await yesMaps();      return plannedWith({ thing: () => null, words: () => null, ...(maps.length ? { maps } : {}) }, undefined, VaultIndex.build(run.rootId, listing).file(SYSTEM.dir)?.id, 'with no model, from the updates shown');
     }
     const exhausted = (): never => { throw new LedgerExhausted(count); };
     const listing = await read.listAll(run.rootId);
@@ -1850,15 +2000,24 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     if (answers.length) shown.answers = answersShown(answers, shown.piles);
     const indexed: Record<string, MaintenanceNote> = { ...setup.retrieval };
     const metadata: Record<string, { summary: string; type?: string | null; links?: string[] }> = {};
+    // A note Drive refuses to give for good is left out of every read of this run (discovery names it); retries and waits still stop the run.
+    const leftOut = new Set<string>();
+    const refusedRead = <T>(id: string, got: () => Promise<T>): Promise<T | undefined> => got().catch((error: unknown) => {
+      if (failureKind(error) !== 'permanent') throw error;
+      console.error(error);
+      leftOut.add(id); Reflect.deleteProperty(indexed, id);
+      return undefined;
+    });
     for (const file of listing) {
       const path = ix.pathOf(file.id);
       if (file.folder || !path?.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) continue;
-      const prefix = await setup.prefixes?.(file, !!file.appProperties?.profile);
+      const prefix = await refusedRead(file.id, async () => setup.prefixes?.(file, !!file.appProperties?.profile));
+      const front = leftOut.has(file.id) ? undefined : await refusedRead(file.id, async () => read.indexedFront?.(file));
+      if (leftOut.has(file.id)) continue;
       if (file.appProperties?.profile && prefix) {
         shown.profileSources ??= {};
         shown.profileSources[file.id] = profileSources(prefix);
       }
-      const front = await read.indexedFront?.(file);
       if (!indexed[file.id]) indexed[file.id] = { path, version: file.modifiedTime, summary: front?.summary ?? '(no summary)',
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
       const entry = indexed[file.id];
@@ -1903,8 +2062,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       await captureMaps(matched);
       for (const id of matched) {
         const file = ix.byId(id); const path = ix.pathOf(id);
-        if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path)) continue;
-        const text = await setup.prefixes?.(file, true);
+        if (!file || !path || metadata[id]?.links || shown.suppressed?.has(path) || leftOut.has(id)) continue;
+        const text = await refusedRead(id, async () => setup.prefixes?.(file, true));
         if (text) {
           metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: indexedFront(text, true).links };
         }
@@ -1951,7 +2110,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
       kinds: shown.types.map((row) => row.id),
-      candidates: Object.keys(shown.indexed), folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
+      candidates: [...Object.keys(shown.indexed), ...leftOut], folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
       pinned: Object.fromEntries(sources.map((s) => [s.itemId,
         answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
     const indexCut = (): boolean => /index cut:/.test(shown.index ?? '');
@@ -1963,6 +2122,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       result.value.items = result.value.items.filter((item) => !cut || typeof item.destination === 'string');
       result.allowedTargets = Object.fromEntries(Object.entries(result.allowedTargets).filter(([id]) => result.value.items.some((item) => item.itemId === id)));
       for (const item of result.value.items) {
+        // A note left out this run is simply not read; a line on it is refused by the reply check.
+        item.wants = item.wants.filter((id) => !leftOut.has(id));
         const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates.map((c) => c.id) ?? [];
         if (item.wants.some((id) => !candidates.includes(id))) return { ok: false };
         if (item.basis && !sourceBasisOk(item.basis, item.itemId, sources.find((s) => s.itemId === item.itemId)?.words)) return { ok: false };
@@ -2100,44 +2261,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
       const input = prepared(run, shownTook, shown);
       const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
-      // B12 (R4, R5): a map's set and the notes its results name, each read whole through the read cache at its listed
-      // version, never retrieval's evidence; a read Drive refuses for good leaves that note unread (ruling 3).
-      const mapSets = new Map<string, ReturnType<typeof setMembers>>();
-      const noteTypes = new Map<string, string | null>();
-      const wholeValues = async (id: string): Promise<Record<string, string> | null> => {
-        try { return frontValues(await read.readText(id)) ?? {}; } catch (error) {
-          if (!(error instanceof BowerError && error.code === 'not-found') && failureKind(error) !== 'permanent') throw error;
-          console.error(error);
-          return null;
-        }
-      };
-      const prepareMaps = async (value: unknown): Promise<void> => {
-        for (const entry of isRecord(value) && Array.isArray(value.maps) ? value.maps.filter(isRecord) : []) {
-          const set = entry.set;
-          const row = isRecord(set) ? shown.types?.find((r) => r.id === set.type) : undefined;
-          if (isRecord(set) && row && typeof set.folderId === 'string' && folders.some((f) => f.id === set.folderId) && !mapSets.has(JSON.stringify(set))
-            && setFault(set, { v: 1, rows: [...shown.types ?? []] }) === null) {
-            const folder = ix.pathOf(set.folderId) ?? '';
-            const candidates: SetNote[] = [];
-            for (const file of listing) {
-              const path = ix.pathOf(file.id);
-              const note = indexed[file.id];
-              // A map is never a member; a note whose current evidence tells another type is not read.
-              if (file.folder || !path?.endsWith('.md') || !inSetFolder(path, folder, set.recursive === true) || note?.type === 'moc' && note.owner === 'bower'
-                || typeof note?.type === 'string' && note.type !== set.type && !note.incomplete && note.version === file.modifiedTime) continue;
-              candidates.push({ id: file.id, path, properties: await wholeValues(file.id) });
-            }
-            mapSets.set(JSON.stringify(set), setMembers({ type: row.id, ...(isRecord(set.where) ? { where: set.where as Predicate } : {}) }, row, candidates));
-          }
-          for (const r of Array.isArray(entry.results) ? entry.results.filter(isRecord) : []) {
-            for (const id of [r.memberId, ...(Array.isArray(r.ops) ? r.ops.filter(isRecord).map((op) => op.targetId) : [])]) {
-              if (typeof id !== 'string' || noteTypes.has(id)) continue;
-              const file = ix.byId(id);
-              noteTypes.set(id, file && !file.folder && ix.pathOf(id)?.endsWith('.md') ? (await wholeValues(id))?.type ?? null : null);
-            }
-          }
-        }
-      };
+      const { sets: mapSets, noteTypes, prepare: prepareMaps } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? []);
       // Whose note it is reads the whole note (one read per version, already cached), never the cut shown to the model.
       const bowerNotes = new Set<string>();
       for (const n of shown.notes) {
@@ -2181,10 +2305,13 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           .map(({ folderId, path }) => ({ folderId, label: path.split('/').at(-1) ?? path }));
         return [id, ask.options || places.length < 2 || places.length > 4 ? ask : { ...ask, options: places }] as const;
       }));
+      const yesList = await yesMaps();
       const intent = await twice(input, async (value) => {
         await prepareMaps(value);
         const got = intentOf(value, shownTook, seen);
         if (!got.ok) return got;
+        // A yes's part is the plan's, beside what the reply maps (B12d); one request is never both.
+        if (yesList.length) Object.assign(got.filing, { maps: [...got.filing.maps ?? [], ...yesList] });
         Object.assign(got.filing, { ...(got.filing.asks ? { asks: offered(got.filing.asks) } : {}), ...(got.filing.thingAsks ? { thingAsks: offered(got.filing.thingAsks) } : {}) });
         if (!isRecord(value)) return null;
         const rows = (key: string): Record<string, unknown>[] => Array.isArray(value[key]) ? value[key].filter(isRecord) : [];
@@ -2281,7 +2408,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       // A request whose targets were not selected stays in the inbox for a later run; one a checked view installs or suggests is taken.
       const installing = new Set([...intent.filing.views ?? [], ...intent.filing.suggestions?.views ?? [], ...intent.filing.maps ?? []].map((v) => v.requestId));
       return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, took.taken.journal.filter((line) =>
-        journal.includes(line) || installing.has(seen.requests?.get(line.fileId)?.id ?? '')));
+        journal.includes(line) || asked.answered.has(line.fileId) || installing.has(seen.requests?.get(line.fileId)?.id ?? '')));
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };

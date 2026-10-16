@@ -10,43 +10,26 @@
         "note": {
           "name": "Garden notice.md",
           "summary": "Alex can collect mulch at the amber gate.",
-          "body": "Alex can collect mulch at the amber gate in Saltmere.\n\nRelated: [[Gardening]]."
+          "body": "Alex can collect mulch at the amber gate in Saltmere."
         }
       }
     ],
     "maps": [
       {
         "requestId": "$request:change-1",
-        "setId": "$set:change-1",
+        "title": "Review Reading",
+        "set": {
+          "type": "concept",
+          "folderId": "$folder:Resources/Reading",
+          "recursive": false,
+          "where": { "op": "eq", "property": "status", "value": "active" }
+        },
+        "ops": [{ "kind": "property", "key": "review_state", "mode": "set", "value": "reviewed" }],
         "question": {
           "text": "There are 201 reading notes. Start with the 200 most recent?",
           "yes": "Start with these",
           "no": "Leave them"
         }
-      }
-    ]
-  },
-  {
-    "kind": "tidy-intent",
-    "v": 1,
-    "things": [],
-    "maps": [
-      {
-        "requestId": "$request:change-1",
-        "setId": "$set:change-1",
-        "results": "$script:approved-property-results"
-      }
-    ]
-  },
-  {
-    "kind": "tidy-intent",
-    "v": 1,
-    "things": [],
-    "maps": [
-      {
-        "requestId": "$request:press-3",
-        "setId": "$set:press-3",
-        "results": "$script:remaining-property-results"
       }
     ]
   }

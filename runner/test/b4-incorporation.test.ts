@@ -175,7 +175,7 @@ const words = (frame: Frame) => ({ ...EMPTY, observations: [{ source: { pileId: 
   section: 'about-preferences', category: 'preference', text: REMOTE }] });
 const fileOffer = (frame: Frame) => ({ ...EMPTY, things: frame.piles.flatMap((p) => p.things)
   .filter((t) => t.name === OFFER).map((t) => ({ fileId: t.fileId, to: 'Projects/Job hunt', name: OFFER,
-    note: { name: 'Ferrowick offer.md', summary: 'Ferrowick offers Alex a developer role.', body: 'Ferrowick offers Alex a developer role.\n\nRelated: [[Job hunt]].' } })) });
+    note: { name: 'Ferrowick offer.md', summary: 'Ferrowick offers Alex a developer role.', body: 'Ferrowick offers Alex a developer role.\n\nSee also [[Job hunt]]: the offer belongs to the job hunt.' } })) });
 const acceptedWords = (frame: Frame) => ({ ...fileOffer(frame), observations: words(frame).observations });
 const memoryRows = (run: CaseRun) => [...report(run).created, ...report(run).updated].filter((r) => r.path === ABOUT);
 const internalRows = (run: CaseRun) => [...report(run).created, ...report(run).updated].filter((r) => r.path.startsWith('.bower/'));
