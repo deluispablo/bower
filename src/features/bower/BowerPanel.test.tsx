@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
@@ -171,15 +171,21 @@ describe('what failed is found once, and focus stays with the person', () => {
 describe('rules-original-ui: the panel\'s rules summary', () => {
   afterEach(cleanup);
   const rules = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `r${i + 1}`, text: `Rule number ${i + 1} for Alex.`, since: Date.UTC(2026, 9, 3) }));
-  const setup = (prose: string | 'pending' | Error, list: ReturnType<typeof rules>) => {
+  /** Lets every read in flight finish: a macrotask after all the promise steps, no real wait. */
+  const settle = (): Promise<void> => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  /** What the vault tells when something changed: each listener the panel's reads subscribed. */
+  let listeners: Array<() => void> = [];
+  const setup = (prose: string | 'pending' | Error | (() => Promise<string>), list: ReturnType<typeof rules> | (() => Promise<ReturnType<typeof rules>>)) => {
     const never = (): Promise<never> => new Promise(() => undefined);
     const sources = loadingSources();
+    listeners = [];
     const vault = new Proxy({}, {
       get: (_t, k) => {
         if (k === 'driveLinks') return false;
-        if (k === 'subscribe') return () => () => undefined;
-        if (k === 'rules') return async () => list;
+        if (k === 'subscribe') return (cb: () => void) => { listeners.push(cb); return () => undefined; };
+        if (k === 'rules') return async () => (typeof list === 'function' ? list() : list);
         if (k === 'rulesProse') return async () => {
+          if (typeof prose === 'function') return prose();
           if (prose === 'pending') return never();
           if (prose instanceof Error) throw prose;
           return prose;
@@ -205,9 +211,8 @@ describe('rules-original-ui: the panel\'s rules summary', () => {
 
   it('AC6 rules-original-panel-prose: "Rules" with no number, the rules note first, then up to 4 rules', async () => {
     setup('Alex keeps paper letters for a year.', rules(5));
-    await screen.findByText('Rule number 1 for Alex.');
-    // expected: a missing link is the assertion below, not a query error.
-    const link = await screen.findByRole('link', { name: 'Your rules note' }).catch(() => null);
+    await settle();
+    const link = screen.queryByRole('link', { name: 'Your rules note' });
     expect(link, 'a link "Your rules note"').not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /^\d+ rules?$/ })).toBeNull();
@@ -220,8 +225,8 @@ describe('rules-original-ui: the panel\'s rules summary', () => {
 
   it('AC6 rules-original-panel-prose-no-rules: with the prose and no rules added, "Rules" and the link, never "0 rules"', async () => {
     setup('Alex keeps paper letters for a year.', []);
-    // expected: a missing link is the assertion below, not a query error.
-    expect(await screen.findByRole('link', { name: 'Your rules note' }).catch(() => null), 'a link "Your rules note"').not.toBeNull();
+    await settle();
+    expect(screen.queryByRole('link', { name: 'Your rules note' }), 'a link "Your rules note"').not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     expect(screen.queryByText(/^0 rules$/)).toBeNull();
   });
@@ -235,17 +240,75 @@ describe('rules-original-ui: the panel\'s rules summary', () => {
 
   it('R8 rules-original-panel-unknown: while the prose read is on its way, or after it failed, no number is claimed', async () => {
     setup('pending', rules(2));
-    await screen.findByText('Rule number 1 for Alex.');
-    await new Promise((r) => setTimeout(r, 20));
+    await settle();
+    expect(screen.queryByText('Rule number 1 for Alex.')).not.toBeNull();
     expect(screen.queryByRole('heading', { name: '2 rules' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     cleanup();
     setup(new BowerError('unknown', 'Bower could not read your rules note.'), rules(2));
-    await screen.findByText('Rule number 1 for Alex.');
-    // expected: a missing alert is the assertion below, not a query error.
-    expect(await screen.findAllByRole('alert').catch(() => [])).toHaveLength(1);
+    await settle();
+    expect(screen.queryAllByRole('alert')).toHaveLength(1);
     expect(screen.getByRole('alert')).toHaveTextContent('Bower could not read your rules note.');
     expect(screen.queryByRole('heading', { name: '2 rules' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument();
+  });
+
+  it('R7 rules-original-panel-recovery: one Try again retries both reads when both failed, and the panel recovers', async () => {
+    let proseCalls = 0;
+    let ruleCalls = 0;
+    setup(
+      async () => {
+        if (++proseCalls === 1) throw new BowerError('unknown', 'Bower could not read your rules note.');
+        return 'Alex keeps paper letters for a year.';
+      },
+      async () => {
+        if (++ruleCalls === 1) throw new BowerError('unknown', 'Your rules did not load.');
+        return rules(2);
+      },
+    );
+    await settle();
+    expect(screen.queryAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Your rules did not load.');
+    const retry = screen.queryAllByRole('button', { name: 'Try again' });
+    expect(retry).toHaveLength(1);
+    fireEvent.click(retry[0] as HTMLElement);
+    await settle();
+    expect([proseCalls, ruleCalls]).toEqual([2, 2]);
+    expect(screen.queryAllByRole('alert')).toEqual([]);
+    expect(screen.queryByRole('link', { name: 'Your rules note' })).not.toBeNull();
+    expect(within(rulesList()).getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('R8 rules-original-panel-refresh: the heading and prose stay while the prose is read again and after that failed; a later success replaces them', async () => {
+    let step: 'first' | 'refresh' | 'again' = 'first';
+    let fail: (e: unknown) => void = () => undefined;
+    setup(
+      async () => {
+        if (step === 'first') return 'Alex keeps paper letters for a year.';
+        if (step === 'refresh') return new Promise<string>((_, reject) => { fail = reject; });
+        return '';
+      },
+      rules(2),
+    );
+    await settle();
+    expect(screen.queryByRole('link', { name: 'Your rules note' })).not.toBeNull();
+    step = 'refresh';
+    await act(async () => { listeners.forEach((l) => l()); });
+    await settle();
+    expect(screen.queryByRole('link', { name: 'Your rules note' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: '2 rules' })).toBeNull();
+    fail(new BowerError('unknown', 'Bower could not read your rules note.'));
+    await settle();
+    // The old prose, so the same heading, with the one sentence.
+    expect(screen.queryByRole('link', { name: 'Your rules note' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: '2 rules' })).toBeNull();
+    expect(screen.queryAllByRole('alert')).toHaveLength(1);
+    step = 'again';
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await settle();
+    // The new answer (no prose now) replaces it: today's count and list.
+    expect(screen.queryByRole('heading', { name: '2 rules' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Your rules note' })).toBeNull();
+    expect(screen.queryAllByRole('alert')).toEqual([]);
   });
 });

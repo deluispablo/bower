@@ -65,7 +65,7 @@ for (const width of [375, 1440]) {
       const heading = panel.getByRole('heading', { name: 'Rules', exact: true });
       await expect(heading).toBeVisible();
       await expect(panel.getByRole('heading', { name: /^\d+ rules?$/ })).toHaveCount(0);
-      const first = panel.locator('section', { has: heading }).getByRole('listitem').first();
+      const first = panel.locator('section', { has: page.getByRole('heading', { name: 'Rules', exact: true }) }).getByRole('listitem').first();
       await expect(first.getByRole('link', { name: 'Your rules note', exact: true })).toBeVisible();
       await expectAxeClean(page, { include: 'aside[aria-label="Right panel"]', wcag22: true });
     }

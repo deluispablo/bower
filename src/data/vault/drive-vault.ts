@@ -1466,6 +1466,21 @@ export class DriveVault implements VaultSource {
     return [...pending, ...worded.filter((r) => !removed.has(r.text))];
   }
 
+  /** The person's own text in the rules note, as the note page shows it; '' for Bower's own note, no note or a damaged region. */
+  async rulesProse(): Promise<string> {
+    let file = (await this.index()).file('Rules.md');
+    if (!file || file.folder) return '';
+    file = await this.drive.get(file.id);
+    try {
+      const note = await this.parsed(file, 'Rules.md');
+      return note.byBower ? '' : note.body.trim();
+    } catch (error) {
+      // rules() already logs a damaged region once; no second message for one file.
+      if (noteRefusal(error) !== 'damaged' || !this.current()) throw error;
+      return '';
+    }
+  }
+
   async addRule(input: string): Promise<Rule> {
     const text = input.trim();
     if (!text) throw new BowerError('conflict', 'Write the rule first.');
