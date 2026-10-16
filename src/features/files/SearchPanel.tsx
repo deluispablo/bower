@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NOTHING_FOUND } from '@/app/words';
 import { useSources } from '@/data/provider';
 import type { SearchHit } from '@/data/types';
 import { fieldBox, Input } from '@/ui/Field';
@@ -40,7 +41,7 @@ export function SearchPanel({ focus = true }: { focus?: boolean }) {
         <Input inBox type="search" autoFocus={focus} placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <p className={s.hint} role="status">
-        {searching ? 'Searching…' : result?.q === q && result.failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
+        {searching ? 'Searching…' : result?.q === q && result.failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : shown.length === 0 ? NOTHING_FOUND : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
       </p>
       <ul className={s.results}>
         {(shown ?? []).map((h) => (
