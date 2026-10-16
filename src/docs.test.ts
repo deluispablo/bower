@@ -139,8 +139,10 @@ describe('runbook-tools', () => {
     const text = production();
     expect(text).toContain('BOWER_DRIVE_TOKEN=<token> pnpm -C runner precheck FOLDER_ID');
     expect(text).toMatch(/drive\.readonly/);
-    // What each exit says, as the command's own header does.
-    expect(text).toMatch(/`0`[^\n]*`1`[^\n]*`2`/);
+    // What each exit says, as the command's own header does, each on its own.
+    expect(text).toMatch(/exit `0`[^\n]*checked/i);
+    expect(text).toMatch(/exit `1`[^\n]*(read failed|not checked)/i);
+    expect(text).toMatch(/exit `2`[^\n]*(arguments|token)/i);
     expect(text).not.toMatch(/Open Home, a few notes, the piles and the search/);
   });
 
@@ -160,6 +162,14 @@ describe('runbook-tools', () => {
     expect(dry, 'the dry run is named').toBeGreaterThan(-1);
     expect(real, 'the real run follows the dry run').toBeGreaterThan(dry);
     expect(text).not.toContain('npx wrangler rollback <version id>');
+  });
+
+  it('R5 runbook-rollback-last-good: the redeploy runs from a scratch clone whose main is the last good commit (guard of deploy-lib.sh)', () => {
+    const text = production();
+    const reset = text.indexOf('git reset --hard <last good SHA>');
+    expect(text).toContain('git clone');
+    expect(reset, 'main is moved in the scratch clone').toBeGreaterThan(-1);
+    expect(text.indexOf('scripts/cutover.sh', reset), 'the cutover runs from there').toBeGreaterThan(reset);
   });
 
   it('R4 runbook-tools-lead-only: the scripts stay the technical lead\'s, never an agent\'s (guard)', () => {
