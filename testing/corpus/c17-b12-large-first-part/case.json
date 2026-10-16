@@ -243,6 +243,12 @@
           "yes": true
         }
       ]
+    },
+    {
+      "request": {
+        "kind": "tidy",
+        "text": "Now do the rest of the active Reading concepts."
+      }
     }
   ]
 }

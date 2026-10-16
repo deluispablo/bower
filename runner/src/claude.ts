@@ -55,10 +55,10 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
-import { SHORTEN_SKIPPED, assignedTags, growTags, modelDecisions, namedNotes, personalAppendHistory, planScripted, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { SHORTEN_SKIPPED, assignedTags, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
-import { RUNNER_WRITES, SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
+import { RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { extract, readable } from './extract';
@@ -678,9 +678,53 @@ export async function requestsAsked(read: ScriptedRead, run: ScriptedRun, took: 
  * B12 (R4, R5): a map's set and the notes its results name, each read whole through the read cache at its listed
  * version, never retrieval's evidence; a read Drive refuses for good leaves that note unread (ruling 3).
  */
-function mapsReader(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, indexed: Readonly<Record<string, MaintenanceNote>>, folders: readonly DriveFile[], types: readonly TypeRow[]) {
+function mapsReader(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, indexed: Readonly<Record<string, MaintenanceNote>>, folders: readonly DriveFile[], types: readonly TypeRow[], recent: ReadonlySet<string> = new Set()) {
   const sets = new Map<string, ReturnType<typeof setMembers>>();
   const noteTypes = new Map<string, string | null>();
+  /** B12e: by the reply's request, the members a recent result already did this to (R47). */
+  const skipped = new Map<string, ReadonlySet<string>>();
+  const textOf = async (id: string): Promise<string | null> => {
+    try { return await read.readText(id); } catch (error) {
+      if (!(error instanceof BowerError && error.code === 'not-found') && failureKind(error) !== 'permanent') throw error;
+      console.error(error);
+      return null;
+    }
+  };
+  /** A member's ops in the plan's form (the key's), or null when the reply does not have the shape; its move or rename as one place. */
+  const planned = (raw: ReadonlyArray<Record<string, unknown>>, memberId: string): { ops: MapOp[]; move?: { parentId?: string; name?: string } } | null => {
+    const ops: MapOp[] = [];
+    let parentId: string | undefined;
+    let name: string | undefined;
+    for (const op of raw) {
+      const targetId = typeof op.targetId === 'string' ? op.targetId : memberId;
+      if (op.kind === 'move' && typeof op.parentId === 'string') parentId ??= op.parentId;
+      else if (op.kind === 'rename' && typeof op.name === 'string') name ??= op.name;
+      else if (op.kind === 'tag' && (op.mode === 'add' || op.mode === 'remove') && typeof op.value === 'string') ops.push({ targetId, key: 'tags', mode: op.mode, value: normalizeTag(op.value) ?? op.value });
+      else if (op.kind === 'property' && typeof op.key === 'string' && (op.mode === 'set' || op.mode === 'union')) ops.push({ targetId, key: op.key, mode: op.mode, value: op.value });
+      else return null;
+    }
+    return { ops, ...(parentId === undefined && name === undefined ? {} : { move: { ...(parentId === undefined ? {} : { parentId }), ...(name === undefined ? {} : { name }) } }) };
+  };
+  /** The members with an unexpired recent row for these ops whose notes, and place, already hold what the ops ask (R47). */
+  const skipRecent = async (entry: Record<string, unknown>, members: readonly string[], type: string): Promise<Set<string>> => {
+    const out = new Set<string>();
+    const results = Array.isArray(entry.results) ? entry.results.filter(isRecord) : [];
+    for (const id of members) {
+      const own = Array.isArray(entry.ops) ? entry.ops : results.find((r) => r.memberId === id)?.ops;
+      const plan = Array.isArray(own) && own.every(isRecord) ? planned(own, id) : null;
+      if (!plan || !recent.has(await recentKey(id, plan.ops, plan.move))) continue;
+      const file = ix.byId(id);
+      if (plan.move && file && ((plan.move.parentId ?? file.parents[0]) !== file.parents[0] || (plan.move.name ?? file.name) !== file.name)) continue;
+      let holds = true;
+      for (const targetId of new Set(plan.ops.map((o) => o.targetId))) {
+        const text = await textOf(targetId);
+        const made = text === null ? null : mapLines(text, types.find((r) => r.id === frontValues(text)?.type) ?? types.find((r) => r.id === type), plan.ops.filter((o) => o.targetId === targetId), []);
+        if (!Array.isArray(made) || made.length) { holds = false; break; }
+      }
+      if (holds) out.add(id);
+    }
+    return out;
+  };
   const wholeValues = async (id: string): Promise<Record<string, string> | null> => {
     try { return frontValues(await read.readText(id)) ?? {}; } catch (error) {
       if (!(error instanceof BowerError && error.code === 'not-found') && failureKind(error) !== 'permanent') throw error;
@@ -704,6 +748,11 @@ function mapsReader(read: ScriptedRead, listing: readonly DriveFile[], ix: Vault
           candidates.push({ id: file.id, path, properties: await wholeValues(file.id) });
         }
         sets.set(JSON.stringify(set), setMembers({ type: row.id, ...(isRecord(set.where) ? { where: set.where as Predicate } : {}) }, row, candidates));      }
+      const resolvedSet = isRecord(set) ? sets.get(JSON.stringify(set)) : undefined;
+      if (recent.size && typeof entry.requestId === 'string' && isRecord(set) && resolvedSet && !resolvedSet.unread) {
+        const out = await skipRecent(entry, resolvedSet.members, typeof set.type === 'string' ? set.type : '');
+        if (out.size) skipped.set(entry.requestId, out);
+      }
       for (const r of Array.isArray(entry.results) ? entry.results.filter(isRecord) : []) {
         for (const id of [r.memberId, ...(Array.isArray(r.ops) ? r.ops.filter(isRecord).map((op) => op.targetId) : [])]) {
           if (typeof id !== 'string' || noteTypes.has(id)) continue;
@@ -713,7 +762,14 @@ function mapsReader(read: ScriptedRead, listing: readonly DriveFile[], ix: Vault
       }
     }
   };
-  return { sets, noteTypes, prepare };
+  return { sets, noteTypes, prepare, skipped };
+}
+
+/** The keys of the recent results not expired at `now` (R45-R47); an unreadable file or row is none here, the plan's write logs it. */
+async function recentKeys(read: ScriptedRead, ix: VaultIndex, now: number): Promise<Set<string>> {
+  const file = ix.file(SYSTEM.requests);
+  const value = file && !file.folder ? jsonOf(await read.readText(file.id)) : null;
+  return new Set(recentRows(isRecord(value) ? value.recent : undefined).rows.filter((r) => now < r.at + RECENT.ttl).map((r) => r.key));
 }
 
 /** Your answers a run took, and whether they are all it took of your changes and each one's question kept what it showed. */
@@ -987,6 +1043,8 @@ export interface Seen {
    */
   sets?: ReadonlyMap<string, ReturnType<typeof setMembers>>;
   noteTypes?: ReadonlyMap<string, string | null>;
+  /** B12e: by the reply's `requestId`, the set's members a recent result already did this to, which still hold: left out (R47). */
+  skipped?: ReadonlyMap<string, ReadonlySet<string>>;
   shownIds?: ReadonlySet<string>;
   /** B12d: the requests (by the reply's `requestId`) whose frozen part a yes applies, so the set's size now is not limited. */
   stored?: ReadonlySet<string>;
@@ -1373,6 +1431,9 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const stored = (m: MapIn): boolean => seen.stored?.has(m.requestId) === true;
   const setRow = (m: MapIn): TypeRow | undefined => rows().find((r) => r.id === m.set.type);
   const resolved = (m: MapIn) => seen.sets?.get(JSON.stringify(m.set));
+  /** B12e: the set's members a recent result already did this to and that still hold are left out; the 200 counts the rest (R47). */
+  const skippedOf = (m: MapIn): ReadonlySet<string> => seen.skipped?.get(m.requestId) ?? new Set();
+  const live = (m: MapIn): string[] => (resolved(m)?.members ?? []).filter((id) => !skippedOf(m).has(id));
   const opsOf = (m: MapIn): Array<{ memberId: string | null; op: OpIn }> => [...(m.ops ?? []).map((op) => ({ memberId: null, op })),
     ...(m.results ?? []).flatMap((r) => r.ops.map((op) => ({ memberId: r.memberId, op })))];
   const targetOf = (op: OpIn): string | null => ('targetId' in op ? op.targetId : null);
@@ -1381,7 +1442,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   /** The ops that would apply to each note: one rule for all goes to every member. */
   const perNote = (m: MapIn): Map<string, number> => {
     const counts = new Map<string, number>();
-    const targets = m.ops ? (resolved(m)?.members ?? []).map((id) => [id, m.ops?.length ?? 0] as const) : (m.results ?? []).flatMap((r) => r.ops.map((op) => [op.targetId, 1] as const));
+    const targets = m.ops ? live(m).map((id) => [id, m.ops?.length ?? 0] as const) : (m.results ?? []).flatMap((r) => r.ops.map((op) => [op.targetId, 1] as const));
     for (const [id, n] of targets) counts.set(id, (counts.get(id) ?? 0) + n);
     return counts;
   };
@@ -1436,12 +1497,12 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('mapBinding', (m) => !!resolved(m)?.unread || !resolved(m)?.members.length || (m.ops ?? m.results ?? []).length > 0 || 'no change for a set that has notes'),
     rule('mapLimit', (m) => !maps.some((x) => x.requestId === seen.requests?.get(m.requestId)?.id) || 'two maps for one request'),
     // A yes applies a part frozen at the ask (B12d R38), so the set's size now is not its limit.
-    rule('mapLimit', (m) => m.question === undefined || stored(m) || !!resolved(m)?.unread || (resolved(m)?.members.length ?? 0) > VIEW_LIMITS.notes
+    rule('mapLimit', (m) => m.question === undefined || stored(m) || !!resolved(m)?.unread || live(m).length > VIEW_LIMITS.notes
       || 'a question for a set of 200 notes or fewer'),
     // Only properties and tags wait for one yes (R90): a move or rename of a large set is asked in sets of 200 or fewer.
-    rule('mapLimit', (m) => !!resolved(m)?.unread || (resolved(m)?.members.length ?? 0) <= VIEW_LIMITS.notes || !opsOf(m).some(({ op }) => op.kind === 'move' || op.kind === 'rename')
+    rule('mapLimit', (m) => !!resolved(m)?.unread || live(m).length <= VIEW_LIMITS.notes || !opsOf(m).some(({ op }) => op.kind === 'move' || op.kind === 'rename')
       || 'a move or rename for a set over 200 notes: only properties and tags can wait for one yes, so ask for a move or rename in a set of 200 notes or fewer'),
-    rule('mapLimit', (m) => stored(m) || (resolved(m)?.members.length ?? 0) <= VIEW_LIMITS.notes || (m.ops !== undefined && m.question !== undefined)
+    rule('mapLimit', (m) => stored(m) || live(m).length <= VIEW_LIMITS.notes || (m.ops !== undefined && m.question !== undefined)
       || 'a set over 200 notes: give one rule for all of them in "ops" and a "question" to start with the first 200'),
     rule('mapLimit', (m) => [...perNote(m)].every(([id, n]) => (opsOnNote.get(id) ?? 0) + n <= 8) || 'more than 8 ops for one note'),
   ], (m) => {
@@ -1460,7 +1521,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const name = ops.flatMap((op) => (op.kind === 'rename' ? [op.name] : []))[0];
       return parentId === undefined && name === undefined ? {} : { move: { ...(parentId === undefined ? {} : { parentId }), ...(name === undefined ? {} : { name }) } };
     };
-    const members = set && !set.unread ? set.members : [];
+    const members = set && !set.unread ? live(m) : [];
+    const skipped = [...skippedOf(m)];
     // A set over 200 asks first: nothing applies, the first 200 are what its question freezes (B12d R35).
     const asks = m.question !== undefined && !stored(m) && members.length > VIEW_LIMITS.notes;
     if (asks && m.question) {
@@ -1471,7 +1533,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }
     maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', title: m.title, folderId: typeof m.set.folderId === 'string' ? m.set.folderId : '', members,
       results: m.ops ? members.map((id) => ({ memberId: id, ops: toOps(m.ops ?? [], () => id), ...placeOf(m.ops ?? []) }))
-        : (m.results ?? []).map((r) => ({ memberId: r.memberId, ops: toOps(r.ops, (op) => targetOf(op) ?? r.memberId), ...placeOf(r.ops) })),
+        : (m.results ?? []).filter((r) => !skippedOf(m).has(r.memberId)).map((r) => ({ memberId: r.memberId, ops: toOps(r.ops, (op) => targetOf(op) ?? r.memberId), ...placeOf(r.ops) })),
+      ...(skipped.length ? { skipped } : {}),
       ...(!set || set.unread ? { pending: true as const } : {}) });
   }));
 
@@ -2261,7 +2324,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
       const input = prepared(run, shownTook, shown);
       const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
-      const { sets: mapSets, noteTypes, prepare: prepareMaps } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? []);
+      const { sets: mapSets, noteTypes, prepare: prepareMaps, skipped: mapSkipped } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? [], await recentKeys(read, ix, shownTook.taken.at));
       // Whose note it is reads the whole note (one read per version, already cached), never the cut shown to the model.
       const bowerNotes = new Set<string>();
       for (const n of shown.notes) {
@@ -2282,7 +2345,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
         merges: mergesOf(answers, shown.notes.map((n) => n.path)), requests: new Map(), maps: new Set(Object.entries(indexed)
           .flatMap(([id, note]) => (note.type === 'moc' && note.owner === 'bower' ? [id] : []))),
-        sets: mapSets, noteTypes, shownIds: new Set(Object.entries(shown.indexed ?? {}).flatMap(([id, n]) => (MAIN_FOLDERS.includes(n.path.split('/')[0] ?? '') ? [id] : []))) };
+        sets: mapSets, noteTypes, skipped: mapSkipped, shownIds: new Set(Object.entries(shown.indexed ?? {}).flatMap(([id, n]) => (MAIN_FOLDERS.includes(n.path.split('/')[0] ?? '') ? [id] : []))) };
       // A request record of this run is the only authority to install (R7): never a document or the model's words.
       for (const line of shownTook.taken.journal) {
         let rec: unknown;

@@ -71,6 +71,20 @@ export interface SuggestionsFile {
 export interface RequestsFile {
   v: 1;
   done: Request[];
+  /** B12e: a done member of a settled map by its key and the admission time; read by `recentRows`, never a refusal. */
+  recent?: Recent[];
+}
+export interface Recent {
+  key: string;
+  at: number;
+}
+/** How long a recent result is skipped, and how many rows are kept (the newest). */
+export const RECENT = { ttl: 30 * 86_400_000, max: 2000 } as const;
+/** The readable rows of a stored `recent`, and whether anything in it was not: a bad row is dropped, a field that is no list is none. */
+export function recentRows(value: unknown): { rows: Recent[]; bad: boolean } {
+  if (value === undefined) return { rows: [], bad: false };
+  const rows = Array.isArray(value) ? value.filter((r): r is Recent => object(r) && text(r.key) && /^[a-f0-9]{16}$/.test(r.key) && number(r.at)) : [];
+  return { rows, bad: !Array.isArray(value) || rows.length !== value.length };
 }
 export interface LastRunFile {
   v: 1;

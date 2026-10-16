@@ -20,7 +20,7 @@ import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal, type ViewDefinition, type ViewHome } from '../types';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
-import { PROP, RUNNER_WRITES, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { PROP, RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows, type HashesFile, type QuestionsFile, type Recent, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
 import { md5Hex } from '../contracts/hashes';
@@ -525,6 +525,21 @@ export interface MapRequest {
    */
   answer?: string;
   notIncluded?: readonly string[];
+  /**
+   * B12e: the members left out of `members` because a recent result already did this to them and it still holds (R47):
+   * no write, not counted toward 200, only counted in the result note.
+   */
+  skipped?: readonly string[];
+}
+
+/**
+ * A member's recent-result key (R47): the first 16 hex of the canonical hash of its id and what is done to it, in the
+ * normalized form the plan carries, so one rule for all and a result per member are one key. Ops keep their order; a
+ * move or rename takes part through its destination (the member id is its source).
+ */
+export async function recentKey(memberId: string, ops: readonly MapOp[], move?: { parentId?: string; name?: string }): Promise<string> {
+  const plain = ops.map(({ targetId, key, mode, value }) => ({ targetId, key, mode, value }));
+  return (await canonical(move ? [memberId, plain, move] : [memberId, plain])).hash.slice(0, 16);
 }
 
 /**
@@ -783,7 +798,7 @@ function flowItems(line: string): Array<{ start: number; end: number; value: str
  * stored list is written again as one inline list in its place. [] when every op already holds; the reason (as the
  * result note words it) when the target is refused: two values for one key, more than 10 items or 3 tags, or a value that cannot be read or written back.
  */
-function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[], vocabulary: readonly string[]): Array<{ key: string; line: string }> | string {
+export function mapLines(text: string, row: TypeRow | undefined, ops: readonly MapOp[], vocabulary: readonly string[]): Array<{ key: string; line: string }> | string {
   const out: Array<{ key: string; line: string }> = [];
   const decoded = (key: string, line: string) => row ? propertyValue(row, key, frontValues(`---\n${line}\n---\n`)?.[key]) : 'invalid';
   /** A key's stored value from its first line, as the author replaces it; a block list by the items read, never as one text. */
@@ -889,6 +904,8 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const requestsValue = requests ? parsed(await ownText(drive, requests)) : null;
   const requestsBroken = !!requests && !isRunnerFile(SYSTEM.requests, requestsValue);
   const requestsDone = isRunnerFile(SYSTEM.requests, requestsValue) ? requestsValue.done : [];
+  /** As read, whatever it holds: a write that settles no map copies it back untouched (R45). */
+  const requestsRecent: unknown = isRunnerFile(SYSTEM.requests, requestsValue) ? (requestsValue as { recent?: unknown }).recent : undefined;
   const typeFile = ix.file(SYSTEM.typeTable);
   const typeText = typeFile ? await ownText(drive, typeFile) : null;
   const types = readTypeTable(typeText);
@@ -938,7 +955,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const unrecorded = lines.some((l) => l.rec.kind === 'request' && !appends.completed.some((h) => h.requestId === l.rec.id)
     && !appends.lines.some((h) => h.consent.requestId === l.rec.id));
   const since = unrecorded ? retainedSince(listing, ix) : null;
-  return { context, rootId, all, listing, ix, lines, inbox, journalAll: read, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
+  return { context, rootId, all, listing, ix, lines, inbox, journalAll: read, sys, requests, hashesFile, requestsBroken, requestsDone, requestsRecent, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, tagList, proposals, proposalIds, memoryFile, memoryText, memoryLedger };
 }
 type Captured = Awaited<ReturnType<typeof capture>>;
 
@@ -948,7 +965,7 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
+  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, requestsRecent, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
   const { editCap, held } = attempt;
   const grownTags = growTags(opts.decisions.newTags, snapshot.tagList);
   if (!grownTags) return refused('invalid new tags');
@@ -2541,6 +2558,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // the members it links to unavailable (R28).
   const mapMoves: Array<{ requestId: string; file: DriveFile; parentId: string; name: string }> = [];
   const outcomes: Array<{ m: MapRequest; reasons: ReadonlyMap<string, string>; updated: string[] }> = [];
+  const recentNew: Recent[] = [];
+  let mapSettled = false;
   const mapFixes = new Map<string, { read: NonNullable<Awaited<ReturnType<typeof readNote>>>; renames: Array<Rename & { fileId: string }>; requestIds: string[] }>();
   const linkReads = new Map<string, Awaited<ReturnType<typeof readNote>>>();
   /** Where a member goes, or null when it is not a note or is already there under that name (R60). */
@@ -2674,9 +2693,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       places.set(id, read.file);
       edited.add(id);
     }
-    if (m.members.length) outcomes.push({ m, reasons: new Map([...reasons, ...m.members.filter((id) => !m.results.some((r) => r.memberId === id)).map((id) => [id, MAP_NO_CHANGE] as const),
-      ...(m.notIncluded ?? []).map((id) => [id, MAP_LEFT] as const)]),
-      updated: [...planned.keys()].filter((id) => !m.members.includes(id)) });
+    if (m.members.length || m.skipped?.length) {
+      const why = new Map([...reasons, ...m.members.filter((id) => !m.results.some((r) => r.memberId === id)).map((id) => [id, MAP_NO_CHANGE] as const),
+        ...(m.notIncluded ?? []).map((id) => [id, MAP_LEFT] as const)]);
+      outcomes.push({ m, reasons: why, updated: [...planned.keys()].filter((id) => !m.members.includes(id)) });
+      // Each done member leaves one row, at the admission time; the requests write below keeps them (R45, AC25).
+      for (const r of m.results) if (m.members.includes(r.memberId) && !why.has(r.memberId)) recentNew.push({ key: await recentKey(r.memberId, r.ops, r.move), at: opts.requestedAt });
+      mapSettled = true;
+    }
   }
   // A settled map's result note (B12c R32, R69-R77, R85): in its set's folder, named after every name the run gives (the
   // members' moves first, then the requests oldest first), linked by title or, when another note has it, by place.
@@ -2712,7 +2736,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const unavailable = m.members.filter((id) => reasons.has(id) && !left.includes(id));
     const words = lines.find((l) => l.rec.kind === 'request' && l.rec.id === m.requestId)?.rec;
     const what = `What Bower did for "${m.title}".`;
-    const body = ['## Notes', `Asked: "${(words?.text ?? words?.what ?? '').replace(/\s+/g, ' ').trim()}"`, '', `Done: ${m.members.length - unavailable.length - left.length}`, `Unavailable: ${unavailable.length}`,
+    const body = ['## Notes', `Asked: "${(words?.text ?? words?.what ?? '').replace(/\s+/g, ' ').trim()}"`, '', `Done: ${m.members.length - unavailable.length - left.length}`, `Unavailable: ${unavailable.length}`, `Skipped from recent results: ${m.skipped?.length ?? 0}`,
       ...(left.length ? [`Not included: ${left.length}`] : []),
       ...(updated.length ? [`Updated: ${updated.map((id) => linkTo(pathOf(id))).join(', ')}`] : []), '',
       ...m.members.map((id) => `- ${pathOf(id) ? linkTo(pathOf(id)) : 'a note that is gone'}: ${left.includes(id) ? MAP_LEFT : reasons.has(id) ? `unavailable, ${reasons.get(id)}` : 'done'}`)].join('\n');
@@ -3099,8 +3123,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
-    memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer,
+    memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled,
     yesMaps: maps.filter((m) => m.answer !== undefined && mapRequests.has(m.requestId)),
   };
 }
@@ -3114,8 +3138,8 @@ export async function build(decided: Decided): Promise<Ended> {
   const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents, path: decided.ix.pathOf(fileId), name: decided.ix.byId(fileId)?.name });
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
-    memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer } = decided;
+    memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3461,7 +3485,14 @@ export async function build(decided: Decided): Promise<Ended> {
     const answered = [...new Set([...asked.flatMap((l) => [...need(l.rec.id).edits, ...need(l.rec.id).derived]), ...notes])];
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
-    const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
+    // Recent results (B12e R45, R46): a write that settles a map drops the expired rows and keeps the newest 2,000; any other copies what was read.
+    let recent: unknown = requestsRecent;
+    if (mapSettled) {
+      const read = recentRows(requestsRecent);
+      if (read.bad) console.error(new BowerError('unknown', RECENT_DROPPED), `${SYSTEM.requests} has recent results that cannot be read: dropped what is not a row`);
+      recent = [...read.rows.filter((r) => opts.requestedAt < r.at + RECENT.ttl), ...recentNew].sort((a, b) => a.at - b.at).slice(-RECENT.max);
+    }
+    const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20), ...(recent === undefined ? {} : { recent: recent as Recent[] }) } satisfies RequestsFile, null, 2)}\n`;
     if (requestsRead) {
       if (requestsBroken) console.error(new BowerError('unknown', REQUESTS_REPLACED), `${SYSTEM.requests} is not a valid requests file`);
       requestsOp = await add({ kind: 'write-runner-json', before: seen(requestsRead.file), beforeContent: requestsRead.content, path: SYSTEM.requests, text, content: await utf8(text) }, answered);
@@ -3864,7 +3895,8 @@ const NOT_ASKED = 'Bower could not ask its question this time.';
 function questionsJson(questions: Question[], rounds: QuestionRound[] = []): string {
   return `${JSON.stringify({ v: 1, questions, ...(rounds.length ? { rounds } : {}) } satisfies QuestionsFile, null, 2)}\n`;
 }
-const REQUESTS_REPLACED = 'Bower replaced its list of done requests, which it could not read.';
+const RECENT_DROPPED = 'Bower forgot some of its recent results, which it could not read.';
+const REQUESTS_REPLACED ='Bower replaced its list of done requests, which it could not read.';
 const HASHES_REPLACED = 'Bower replaced its list of your files, which it could not read.';
 /** A run refused before admission because one of Bower's own files could not be read (TL-P2-17). */
 export const OWN_FILES = "Bower couldn't read its own files. Try again.";

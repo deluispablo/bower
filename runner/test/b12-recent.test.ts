@@ -9,9 +9,9 @@ import { fakeRead } from '../../src/data/spine/read';
 import { canonical } from '../../src/data/spine/records';
 import { SYSTEM } from '../../src/data/vault/layout';
 import type { ClaudeSpawn } from '../src/claude';
-import type { LoadedCase } from '../src/corpus';
+import { loadCase, type LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { caseReplies, redispatchCase, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
@@ -63,7 +63,8 @@ type Ctx = { request: string; hunt: string; id: (path: string) => Promise<string
 const empty = { kind: 'tidy-intent', v: 1, things: [] };
 type Question = { id: string; askedAt: number } & Record<string, unknown>;
 
-async function press(f: Folder, intent: (ctx: Ctx) => unknown, o: { words?: string; at?: number; answer?: { question: Question; yes: boolean } } = {}) {
+type Around = (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
+async function press(f: Folder, intent: (ctx: Ctx) => unknown, o: { words?: string; at?: number; answer?: { question: Question; yes: boolean }; around?: Around } = {}) {
   f.press++;
   const at = (o.at ?? DAY) + f.press;
   vi.setSystemTime(at);
@@ -81,7 +82,7 @@ async function press(f: Folder, intent: (ctx: Ctx) => unknown, o: { words?: stri
     calls.push(phase);
     return phase === 'selection' ? reply({ items: [], asks: [] }) : reply(await intent({ request: request?.id ?? '', hunt, id: f.id }));
   }, () => ({ drive: f.drive, root: f.root, admission: admission.manifest }), true);
-  const run = await runOnDrive(f.c, f.drive, f.root, { claude: spawn, admission: admission.manifest, pacing: { baseMs: 0, sleep: async () => {} },
+  const run = await runOnDrive(f.c, f.drive, f.root, { claude: spawn, admission: admission.manifest, ...(o.around ? { around: o.around } : {}), pacing: { baseMs: 0, sleep: async () => {} },
     answerStart: { scope: 'instructions', requestId: `b12-run-${f.press}` }, env: { CLAUDE_CODE_OAUTH_TOKEN: TOKEN } }, f.press);
   return { ...run, calls, at, record: request ? `press-${f.press}` : undefined };
 }
@@ -89,17 +90,32 @@ const set = (ctx: Ctx) => ({ type: 'offer', folderId: ctx.hunt, recursive: false
 const opsMap = (ctx: Ctx, ops: unknown[], title = 'Review offers', extra: Record<string, unknown> = {}) => ({ ...empty, maps: [{ requestId: ctx.request, title, set: set(ctx), ops, ...extra }] });
 type Recent = { key: string; at: number };
 const recent = (run: CaseRun): Recent[] => (JSON.parse(run.after[SYSTEM.requests] ?? '{}') as { recent?: Recent[] }).recent ?? [];
-const keyOf = async (memberId: string, ops: unknown[]) => (await canonical([memberId, ops])).hash.slice(0, 16);
+/** The key in the form the plan records: target-qualified ops (a move through its destination), whichever form the reply used. */
+const keyOf = async (memberId: string, ops: unknown[], move?: unknown) => (await canonical(move ? [memberId, ops, move] : [memberId, ops])).hash.slice(0, 16);
+const reviewedOn = (id: string) => ({ targetId: id, key: 'review_state', mode: 'set', value: 'reviewed' });
 type Op = { effect: Record<string, unknown> & { kind: string } };
-const manifestOf = (run: CaseRun): { operations?: Op[] } => JSON.parse(Object.entries(run.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as { operations?: Op[] };
+/** The run's own manifest by its run id: an earlier press's manifest stays in its run folder (as b12-set-properties.test.ts does). */
+const manifestOf = (run: CaseRun): { operations?: Op[] } => JSON.parse(Object.entries(run.after)
+  .find(([path]) => path.includes(`/${run.dispatch?.runId ?? 'no-run'}/`) && /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as { operations?: Op[] };
 const memberEdits = (run: CaseRun) => (manifestOf(run).operations ?? []).filter((o) => o.effect.kind === 'edit-text' && String(o.effect.path).startsWith(`${HUNT}/`));
 const questions = (run: CaseRun) => (JSON.parse(run.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
+
+const MOC = '---\nbower_format: ownership/2\nby: bower\ntype: moc\nsummary: Job hunt reference notes.\n---\n'
+  + ['current', 'personal', 'timeline', 'bower-note', 'moc-overview', 'moc-figures', 'moc-members']
+    .map((r) => `<!-- bower:ownership/2 begin ${r} -->\n${r === 'moc-figures' ? '## Figures\n' : r === 'moc-members' ? '## Notes\n' : ''}<!-- bower:ownership/2 end ${r} -->\n`).join('');
+/** A request that settles with no map: it installs a figure in the Bower map (B11), so requests.json is written. `recent` is as stored. */
+async function withoutMap(stored: unknown) {
+  const f = await folder({ [SYSTEM.requests]: JSON.stringify({ v: 1, done: [], recent: stored }), [`${HUNT}/Job hunt.md`]: MOC });
+  return press(f, async (ctx) => ({ ...empty, views: [{ requestId: ctx.request, home: { kind: 'moc', fileId: await ctx.id(`${HUNT}/Job hunt.md`) }, mode: 'install',
+    definition: { v: 1, id: 'offers', kind: 'aggregate', title: 'Offers', set: { type: 'offer', folderId: ctx.hunt, recursive: true }, groupBy: [],
+      measures: [{ id: 'n', label: 'Offers', op: 'count' }] } }] }), { words: 'Show how many offers there are in the Job hunt map.' });
+}
 
 describe('B12e successes kept 30 days, skipped while they hold', () => {
   it('AC25 b12-recent-recorded: each done member of a settled request leaves one compact row: its key and the admission time', async () => {
     const f = await folder();
     const run = await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
-    expect(recent(run).sort((a, b) => a.key < b.key ? -1 : 1)).toEqual((await Promise.all([FERRO, MALLO].map(async (path) => ({ key: await keyOf(await f.id(path), [REVIEWED]), at: run.at }))))
+    expect(recent(run).sort((a, b) => a.key < b.key ? -1 : 1)).toEqual((await Promise.all([FERRO, MALLO].map(async (path) => ({ key: await keyOf(await f.id(path), [reviewedOn(await f.id(path))]), at: run.at }))))
       .sort((a, b) => a.key < b.key ? -1 : 1));
     expect((JSON.parse(run.after[SYSTEM.requests] ?? '{}') as { done: Array<{ id: string }> }).done.map((r) => r.id), 'the done rows are as before').toEqual(['press-1']);
   });
@@ -142,7 +158,7 @@ describe('B12e successes kept 30 days, skipped while they hold', () => {
     const f = await folder();
     const results = async (ctx: Ctx) => ({ ...empty, maps: [{ requestId: ctx.request, title: 'Review the rest', set: set(ctx),
       results: await Promise.all([FERRO, MALLO].map(async (path) => ({ memberId: await ctx.id(path), ops: [{ ...REVIEWED, targetId: await ctx.id(path) }] }))) }] });
-    await press(f, results);
+    await press(f, async (ctx) => { const v = await results(ctx); v.maps[0] = { ...v.maps[0], title: 'Review offers' } as typeof v.maps[0]; return v; });
     const again = await press(f, results, { words: 'Review them again.' });
     expect(again.after[REST] ?? '').toContain('Skipped from recent results: 2\n');
   });
@@ -166,7 +182,7 @@ describe('B12e successes kept 30 days, skipped while they hold', () => {
   });
 
   it('AC25 b12-recent-bounded: expired rows go when the file is written, and at most 2,000 rows are kept, the newest', async () => {
-    const old = Array.from({ length: 1999 }, (_, i) => ({ key: i.toString(16).padStart(16, '0'), at: DAY - 1000 + i }));
+    const old = Array.from({ length: 1999 }, (_, i) => ({ key: i.toString(16).padStart(16, '0'), at: DAY - 5000 + i }));
     const expired = { key: 'ffffffffffffffff', at: DAY - MONTH - 1 };
     const f = await folder({ [SYSTEM.requests]: JSON.stringify({ v: 1, done: [], recent: [expired, ...old] }) });
     const run = await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
@@ -179,17 +195,17 @@ describe('B12e successes kept 30 days, skipped while they hold', () => {
 
   it('AC25 b12-recent-untouched: a run that settles no map keeps every recent row as read, even an expired one', async () => {
     const rows = [{ key: '00000000000000aa', at: DAY - 1000 }, { key: '00000000000000bb', at: DAY - MONTH - 1 }];
-    const moc = '---\nbower_format: ownership/2\nby: bower\ntype: moc\nsummary: Job hunt reference notes.\n---\n'
-      + ['current', 'personal', 'timeline', 'bower-note', 'moc-overview', 'moc-figures', 'moc-members']
-        .map((r) => `<!-- bower:ownership/2 begin ${r} -->\n${r === 'moc-figures' ? '## Figures\n' : r === 'moc-members' ? '## Notes\n' : ''}<!-- bower:ownership/2 end ${r} -->\n`).join('');
-    const f = await folder({ [SYSTEM.requests]: JSON.stringify({ v: 1, done: [], recent: rows }), [`${HUNT}/Job hunt.md`]: moc });
-    // A request that settles with no map: it installs a figure in the Bower map (B11), so requests.json is written.
-    const plain = await press(f, async (ctx) => ({ ...empty, views: [{ requestId: ctx.request, home: { kind: 'moc', fileId: await ctx.id(`${HUNT}/Job hunt.md`) }, mode: 'install',
-      definition: { v: 1, id: 'offers', kind: 'aggregate', title: 'Offers', set: { type: 'offer', folderId: ctx.hunt, recursive: true }, groupBy: [],
-        measures: [{ id: 'n', label: 'Offers', op: 'count' }] } }] }), { words: 'Show how many offers there are in the Job hunt map.' });
+    const plain = await withoutMap(rows);
     expect((JSON.parse(plain.after[SYSTEM.requests] ?? '{}') as { done: Array<{ id: string }> }).done.map((r) => r.id), 'the request row is written').toEqual(['press-1']);
     expect(recent(plain), 'the rows a map wrote are kept by every other write').toEqual(rows);
   });
+
+  it.each([['a bad row among good ones', [{ key: '00000000000000aa', at: DAY - 1000 }, { key: 'not hex', at: 'soon' }, 7]], ['a field that is no list', { key: '00000000000000aa' }]])(
+    'AC25 b12-recent-untouched-malformed: %s is copied back exactly as read by a run that settles no map', async (_name, raw) => {
+      const plain = await withoutMap(raw);
+      expect((JSON.parse(plain.after[SYSTEM.requests] ?? '{}') as { recent?: unknown }).recent).toEqual(raw);
+      expect((JSON.parse(plain.after[SYSTEM.requests] ?? '{}') as { done: Array<{ id: string }> }).done.map((r) => r.id)).toEqual(['press-1']);
+    });
 });
 
 describe('B12e now the rest', () => {
@@ -223,4 +239,176 @@ describe('B12e now the rest', () => {
     expect(String(last?.requestId)).toMatch(/^\$request:press-/);
     expect(existsSync(join(ROOT, 'c17-b12-large-first-part', 'oracle.json'))).toBe(false);
   });
+});
+
+/** Seeds requests.json as stored, once the folder's ids are known. */
+async function storeRequests(f: Folder, file: Record<string, unknown>): Promise<void> {
+  const id = await f.id(SYSTEM.requests);
+  await f.drive.writeText(id, JSON.stringify(file), (await f.drive.get(id)).modifiedTime);
+}
+const resultsOf = (target: (path: string, ctx: Ctx) => Promise<string>, paths = [FERRO, MALLO], title = 'Review the rest') => async (ctx: Ctx) => ({ ...empty, maps: [{ requestId: ctx.request,
+  title, set: set(ctx), results: await Promise.all(paths.map(async (path) => ({ memberId: await ctx.id(path), ops: [{ ...REVIEWED, targetId: await target(path, ctx) }] }))) }] });
+const own = (path: string, ctx: Ctx) => ctx.id(path);
+const flat = (run: CaseRun) => run.after[REST] ?? '';
+/** The first press of a pair settles under its own title, so the second one's result note is the one read. */
+const firstTitled = (intent: (ctx: Ctx) => unknown) => async (ctx: Ctx) => {
+  const value = await intent(ctx) as { maps: Array<{ title: string }> };
+  value.maps.forEach((m) => { m.title = 'Review offers'; });
+  return value;
+};
+
+describe('B12e what a key is: the plan\'s normalized ops, a move or rename through its destination', () => {
+  it.each([['one rule for all', 'a result per member'], ['a result per member', 'one rule for all']])('AC26 b12-recent-key-cross-form: %s, then %s, is one key', async (first, second) => {
+    const f = await folder();
+    const form = (name: string) => (name === 'one rule for all' ? (ctx: Ctx) => opsMap(ctx, [REVIEWED], 'Review the rest') : resultsOf(own));
+    await press(f, firstTitled(form(first)));
+    const again = await press(f, form(second));
+    expect(flat(again)).toContain('Skipped from recent results: 2\n');
+    expect(memberEdits(again)).toEqual([]);
+  });
+
+  describe('a move', () => {
+    const ARCHIVE = `${HUNT}/Archive`;
+    const LATER = `${HUNT}/Later`;
+    const homes = { [`${ARCHIVE}/Keep.md`]: '# Keep\n', [`${LATER}/Keep.md`]: '# Keep\n' };
+    const moveTo = (to: string) => async (ctx: Ctx) => opsMap(ctx, [{ kind: 'move', parentId: await ctx.id(to) }], 'Review the rest', { set: { ...set(ctx), recursive: true } });
+    it.each([[ARCHIVE, 2, `${ARCHIVE}/Ferrowick offer.md`], [LATER, 0, `${LATER}/Ferrowick offer.md`]])('AC26 b12-recent-key-destination: the same move to %s skips %i members', async (to, skipped, landed) => {
+      const f = await folder(homes);
+      await press(f, firstTitled(moveTo(ARCHIVE)), { words: 'Move the active offers to Archive.' });
+      const again = await press(f, moveTo(to), { words: 'Move the active offers.' });
+      expect(flat(again)).toContain(`Skipped from recent results: ${skipped}\n`);
+      expect(again.after[landed], 'it is where the last move asked').toBeDefined();
+      if (to === LATER) expect(again.after[`${ARCHIVE}/Ferrowick offer.md`], 'and no longer in the first destination').toBeUndefined();
+    });
+  });
+
+  it.each([['Ferro offer.md', 1, 'Done: 0\n'], ['Other offer.md', 0, 'Done: 1\n']])('AC26 b12-recent-key-rename: the same rename to %s skips %i members', async (name, skipped, done) => {
+    const f = await folder();
+    const ferro = await f.id(FERRO);
+    const rename = (to: string) => async (ctx: Ctx) => ({ ...empty, maps: [{ requestId: ctx.request, title: 'Review the rest', set: set(ctx),
+      results: [{ memberId: ferro, ops: [{ kind: 'rename', targetId: ferro, name: to }] }] }] });
+    await press(f, firstTitled(rename('Ferro offer.md')), { words: 'Rename Ferrowick.' });
+    const again = await press(f, rename(name), { words: 'Rename Ferrowick again.' });
+    expect(flat(again)).toContain(`Skipped from recent results: ${skipped}\n`);
+    expect(flat(again)).toContain(done);
+    expect(again.after[`${HUNT}/${name}`], 'it is named as the last rename asked').toBeDefined();
+  });
+});
+
+describe('B12e a row is kept as it was, and a skip is counted in full', () => {
+  it('AC26 b12-recent-skip-no-refresh: a skip keeps the row\'s own time, so asking again inside a month never keeps a result for ever', async () => {
+    const f = await folder();
+    const first = await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
+    const skipped = await press(f, (ctx) => opsMap(ctx, [REVIEWED], 'Review the rest'), { at: DAY + 10 * 86_400_000 });
+    expect(flat(skipped)).toContain('Skipped from recent results: 2\n');
+    expect(recent(skipped).map((r) => r.at), 'the rows are the first press\'s, not refreshed').toEqual([first.at, first.at]);
+    const expired = await press(f, (ctx) => opsMap(ctx, [REVIEWED], 'Review the rest again'), { at: first.at + MONTH + 5 * 86_400_000 });
+    expect(expired.after[`${HUNT}/Request - Review the rest again.md`], 'a month after the first success, whatever was asked since').toContain('Skipped from recent results: 0\n');
+    expect(expired.after[`${HUNT}/Request - Review the rest again.md`]).toContain('Done: 2\n');
+    expect(recent(expired).map((r) => r.at), 'the expired rows went, two new ones came').toEqual([expired.at, expired.at]);
+  });
+
+  it('AC26 b12-recent-reapplied: a later success of the same key is a new row beside the old one, and a member that holds is still skipped', async () => {
+    const f = await folder();
+    const first = await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
+    const ferro = await f.id(FERRO);
+    await f.drive.writeText(ferro, first.after[FERRO]?.replace('review_state: reviewed', 'review_state: new') ?? '', (await f.drive.get(ferro)).modifiedTime);
+    const again = await press(f, (ctx) => opsMap(ctx, [REVIEWED], 'Review the rest'), { at: DAY + 1000 });
+    expect(flat(again)).toContain('Skipped from recent results: 1\n');
+    const key = await keyOf(ferro, [reviewedOn(ferro)]);
+    expect(recent(again).filter((r) => r.key === key).map((r) => r.at).sort(), 'one row per success').toEqual([first.at, again.at]);
+    expect(recent(again), 'the skipped member got none').toHaveLength(3);
+  });
+
+  it('AC26 b12-recent-all-skipped: a request whose members are all skipped still settles with a result note that accounts for them, with no member lines', async () => {
+    const f = await folder();
+    await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
+    const again = await press(f, (ctx) => opsMap(ctx, [REVIEWED], 'Review the rest'));
+    expect(flat(again)).toMatch(/Done: 0\nUnavailable: 0\nSkipped from recent results: 2\n\n?/);
+    expect(flat(again), 'a skipped member has no line of its own').not.toMatch(/^- /m);
+    expect(Object.keys(again.after).some((path) => path.startsWith(`${SYSTEM.changes}/`) && !path.startsWith(`${SYSTEM.archive}/`)), 'the request is settled').toBe(false);
+  });
+
+  it('AC26 b12-recent-shared-target: a result whose own note is unchanged still holds only while the note it changes does', async () => {
+    const f = await folder();
+    const mallo = await f.id(MALLO);
+    const onMallo = resultsOf(async () => mallo, [FERRO]);
+    const first = await press(f, firstTitled(onMallo));
+    expect(first.after[FERRO], 'the member itself is not what changes').toContain('review_state: new\n');
+    const skipped = await press(f, onMallo, { at: DAY + 1000 });
+    expect(flat(skipped), 'the shared note still has it').toContain('Skipped from recent results: 1\n');
+    await f.drive.writeText(mallo, skipped.after[MALLO]?.replace('review_state: reviewed', 'review_state: new') ?? '', (await f.drive.get(mallo)).modifiedTime);
+    const again = await press(f, resultsOf(async () => mallo, [FERRO], 'Review once more'), { at: DAY + 2000 });
+    expect(again.after[`${HUNT}/Request - Review once more.md`],'the shared note was undone: the result is written again').toContain('Skipped from recent results: 0\n');
+    expect(again.after[MALLO]).toContain('review_state: reviewed\n');
+    expect(again.after[FERRO], 'its own note is still as it was').toContain('review_state: new\n');
+  });
+});
+
+describe('B12e unreadable rows', () => {
+  it('AC25 b12-recent-mixed: a bad row is dropped and the good rows still skip; done rows are kept', async () => {
+    const f = await folder({ [FERRO]: offer('Ferrowick', '2026-10-06', 'reviewed') });
+    const ferro = await f.id(FERRO);
+    await storeRequests(f, { v: 1, done: [{ id: 'older', text: 'Earlier', at: DAY - 5000, done: 'done' }],
+      recent: [{ key: await keyOf(ferro, [reviewedOn(ferro)]), at: DAY - 1000 }, { key: 'zz', at: 1 }, 7] });
+    const run = await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
+    for (const line of ['Done: 1', 'Skipped from recent results: 1']) expect(run.after[NOTE] ?? '', line).toContain(`${line}\n`);
+    expect(run.after[MALLO]).toContain('review_state: reviewed\n');
+    expect(recent(run).map((r) => r.at).sort(), 'the good row and the new one').toEqual([DAY - 1000, run.at]);
+    expect((JSON.parse(run.after[SYSTEM.requests] ?? '{}') as { done: Array<{ id: string }> }).done.map((r) => r.id).sort()).toEqual(['older', 'press-1']);
+    expect(vi.mocked(console.error).mock.calls.flat().map(String).some((l) => /recent/i.test(l)), 'logged').toBe(true);
+  });
+
+  it('AC25 b12-recent-no-list: a recent that is no list is read as none, logged, and the run still works', async () => {
+    const f = await folder();
+    await storeRequests(f, { v: 1, done: [{ id: 'older', text: 'Earlier', at: DAY - 5000, done: 'done' }], recent: { key: 'x' } });
+    const run = await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
+    expect(run.after[FERRO]).toContain('review_state: reviewed\n');
+    expect(recent(run)).toHaveLength(2);
+    expect((JSON.parse(run.after[SYSTEM.requests] ?? '{}') as { done: Array<{ id: string }> }).done.map((r) => r.id).sort()).toEqual(['older', 'press-1']);
+    expect(vi.mocked(console.error).mock.calls.flat().map(String).some((l) => /recent/i.test(l)), 'logged').toBe(true);
+  });
+});
+
+describe('B12e rows survive an interrupted write', () => {
+  const url = (input: RequestInfo | URL): URL => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+  it('AC25 b12-recent-lost-ack: a lost answer after a member write completes once on redispatch: one row per success at the admission time, then a skip', async () => {
+    const f = await folder();
+    const ferro = await f.id(FERRO);
+    let crashed = false;
+    const first = await press(f, (ctx) => opsMap(ctx, [REVIEWED]), { around: (next) => async (input, init) => {
+      if (crashed && url(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
+      if (init?.method === 'PATCH' && url(input).pathname === `/upload/drive/v3/files/${ferro}`) {
+        const response = await next(input, init);
+        crashed = response.ok;
+        throw new TypeError('Made-up lost answer after the write.');
+      }
+      return next(input, init);
+    } });
+    expect(crashed, 'main reached the member write').toBe(true);
+    const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A redispatch must not call a model.'); });
+    vi.setSystemTime(DAY + 5000);
+    const resumed = await redispatchCase(f.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });
+    expect(model).not.toHaveBeenCalled();
+    expect(resumed.after[FERRO]).toContain('review_state: reviewed\n');
+    expect(recent(resumed).map((r) => r.at), 'one row per success, at the first admission').toEqual([first.at, first.at]);
+    expect(new Set(recent(resumed).map((r) => r.key)).size).toBe(2);
+    const later = await press(f, (ctx) => opsMap(ctx, [REVIEWED], 'Review the rest'), { at: DAY + 10_000 });
+    expect(flat(later)).toContain('Skipped from recent results: 2\n');
+  });
+});
+
+describe('B12e the large case runs to its fourth press', () => {
+  it('AC27 b12-recent-fixture-executed: c17-b12-large-first-part\'s follow-up press runs, writes the notes left, and leaves the first result note as it was', async () => {
+    const c = await loadCase(join(ROOT, 'c17-b12-large-first-part'));
+    expect(c.presses?.length, 'the follow-up is a fourth run').toBe(3);
+    const run = await runWithClaude(c, caseReplies(c.id));
+    expect(run.score).toEqual({ pass: true, unmet: [] });
+    expect(run.runs?.length, 'three runs before the last').toBe(3);
+    const first = run.after['Resources/Reading/Request - Review Reading.md'] ?? '';
+    for (const line of ['Done: 200', 'Skipped from recent results: 0', 'Not included: 1']) expect(first, line).toContain(`${line}\n`);
+    const rest = run.after['Resources/Reading/Request - Review the rest.md'] ?? '';
+    for (const line of ['Done: 2', 'Skipped from recent results: 200']) expect(rest, line).toContain(`${line}\n`);
+    for (const path of ['Reading 201', 'Late reading']) expect(run.after[`Resources/Reading/${path}.md`], path).toContain('review_state: reviewed\n');
+  }, 600_000);
 });
