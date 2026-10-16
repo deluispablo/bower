@@ -274,6 +274,55 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     expect(base.noteReads().filter((path) => path === `${hub}.md`), 'the refused version stays decided').toEqual([]);
     expect(next.after[HEALTH]).toBe(refused.after[HEALTH]);
   });
+  // A Project or Area hub also feeds hot's Current focus, so hot's source selection must not read a refused one again.
+  const HOT = '.bower/hot.md';
+  const hubCase = async (area: string) => {
+    const place = `${area}/Orchard/Orchard`;
+    const base = await folder((files) => {
+      files[`${place}.md`] = '---\nsummary: Alex keeps orchard plans here.\nby: bower\ntype: moc\n---\n\n# Orchard\n\n- [[Plot diary]]\n\n## Timeline\n- 2026-10-05 · Alex pruned the pear trees.\n';
+    });
+    const warm = await base.press(1);
+    expect(warm.code).toBe(0);
+    expect(warm.after[HOT] ?? '', 'warm: the hub is in hot\'s current focus').toContain(`${place}`);
+    const id = base.idOf(warm, `${place}.md`);
+    const edit = async (text: string): Promise<void> => { await base.drive.writeText(id, text, (await base.drive.get(id)).modifiedTime); };
+    await edit(`${warm.after[`${place}.md`]}\nAlex adds an orchard thought.\n`);
+    base.refused.add(`${place}.md`);
+    return { base, place, edit };
+  };
+  it.each(['Projects', 'Areas'])('AC1 b8c-unreadable-hot-completes: an edited %s hub Drive refuses for good never stops the run', async (area) => {
+    const { base, place } = await hubCase(area);
+    base.traffic.length = 0;
+    const run = await base.press(2);
+    expect(run.code, 'the refused hub does not abort maintenance').toBe(0);
+    expect(run.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(lineAbout(run, place)).toEqual([couldNotRead(place)]);
+  });
+  it.each(['Projects', 'Areas'])('AC1 b8c-unreadable-hot-retry: a retry through hot declaration makes zero reads of the refused %s hub and keeps its line', async (area) => {
+    const { base, place } = await hubCase(area);
+    const first = await base.press(2);
+    expect(first.code).toBe(0);
+    // Another note changes, so the retry is not idle and hot declares its sources again.
+    const other = base.idOf(first, `${GARDEN}/Plot diary.md`);
+    await base.drive.writeText(other, `${first.after[`${GARDEN}/Plot diary.md`]}\nAlex waters the beans.\n`, (await base.drive.get(other)).modifiedTime);
+    base.traffic.length = 0;
+    const retry = await base.press(3);
+    expect(retry.code).toBe(0);
+    expect(base.noteReads().filter((path) => path === `${place}.md`), 'zero reads of the refused version').toEqual([]);
+    expect(lineAbout(retry, place)).toEqual([couldNotRead(place)]);
+    expect(retry.after[HOT] ?? '', 'hot is rebuilt without the refused hub').not.toContain(place);
+  });
+  it('AC3 b8c-unreadable-hot-recovery: once the refused hub changes to a readable version it returns to current focus', async () => {
+    const { base, place, edit } = await hubCase('Projects');
+    const refused = await base.press(2);
+    expect(refused.code).toBe(0);
+    base.refused.clear();
+    await edit(`${refused.after[`${place}.md`]}\nAlex plants a pear tree.\n`);
+    const back = await base.press(3);
+    expect(back.code).toBe(0);
+    expect(lineAbout(back, place).join('\n')).not.toMatch(/could not read/i);
+    expect(back.after[HOT] ?? '', 'back in hot\'s current focus').toContain(place);
+  });
   it('AC4 b8c-unreadable-contract: one rule for stored lint evidence accepts \'unreadable\' and nothing else new', () => {
     expect(lintEvidenceOk('unreadable'), 'a manifest and retrieval accept the refusal record').toBe(true);
     for (const other of ['refused', 'Unreadable', '', null]) expect(lintEvidenceOk(other), String(other)).toBe(false);
