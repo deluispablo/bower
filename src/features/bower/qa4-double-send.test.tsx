@@ -15,7 +15,7 @@ afterEach(cleanup);
 
 /** Bower's screen over a vault whose saves wait until `release` is called. */
 function screenWithHeldSaves() {
-  const calls = { addRequest: 0, addRule: 0 };
+  const calls = { addRequest: 0, addRule: 0, ids: [] as (string | undefined)[] };
   let release: () => void = () => undefined;
   let fail = false;
   const gate = (): Promise<void> => new Promise<void>((done) => (release = done));
@@ -25,15 +25,23 @@ function screenWithHeldSaves() {
       if (k === 'driveLinks') return false;
       if (k === 'subscribe') return () => () => undefined;
       if (k === 'rules' || k === 'requests' || k === 'questions' || k === 'failedChanges') return async () => [];
-      if (k === 'addRequest') return async (text: string) => {
+      if (k === 'addRequest') return async (text: string, id?: string) => {
         calls.addRequest++;
+        calls.ids.push(id);
         await gate();
-        if (fail) throw new BowerError('offline', 'That did not send. Try again.');
+        if (fail) {
+          fail = false;
+          throw new BowerError('offline', 'That did not send. Try again.');
+        }
         return { id: `R${calls.addRequest}`, text, at: 0 };
       };
       if (k === 'addRule') return async (text: string) => {
         calls.addRule++;
         await gate();
+        if (fail) {
+          fail = false;
+          throw new BowerError('offline', 'That did not send. Try again.');
+        }
         return { id: `rule-${calls.addRule}`, text, yourWords: text, since: 0, pending: true };
       };
       return () => new Promise(() => undefined);
@@ -106,5 +114,52 @@ describe('qa4-double-send: one press, one request', () => {
     expect(box).toHaveValue('Put my id papers together');
     fireEvent.click(screen.getByRole('button', { name: /Send/ }));
     await waitFor(() => expect(s.calls.addRequest).toBe(2));
+  });
+
+  it('R1 empty-keyboard-submit: Ctrl+Enter on empty or blank words does nothing and leaves Send working', async () => {
+    const s = screenWithHeldSaves();
+    const box = screen.getByRole('textbox', { name: 'Your request' });
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+    fireEvent.change(box, { target: { value: '   ' } });
+    fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+    expect(s.calls.addRequest).toBe(0);
+    fireEvent.change(box, { target: { value: 'Put my id papers together' } });
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+    await waitFor(() => expect(s.calls.addRequest).toBe(1));
+    await s.release();
+    await waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('R1 R3 second-send-fresh-intent: a second completed send, even with the same words, is a new request', async () => {
+    const s = screenWithHeldSaves();
+    const box = screen.getByRole('textbox', { name: 'Your request' });
+    for (const n of [1, 2]) {
+      fireEvent.change(box, { target: { value: 'Compare the flats by commute' } });
+      fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+      await waitFor(() => expect(s.calls.addRequest).toBe(n));
+      await s.release();
+      await waitFor(() => expect(box).toHaveValue(''));
+    }
+    expect(s.calls.ids[0]).toBeTruthy();
+    expect(s.calls.ids[1]).toBeTruthy();
+    expect(s.calls.ids[1]).not.toBe(s.calls.ids[0]);
+  });
+
+  it('R2 R4 failed-rule-again: after a rule save that failed, the words stay and Keep this rule works again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const s = screenWithHeldSaves();
+    s.failNext();
+    fireEvent.click(screen.getByRole('radio', { name: 'A rule' }));
+    const box = screen.getByRole('textbox', { name: 'The rule' });
+    fireEvent.change(box, { target: { value: 'Receipts go to Money, by month' } });
+    fireEvent.click(screen.getByRole('button', { name: /Keep this rule/ }));
+    await waitFor(() => expect(s.calls.addRule).toBe(1));
+    await s.release();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Keep this rule/ })).toBeEnabled());
+    expect(box).toHaveValue('Receipts go to Money, by month');
+    fireEvent.click(screen.getByRole('button', { name: /Keep this rule/ }));
+    await waitFor(() => expect(s.calls.addRule).toBe(2));
+    await s.release();
+    await waitFor(() => expect(box).toHaveValue(''));
   });
 });

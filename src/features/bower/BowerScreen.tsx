@@ -40,6 +40,8 @@ export function BowerScreen() {
   const link = useNoteLink();
   const requestsState = useRequests();
   const { data: requests } = requestsState;
+  const saving = useRef(false);
+  const [busy, setBusy] = useState(false);
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
@@ -51,7 +53,9 @@ export function BowerScreen() {
 
   const send = async (): Promise<void> => {
     const t = text.trim();
-    if (!t) return;
+    if (!t || saving.current) return;
+    saving.current = true;
+    setBusy(true);
     try {
       if (kind === 'rule') {
         await vault.addRule(t);
@@ -65,6 +69,9 @@ export function BowerScreen() {
       composerRef.current?.focus();
     } catch (e) {
       report(e, 'That did not send. Try again.');
+    } finally {
+      saving.current = false;
+      setBusy(false);
     }
   };
 
@@ -161,7 +168,7 @@ export function BowerScreen() {
           ) : (
             <span />
           )}
-          <Button size="sm" type="submit" disabled={!text.trim()}>
+          <Button size="sm" type="submit" disabled={busy || !text.trim()}>
             <Icon name="send" size={16} /> {kind === 'rule' ? 'Keep this rule' : 'Send'}
           </Button>
         </div>
