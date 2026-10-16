@@ -40,3 +40,28 @@ it('AC3 audit-ui-guards-dup-row: a refill and a new file added together each get
   const left = within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem');
   expect(left.map((r) => r.textContent ?? '')).toEqual([expect.stringContaining('outline.txt')]);
 });
+
+it('AC3 audit-ui-guards-dup-row-reverse: the new file is the duplicate, picked before the refill; the check gets each file once with its own bytes', async () => {
+  sessionStorage.setItem('bower:add-items', JSON.stringify([{ key: scanKey, name: 'scan.pdf', kind: 'pdf', origin: 'From this device' }]));
+  const duplicates = vi.fn(async (files: Array<{ name: string }>) => files.map((f) => (f.name === 'outline.txt' ? 'Resources' : null)));
+  const base = loadingSources();
+  const view = render(<MemoryRouter initialEntries={['/add']}><DataProvider sources={{ ...base, vault: { ...base.vault, duplicates } }}><Add /></DataProvider></MemoryRouter>);
+  const input = view.container.querySelector('input[type="file"]');
+  if (!input) throw new Error('The file picker is missing.');
+  const scan = new File(['SYNTHETIC_SCAN'], 'scan.pdf', { type: 'application/pdf' });
+  const fresh = new File(['SYNTHETIC_OUTLINE'], 'outline.txt', { type: 'text/plain' });
+  await act(async () => { fireEvent.change(input, { target: { files: [fresh, scan] } }); });
+  await act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); });
+  expect(get(scanKey)).toBe(scan);
+  expect(duplicates).toHaveBeenCalledTimes(1);
+  expect(duplicates).toHaveBeenCalledWith([{ name: 'outline.txt', body: fresh }, { name: 'scan.pdf', body: scan }]);
+  const rows = within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem');
+  expect(rows).toHaveLength(2);
+  const row = (name: string) => rows.find((r) => within(r).queryByText(name)) ?? null;
+  expect(row('outline.txt')).toHaveTextContent('You already have this in');
+  expect(row('scan.pdf')).not.toHaveTextContent('You already have this in');
+  fireEvent.click(within(row('outline.txt') as HTMLElement).getByRole('button', { name: 'Leave it out' }));
+  const left = within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem');
+  expect(left.map((r) => r.textContent ?? '')).toEqual([expect.stringContaining('scan.pdf')]);
+  expect(get(scanKey), 'the refilled row keeps its bytes').toBe(scan);
+});

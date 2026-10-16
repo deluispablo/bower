@@ -30,3 +30,38 @@ it('AC2 audit-ui-guards-welcome-retry: making the folder fails, the screen says 
   expect(createFolder).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole('alert')).toBeNull();
 });
+
+const mount = (session: Record<string, unknown>) => {
+  const base = loadingSources();
+  const sources = { ...base, session: { ...base.session, ...session } } as unknown as Sources;
+  render(<MemoryRouter initialEntries={['/welcome']}><DataProvider sources={sources}><Welcome /></DataProvider></MemoryRouter>);
+};
+const settle = () => act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); });
+
+it('AC2 audit-ui-guards-welcome-state-retry: reading the folder fails, Try again reads it again and a ready folder needs no new one', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const folderState = vi.fn()
+    .mockRejectedValueOnce(new BowerError('offline', "You're offline."))
+    .mockResolvedValue('ready');
+  const createFolder = vi.fn().mockResolvedValue({ found: false });
+  mount({ folderState, createFolder });
+  await settle();
+  expect(screen.getByRole('alert')).toHaveTextContent("You're offline.");
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await settle();
+  expect(folderState).toHaveBeenCalledTimes(2);
+  expect(createFolder).not.toHaveBeenCalled();
+  expect(screen.getByRole('heading', { level: 1, name: 'Your folder is ready' })).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('AC2 audit-ui-guards-welcome-plain-error: an unknown failure shows the fallback sentence and logs the details', async () => {
+  const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const boom = new Error('SYNTHETIC_DETAIL');
+  mount({ folderState: async () => 'missing', createFolder: vi.fn().mockRejectedValue(boom) });
+  await settle();
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent('Your Bower folder could not be opened. Try again.');
+  expect(alert).not.toHaveTextContent('SYNTHETIC_DETAIL');
+  expect(logged).toHaveBeenCalledWith(boom);
+});
