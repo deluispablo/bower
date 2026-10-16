@@ -3,11 +3,13 @@
  * output, and a scripted made-up large folder pins characters per call and calls per run for the next C12 tasks.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeScripted } from '../../src/data/fake/fake-runner';
+import { claudeProvider, type ClaudeExit } from '../src/claude';
 import { RunTiming } from '../src/timing';
 import { AT } from './corpus-run';
-import { paging } from './drive-v3';
+import { RUN_ID, paging } from './drive-v3';
 import * as support from './b1-planning-support';
-import { candidates, fileIntent, report, run, seedState, select, setup } from './b1-planning-support';
+import { candidates, fileIntent, phaseAwareClaude, report, run, seedState, select, setup } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -52,6 +54,42 @@ describe('model usage in the timing output (c12-measure)', () => {
     expect(retried.frames).toHaveLength(3);
     expect(callLines(retried).map((l) => /kind=(\w+)/.exec(l)?.[1])).toEqual(['selection', 'selection', 'execution']);
     expect(callLines(retried)[2]).toBe('model-call: kind=execution in=48 cached=9 out=15 ms=30');
+  });
+
+  // Review gap (round 1, acceptance): the call lines are RunTiming.line's own, after the run line, in its one output.
+  it('AC2 c12-measure-call-lines: the call lines follow the run line in the one timing output', async () => {
+    const timing = new RunTiming(0, () => 0);
+    timing.addModel({ wallMs: 10, apiMs: 7, turns: 1, inputTokens: 16, outputTokens: 5, cacheReadTokens: 3, cacheWriteTokens: 2 }, 'selection');
+    timing.addModel(null, 'execution');
+    expect(timing.line('done').split('\n')).toEqual([expect.stringMatching(/^timing: .* in=16 out=5 .* cache=3\/2$/),
+      'model-call: kind=selection in=16 cached=3 out=5 ms=10', 'model-call: kind=execution in=0 cached=0 out=0 ms=0']);
+
+    const b = await setup(); await seedState(b);
+    const r = await run(b, [select(b), fileIntent(b)]);
+    const logged = r.consoleLines.filter((l) => l.includes('model-call:'));
+    expect(logged, 'printed once, with the run line').toHaveLength(1);
+    expect(logged[0]?.split('\n')).toEqual([runLine(r), ...callLines(r)]);
+    expect(callLines(r)).toHaveLength(2);
+  });
+
+  // Review gap (round 1, ruling): a spawned call with no JSON result (it throws, is cut, or prints none) still gets its
+  // line, with zeros; the run line's model figures stay as they were (no stats, nothing summed).
+  it.each([
+    ['throws', (): ClaudeExit => { throw new Error('spawn failed'); }],
+    ['is cut at its time cap', (): ClaudeExit => ({ code: null, stderr: '', cut: 'time', stdout: '{"type":"res' })],
+    ['prints no JSON result', (): ClaudeExit => ({ code: 1, stderr: 'crashed', cut: null, stdout: 'Segmentation fault' })],
+  ])('AC2 c12-measure-call-lines: a call that %s still gets its line, with zeros', async (_what, exit) => {
+    const b = await setup(); await seedState(b);
+    const timing = new RunTiming(0, () => 0);
+    let spawned = 0;
+    const spawn = phaseAwareClaude(() => { spawned++; return exit(); }, () => ({ drive: b.drive, root: b.root, admission: b.admission }), true);
+    await claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: b.root, runId: RUN_ID, allowWeb: false },
+      fakeScripted(b.drive))({ taken: b.admission, deferred: [] }).catch(() => null);
+    const [line = '', ...calls] = timing.line('done').split('\n');
+    expect(spawned).toBeGreaterThan(0);
+    expect(calls).toEqual(Array.from({ length: spawned }, () => 'model-call: kind=selection in=0 cached=0 out=0 ms=0'));
+    expect(line).toMatch(/ api=0 turns=0 in=0 out=0 .* cache=0\/0$/);
+    expect(timing.model).toBeNull();
   });
 });
 
