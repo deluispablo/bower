@@ -47,6 +47,20 @@ for (const path of NOTES) {
     // AC1: the region scrolls sideways when it must; the page never does.
     expect(await region.evaluate((r) => getComputedStyle(r).overflowX)).toBe('auto');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    // Overflow is reachable: scrolling the region sideways brings its last cell into view (nothing is clipped).
+    const reach = await region.evaluate((r) => {
+      const last = [...r.querySelectorAll('tr')].at(-1)?.lastElementChild;
+      // Force an overflow with a long unbroken token (a web address) in the last cell, as a real note could have.
+      if (last) last.textContent = 'https://example.com/a/very/long/address/that/cannot/break/anywhere/at/all';
+      r.scrollLeft = r.scrollWidth;
+      const box = r.getBoundingClientRect();
+      const cell = last?.getBoundingClientRect();
+      return { overflows: r.scrollWidth > r.clientWidth, reached: !!cell && cell.right <= box.right + 1 && cell.right > box.left };
+    });
+    expect(reach.reached, 'the last cell is reachable by scrolling the table').toBe(true);
+    expect(reach.overflows, 'positive control: at 375 px the table overflows its region').toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'the page still does not scroll').toBe(true);
+    await region.evaluate((r) => { r.scrollLeft = 0; });
     await region.focus();
     await expect(region).toBeFocused();
     await expectAxeClean(page, { include: 'main', wcag22: true });
@@ -58,9 +72,9 @@ test('design-note-page: linked notes show each note once on a phone, two-way one
   await page.goto(`/note/${NOTES[0]}?scenario=default&time=instant`);
   const linked = page.getByRole('main').locator('section', { has: page.getByRole('heading', { name: 'Linked notes', exact: true }) });
   await expect(linked.getByRole('heading', { name: 'Links to', exact: true })).toBeVisible();
-  const titles = await linked.getByRole('link').evaluateAll((as) => as.map((a) => a.firstElementChild?.textContent ?? ''));
-  expect(titles.length, 'the note has linked notes').toBeGreaterThan(1);
-  expect(titles.filter((t, i) => titles.indexOf(t) !== i), 'each note once').toEqual([]);
+  const paths = await linked.getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''));
+  expect(paths.length, 'the note has linked notes').toBeGreaterThan(1);
+  expect(paths.filter((t, i) => paths.indexOf(t) !== i), 'each note once, by its path').toEqual([]);
   // In the demo the flats link back to their project, so they are marked as linking both ways (the pretend
   // Drive's flats do not link back).
   if (!isFake) await expect(linked.getByRole('link', { name: /Flat 3, 12 Larkspur Lane/ })).toContainText('Links both ways');

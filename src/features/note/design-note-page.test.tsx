@@ -41,9 +41,30 @@ describe('design-note-page: note tables', () => {
       ['75%', true],
     ]);
   });
+
+  it('R4 note-table-rendered-text: a number is judged as shown, so bold and link marks do not hide it', () => {
+    const text = ['| Item | Time |', '| --- | --- |', '| **24 min** | *£3* |', '| [[18 min]] | **soon** |'].join('\n');
+    const { container } = render(<Markdown text={text} link={(t, l, k) => <a key={k} href={`#${t}`}>{l}</a>} />);
+    const cells = [...container.querySelectorAll('td')].map((td) => [td.textContent, td.classList.contains('md-num')]);
+    expect(cells).toEqual([['24 min', true], ['£3', true], ['18 min', true], ['soon', false]]);
+  });
+
+  it('R4 note-table-code-span: a code span holding link marks renders literally, so it is judged and named as rendered', () => {
+    const text = ['| `[[24 min]]` | Time |', '| --- | --- |', '| `[[24 min]]` | x |'].join('\n');
+    const { container } = render(<Markdown text={text} link={(t, l, k) => <a key={k} href={`#${t}`}>{l}</a>} />);
+    expect(container.querySelector('td')?.textContent).toBe('[[24 min]]');
+    expect(container.querySelector('td')).not.toHaveClass('md-num');
+    expect(screen.getByRole('region', { name: 'Table: [[24 min]], Time' })).toBeInTheDocument();
+  });
+
+  it('R3 note-table-headerless: a table with no header row keeps today\'s parsing, its first row becomes the header', () => {
+    render(<Markdown text={['| a | b |', '| 1 | 2 |'].join('\n')} link={(t, l, k) => <a key={k} href={`#${t}`}>{l}</a>} />);
+    expect(screen.getByRole('region', { name: 'Table: a, b' })).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['a', 'b']);
+  });
 });
 
-const note = (links: string[], backlinks: string[]): Note => ({
+const note =(links: string[], backlinks: string[]): Note => ({
   path: 'Projects/Flat hunt/Flat hunt.md', title: 'Flat hunt', summary: '', properties: [], tags: [], currentState: [], body: '', timeline: [], links, backlinks, byBower: true,
 });
 const show = (n: Note): void => {
@@ -74,6 +95,12 @@ describe('design-note-page: links to and linked from', () => {
     expect(under('Links to')).toEqual([['Flat 7', true]]);
     expect(screen.queryByText('Nothing links here yet.')).toBeNull();
     expect(screen.getByText('No other notes link here.')).toBeInTheDocument();
+  });
+
+  it('R5 note-links-by-path: two notes with the same title in different places both stay', () => {
+    show(note(['Projects/Flat hunt/Notes.md', 'Archive/Notes.md'], ['Archive/Notes.md']));
+    expect(under('Links to')).toEqual([['Notes', false], ['Notes', true]]);
+    expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 
   it('R5 note-links-one-way: one-way links and the empty cases read as today', () => {
