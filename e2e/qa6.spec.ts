@@ -229,7 +229,7 @@ test('a file added again after a reload is not doubled', async ({ page }) => {
   await page.locator('input[type=file][multiple]').setInputFiles(file);
   await expect(page.getByText('Add this file again')).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'In this pile' }).getByRole('listitem')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Add 1 thing to the inbox/ })).toBeVisible();
 });
 
 test("the run's end shows one bird and no stray card", async ({ page }) => {

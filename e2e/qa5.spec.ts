@@ -245,7 +245,7 @@ test('Add keeps one copy of a file added twice', async ({ page }) => {
   const file = { name: 'Boiler service.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF made up') };
   await page.locator('input[type=file][multiple]').setInputFiles(file);
   await page.locator('input[type=file][multiple]').setInputFiles(file);
-  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Add 1 thing to the inbox/ })).toBeVisible();
   await expect(page.getByRole('status').getByText(/already in this pile/)).toBeVisible();
   await expectAxeClean(page, { include: 'main' });
 });

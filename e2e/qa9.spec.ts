@@ -73,13 +73,13 @@ test('on screen: an unresolved Add draft stays until its missing file is chosen 
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('list', { name: 'In this pile' })).toContainText('Add this file again');
-  await expect(page.getByRole('button', { name: 'Put the note in the inbox' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add to the inbox' })).toBeDisabled();
   await expect(page.locator('textarea').first()).toHaveValue('Papers for the flat');
   await expect(page).toHaveURL(/\/add(?:\?|$)/);
   await page.locator('input[type="file"]').first().setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 x') });
   await expect(page.getByRole('list', { name: 'In this pile' }).getByRole('listitem')).toHaveCount(1);
   await expect(page.getByRole('list', { name: 'In this pile' })).not.toContainText('Add this file again');
-  await page.getByRole('button', { name: 'Put 1 thing in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add 1 thing to the inbox' }).click();
   await expect(toast(page, '1 thing in the inbox')).toBeVisible();
   await expect(page).toHaveURL(/\/(?:\?|$)/);
 });

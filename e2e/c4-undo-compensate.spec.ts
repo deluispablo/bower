@@ -87,7 +87,7 @@ test('a pile removal that cannot reach Drive says so in its confirm box', async 
   await page.evaluate(() => (window as unknown as { __unreachDrive: () => void }).__unreachDrive());
   await page.getByLabel('Paste a link').fill('https://insurer.example/renewal');
   await page.getByRole('button', { name: 'Add link' }).click();
-  await page.getByRole('button', { name: /Put 1 thing in the inbox/ }).click();
+  await page.getByRole('button', { name: /Add 1 thing to the inbox/ }).click();
   await page.getByRole('region', { name: 'Inbox' }).getByRole('link', { name: /insurer\.example/ }).first().click();
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Remove this pile', exact: true }).click();

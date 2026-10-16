@@ -307,7 +307,7 @@ export function Add() {
 
       <div className={s.footer}>
         <Button block disabled={busy || ready.length !== items.length || (!ready.length && !text.trim())} onClick={() => void save()}>
-          {busy ? 'Saving…' : ready.length ? `Put ${plural(ready.length, 'thing')} in the inbox` : 'Put the note in the inbox'}
+          {busy ? 'Saving…' : ready.length ? `Add ${plural(ready.length, 'thing')} to the inbox` : 'Add to the inbox'}
         </Button>
       </div>
     </div>

@@ -1270,7 +1270,8 @@ describe('deleting the account', () => {
     await expect(s.session.deleteAccount()).rejects.toThrow();
     expect(sessionStorage.getItem('bower:bye')).toBeNull();
     await s.session.signOut();
-    expect(sessionStorage.getItem('bower:bye')).toBeNull();
+    expect(sessionStorage.getItem('bower:bye')).toBe('signed-out');
+    sessionStorage.removeItem('bower:bye');
     worker.deleteAccount = real;
     await s.session.deleteAccount();
     expect(sessionStorage.getItem('bower:bye')).toBe('1');
@@ -1674,7 +1675,7 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
       await expect(s.vault.tree()).rejects.toMatchObject({ code: 'auth' });
     }
     expect(await s.session.current()).toBeNull(); forgotten();
-    expect(sessionStorage.getItem('bower:bye')).toBe(ending === 'delete' ? '1' : null);
+    expect(sessionStorage.getItem('bower:bye')).toBe({ logout: 'signed-out', delete: '1', expiry: null }[ending]);
   });
   it('stale-session logout answering 204 forgets this person and keeps the folder outbox', async () => {
     const { s, forgotten } = await draft();
@@ -1687,7 +1688,7 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
     expect(fetchLogout).toHaveBeenCalledWith('https://worker.example/auth/logout', expect.objectContaining({ method: 'POST' }));
     expect(await s.session.current()).toBeNull();
     forgotten();
-    expect(sessionStorage.getItem('bower:bye')).toBeNull();
+    expect(sessionStorage.getItem('bower:bye')).toBe('signed-out');
   });
   it('failed remote logout forgets bytes and metadata before the successful retry', async () => {
     const { s, retained, forgotten } = await draft();

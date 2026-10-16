@@ -7,6 +7,22 @@ import { loadingSources } from '@/testing/loading-sources';
 import { Settings } from './Settings';
 
 describe('Settings', () => {
+  it('AC3 settings-leaving-group: deleting the account is a group of its own, after Account, with nothing else in it', async () => {
+    render(<MemoryRouter><DataProvider sources={loadingSources()}><Settings /></DataProvider></MemoryRouter>);
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings.slice(-2)).toEqual(['Account', 'Leaving Bower']);
+    /** The level 2 heading a control sits under. */
+    const groupOf = (el: HTMLElement): string | null => {
+      const all = screen.getAllByRole('heading', { level: 2 });
+      return all.filter((h) => !!(h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)).at(-1)?.textContent ?? null;
+    };
+    expect(groupOf(screen.getByRole('button', { name: 'Sign out' }))).toBe('Account');
+    const del = screen.getByRole('button', { name: 'Delete' });
+    expect(groupOf(del)).toBe('Leaving Bower');
+    expect(screen.getByText('Delete your Bower account')).toBeInTheDocument();
+    expect(groupOf(screen.getByText('Delete your Bower account'))).toBe('Leaving Bower');
+  });
+
   it('shows who is signed in, not a name written in the code', async () => {
     const base = loadingSources();
     const sources = { ...base, session: { ...base.session, current: async () => ({ name: 'Sam', email: 'sam@example.com' }) } } as Sources;
@@ -102,6 +118,17 @@ describe('c02-upload-count-ui sign-out contract', () => {
       await settle();
       expect(f.signOut).toHaveBeenCalledOnce();
       expect(await f.sources.session.current()).toBeNull();
+    } finally { f.sources.dispose(); }
+  });
+
+  it('AC4 signed-out-farewell: a finished sign-out leaves the sign-in screen its one line to say', async () => {
+    const f = await setup(0);
+    try {
+      expect(sessionStorage.getItem('bower:bye')).toBeNull();
+      fireEvent.click(f.opener);
+      await settle();
+      expect(await f.sources.session.current()).toBeNull();
+      expect(sessionStorage.getItem('bower:bye')).toBe('signed-out');
     } finally { f.sources.dispose(); }
   });
 

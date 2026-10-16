@@ -31,7 +31,7 @@ async function addPile(page: Page, text: string, file: string): Promise<void> {
   await open(page, '/add');
   await page.locator('textarea').first().fill(text);
   await page.locator('input[type=file][multiple]').setInputFiles({ name: file, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${file}`) });
-  await page.getByRole('button', { name: 'Put 1 thing in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add 1 thing to the inbox' }).click();
   await expect(toast(page, '1 thing in the inbox')).toBeVisible();
   await expect(page).toHaveURL(/\/(?:\?|$)/);
   await expect(rowOf(page, new RegExp(text))).toBeVisible();

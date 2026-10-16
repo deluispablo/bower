@@ -207,7 +207,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
               <Link to={`/pile/${p.id}`} className={s.pile}>
                 <PileStack items={p.items} />
                 <span className={s.pileMain}>
-                  <span id={`pile-name-${p.id}`} className={p.text ? s.pileText : `${s.pileText} mono`}>
+                  <span id={`pile-name-${p.id}`} className={s.pileText}>
                     {pileName(p)}
                   </span>
                   <span className={s.pileSub}>

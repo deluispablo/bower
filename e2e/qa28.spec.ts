@@ -106,7 +106,7 @@ test('fake: a thing that never arrived is chosen again on its pile; only the sam
   await open(page, '/add');
   await page.locator('textarea').first().fill('Papers from Alex');
   await page.locator('input[type=file][multiple]').setInputFiles([pdf('a.pdf'), pdf('b.pdf')]);
-  await page.getByRole('button', { name: 'Put 2 things in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add 2 things to the inbox' }).click();
   await expect(toast(page, '2 things in the inbox')).toBeVisible();
   await expect(rowOf(page, /Papers from Alex/)).toBeVisible();
   await neverArrived(page, 'b.pdf');
@@ -149,7 +149,7 @@ test('fake: a link that never arrived is pasted again on its pile; only the same
   await page.locator('input[type=file][multiple]').setInputFiles([pdf('a.pdf')]);
   await page.getByRole('textbox', { name: 'Paste a link' }).fill('source.example/path');
   await page.getByRole('button', { name: 'Add link' }).click();
-  await page.getByRole('button', { name: 'Put 2 things in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add 2 things to the inbox' }).click();
   await expect(toast(page, '2 things in the inbox')).toBeVisible();
   await expect(rowOf(page, /Reading from Alex/)).toBeVisible();
   await neverArrived(page, /\.url$/);
