@@ -71,3 +71,35 @@ for (const width of [375, 1440]) {
     await expect(sheet).toHaveCount(0);
   });
 }
+
+// AC1 tidy-row-flush: the pinned actions row ends at the sheet's bottom edge, so no report text scrolls below the buttons.
+// The sheet's own bottom padding (and the phone's safe area) sits inside the row, not under it.
+const INSET = 34; // a controlled nonzero bottom safe area, like a phone with a home indicator
+for (const [width, height] of [[375, 812], [1440, 520]]) {
+  test(`AC1 tidy-row-flush: the actions row ends flush at the sheet's bottom while the report scrolls, at ${width}`, async ({ page }) => {
+    await resize(page, { width, height });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: INSET } });
+    await page.goto('/?scenario=default&time=instant');
+    await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+    const sheet = page.getByRole('dialog');
+    await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
+    await expect(sheet.getByText(/^Done\. \d+ things filed$/).last()).toBeVisible();
+    const done = sheet.getByRole('button', { name: 'Done', exact: true });
+    await expect(done).toBeAttached();
+
+    expect(await sheet.evaluate((d) => d.scrollHeight > d.clientHeight + 1), 'positive control: the report overflows the sheet').toBe(true);
+    for (const at of ['middle', 'bottom'] as const) {
+      await sheet.evaluate((d, where) => { d.scrollTop = where === 'bottom' ? d.scrollHeight : d.scrollHeight / 2; }, at);
+      expect(await sheet.evaluate((d) => d.scrollTop), `positive control: the report scrolled to the ${at}`).toBeGreaterThan(0);
+      const [row, box, button] = await Promise.all([
+        done.evaluate((n) => n.parentElement?.getBoundingClientRect().bottom ?? NaN),
+        sheet.evaluate((d) => d.getBoundingClientRect().bottom),
+        done.evaluate((n) => n.getBoundingClientRect().bottom),
+      ]);
+      expect(Math.abs(row - box), `the actions row ends at the sheet's bottom edge, report at the ${at}`).toBeLessThanOrEqual(0.5);
+      // The buttons keep the sheet's bottom padding (plus the safe area on the phone) clear below them.
+      expect(box - button, `the buttons clear the bottom edge, report at the ${at}`).toBeGreaterThanOrEqual((width < 900 ? 24 + INSET : 26) - 0.5);
+    }
+  });
+}
