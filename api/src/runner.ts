@@ -155,7 +155,8 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   runner.get('/runner/runs/:id/token', async (c) => {
     const env = c.get('env');
     const { person, access } = await granted(c);
-    const options: DriveTokenOptions = {};
+    // After a Drive 401 the runner asks `?fresh=1`, as the app asks `/drive/token` (RFC 6750 section 3.1).
+    const options: DriveTokenOptions = { fresh: c.req.query('fresh') === '1' };
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
     let minted: { accessToken: string; expiresAt: number };
     try {
