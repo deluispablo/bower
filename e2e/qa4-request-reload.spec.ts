@@ -6,6 +6,12 @@ import { expect, isFake, test } from './fixtures';
 
 test('qa4-request-reload: AC3 waiting-survives-reload: a request shown as waiting survives an immediate reload', async ({ page }) => {
   test.skip(!isFake, 'the pretend Drive keeps the folder across a reload; the demo starts again');
+  // The tab's delayed save (the one 250 ms timer, `Saver.schedule`) never fires; explicit flushes still work.
+  await page.addInitScript(() => {
+    const real = window.setTimeout.bind(window);
+    window.setTimeout = ((fn: TimerHandler, ms?: number, ...args: unknown[]) =>
+      real(fn, ms === 250 ? 2 ** 30 : ms, ...args)) as typeof window.setTimeout;
+  });
   const words = 'Compare the three flats for Alex by commute';
   await page.goto('/bower?scenario=default&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
@@ -14,7 +20,6 @@ test('qa4-request-reload: AC3 waiting-survives-reload: a request shown as waitin
   await main.getByRole('button', { name: 'Send' }).click();
   const bubble = main.getByRole('region', { name: 'What you asked' }).locator('div').filter({ hasText: words }).last();
   await expect(bubble.getByText('Waiting for the next tidy-up.', { exact: true })).toBeVisible();
-  // At once: no wait for any delayed save.
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('region', { name: 'What you asked' }).getByText(words, { exact: true })).toHaveCount(1);
