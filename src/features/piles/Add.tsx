@@ -100,22 +100,17 @@ export function Add() {
     if (twice) toast(`${twice.name} is already in this pile.`);
     if (!list.length) return;
     // A file whose draft lost its bytes in a reload ("Add this file again") fills that draft, not a new row.
-    const refill = list.filter((x) => x.file && items.some((d) => missing(d) && d.name === x.name));
-    if (refill.length) {
-      for (const x of refill) {
-        const d = items.find((y) => missing(y) && y.name === x.name);
-        if (d && x.file) keep(d.key, x.file);
-      }
-      setItems((cur) => [...cur]);
-    }
-    const drafts = list.filter((x) => !refill.includes(x)).map(({ file, ...d }, i) => {
-      const key = `${Date.now()}-${i}-${d.name}`;
-      if (file) keep(key, file);
-      return { ...d, key };
+    // Each thing gets its row key once, so the new rows and the duplicate check below name the same row.
+    const keyed = list.map((x, i) => {
+      const old = x.file ? items.find((d) => missing(d) && d.name === x.name) : undefined;
+      return { x, key: old?.key ?? `${Date.now()}-${i}-${x.name}`, refill: Boolean(old) };
     });
+    for (const { x, key } of keyed) if (x.file) keep(key, x.file);
+    const drafts = keyed.flatMap(({ x: { file, ...d }, key, refill }) => (refill ? [] : [{ ...d, key }]));
+    // A refill changes no row, only its bytes: a new list draws it again.
     setItems((x) => [...x, ...drafts]);
     // Before anything is sent: does the folder already have any of these?
-    const sent = list.flatMap(({ name, file }, i) => (file ? [{ key: drafts[i]?.key ?? '', name, body: file }] : []));
+    const sent = keyed.flatMap(({ x: { name, file }, key }) => (file ? [{ key, name, body: file }] : []));
     if (sent.length)
       void vault.duplicates(sent.map(({ name, body }) => ({ name, body }))).then(
         (found) => {
