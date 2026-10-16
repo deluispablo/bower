@@ -11,9 +11,15 @@ async function inReach(sheet: Locator, el: Locator): Promise<boolean> {
   return el.evaluate((node, dialog) => {
     const r = node.getBoundingClientRect();
     const d = (dialog as Element).getBoundingClientRect();
-    const inside = r.top >= d.top - 0.5 && r.bottom <= d.bottom + 0.5 && r.bottom <= window.innerHeight + 0.5 && r.height > 0;
-    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return inside && !!top && (node === top || node.contains(top));
+    const inside = r.top >= d.top - 0.5 && r.bottom <= d.bottom + 0.5 && r.left >= d.left - 0.5 && r.right <= d.right + 0.5
+      && r.bottom <= window.innerHeight + 0.5 && r.right <= window.innerWidth + 0.5 && r.height > 0 && r.width > 0;
+    // Edge coverage: the centre and a point just inside each edge's midpoint (the corners are rounded) must hit the element itself.
+    const points: [number, number][] = [[0.5, 0.5], [0.05, 0.5], [0.95, 0.5], [0.5, 0.08], [0.5, 0.92]];
+    const onTop = points.every(([x, y]) => {
+      const top = document.elementFromPoint(r.left + r.width * x, r.top + r.height * y);
+      return !!top && (node === top || node.contains(top));
+    });
+    return inside && onTop;
   }, await sheet.elementHandle());
 }
 
@@ -39,10 +45,27 @@ for (const width of [375, 1440]) {
     }
     // At the bottom the last line of the report shows whole, not under the buttons.
     expect(await inReach(sheet, clock), 'the last line of the report in view at the bottom').toBe(true);
+    const [clockBottom, actionsTop] = await Promise.all([clock.evaluate((n) => n.getBoundingClientRect().bottom), done.evaluate((n) => n.parentElement?.getBoundingClientRect().top ?? 0)]);
+    expect(clockBottom, 'the last line ends above the actions row').toBeLessThanOrEqual(actionsTop + 0.5);
     // The question comes first after the summary: in view when the sheet opens.
     await sheet.evaluate((d) => { d.scrollTop = 0; });
     const asked = sheet.getByText('Bower has a question', { exact: true });
     if (await asked.count()) expect(await inReach(sheet, asked), 'the question label in view at the top').toBe(true);
+    // Tabbing through the report's links never lands one behind the actions row (WCAG 2.4.11).
+    const count = await sheet.getByRole('link').count();
+    expect(count, 'positive control: the report has links to tab through').toBeGreaterThan(0);
+    await sheet.getByRole('link').first().focus();
+    for (let i = 0; i < count * 3; i++) {
+      const covered = await done.evaluate((btn) => {
+        const focus = document.activeElement;
+        const row = btn.parentElement?.getBoundingClientRect();
+        if (!focus || !row || focus.tagName !== 'A') return false;
+        const r = focus.getBoundingClientRect();
+        return r.bottom > row.top + 0.5 && r.top < row.bottom;
+      });
+      expect(covered, `link ${i + 1} of ${count} is clear of the actions row`).toBe(false);
+      await page.keyboard.press('Tab');
+    }
     await expectAxeClean(page, { include: '[role="dialog"]', wcag22: true });
     await done.click();
     await expect(sheet).toHaveCount(0);

@@ -6,6 +6,7 @@ import { pileName, thingsIn, waitingIn } from '@/data/piles';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
+import { usePrefs } from '@/app/prefs';
 import { plural } from '@/app/words';
 import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
@@ -125,6 +126,8 @@ function RunView({ run }: { run: RunState }) {
   const now = useNow(isRunning(run));
   const { setTidy, startReplay } = useUi();
   const { runs } = useSources();
+  // The same condition useRunWatcher notifies on, read on render.
+  const notifies = usePrefs((p) => p.notifyRuns) && typeof Notification !== 'undefined' && Notification.permission === 'granted';
   return (
     <div>
       <TidyScene phase={run.phase} scope={run.scope} {...(run.report ? { filed: run.report.filed.length } : {})} />
@@ -151,7 +154,7 @@ function RunView({ run }: { run: RunState }) {
       )}
       {run.phase === 'done' && run.report && <RunLinks report={run.report} onOpen={() => setTidy(false)} />}
       <p className={s.clock}>{runClock(run, now)}</p>
-      <div className={s.actions}>
+      <div className={s.pinned}>
         {run.phase === 'done' && !hasReplay(run) ? (
           <Button
             block
@@ -190,9 +193,12 @@ function RunView({ run }: { run: RunState }) {
             </Button>
           </>
         ) : (
-          <Button variant="ghost" block onClick={() => setTidy(false)}>
-            Hide. Tell me when it ends
-          </Button>
+          <>
+            <p className={s.hideLine}>{notifies ? 'Bower tells you here when it ends, or with a notification if you are in another app.' : 'Bower tells you here when it ends.'}</p>
+            <Button variant="ghost" block onClick={() => setTidy(false)}>
+              Hide this
+            </Button>
+          </>
         )}
       </div>
     </div>
