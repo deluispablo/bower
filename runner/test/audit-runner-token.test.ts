@@ -50,6 +50,27 @@ describe('audit-runner-token', () => {
     expect(route.asked).toHaveLength(2);
   });
 
+  it('AC2 audit-runner-token-late-plain: a plain grant that ends after a fresh one never replaces the fresh token', async () => {
+    // Spec review round 1 (ruling gap): only the grant still in flight when it settles keeps its token.
+    const answers: Array<(token: string) => void> = [];
+    const asked: URL[] = [];
+    const token = runnerToken((url) => {
+      asked.push(new URL(url));
+      return new Promise((resolve) => answers.push((accessToken) => resolve(Response.json({ accessToken, expiresAt: 1_000_000 + 3_600_000, folderId: 'FOLDER_ID', attempt: 1 }))));
+    });
+    const plain = token.token(false);
+    await new Promise((r) => setTimeout(r, 0));
+    const fresh = token.token(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(asked.map((u) => u.searchParams.get('fresh'))).toEqual([null, '1']);
+    answers[1]?.('drive-token-fresh');
+    expect(await fresh).toBe('drive-token-fresh');
+    answers[0]?.('drive-token-refused');
+    await plain;
+    expect(await token.token(false)).toBe('drive-token-fresh');
+    expect(asked).toHaveLength(2);
+  });
+
   it('AC3 audit-runner-token-one-grant: a new run asks the token route once', async () => {
     const drive = fixedDrive();
     const root = (await drive.createFolder('root', 'Bower')).id;
