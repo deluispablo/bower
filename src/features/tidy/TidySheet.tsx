@@ -12,7 +12,7 @@ import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
-import { hasReplay, reportWaiting, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
+import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import { RunLinks } from './RunLinks';
@@ -25,13 +25,13 @@ export function TidySheet() {
   const runState = useRun();
   const { data: run } = runState;
   const running = isRunning(run);
-  // The status bar reopens unseen reports; watched runs still show their end even with no rows.
+  // The opener (status bar, panel card) names an unseen done run to show it, rows or not; watched runs still show their end even with no rows.
   // A stopped run stays reachable until acknowledged as well.
   const [watched, setWatched] = useState<string | null>(null);
   // Adjusted while rendering (React: storing information from previous renders), not in an effect.
   if (!tidyOpen && watched !== null) setWatched(null);
   else if (tidyOpen && running && run && watched !== run.id) setWatched(run.id);
-  const showRun = !!run && (running || (tidyReportRunId === run.id && reportWaiting(run)) || (run.phase === 'failed' && !run.seen) || watched === run.id);
+  const showRun = !!run && (running || (tidyReportRunId === run.id && run.phase === 'done' && !run.seen) || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
   const pilesState = usePiles();
   const { data: piles } = pilesState;
