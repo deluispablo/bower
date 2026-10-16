@@ -121,7 +121,8 @@ export const hotTarget: DeclaredTarget = {
     const candidates = [...(previous ? [previous] : []), ...(readQuestions ? [questions] : []), ...journal,
       ...Object.entries(notes).flatMap(([id, note]) => {
         const f = index.byId(id);
-        return f && hub(note.path, note) ? [f] : [];
+        // A version Drive refused for good stays decided (b8c-unreadable): hot never asks for it again.
+        return f && hub(note.path, note) && note.lint !== 'unreadable' ? [f] : [];
       })];
     for (const f of candidates) {
       const path = index.pathOf(f.id);
