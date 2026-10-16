@@ -50,3 +50,17 @@ it('AC2 audit-search-400-inside-same-slice: with more than 400 name matches, one
   const inside = screen.getByRole('group', { name: 'Inside notes' });
   expect(within(inside).getByRole('option', { name: /Plan 401/ })).toBeInTheDocument();
 });
+
+it('R1 audit-search-400-words-any-order: past 400 entries, every word matches in any order, whatever the case and spacing', async () => {
+  await palette([...fillers(450), 'Zebra green plan'], [], '  PLAN   zebra ');
+  expect(within(screen.getByRole('listbox')).getByRole('option', { name: /Zebra green plan/ })).toBeInTheDocument();
+});
+
+it('R3 audit-search-400-inside-only-unlisted: a hit listed by name stays out of Inside notes, one past the cap shows there', async () => {
+  const names = Array.from({ length: 401 }, (_, i) => `Plan ${String(i + 1).padStart(3, '0')} zebra`);
+  const hit = (name: string): SearchHit => ({ path: note(name).path, title: name, snippet: 'A plan.' });
+  await palette(names, [hit('Plan 001 zebra'), hit('Plan 401 zebra')], 'Zebra  plan');
+  const inside = screen.getByRole('group', { name: 'Inside notes' });
+  expect(within(inside).getByRole('option', { name: /Plan 401 zebra/ })).toBeInTheDocument();
+  expect(within(inside).queryByRole('option', { name: /Plan 001 zebra/ })).toBeNull();
+});
