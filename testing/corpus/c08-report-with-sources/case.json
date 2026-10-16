@@ -2,7 +2,7 @@
   "id": "c08-report-with-sources",
   "capability": "C08",
   "title": "A useful readiness report with grounded next steps",
-  "covers": "model",
+  "covers": "scripted",
   "source": "new (C08 prep; existing thing.note boundary)",
   "scope": "all",
   "allowWeb": false,

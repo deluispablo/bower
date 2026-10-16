@@ -35,11 +35,22 @@
       ]
     }
   ],
+  "tables": [
+    {
+      "path": "Projects/Flat hunt/Shortlist comparison.md",
+      "header": ["Flat", "Rent", "Commute", "Deposit", "Status"],
+      "rows": [
+        ["[[Larkspur Lane flat]]", "1,450 a month", "24 min", "1,450", "viewing done"],
+        ["[[Cobble Row flat]]", "1,580 a month", "18 min", "Not stated", "viewing booked"]
+      ]
+    }
+  ],
   "linksResolve": true,
   "report": {
     "filed": 1,
     "created": [
-      "Projects/Flat hunt/Shortlist comparison.md"
+      "Projects/Flat hunt/Shortlist comparison.md",
+      "Bower health.md"
     ],
     "updated": [],
     "setAside": 0,

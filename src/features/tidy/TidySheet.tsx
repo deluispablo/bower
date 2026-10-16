@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { report } from '@/ui/report';
 import { startRun } from './start-run';
 import { pileName, thingsIn, waitingIn } from '@/data/piles';
@@ -54,9 +54,13 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
   const { data: piles } = pilesState;
   const { runs } = useSources();
   const [busy, setBusy] = useState(false);
+  // A ref, so two presses in one render start once. Waiting keeps the focus: aria-disabled, not disabled (as on the pile page).
+  const starting = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const count = waitingIn(piles);
   const start = async (): Promise<void> => {
+    if (starting.current) return;
+    starting.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -65,6 +69,7 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
       setError(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again.');
       if (!(e instanceof BowerError)) console.error(e);
     } finally {
+      starting.current = false;
       setBusy(false);
     }
   };
@@ -112,7 +117,7 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
             <Button variant="ghost" onClick={() => useUi.getState().setTidy(false)}>
               Not now
             </Button>
-            <Button block onClick={() => void start()} disabled={busy}>
+            <Button block onClick={() => void start()} aria-disabled={busy || undefined}>
               {busy ? 'Starting…' : error ? 'Try again' : `Tidy up ${plural(count, 'thing')}`}
             </Button>
           </>

@@ -56,6 +56,11 @@ export function countThings(n: TreeNode): number {
   return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
 }
 
+/** A pile folder in the Inbox waits as its things, or once when it holds only its note (as `thingsIn`). */
+function pileWaits(n: TreeNode): number {
+  return countThings(n) || ((n.children ?? []).some((c) => c.name === PILE_NOTE) ? 1 : 0);
+}
+
 /**
  * The one count a folder shows, wherever it shows (card, row, header, tree):
  * what is directly in it, a subfolder counting once, its own note and pile
@@ -63,7 +68,8 @@ export function countThings(n: TreeNode): number {
  */
 export function folderCount(n: TreeNode): number {
   if (n.type === 'file') return 1;
-  if (n.path === 'Inbox') return countThings(n);
+  if (n.path === 'Inbox') return (n.children ?? []).reduce((t, c) => t + (c.type === 'folder' ? pileWaits(c) : countThings(c)), 0);
+  if (/^Inbox\/[^/]+$/.test(n.path)) return pileWaits(n);
   return (n.children ?? []).filter((c) => !c.hub && c.name !== PILE_NOTE).length;
 }
 

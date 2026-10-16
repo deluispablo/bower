@@ -1158,14 +1158,16 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // does, and its request is asked again from the set as it is then; a yes with its map waits for the part's writes.
   const declinedRequests = new Set<string>();
   const requestSettled = new Set<string>();
+  /** An answer's request by record id: its question closes, and the answer is archived, only once that request's archive moves applied (R40). */
+  const requestOfAnswer = new Map<string, string>();
   for (const q of questionState.questions) {
     const line = q.request && latest.get(q.id);
     const answer = line && journalAnswer(line.rec);
     if (!q.request || !line || typeof answer !== 'boolean') continue;
     const map = answer ? maps.find((m) => m.answer === line.rec.id) : undefined;
-    if (!answer) { declinedRequests.add(q.request.id); requestSettled.add(line.rec.id); }
+    if (!answer) { declinedRequests.add(q.request.id); requestSettled.add(line.rec.id); requestOfAnswer.set(line.rec.id, q.request.id); }
     else if (!map) staleYes(line.rec.id, `${q.id} no longer fits its request`, REQUEST_STALE);
-    else if (!map.pending) requestSettled.add(line.rec.id);
+    else if (!map.pending) { requestSettled.add(line.rec.id); requestOfAnswer.set(line.rec.id, q.request.id); }
   }
   // Every request in your changes counts, one this run leaves waiting too: the oldest owns a note (R52).
   const mapOwned = mapsOwned(maps.filter((m) => !m.pending && !m.ask), snapshot.journalAll.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
@@ -3098,7 +3100,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer,
     yesMaps: maps.filter((m) => m.answer !== undefined && mapRequests.has(m.requestId)),
   };
 }
@@ -3113,7 +3115,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3471,8 +3473,58 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   // The yes's question and archive also wait for its request's result note and requests row, so a refused one leaves the yes to reapply (R40).
   for (const { answer = '', requestId } of yesMaps) derive(answer, ...[resultOps.get(requestId), requestsOp].flatMap((op) => op ?? []));
+  const archiveChain: string[] = [];
+  let archiveTo: Target | null = archiveFolder ? { fileId: archiveFolder.id } : null;
+  if (journal.length && !archiveTo && changesFolder) {
+    const made = await add({ kind: 'create-folder', parent: { fileId: changesFolder.id }, name: nameOf(SYSTEM.archive), createKey: newKey('folder') });
+    archiveChain.push(made);
+    archiveTo = { createdBy: made };
+  }
+  let pendingTo: Target | null = null;
+  if (pointers.size && changesFolder) {
+    const path = `${SYSTEM.changes}/pending`;
+    const folder = ix.file(path);
+    const parent: Target = folder ? { fileId: folder.id } : { createdBy: await add({ kind: 'create-folder',
+      parent: { fileId: changesFolder.id }, name: 'pending', createKey: newKey('folder') }) };
+    const run = ix.file(`${path}/${opts.runId}`);
+    pendingTo = run ? { fileId: run.id } : { createdBy: await add({ kind: 'create-folder', parent,
+      name: opts.runId, createKey: newKey('folder') }) };
+  }
   let questionsOp: string | null = null;
-  const questionsText = questionsList === null ? null : questionsJson(questionsList, rounds);
+  /** A record's archive moves, planned once, on the first ask: what they wait for and the move of each copy. */
+  const planned = new Map<string, { derived: string[]; moves: string[] }>();
+  const archiveOf = async (line: (typeof journal)[number]): Promise<{ derived: string[]; moves: string[] }> => {
+    const had = planned.get(line.rec.id);
+    if (had) return had;
+    // Unreachable: a captured line has its changes folder, so its archive is there or planned above.
+    if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
+    const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
+    const n = need(line.rec.id);
+    // A person's request (`settleRequest`) also waits for the sources it settles on: its lines', or every thing filed.
+    const sourceMoves = line.rec.kind === 'request' ? settlement.sourcesOf(line.rec.id, runSources).flatMap((id) => moveOf.get(id) ?? []) : [];
+    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived, ...sourceMoves])];
+    const moves: string[] = [];
+    for (const f of line.files) {
+      const pointer = pointers.get(line.rec.id) ?? [];
+      // Pending moves run once append outcomes are known, including a definite clash. The archive still waits
+      // for successful edits. Thus only a clash leaves the unchanged request in its originating run's folder.
+      const pending = pendingTo && pointer.length ? await add({ kind: 'move', before: seen(f), parent: pendingTo,
+        name: f.name, properties: { [PROP.run]: null } }, [...pointer, ...n.edits, ...sourceMoves]) : null;
+      moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name,
+        properties: line.waitingRun ? { [PROP.run]: null } : {} }, [...derived, ...(pending ? [pending] : [])]));
+    }
+    const made = { derived, moves };
+    planned.set(line.rec.id, made);
+    return made;
+  };
+  // An answered request is archived before its question closes: a refused move (any copy) leaves the question open and the
+  // answer unarchived, and the next run retries (B12d R40).
+  const requestArchives: string[] = [];
+  for (const requestId of new Set(requestOfAnswer.values())) {
+    const line = journal.find((l) => l.rec.kind === 'request' && l.rec.id === requestId);
+    if (line) requestArchives.push(...(await archiveOf(line)).moves);
+  }
+  const questionsText =questionsList === null ? null : questionsJson(questionsList, rounds);
   if (questionsText !== null) {
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
     // and for the moves of the piles its new question is about, so it is asked once they are filed.
@@ -3483,6 +3535,7 @@ export async function build(decided: Decided): Promise<Ended> {
         return edit ? [edit, ...operations.filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === id && o.dependsOn.includes(edit)).map((o) => o.operationId)] : [];
       }),
       ...(fresh.length ? [...asking.keys()].flatMap((id) => movesOf.get(id) ?? []) : []),
+      ...requestArchives,
       // A disagreement is asked once the note it links is written (C07).
       ...disagreeing.filter((d) => fresh.some((q) => q.id === d.question.id)).flatMap((d) => notesOf.get(d.pileId) ?? []),
       // A question about a saved copy (by its id, its pile's or its content) closes once its Bin is done: a refused Bin
@@ -3517,47 +3570,14 @@ export async function build(decided: Decided): Promise<Ended> {
   // Every rule line Rules.md is made to word waits for it, in the one map (`needs`).
   if (rulesMade) for (const r of ruleWords.change?.add ?? []) derive(r.recordId, rulesMade);
   const rulesOp = rulesMade ?? (rulesState === 'planned' && rulesFile ? editOf.get(rulesFile.id) ?? null : null);
-  const archiveChain: string[] = [];
-  let archiveTo: Target | null = archiveFolder ? { fileId: archiveFolder.id } : null;
-  if (journal.length && !archiveTo && changesFolder) {
-    const made = await add({ kind: 'create-folder', parent: { fileId: changesFolder.id }, name: nameOf(SYSTEM.archive), createKey: newKey('folder') });
-    archiveChain.push(made);
-    archiveTo = { createdBy: made };
-  }
-  let pendingTo: Target | null = null;
-  if (pointers.size && changesFolder) {
-    const path = `${SYSTEM.changes}/pending`;
-    const folder = ix.file(path);
-    const parent: Target = folder ? { fileId: folder.id } : { createdBy: await add({ kind: 'create-folder',
-      parent: { fileId: changesFolder.id }, name: 'pending', createKey: newKey('folder') }) };
-    const run = ix.file(`${path}/${opts.runId}`);
-    pendingTo = run ? { fileId: run.id } : { createdBy: await add({ kind: 'create-folder', parent,
-      name: opts.runId, createKey: newKey('folder') }) };
-  }
   /** What each record's archive waits for: the plan's `needs`. */
   const archives = new Map<string, readonly string[]>();
   const satisfiedAppends: SatisfiedAppend[] = [];
   // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply.
   const paired = pairsOf(journal.map((l) => l.rec));
   for (const line of journal) {
-    // Unreachable: a captured line has its changes folder, so its archive is there or planned above.
-    if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
-    const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
-    const n = need(line.rec.id);
-    // A person's request (`settleRequest`) also waits for the sources it settles on: its lines', or every thing filed.
-    const sourceMoves = line.rec.kind === 'request' ? settlement.sourcesOf(line.rec.id, runSources).flatMap((id) => moveOf.get(id) ?? []) : [];
-    const derived = [...new Set([...(write ? [write] : []), ...n.edits, ...n.derived, ...sourceMoves])];
+    const { derived, moves } = await archiveOf(line);
     archives.set(line.rec.id, derived);
-    const moves: string[] = [];
-    for (const f of line.files) {
-      const pointer = pointers.get(line.rec.id) ?? [];
-      // Pending moves run once append outcomes are known, including a definite clash. The archive still waits
-      // for successful edits. Thus only a clash leaves the unchanged request in its originating run's folder.
-      const pending = pendingTo && pointer.length ? await add({ kind: 'move', before: seen(f), parent: pendingTo,
-        name: f.name, properties: { [PROP.run]: null } }, [...pointer, ...n.edits, ...sourceMoves]) : null;
-      moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name,
-        properties: line.waitingRun ? { [PROP.run]: null } : {} }, [...derived, ...(pending ? [pending] : [])]));
-    }
     // A line already there completes its request with the request's archive.
     for (const p of satisfied.filter((x) => x.consent.requestId === line.rec.id)) if (moves[0]) {
       satisfiedAppends.push({ consent: p.consent, entry: p.line.entry, before: seen(p.file), path: p.path, text: new TextDecoder().decode(p.bytes), content: p.before, operationId: moves[0], editContract: 2 });
@@ -3591,7 +3611,6 @@ export async function build(decided: Decided): Promise<Ended> {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
     }
   }
-
   // `.bower/hashes.json` only on a full run, as the legacy runner wrote it.
   if (hashesNew) {
     const { text } = hashesNew;
