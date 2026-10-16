@@ -10,7 +10,7 @@ import type { SearchHit, TreeNode } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
 import { crumbs, routeFor } from '@/app/paths';
-import { plural } from '@/app/words';
+import { NOTHING_FOUND, plural } from '@/app/words';
 import { Icon, type IconName } from '@/ui/Icon';
 import s from './palette.module.css';
 import { useBackCloses } from '@/ui/back';
@@ -140,7 +140,7 @@ export function Palette() {
             </div>
             {/* A listbox owns only options (ARIA 1.2), so the message lives in an always-present live status (APG combobox, WCAG 4.1.3). */}
             <div role="status">
-              <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : inside.failed ? 'Search did not answer. Names still work; try the words again in a moment.' : 'Nothing by that name or in your notes.'}</Command.Empty>
+              <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : inside.failed ? 'Search did not answer. Names still work; try the words again in a moment.' : NOTHING_FOUND}</Command.Empty>
             </div>
             <Command.List className={s.list}>
               <Command.Group heading="Actions" className={s.group}>
