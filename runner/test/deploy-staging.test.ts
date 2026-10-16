@@ -117,6 +117,8 @@ function checkout(): Checkout {
   mkdirSync(join(repo, 'api'));
   mkdirSync(join(repo, 'runner'));
   copyFileSync(SCRIPT, join(repo, 'scripts', 'deploy-staging.sh'));
+  // The guards it shares with the production cutover (cutover-rollback R3), once they live in their own file.
+  if (existsSync(join(ROOT, 'scripts', 'deploy-lib.sh'))) copyFileSync(join(ROOT, 'scripts', 'deploy-lib.sh'), join(repo, 'scripts', 'deploy-lib.sh'));
   copyFileSync(join(ROOT, 'api', 'wrangler.jsonc'), join(repo, 'api', 'wrangler.jsonc'));
   writeFileSync(join(repo, 'runner', 'package.json'), '{}\n');
   writeFileSync(join(repo, '.gitignore'), 'dist\nnode_modules\n.env*\n.dev.vars\n');
