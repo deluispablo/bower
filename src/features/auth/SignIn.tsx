@@ -54,7 +54,7 @@ export function SignIn() {
   }, []);
   return (
     <div className={s.wrap}>
-      <div className={s.art}>
+      <header className={s.art}>
         <span className={s.brand}>
           <BowerMark size={30} />
           <span>Bower</span>
@@ -63,7 +63,7 @@ export function SignIn() {
           <PoseBower pose="idle" size={180} className={s.bird} />
           <Court />
         </div>
-      </div>
+      </header>
       <main className={s.panel}>
         {bye && (
           <p className={s.bye} role="status">

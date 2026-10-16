@@ -89,7 +89,7 @@ function WelcomeSteps() {
   if (step >= 0) {
     const st = STEPS[step];
     return (
-      <div className={s.page}>
+      <main className={s.page}>
         <div className={s.dots} aria-label={`Step ${step + 1} of ${STEPS.length}`}>
           {STEPS.map((_, i) => (
             <span key={i} className={i === step ? s.dotOn : ''} />
@@ -106,12 +106,12 @@ function WelcomeSteps() {
             {step + 1 < STEPS.length ? 'Skip' : 'Look around first'}
           </Button>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className={s.page}>
+    <main className={s.page}>
       <div className={s.head}>
         <PoseBower pose={ready ? 'proud' : 'carry'} size={96} />
         <div>
@@ -138,6 +138,6 @@ function WelcomeSteps() {
           Show me around
         </Button>
       </div>
-    </div>
+    </main>
   );
 }

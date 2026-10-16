@@ -5,7 +5,7 @@ import s from './legal.module.css';
 /** Plain words on what Bower keeps and what it does not. Readable signed in or out. */
 export function Privacy() {
   return (
-    <article className={s.page}>
+    <main className={s.page}>
       <Top />
       <h1>Privacy</h1>
       <p>Bower files what you save into a folder of your own Google Drive. Your notes and files stay there; Bower does not keep a copy anywhere else.</p>
@@ -24,13 +24,13 @@ export function Privacy() {
       </ul>
       <h2>Leaving</h2>
       <p>Delete the app in Settings and Bower forgets you. Your folder stays in your Drive, with everything in it.</p>
-    </article>
+    </main>
   );
 }
 
 export function Terms() {
   return (
-    <article className={s.page}>
+    <main className={s.page}>
       <Top />
       <h1>Terms</h1>
       <p>This Bower is run by the person who invited you, for themselves and the people they invite. Use it for your own things.</p>
@@ -39,7 +39,7 @@ export function Terms() {
         <li>Bower can get a name or a folder wrong. Nothing is deleted: every move can be undone, and what Bower set aside waits in the inbox.</li>
         <li>The person who runs this Bower can stop it at any time; your folder stays in your Drive.</li>
       </ul>
-    </article>
+    </main>
   );
 }
 
