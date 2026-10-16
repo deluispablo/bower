@@ -61,12 +61,15 @@ interface MarkdownProps {
   taskRegions?: Note['taskRegions'];
   /** Makes task boxes tickable; gets the task's position among the note's tasks. */
   onToggle?: (index: number) => void;
+  /** The level (1-6) the note's shallowest heading takes, for a note shown under a heading of its own. */
+  headingLevel?: number;
 }
 
-export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
+export function Markdown({ text, link, taskRegions, onToggle, headingLevel }: MarkdownProps) {
   // CommonMark leaves HTML comments out of a reader that renders no HTML. shortcut: single-line comments only (the
   // data layer counts task lines one by one), a comment over several lines stays as text.
   const lines = text.split('\n').map((l) => l.replace(/<!--.*?-->/g, ''));
+  const top = Math.min(4, ...lines.map((l) => /^(#{1,4})\s/.exec(l)?.[1]?.length ?? 4));
   let task = -1;
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -80,10 +83,12 @@ export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
     }
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     if (h) {
-      const level = Math.min(4, (h[1]?.length ?? 2) + 0);
+      const depth = h[1]?.length ?? 2;
       const content = inline(h[2] ?? '', link, key);
       const id = headingId(h[2] ?? '');
-      blocks.push(level <= 2 ? <h2 key={key} id={id}>{content}</h2> : <h3 key={key} id={id}>{content}</h3>);
+      // With headingLevel the shallowest heading takes that level and the rest keep their gap, down to h6.
+      const Tag = headingLevel ? (`h${Math.min(6, headingLevel + depth - top)}` as 'h4') : depth <= 2 ? 'h2' : 'h3';
+      blocks.push(<Tag key={key} id={id}>{content}</Tag>);
       i++;
       continue;
     }
