@@ -131,3 +131,38 @@ describe('deletion-allowlist-doc', () => {
     expect(runbook).toMatch(/operator.*remov|remov.*operator|remov.*by hand|by hand/i);
   });
 });
+
+describe('runbook-tools', () => {
+  const production = (): string => read('docs/runbook.md').split('## Production')[1] ?? '';
+
+  it('AC1 runbook-precheck-command: the precheck is the read-only command, not a walk through the app', () => {
+    const text = production();
+    expect(text).toContain('BOWER_DRIVE_TOKEN=<token> pnpm -C runner precheck FOLDER_ID');
+    expect(text).toMatch(/drive\.readonly/);
+    // What each exit says, as the command's own header does.
+    expect(text).toMatch(/`0`[^\n]*`1`[^\n]*`2`/);
+    expect(text).not.toMatch(/Open Home, a few notes, the piles and the search/);
+  });
+
+  it('AC2 runbook-cutover-script: the deploy is scripts/cutover.sh, dry run first', () => {
+    const text = production();
+    const dry = text.indexOf('scripts/cutover.sh --dry-run <main short SHA> <production origin> api/wrangler.production.jsonc');
+    const real = text.indexOf('scripts/cutover.sh <main short SHA> <production origin> api/wrangler.production.jsonc');
+    expect(dry, 'the dry run is named').toBeGreaterThan(-1);
+    expect(real, 'the real run follows the dry run').toBeGreaterThan(dry);
+    expect(text).not.toContain('npx wrangler deploy --var APP_ORIGIN:<production origin>');
+  });
+
+  it('AC3 runbook-rollback-script: the rollback is scripts/rollback.sh, dry run first', () => {
+    const text = production();
+    const dry = text.indexOf('scripts/rollback.sh --dry-run <version id> <production origin>');
+    const real = text.indexOf('scripts/rollback.sh <version id> <production origin>');
+    expect(dry, 'the dry run is named').toBeGreaterThan(-1);
+    expect(real, 'the real run follows the dry run').toBeGreaterThan(dry);
+    expect(text).not.toContain('npx wrangler rollback <version id>');
+  });
+
+  it('R4 runbook-tools-lead-only: the scripts stay the technical lead\'s, never an agent\'s (guard)', () => {
+    expect(production()).toMatch(/by hand, by the technical lead/);
+  });
+});
