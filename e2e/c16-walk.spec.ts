@@ -68,7 +68,7 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   await typeIn(page, page.getByRole('textbox', { name: 'What is this?' }), 'Car insurance renewal');
   await typeIn(page, page.getByRole('textbox', { name: 'Paste a link' }), 'https://insurer.example/renewal');
   await press(page, page.getByRole('button', { name: 'Add link' }));
-  await press(page, page.getByRole('button', { name: /Put 1 thing in the inbox/ }));
+  await press(page, page.getByRole('button', { name: /Add 1 thing to the inbox/ }));
   await expect(page.getByRole('status').filter({ hasText: /inbox/i }).or(main.getByRole('link', { name: /Car insurance renewal/ })).first()).toBeVisible();
 
   // Tell Bower: a request, then a rule (the arrow keys pick the second choice).

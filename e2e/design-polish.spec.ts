@@ -89,3 +89,25 @@ for (const path of ['/', '/files', '/add', '/bower', '/settings', '/note/Project
     expect(Math.min(result.width, result.height), 'at least 24 by 24').toBeGreaterThanOrEqual(24);
   });
 }
+
+test('design-polish AC6: the Demo strip does not cover the note toolbar once the page is scrolled on a phone', async ({ page }) => {
+  await resize(page, { width: 375, height: 812 });
+  await page.goto('/note/Projects/Flat%20hunt/Flat%20hunt.md?scenario=default&time=instant');
+  await expect(page.getByRole('button', { name: 'Demo situations', exact: true })).toBeVisible();
+  await expect(page.locator('#boot')).toHaveCount(0);
+  // Make sure the page can scroll, whatever the note's length.
+  await page.evaluate(() => {
+    document.body.style.minHeight = '3000px';
+    window.scrollTo(0, 400);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(24);
+  const overlap = await page.evaluate(() => {
+    const bar = [...document.querySelectorAll('*')].find((e) => getComputedStyle(e).position === 'sticky' && e.getBoundingClientRect().height > 0);
+    const fab = document.querySelector('button[aria-label="Demo situations"]');
+    if (!bar || !fab) return null;
+    const a = bar.getBoundingClientRect();
+    const b = fab.getBoundingClientRect();
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  });
+  expect(overlap, 'a sticky toolbar and the strip exist, and do not overlap').toBe(false);
+});

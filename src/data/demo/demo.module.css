@@ -1,4 +1,4 @@
-.fab { position: fixed; left: 0; top: 46%; z-index: 35; width: 14px; height: 52px; padding: 0; border: 0; border-radius: 0 8px 8px 0; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px !important; letter-spacing: 0.04em; background: color-mix(in srgb, var(--accent) 85%, transparent); color: var(--on-brand); font: 600 12px var(--font-body); cursor: pointer; opacity: 0.75; }
+.fab { position: fixed; left: 0; right: 0; top: 0; z-index: 35; height: 24px; padding: 0; border: 0; font-size: 12px !important; letter-spacing: 0.04em; background: color-mix(in srgb, var(--accent) 85%, transparent); color: var(--on-brand); font: 600 12px var(--font-body); cursor: pointer; opacity: 0.75; }
 .fab:hover { opacity: 1; }
 .panel { position: fixed; right: 12px; top: 12px; z-index: 110; width: 300px; max-height: calc(100dvh - 24px); overflow: auto; padding: 14px; border-radius: 14px; background: var(--raised); box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--line); font-size: 14px; }
 .head { display: flex; justify-content: space-between; align-items: center; color: var(--heading); }
@@ -13,8 +13,9 @@
 
 :global(body:has(#boot)) .fab { z-index: 110; }
 
-/* On the phone a slim tab on the left edge, in the gutter, where no button ever is. */
-@media (min-width: 900px) { .fab { left: 50%; top: auto; width: auto; height: 26px; padding: 0 10px; border-radius: 999px; writing-mode: horizontal-tb; transform: translateX(-50%); bottom: 2px; font-size: 12px !important; letter-spacing: 0; } }
+/* On the phone a strip of its own at the top of the page, scrolling away with it (never fixed, so it never sits on sticky bars), with the page pushed down by its height. */
+@media (max-width: 899px) { .fab { position: absolute; } :global(body):has(.fab) { padding-top: 24px; } }
+@media (min-width: 900px) { .fab { left: 50%; right: auto; top: auto; width: auto; height: 26px; padding: 0 10px; border-radius: 999px; transform: translateX(-50%); bottom: 2px; letter-spacing: 0; } }
 
 
 

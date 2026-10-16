@@ -89,6 +89,7 @@ export class LiveSession implements Session {
       await this.worker.signOut();
       this.check(epoch);
       forgetThisPerson();
+      sayGoodbye('signed-out');
       this.me = Promise.resolve(null);
       this.transitioning = false;
       this.emit();

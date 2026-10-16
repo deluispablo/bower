@@ -665,6 +665,7 @@ export class DemoWorld {
           this.user = null;
           keepSignedIn(false);
           forgetThisPerson();
+          sayGoodbye('signed-out');
           this.sessionListeners.forEach((l) => l());
         });
       },

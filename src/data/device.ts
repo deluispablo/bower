@@ -15,10 +15,10 @@ import { forgetFailedInMemory } from './vault/journal';
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
 
-/** The account is gone: the sign-in screen says so once (it reads and clears 'bower:bye'). */
-export function sayGoodbye(): void {
+/** The account is gone or the person signed out: the sign-in screen says so once (it reads and clears 'bower:bye'). */
+export function sayGoodbye(reason: 'deleted' | 'signed-out' = 'deleted'): void {
   try {
-    sessionStorage.setItem('bower:bye', '1');
+    sessionStorage.setItem('bower:bye', reason === 'deleted' ? '1' : reason);
   } catch (e) {
     // Storage blocked: the sign-in screen shows without the goodbye.
     console.error(e);
