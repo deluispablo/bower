@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
-import { PARA_ROOTS, type ParaRoot } from '@/data/types';
+import { BowerError, PARA_ROOTS, type ParaRoot } from '@/data/types';
 import { paraColor } from '@/app/paths';
 import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
-import { report } from '@/ui/report';
+import { LoadError } from '@/ui/LoadError';
 import s from './welcome.module.css';
 
 const MEANING: Record<ParaRoot, string> = {
@@ -66,10 +66,11 @@ function WelcomeSteps() {
   // Steps replace each other, so finishing the tour leaves no way back into it.
   const setStep = (n: number): void => setParams({ step: String(n) }, { replace: true });
   const started = useRef(false);
+  const [error, setError] = useState<BowerError | null>(null);
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+  // One attempt at a time: the mount starts it once, and LoadError's Try again starts it again after a failure.
+  const attempt = useCallback(() => {
+    setError(null);
     void session
       .folderState()
       .then(async (st) => {
@@ -83,8 +84,17 @@ function WelcomeSteps() {
         setBack(found);
         setReady(true);
       })
-      .catch((e: unknown) => report(e, 'Your Bower folder could not be opened. Try again.'));
+      .catch((e: unknown) => {
+        console.error(e);
+        setError(e instanceof BowerError ? e : new BowerError('unknown', 'Your Bower folder could not be opened. Try again.'));
+      });
   }, [session]);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    attempt();
+  }, [attempt]);
 
   if (step >= 0) {
     const st = STEPS[step];
@@ -135,6 +145,7 @@ function WelcomeSteps() {
         ))}
       </ul>
       <div className={s.foot}>
+        <LoadError state={{ error, reload: attempt }} />
         <Button block disabled={!ready} onClick={() => setStep(0)}>
           Show me around
         </Button>

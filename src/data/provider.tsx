@@ -21,10 +21,13 @@ export interface Loaded<T> {
   reload: () => void;
 }
 
+const sameDeps = (a: readonly unknown[], b: readonly unknown[]) => a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+
 /**
  * Reads something from a source and reads it again whenever the source says
  * it changed. Keeps the last good answer while a new one is on its way, so
- * screens do not flash.
+ * screens do not flash; new deps (another note) start over, since that answer
+ * belongs to the deps it was read for.
  */
 export function useLoad<T>(
   load: (s: Sources, again: boolean) => Promise<T>,
@@ -32,26 +35,32 @@ export function useLoad<T>(
   deps: readonly unknown[] = [],
 ): Loaded<T> {
   const sources = useSources();
-  const [state, setState] = useState<{ data: T | undefined; error: BowerError | null; loading: boolean }>({
-    data: undefined,
-    error: null,
-    loading: true,
-  });
-  const loadRef = useRef(load);
+  type State = { data: T | undefined; error: BowerError | null; loading: boolean; deps: readonly unknown[] };
+  const [kept, setState] = useState<State>({ data: undefined, error: null, loading: true, deps });
+  let state = kept;
+  if (!sameDeps(kept.deps, deps)) {
+    // Adjusting state while rendering when a prop changes (React: you might not need an effect); this render shows it too.
+    state = { data: undefined, error: null, loading: true, deps };
+    setState(state);
+  }
+  const loadRef = useRef({ load, deps });
   useLayoutEffect(() => {
-    loadRef.current = load;
+    loadRef.current = { load, deps };
   });
   const seq = useRef(0);
 
   const run = useCallback((again = false) => {
     const n = ++seq.current;
-    loadRef.current(sources, again).then(
-      (data) => n === seq.current && setState({ data, error: null, loading: false }),
+    const { load: read, deps: asked } = loadRef.current;
+    // An answer lands only on the deps it was asked for (seq orders answers for the same deps).
+    const mine = (s: State) => sameDeps(s.deps, asked);
+    read(sources, again).then(
+      (data) => n === seq.current && setState((s) => (mine(s) ? { data, error: null, loading: false, deps: s.deps } : s)),
       (e: unknown) => {
         if (n !== seq.current) return;
         const err = e instanceof BowerError ? e : new BowerError('unknown', 'Something went wrong.');
         if (!(e instanceof BowerError)) console.error(e);
-        setState((s) => ({ ...s, error: err, loading: false }));
+        setState((s) => (mine(s) ? { ...s, error: err, loading: false } : s));
       },
     );
   }, [sources]);
@@ -65,7 +74,7 @@ export function useLoad<T>(
 
   // Only the person's reload asks again after a client error; mounts and listeners do not.
   const reload = useCallback(() => run(true), [run]);
-  return { ...state, reload };
+  return { data: state.data, error: state.error, loading: state.loading, reload };
 }
 
 export const useTree = () => useLoad((s) => s.vault.tree(), (s, cb) => s.vault.subscribe(cb));

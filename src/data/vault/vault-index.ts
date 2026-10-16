@@ -177,7 +177,10 @@ export class VaultIndex {
     const kids = new Map<string, DriveFile[]>();
     for (const f of this.files.values()) {
       const p = f.parents[0];
-      if (p) kids.set(p, [...(kids.get(p) ?? []), f]);
+      if (!p) continue;
+      const list = kids.get(p);
+      if (list) list.push(f);
+      else kids.set(p, [f]);
     }
     const walk = (parentId: string, parentPath: string): void => {
       const list = (kids.get(parentId) ?? []).sort((a, b) => a.createdTime.localeCompare(b.createdTime) || a.id.localeCompare(b.id));

@@ -247,6 +247,15 @@ describe('B4c-c through production main', () => {
     expect(phase(second)).toBe('done');
   });
 
+  it('AC2 c12-measure-call-kinds: a consolidating run prints one model-call line per call, in order, by kind', async () => {
+    const { f } = await waited();
+    const from = vi.mocked(console.log).mock.calls.length;
+    const second = await press(f, remember(PREFS[7] ?? ''));
+    expect(second.calls).toEqual(CONSOLIDATING);
+    const lines = vi.mocked(console.log).mock.calls.slice(from).flat().map(String).flatMap((s) => s.split('\n'));
+    expect(lines.flatMap((l) => /^model-call: kind=(\w+) in=\d+ cached=\d+ out=\d+ ms=\d+$/.exec(l)?.[1] ?? [])).toEqual(CONSOLIDATING);
+  });
+
   it('AC17 b4c-learning-run: a due section is consolidated only by a run that adds a fact to it', async () => {
     const f = await folder({ extra: [7, 8].map((n) => fact(`pref-${n}`, 'about-preferences', '2026-10-06', PREFS[n - 1] ?? '')) });
     const plain = await press(f, null);

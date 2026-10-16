@@ -34,6 +34,24 @@ export const folder = {
   [PERSONAL]: note('Alex records remote developer applications.', '# Applications\n\n## My thoughts\nAlex checks remote work.\n\n## Timeline\n'),
   'Resources/Gardening/Garden plans.md': note('Alex grows herbs.', 'PERSONAL_GARDEN_BODY\n'),
 };
+
+/**
+ * C12's made-up large folder (c12-measure): `notes` notes spread over `folders` topic folders under the four main
+ * folders, the first note of each folder its hub, and `things` loose text files in the inbox. Names are made up.
+ */
+export function largeFolder(notes: number, folders: number, things: number) {
+  const topics = Array.from({ length: folders }, (_, f) => `${['Projects', 'Areas', 'Resources', 'Archives'][f % 4]}/Topic ${String(f + 1).padStart(2, '0')}`);
+  const name = (at: string): string => at.slice(at.indexOf('/') + 1);
+  const folder = Object.fromEntries(Array.from({ length: notes }, (_, i) => {
+    const at = topics[i % folders] ?? '';
+    const path = i < folders ? `${at}/${name(at)}.md` : `${at}/Note ${String(i + 1).padStart(3, '0')}.md`;
+    return [path, note(`Alex keeps ${name(at)} record ${i + 1} on shared plots and local workshops.`, `${'Made-up evidence line. '.repeat(12)}\n`)];
+  }));
+  const files = Array.from({ length: things }, (_, t) => `Thing ${String(t + 1).padStart(3, '0')}.txt`);
+  const inboxFiles = Object.fromEntries(files.map((file, t) => [file,
+    `Alex received ${name(topics[t % folders] ?? '')} item ${t + 1}. ${'A made-up detail for the benchmark. '.repeat(40)}\n`]));
+  return { folder, inbox: files.map((file) => ({ line: '', files: [file] })), inboxFiles, to: topics[0] ?? '' };
+}
 export interface Item { itemId: string; kind: string; destination: string | { parentId: string; name: string }; wants: string[] }
 export interface Selection { items: Item[]; asks: unknown[] }
 export interface Frame { call: ClaudeCall; value: Record<string, unknown>; events: Observation[] }
