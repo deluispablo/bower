@@ -649,7 +649,7 @@ function jsonOf(text: string): unknown {
  * (neither shown nor taken, R36), `answered` once it has one (taken, never shown). None when the list cannot be read: with
  * no readable question the request is the model's again (R87).
  */
-async function requestsAsked(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<{ held: Set<string>; answered: Set<string> }> {
+export async function requestsAsked(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<{ held: Set<string>; answered: Set<string> }> {
   const held = new Set<string>();
   const answered = new Set<string>();
   if (!took.taken.journal.length) return { held, answered };
@@ -658,7 +658,9 @@ async function requestsAsked(read: ScriptedRead, run: ScriptedRun, took: Admitte
   // A file that fails validation still names the requests it holds: they stay held, none answered (R87).
   const valid = isRunnerFile(SYSTEM.questions, value);
   const listed = valid ? value.questions : isRecord(value) && Array.isArray(value.questions) ? value.questions.filter(isRecord) : [];
-  const requestOf = (q: unknown): string | undefined => (isRecord(q) && isRecord(q.request) && typeof q.request.id === 'string' ? q.request.id : undefined);
+  // By the question's own id, never its payload: an edited payload (id changed, missing, null) still holds the request it was asked for (R87).
+  const prefix = requestQuestionId('');
+  const requestOf = (q: unknown): string | undefined => (isRecord(q) && typeof q.id === 'string' && q.id.startsWith(prefix) && q.id.length > prefix.length ? q.id.slice(prefix.length) : undefined);
   if (!listed.some((q) => requestOf(q) !== undefined)) return { held, answered };
   const records: Array<{ fileId: string; rec: JournalRecord }> = [];
   for (const line of took.taken.journal) {
@@ -666,10 +668,8 @@ async function requestsAsked(read: ScriptedRead, run: ScriptedRun, took: Admitte
     if (isJournalRecord(rec)) records.push({ fileId: line.fileId, rec });
   }
   for (const q of listed) {
-    const request = records.find((r) => r.rec.kind === 'request' && r.rec.id === requestOf(q));
-    if (!request) continue;
     const yes = valid && records.some((r) => r.rec.kind === 'answer' && answersAsking(r.rec, q as Question) && typeof journalAnswer(r.rec) === 'boolean');
-    (yes ? answered : held).add(request.fileId);
+    for (const request of records.filter((r) => r.rec.kind === 'request' && r.rec.id === requestOf(q))) (yes ? answered : held).add(request.fileId);
   }
   return { held, answered };
 }
