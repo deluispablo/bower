@@ -91,7 +91,7 @@ export class FakeDrive implements DriveApi {
 
   /** Told after every change, so the fake source can keep the Drive across reloads. */
   onChange: (() => void) | null = null;
-  /** Makes this Drive durable now; awaited before a reserved id or a partial upload is answered. */
+  /** Makes this Drive durable now; awaited before any write is answered, as Drive answers only what it stored. */
   persist: (() => Promise<void>) | null = null;
 
   /** Everything, as JSON: files, the Bin, contents (blobs as base64), changes feed and counters. */
@@ -320,34 +320,34 @@ export class FakeDrive implements DriveApi {
 
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.changed(this.add(parentId, name, true, null, appProperties, id)));
+    return this.kept(this.changed(this.add(parentId, name, true, null, appProperties, id)));
   }
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>, id?: string): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.answered(this.changed(this.add(parentId, name, false, text, appProperties, id))));
+    return this.kept(this.answered(this.changed(this.add(parentId, name, false, text, appProperties, id))));
   }
 
   async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
     const f = this.add(parentId, name, false, body, appProperties);
     onProgress?.(1);
-    return this.changed(f);
+    return this.kept(this.changed(f));
   }
 
   async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.answered(this.applyWrite(id, text, ifModified, appProperties)));
+    return this.kept(this.answered(this.applyWrite(id, text, ifModified, appProperties)));
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.applyUpdate(id, patch));
+    return this.kept(this.applyUpdate(id, patch));
   }
 
   async trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.applyTrash(id, appProperties));
+    return this.kept(this.applyTrash(id, appProperties));
   }
 
   async untrash(id: string, appProperties?: Record<string, string>, name?: string): Promise<DriveFile> {
@@ -357,7 +357,7 @@ export class FakeDrive implements DriveApi {
     f.trashed = false;
     if (appProperties) f.meta = { ...f.meta, appProperties: { ...f.meta.appProperties, ...appProperties } };
     if (name !== undefined) f.meta = { ...f.meta, name, modifiedTime: this.stamp() };
-    return this.reply(this.changed(this.copy(f.meta)));
+    return this.kept(this.changed(this.copy(f.meta)));
   }
 
   /**
@@ -448,11 +448,9 @@ export class FakeDrive implements DriveApi {
       if (this.files.has(id)) throw driveError('conflict');
       s.file = { ...this.changed(this.add(parentId, name, false, content, appProperties, id)), sha256: hash };
       s.parts = [];
-    } else {
-      // Drive keeps the bytes it confirms, so they are confirmed only once kept: a reload right after resumes from them.
-      this.changed(null);
-      await this.persist?.();
-    }
+    } else this.changed(null);
+    // Drive keeps the bytes it confirms (or the finished file), so they are confirmed only once kept.
+    await this.persist?.();
     return this.reply(this.statusOf(s));
   }
 
@@ -502,6 +500,12 @@ export class FakeDrive implements DriveApi {
   }
 
   /** The answer, unless a test asked for it to be lost after the effect. */
+  /** `reply` once the tab keeps the write: the effect, then kept, then the answer (or its loss). */
+  private async kept<T>(value: T): Promise<T> {
+    await this.persist?.();
+    return this.reply(value);
+  }
+
   private reply<T>(value: T): T {
     if (!this.loseReply) return value;
     this.loseReply = false;
