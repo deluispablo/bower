@@ -11,7 +11,7 @@
  * The fence of both apply engine adapters (`RunnerDrive` on Google Drive,
  * `FakeRunDrive` on the pretend one), so both refuse the same writes.
  */
-import { notAsSeenError, readForFence, refuseNotAsSeen } from '../contracts/still-as-seen';
+import { notAsSeenError, openFolder, readForFence, refuseNotAsSeen } from '../contracts/still-as-seen';
 import type { DriveFile, FencedCall, FencedDrive } from './drive-api';
 import { isNoAnswer } from './transport';
 import { bowerNoteRole, parseNote } from '../contracts/note-format';
@@ -73,7 +73,7 @@ export class SeenFiles {
     // A create or a move needs its folder there and out of the Bin; where that folder is, or what it is called, is no
     // version of what it holds, so it need not have been read before. A move's folder gone is told by its code.
     if (target.part !== 'target') {
-      if (now && !now.trashed && now.file.folder) return;
+      if (openFolder(now && { ...now.file, trashed: now.trashed })) return;
       console.error(`Refused a write into folder ${target.id}: gone`);
       throw notAsSeenError('gone', NOT_AS_SEEN, target.part === 'destination' ? 'not-found' : 'conflict');
     }

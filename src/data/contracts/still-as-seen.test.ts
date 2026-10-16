@@ -155,3 +155,16 @@ describe('every write checks one still-as-seen expectation', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('audit-move-destination', () => {
+  it('AC2 audit-move-destination-one-home: a write goes only into a folder that is there and out of the Bin', async () => {
+    const { openFolder } = (await import('./still-as-seen')) as unknown as { openFolder?: (now: { folder: boolean; trashed?: boolean } | null) => boolean };
+    expect(openFolder).toBeTypeOf('function');
+    if (!openFolder) return;
+    expect(openFolder({ folder: true })).toBe(true);
+    expect(openFolder({ folder: true, trashed: false })).toBe(true);
+    expect(openFolder({ folder: true, trashed: true })).toBe(false);
+    expect(openFolder({ folder: false })).toBe(false);
+    expect(openFolder(null)).toBe(false);
+  });
+});
