@@ -11,7 +11,7 @@ for (const width of [375, 1440]) {
     await page.goto('/add?source=demo&scenario=default&time=instant');
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
     await page.locator('input[type=file][multiple]').setInputFiles({ name: 'Soup ideas.md', mimeType: 'text/markdown', buffer: Buffer.alloc(0) });
-    await page.getByRole('button', { name: 'Put 1 thing in the inbox', exact: true }).click();
+    await page.getByRole('button', { name: 'Add 1 thing to the inbox', exact: true }).click();
     await expect(page.getByRole('status').getByText('1 thing in the inbox', { exact: true })).toBeVisible();
     await page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link', { name: 'Files', exact: true }).click();
     const tree = page.getByRole('tree', { name: 'Your Bower folder', exact: true });

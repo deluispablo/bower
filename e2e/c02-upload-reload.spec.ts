@@ -21,7 +21,7 @@ async function addTwo(page: Page): Promise<void> {
   await page.goto('/add?scenario=empty&time=demo');
   await page.locator('textarea').first().fill('Papers from Alex');
   await page.locator('input[type=file][multiple]').setInputFiles(['a.pdf', 'b.pdf'].map((name) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${name}`) })));
-  await page.getByRole('button', { name: 'Put 2 things in the inbox', exact: true }).click();
+  await page.getByRole('button', { name: 'Add 2 things to the inbox', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Inbox' }).getByRole('link', { name: /Papers from Alex/ })).toBeVisible();
 }
 

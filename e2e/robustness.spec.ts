@@ -61,7 +61,7 @@ test('a pile note can be changed before the tidy-up', async ({ page }) => {
 test('a note-only pile can be added from Add', async ({ page }) => {
   await open(page, '/add', 'empty', 'instant');
   await page.getByRole('textbox', { name: 'What is this?' }).fill('Ask the landlord about the heating');
-  await page.getByRole('button', { name: 'Put the note in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add to the inbox' }).click();
   await expect(page.getByRole('region', { name: 'Inbox' }).getByRole('link', { name: /Ask the landlord about the heating/ })).toBeVisible();
 });
 
@@ -102,7 +102,7 @@ test('Add keeps its links when you leave and come back', async ({ page, isMobile
   await page.getByRole('link', { name: /^Home/ }).first().click();
   if (isMobile) await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Add' }).click();
   else await page.getByRole('link', { name: 'Add a pile' }).first().click();
-  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Add 1 thing to the inbox/ })).toBeVisible();
 });
 
 test('Undo after moving the open note brings the page back with it', async ({ page, isMobile }) => {
@@ -149,11 +149,11 @@ test('clicking away from a refused name cancels without a second toast', async (
 test('after a reload an added file asks to be added again', async ({ page }) => {
   await open(page, '/add', 'empty', 'instant');
   await page.locator('input[type=file][multiple]').setInputFiles({ name: 'Boiler service.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF made up') });
-  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Add 1 thing to the inbox/ })).toBeVisible();
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 5000 });
   await expect(page.getByText('Add this file again')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Put the note in the inbox' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add to the inbox' })).toBeDisabled();
 });
 
 test('Add warns about a file you already have', async ({ page }) => {
@@ -162,9 +162,9 @@ test('Add warns about a file you already have', async ({ page }) => {
   await page.locator('input[type=file][multiple]').setInputFiles(lease);
   await expect(page.getByText('You already have this in Projects / Flat hunt.')).toBeVisible();
   await page.getByRole('button', { name: 'Leave it out' }).click();
-  await expect(page.getByRole('button', { name: 'Put the note in the inbox' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add to the inbox' })).toBeDisabled();
   await page.locator('input[type=file][multiple]').setInputFiles(lease);
   await page.getByRole('button', { name: 'Add it anyway' }).click();
   await expect(page.getByText('You already have this in Projects / Flat hunt.')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Add 1 thing to the inbox/ })).toBeVisible();
 });

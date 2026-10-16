@@ -39,7 +39,7 @@ it.each([
   });
   const base = loadingSources();
   render(<MemoryRouter initialEntries={['/add']}><DataProvider sources={{ ...base, vault: { ...base.vault, addPile, duplicates: async () => [] } }}><CurrentRoute /><Routes><Route path="/add" element={<Add />} /><Route path="/" element={<p>Saved inbox page</p>} /></Routes></DataProvider></MemoryRouter>);
-  const save = screen.getByRole('button', { name: /^Put .+ in the inbox$/ });
+  const save = screen.getByRole('button', { name: /^Add .*to the inbox$/ });
   expect(within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem')).toHaveLength(members.length);
   if (disappearsAfterRender) {
     // Public byte-store operation, after the screen has rendered its enabled save.
@@ -87,7 +87,7 @@ it('explicitly removing an unavailable draft member saves the entire remaining s
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Take scan.pdf out' })); });
   expect(screen.getByRole('list', { name: 'In this pile' })).not.toHaveTextContent('scan.pdf');
   expect(get(readyKey)).toBe(body);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 2 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect(addPile).toHaveBeenCalledExactlyOnceWith({ text: context, items: [{ name: readyMember.name, kind: readyMember.kind, origin: readyMember.origin, body }, { name: linkMember.name, kind: linkMember.kind, origin: linkMember.origin, url: linkMember.url }] });
   expect(sessionStorage.getItem('bower:add-items')).toBeNull();
   expect(sessionStorage.getItem('bower:add-draft')).toBeNull();
@@ -106,7 +106,7 @@ it('reselecting an unavailable draft member keeps one row and saves all members 
   expect(within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem')).toHaveLength(3);
   expect(screen.getByRole('list', { name: 'In this pile' })).not.toHaveTextContent('Add this file again');
   expect(get(missingKey)).toBe(restored);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 3 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 3 things to the inbox' })); });
   const request: NewPile = { text: context, items: [{ name: missingMember.name, kind: missingMember.kind, origin: missingMember.origin, body: restored }, { name: readyMember.name, kind: readyMember.kind, origin: readyMember.origin, body: readyBody }, { name: linkMember.name, kind: linkMember.kind, origin: linkMember.origin, url: linkMember.url }] };
   expect(addPile).toHaveBeenCalledExactlyOnceWith(request);
   expect(sessionStorage.getItem('bower:add-draft')).toBe(context);
@@ -127,7 +127,7 @@ it.each([
   const emptyBody = new Blob([]); if (zeroByte) keep(readyKey, emptyBody);
   const addPile = vi.fn(async (input: NewPile) => admitted(input));
   renderDraft(members, addPile);
-  const save = screen.getByRole('button', { name: /^Put .+ in the inbox$/ }); expect(save).toBeEnabled();
+  const save = screen.getByRole('button', { name: /^Add .*to the inbox$/ }); expect(save).toBeEnabled();
   await act(async () => { fireEvent.click(save); });
   expect(addPile).toHaveBeenCalledExactlyOnceWith({ text: context, items: members.map(({ name, kind, origin, url }) => ({ name, kind, origin, ...(url ? { url } : {}), ...(zeroByte ? { body: emptyBody } : {}) })) });
   expect(screen.getByLabelText('Current route')).toHaveTextContent('/');
@@ -139,13 +139,13 @@ it('a rejected Add admission retains context, all rows and complete bytes for re
   const addPile = vi.fn<(input: NewPile) => Promise<Pile>>().mockRejectedValueOnce(failure).mockImplementation(async (input) => admitted(input));
   renderDraft([readyMember, linkMember], addPile);
   const storedItems = sessionStorage.getItem('bower:add-items');
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 2 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect(diagnostic).toHaveBeenCalledExactlyOnceWith(failure);
   expect(sessionStorage.getItem('bower:add-items')).toBe(storedItems); expect(sessionStorage.getItem('bower:add-draft')).toBe(context);
   expect(get(readyKey)).toBe(body); expect(screen.getByLabelText('Current route')).toHaveTextContent('/add');
   expect(within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem')).toHaveLength(2);
   expect(screen.getByRole('textbox', { name: 'What is this?' })).toHaveValue(context);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 2 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect(addPile).toHaveBeenCalledTimes(2); expect(addPile.mock.calls[1]).toEqual(addPile.mock.calls[0]);
   expect(get(readyKey)).toBeUndefined(); expect(screen.getByLabelText('Current route')).toHaveTextContent('/');
 });
@@ -158,7 +158,7 @@ it('an Add draft with unavailable bytes keeps every member before saving (pendin
   const view = renderDraft([readyMember, linkMember], addPile);
   const before = sessionStorage.getItem('bower:add-items');
   const zone = screen.getByText('Drop files here').parentElement; if (!zone) throw new Error('The drop surface is missing.');
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 2 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect.soft(zone).toHaveAttribute('aria-disabled', 'true');
   expect.soft(zone).toHaveTextContent('Saving this pile…');
   expect(addPile).toHaveBeenCalledOnce();
@@ -202,7 +202,7 @@ it('an Add draft with unavailable bytes keeps every member before saving (failed
   const view = renderDraft([readyMember, linkMember], addPile);
   const before = sessionStorage.getItem('bower:add-items');
   const zone = screen.getByText('Drop files here').parentElement; if (!zone) throw new Error('The drop surface is missing.');
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 2 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect.soft(zone).toHaveAttribute('aria-disabled', 'true');
   expect.soft(zone).toHaveTextContent('Saving this pile…');
   expect(screen.getByRole('textbox', { name: 'What is this?' })).toBeDisabled();
@@ -225,7 +225,7 @@ it('an Add draft with unavailable bytes keeps every member before saving (failed
   const rows = JSON.parse(sessionStorage.getItem('bower:add-items') ?? '[]') as DraftFixture[];
   const laterKey = rows.find((item) => item.name === later.name)?.key; if (!laterKey) throw new Error('The recovered member is missing.');
   expect(get(laterKey)).toBe(later);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Put 2 things in the inbox' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect(addPile).toHaveBeenCalledTimes(2);
   expect(addPile.mock.calls[1]?.[0].text).toBe('Synthetic retry context');
   expect(addPile.mock.calls[1]?.[0].items.map(({ name, body: bytes }) => ({ name, bytes }))).toEqual([{ name: readyMember.name, bytes: body }, { name: later.name, bytes: later }]);

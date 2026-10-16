@@ -15,7 +15,7 @@ for (const source of ['demo', 'fake']) {
     for (const name of names) {
       await inbox.getByRole('button', { name: 'Add a pile', exact: true }).click();
       await page.getByRole('textbox', { name: 'What is this?', exact: true }).fill(name);
-      await page.getByRole('button', { name: 'Put the note in the inbox', exact: true }).click();
+      await page.getByRole('button', { name: 'Add to the inbox', exact: true }).click();
       await expect(inbox.getByRole('link', { name: new RegExp(`^${name}\\b`) })).toBeVisible();
     }
 

@@ -45,3 +45,25 @@ describe('sign-in after Google sends the person back', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/sign-in$/));
   });
 });
+
+describe('design-polish: the sign-in screen after leaving', () => {
+  afterEach(() => sessionStorage.clear());
+
+  it('AC4 signed-out-line: after a sign-out it says so once, as a status', () => {
+    sessionStorage.setItem('bower:bye', 'signed-out');
+    open('');
+    expect(screen.queryByText('Signed out. This device forgot you.', { exact: true })?.getAttribute('role')).toBe('status');
+    expect(screen.queryByText('Your account is gone. Your notes stay in your Drive.')).toBeNull();
+    expect(sessionStorage.getItem('bower:bye')).toBeNull();
+    cleanup();
+    open('');
+    expect(screen.queryByText('Signed out. This device forgot you.', { exact: true })).toBeNull();
+  });
+
+  it('R9 deleted-line: after deleting the account it still says the account is gone', () => {
+    sessionStorage.setItem('bower:bye', '1');
+    open('');
+    expect(screen.getByText('Your account is gone. Your notes stay in your Drive.', { exact: true })).toHaveAttribute('role', 'status');
+    expect(screen.queryByText('Signed out. This device forgot you.')).toBeNull();
+  });
+});
