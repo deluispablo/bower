@@ -13,6 +13,7 @@ import { NameSheet } from '@/features/files/NameSheet';
 import { MovePicker } from '@/features/files/MovePicker';
 import { useRunWatcher } from '@/features/tidy/useRunWatcher';
 import { Replay } from '@/features/tidy/Replay';
+import s from './shell.module.css';
 
 /** Picks the desktop or phone frame and mounts what every screen shares. */
 export function Shell() {
@@ -42,6 +43,17 @@ export function Shell() {
 
   return (
     <>
+      {/* First in the page, for both frames (WCAG 2.4.1). Focuses #main itself: the jump would change the address. */}
+      <a
+        className={s.skip}
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
+      >
+        Skip to content
+      </a>
       {desktop ? <DesktopShell /> : <PhoneShell />}
       <Palette />
       <TidySheet />

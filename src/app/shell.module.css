@@ -88,3 +88,7 @@
 .drawerHead { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px 6px 16px; }
 @keyframes slideIn { from { transform: translateX(-100%); } }
 @keyframes fadeIn { from { opacity: 0; } }
+
+/* ---------- skip link: off the top edge until it has focus, above every frame and layer, no transition */
+.skip { position: fixed; top: 8px; left: 8px; z-index: 120; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; background: var(--surface-strong); color: var(--brand-line); font-weight: 600; text-decoration: none; transform: translateY(calc(-100% - 16px)); }
+.skip:focus { transform: none; box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--line); }
