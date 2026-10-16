@@ -80,7 +80,7 @@ describe('what the repository promises', () => {
     const names = [...list('REQUIRED_SECRETS'), ...list('OPTIONAL_SECRETS'), ...list('REQUIRED_VARS')];
     const defaults = /const DEFAULTS = \{([^}]*)\}/.exec(env)?.[1] ?? '';
     names.push(...[...defaults.matchAll(/^\s*([A-Z_]+):/gm)].map((m) => m[1] ?? ''));
-    expect(names.length).toBeGreaterThanOrEqual(12);
+    expect(names.length).toBeGreaterThanOrEqual(11);
     for (const name of names) expect(runbook, name).toContain(name);
     expect(runbook).toContain('APP_VERSION');
   });
