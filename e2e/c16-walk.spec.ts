@@ -47,8 +47,7 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   await page.goto('/sign-in?scenario=signed-out&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page).toHaveURL(/\/sign-in/);
-  // The brand mark sits outside the page's main landmark: axe's best-practice `region` rule, not a WCAG criterion.
-  await scan(page, ['region']);
+  await scan(page);
   await press(page, page.getByRole('button', { name: 'Continue with Google' }));
 
   // Home.
