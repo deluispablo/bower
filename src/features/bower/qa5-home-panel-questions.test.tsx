@@ -4,7 +4,7 @@
  * "Answer on Home".
  */
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import { BowerError, type Question } from '@/data/types';
@@ -32,14 +32,18 @@ async function show(path: string, read: () => Promise<Question[]> = async () => 
       return never;
     },
   });
-  render(
-    <MemoryRouter initialEntries={[path]}>
+  // One catch-all route: navigating keeps the same panel mounted, as RightPanel does.
+  const router = createMemoryRouter([{
+    path: '*',
+    element: (
       <DataProvider sources={{ ...sources, vault: vault as typeof sources.vault, runs: { ...sources.runs, subscribe: () => () => undefined } }}>
         <BowerPanel />
       </DataProvider>
-    </MemoryRouter>,
-  );
+    ),
+  }], { initialEntries: [path] });
+  render(<RouterProvider router={router} />);
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  return router;
 }
 
 describe('qa5-home-panel-questions: the panel stops repeating Home', () => {
@@ -64,6 +68,19 @@ describe('qa5-home-panel-questions: the panel stops repeating Home', () => {
     await show(path);
     expect(screen.getByRole('heading', { name: '2 questions for you' })).toBeInTheDocument();
     expect(screen.getByText('Where should these papers go?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Answer on Home' })).toHaveAttribute('href', '/');
+  });
+
+  it('R2 same-mount-route-change: one kept panel follows the route, note to Home to note (RightPanel keeps it mounted)', async () => {
+    const router = await show('/note/Projects/Flat.md');
+    const panel = screen.getByRole('heading', { name: 'Now' });
+    expect(screen.getByText('Where should these papers go?')).toBeInTheDocument();
+    await act(async () => { await router.navigate('/?source=fake'); });
+    expect(screen.getByRole('heading', { name: 'Now' })).toBe(panel); // same mount
+    expect(screen.queryByText('Where should these papers go?')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Answer on Home' })).toBeNull();
+    await act(async () => { await router.navigate('/note/Projects/Flat.md'); });
+    expect(screen.getByRole('heading', { name: '2 questions for you' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Answer on Home' })).toHaveAttribute('href', '/');
   });
 });

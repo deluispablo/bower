@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
 import { noteRoute } from '@/app/paths';
 import { report } from '@/ui/report';
@@ -27,6 +27,8 @@ export function BowerPanel() {
   // Put away is Home's Got it: the stopped run is seen, everywhere.
   const putAway = (id: string): void => void runs.markSeen(id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'));
   const nav = useNavigate();
+  // Home shows the questions and their error itself (d-v2-14).
+  const onHome = useLocation().pathname === '/';
   return (
     <div className={s.panel}>
       <section>
@@ -53,8 +55,8 @@ export function BowerPanel() {
         )}
         <FailedChanges />
       </section>
-      <LoadError state={questionsState} />
-      {!!qs?.length && (
+      {!onHome && <LoadError state={questionsState} />}
+      {!onHome && !!qs?.length && (
         <section>
           <h2 className={s.ph}>{plural(qs.length, 'question')} for you</h2>
           {qs.map((q) => (
