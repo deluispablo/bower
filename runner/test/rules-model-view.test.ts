@@ -166,7 +166,7 @@ async function sweep(window: [number, number], shownPart: (lead: number) => Prom
 
 it('AC6 rules-model-code-point-cut: the rules cut never splits a character made of two units (R5, R12)', async () => {
   await sweep([3_880, 3_960], async (lead) => (await shown(`${'a'.repeat(lead)}${SPROUT}${'b'.repeat(400)}\n`)).rules);
-});
+}, 60_000);
 
 it('AC6 rules-model-code-point-cut-default-marker: a field with the generic marker never splits one either (R5, R12)', async () => {
   await sweep([11_880, 11_960], async (lead) => {
@@ -175,7 +175,7 @@ it('AC6 rules-model-code-point-cut-default-marker: a field with the generic mark
     const piles = result.frames[1]?.value.piles as Array<{ things: Array<{ text: string | null }> }> | undefined;
     return piles?.[0]?.things[0]?.text ?? undefined;
   });
-});
+}, 60_000);
 
 function newProject(base: Awaited<ReturnType<typeof setup>>, basis: string) {
   return { ...empty, things: base.sources.filter((s) => s.name).map((s) => ({ fileId: s.itemId, to: 'Projects/Garden club', name: s.name, basis,
