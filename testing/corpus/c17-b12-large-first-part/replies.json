@@ -32,5 +32,23 @@
         }
       }
     ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "maps": [
+      {
+        "requestId": "$request:press-4",
+        "title": "Review the rest",
+        "set": {
+          "type": "concept",
+          "folderId": "$folder:Resources/Reading",
+          "recursive": false,
+          "where": { "op": "eq", "property": "status", "value": "active" }
+        },
+        "ops": [{ "kind": "property", "key": "review_state", "mode": "set", "value": "reviewed" }]
+      }
+    ]
   }
 ]
