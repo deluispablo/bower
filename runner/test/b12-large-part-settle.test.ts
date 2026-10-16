@@ -2,9 +2,9 @@
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { planAdmission } from '../../src/data/spine/plan';
-import { fakeRead } from '../../src/data/spine/read';
+import { fakeRead, type ScriptedRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
-import type { ClaudeSpawn } from '../src/claude';
+import { requestsAsked, type ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
 import { runOnDrive, seedCase, type CaseRun } from './corpus-run';
@@ -63,8 +63,9 @@ type Folder = Awaited<ReturnType<typeof folder>>;
 async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, o: Press = {}) {
   f.press++;
   const changes = await f.id(SYSTEM.changes);
-  if (o.answer) await f.drive.createText(changes, `answer-${f.press}.json`, JSON.stringify({ v: 1, id: `answer-${f.press}`, device: 'device-1', at: DAY + f.press,
-    kind: 'answer', what: 'Answered a question', questionId: o.answer.question.id, askedAt: o.answer.question.askedAt, answer: o.answer.yes, text: o.answer.yes ? 'yes' : 'no' }));
+  const body = o.answer ? JSON.stringify({ v: 1, id: `answer-${f.press}`, device: 'device-1', at: DAY + f.press,
+    kind: 'answer', what: 'Answered a question', questionId: o.answer.question.id, askedAt: o.answer.question.askedAt, answer: o.answer.yes, text: o.answer.yes ? 'yes' : 'no' }) : '';
+  const answer = o.answer ? await f.drive.createText(changes, `answer-${f.press}.json`, body) : undefined;
   const words = 'Update these notes.';
   const request = o.request === false || o.answer ? undefined : await f.drive.createText(changes, `press-${f.press}.json`, JSON.stringify({ v: 1,
     id: `press-${f.press}`, device: 'device-1', at: DAY + f.press, kind: 'request', what: `Asked Bower: "${words}"`, text: words }));
@@ -72,16 +73,18 @@ async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, 
   if (admission.kind !== 'manifest') throw new Error(`Not admitted: ${admission.cause}`);
   const hunt = await f.id(HUNT);
   const calls: string[] = [];
+  const inputs: string[] = [];
   let attempt = 0;
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
     calls.push(phase);
+    inputs.push(call.input);
     const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string }> };
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: hunt, wants: [] })), asks: [] });
     return reply(await intent({ request: request?.id ?? '', hunt }, attempt++));
   }, () => ({ drive: f.drive, root: f.root, admission: admission.manifest }), true);
   const run = await runOnDrive(f.c, f.drive, f.root, { claude: spawn, admission: admission.manifest, pacing: { baseMs: 0, sleep: async () => {} },
     answerStart: { scope: 'instructions', requestId: `b12s-run-${f.press}` }, env: { CLAUDE_CODE_OAUTH_TOKEN: TOKEN }, ...(o.around ? { around: o.around } : {}) }, f.press);
-  return { ...run, calls };
+  return { ...run, calls, inputs, answerFile: answer ? { id: answer.id, text: body } : undefined };
 }
 
 /** 200 more active offers; idle runs read them in (b12-large-part.test.ts `grow`). */
@@ -110,8 +113,16 @@ async function seeded(part: Record<string, unknown> = {}) {
 
 const questions = (run: CaseRun) => (JSON.parse(run.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions;
 const reviewed = (run: CaseRun) => Object.entries(run.after).filter(([path, text]) => path.startsWith(`${HUNT}/`) && text.includes('review_state: reviewed\n')).map(([path]) => path);
+/** Record `id` is out of pending and kept under the archive: a deleted or lost record is not archived. */
 const archived = (run: CaseRun, id: string) => !Object.keys(run.after).some((path) => path.startsWith(`${SYSTEM.changes}/`)
-  && !path.startsWith(`${SYSTEM.archive}/`) && path.endsWith(`${id}.json`));
+  && !path.startsWith(`${SYSTEM.archive}/`) && path.endsWith(`${id}.json`))
+  && Object.keys(run.after).some((path) => path.startsWith(`${SYSTEM.archive}/`) && path.endsWith(`${id}.json`));
+/** The original file (its Drive id and text) sits under the archive, unchanged. */
+const kept = (run: CaseRun, file: { id: string; text: string } | undefined) => {
+  const path = file ? run.pathsById[file.id] : undefined;
+  return file !== undefined && path?.startsWith(`${SYSTEM.archive}/`) === true && run.after[path] === file.text;
+};
+const original = async (f: Folder, id: string) => ({ id, text: await f.drive.readText(id) });
 const rowsOf = (run: CaseRun) => (JSON.parse(run.after[SYSTEM.requests] ?? '{"done":[]}') as { done: Array<{ id: string }> }).done;
 const url = (input: RequestInfo | URL): URL => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 const noModel = () => { throw new Error('A yes runs its stored part with no model call.'); };
@@ -151,8 +162,9 @@ describe('B12d settlement keeps the person\'s consent', () => {
 
   it('AC3 retry closes on the next run', async () => {
     const { f, q, heldId } = await seeded();
+    const request = await original(f, heldId);
     let refusing = true;
-    await press(f, noModel, { answer: { question: q, yes: true }, around: (next) => async (input, init) => {
+    const first = await press(f, noModel, { answer: { question: q, yes: true }, around: (next) => async (input, init) => {
       const at = url(input);
       if (refusing && init?.method === 'PATCH' && at.pathname === `/drive/v3/files/${heldId}` && at.searchParams.has('addParents')) {
         return new Response('{"error":{"code":403,"message":"Made-up refusal."}}', { status: 403 });
@@ -166,7 +178,120 @@ describe('B12d settlement keeps the person\'s consent', () => {
     expect(archived(next, 'held-1'), 'the request is archived').toBe(true);
     expect(questions(next), 'only then the question closes').toEqual([]);
     expect(archived(next, `answer-${f.press - 1}`), 'and the yes is archived').toBe(true);
+    expect(kept(next, request), 'the original request is under the archive').toBe(true);
+    expect(kept(next, first.answerFile), 'the original answer is under the archive').toBe(true);
     expect(rowsOf(next).filter((r) => r.id === 'held-1'), 'one requests row').toHaveLength(1);
     expect(Object.keys(next.after).filter((p) => /\/Request - [^/]*\.md$/.test(p)), 'one result note').toEqual([NOTE]);
+  }, 120_000);
+});
+
+/** A made-up refusal of the archive move of the given files; `applied`: the move reaches Drive anyway (a lost response). */
+const refuse = (fileIds: string[], o: { applied?: boolean } = {}) => (next: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
+  const at = url(input);
+  if (init?.method === 'PATCH' && at.searchParams.has('addParents') && fileIds.some((id) => at.pathname === `/drive/v3/files/${id}`)) {
+    if (o.applied) await next(input, init);
+    return new Response('{"error":{"code":403,"message":"Made-up refusal."}}', { status: 403 });
+  }
+  return next(input, init);
+};
+const shrunk = async (f: Folder) => {
+  const old = await f.id(OLD);
+  await f.drive.writeText(old, offer('Oldwick', '2026-09-01').replace('status: active', 'status: closed'), (await f.drive.get(old)).modifiedTime);
+};
+
+describe('B12d settlement, the review cases', () => {
+  for (const [name, part] of [['missing request id', { id: undefined }], ['null request id', { id: null }]] as const) {
+    it(`AC1 ${name} keeps the hold`, async () => {
+      const { f, heldId } = await seeded(part);
+      await shrunk(f);
+      const run = await press(f, (ctx, attempt) => (attempt === 0 ? asking({ ...ctx, request: heldId }, { question: undefined }) : empty), { request: false });
+      expect(reviewed(run), 'no member is written').toEqual([]);
+      expect(archived(run, 'held-1'), 'the request stays pending').toBe(false);
+    }, 120_000);
+  }
+
+  it('AC1 an altered question holds every copy of its request: neither reaches the model', async () => {
+    const { f, heldId } = await seeded({ id: 'held-altered' });
+    const copy = await f.drive.createText(await f.id(SYSTEM.changes), 'held-1.json', await f.drive.readText(heldId));
+    const admission = await planAdmission(fakeRead(f.drive), f.root, { scope: 'instructions', clock: () => DAY, newId: () => 'b12s-copies' });
+    if (admission.kind !== 'manifest') throw new Error(`Not admitted: ${admission.cause}`);
+    const took = { taken: admission.manifest } as unknown as Parameters<typeof requestsAsked>[2];
+    // The model gets the admitted lines that are not held (claude.ts `took`).
+    const read: ScriptedRead = { ...fakeRead(f.drive), piles: async () => [], provenance: 'fake-stored' };
+    const { held, answered } = await requestsAsked(read, { rootId: f.root } as Parameters<typeof requestsAsked>[1], took);
+    expect(admission.manifest.journal.map((l) => l.fileId), 'both copies are admitted').toEqual(expect.arrayContaining([heldId, copy.id]));
+    expect([heldId, copy.id].filter((id) => !held.has(id)), 'no copy is left for the model').toEqual([]);
+    expect([...answered], 'none is settled').toEqual([]);
+  }, 120_000);
+
+  it('AC1 a pending yes on an altered question writes and settles nothing', async () => {
+    const { f, q, heldId } = await seeded({ id: 'held-altered' });
+    await shrunk(f);
+    const run = await press(f, (ctx, attempt) => (attempt === 0 ? asking({ ...ctx, request: heldId }, { question: undefined }) : empty), { answer: { question: q, yes: true } });
+    expect(reviewed(run), 'no member is written').toEqual([]);
+    expect(archived(run, 'held-1'), 'the request stays pending').toBe(false);
+    expect(rowsOf(run).filter((r) => r.id === 'held-1'), 'no requests row').toEqual([]);
+  }, 120_000);
+
+  it('AC1 an altered id naming another live request does not hold that one', async () => {
+    // The stored id names the request pressed next; the question's own id still holds only held-1.
+    const { f } = await seeded();
+    await shrunk(f);
+    const other = `press-${f.press + 1}`;
+    const part = (await f.drive.listAll(f.root)).find((x) => f.drive.pathOf(x.id, f.root) === SYSTEM.questions);
+    if (!part) throw new Error('Missing made-up questions');
+    const text = (await f.drive.readText(part.id)).replace('"id": "held-1"', `"id": "${other}"`);
+    await f.drive.writeText(part.id, text, (await f.drive.get(part.id)).modifiedTime);
+    const run = await press(f, (ctx, attempt) => (attempt === 0 ? asking(ctx, { question: undefined }) : empty));
+    expect(reviewed(run), 'the other request is the model\'s: its part is written').toHaveLength(200);
+    expect(archived(run, other), 'the other request is settled').toBe(true);
+    expect(archived(run, 'held-1'), 'the held request stays pending').toBe(false);
+  }, 120_000);
+
+  it('AC2 a refused archive after a no keeps the question open and the no unarchived', async () => {
+    const { f, q, heldId } = await seeded();
+    const request = await original(f, heldId);
+    const no = await press(f, () => empty, { answer: { question: q, yes: false }, around: refuse([heldId]) });
+    expect(archived(no, 'held-1'), 'the request stays pending').toBe(false);
+    expect(questions(no).map((x) => x.id), 'its question stays open').toEqual([q.id]);
+    expect(archived(no, `answer-${f.press}`), 'the no is not archived').toBe(false);
+    const next = await press(f, () => empty, { request: false });
+    expect(archived(next, 'held-1'), 'the retry archives it').toBe(true);
+    expect(questions(next), 'only then the question closes').toEqual([]);
+    expect(archived(next, `answer-${f.press - 1}`)).toBe(true);
+    expect(kept(next, request), 'the original request is under the archive').toBe(true);
+    expect(kept(next, no.answerFile), 'the original answer is under the archive').toBe(true);
+  }, 120_000);
+
+  it('AC2 a request with two copies closes only after every copy is archived', async () => {
+    const { f, q, heldId } = await seeded();
+    const copy = await f.drive.createText(await f.id(SYSTEM.changes), 'held-1.json', JSON.stringify({ v: 1, id: 'held-1', device: 'device-1', at: DAY,
+      kind: 'request', what: `Asked Bower: "${WORDS}"`, text: WORDS }));
+    expect(copy.id).not.toBe(heldId);
+    const copies = [await original(f, heldId), await original(f, copy.id)];
+    const yes = await press(f, noModel, { answer: { question: q, yes: true }, around: refuse([copy.id]) });
+    expect(questions(yes).map((x) => x.id), 'one copy refused: the question stays open').toEqual([q.id]);
+    expect(archived(yes, `answer-${f.press}`), 'and the yes is not archived').toBe(false);
+    const next = await press(f, noModel, { request: false });
+    expect(next.calls).toEqual([]);
+    expect(archived(next, 'held-1'), 'every copy is archived').toBe(true);
+    expect(copies.map((c) => kept(next, c)), 'both original copies are under the archive').toEqual([true, true]);
+    expect(kept(next, yes.answerFile), 'the original answer is under the archive').toBe(true);
+    expect(questions(next), 'only then the question closes').toEqual([]);
+  }, 120_000);
+
+  it('AC3 a lost response after the archive move is retried: the next run closes', async () => {
+    const { f, q, heldId } = await seeded();
+    const request = await original(f, heldId);
+    const yes = await press(f, noModel, { answer: { question: q, yes: true }, around: refuse([heldId], { applied: true }) });
+    expect(questions(yes).map((x) => x.id), 'the question stayed open').toEqual([q.id]);
+    const next = await press(f, noModel, { request: false });
+    expect(next.calls, 'no model call').toEqual([]);
+    expect(archived(next, 'held-1'), 'the request is out of pending').toBe(true);
+    expect(kept(next, request), 'the original request is under the archive').toBe(true);
+    expect(kept(next, yes.answerFile), 'the original answer is under the archive').toBe(true);
+    expect(questions(next), 'the question closes').toEqual([]);
+    expect(archived(next, `answer-${f.press - 1}`)).toBe(true);
+    expect(rowsOf(next).filter((r) => r.id === 'held-1'), 'one requests row').toHaveLength(1);
   }, 120_000);
 });
