@@ -426,6 +426,7 @@ Current Version ID: 00000000-0000-0000-0000-000000000000`;
     expect(other.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
     const none = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: 'APP_ORIGIN: "https://bower-staging.example.test"' });
     expect(none.status).not.toBe(0);
+    expect(none.stderr).toMatch(/no upload line for bower-staging/);
     expect(none.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
     const fine = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: `${echoed.split('Uploaded')[0]}Uploaded bower-staging (2.10 sec)` });
     expect(fine.status).toBe(0);
