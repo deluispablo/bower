@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
@@ -6,15 +6,23 @@ import { useUi } from './ui-store';
 import { Explorer } from '@/features/files/Explorer';
 import { RunChip } from '@/features/tidy/RunChip';
 import { Dock } from '@/ui/Dock';
-import { useBackCloses } from '@/ui/back';
+import { Sheet } from '@/ui/Sheet';
+import { usePrefs } from './prefs';
 import s from './shell.module.css';
 
 /** The phone frame: a tab bar, the tree as a drawer from the left edge, the run chip. */
 export function PhoneShell() {
   const { drawerOpen, setDrawer } = useUi();
-  useBackCloses(drawerOpen, () => setDrawer(false));
+  const birdMoves = usePrefs((p) => p.birdMoves);
   const loc = useLocation();
-  useEffect(() => setDrawer(false), [loc.pathname, setDrawer]);
+  // Every navigation, to the same page too, is a new location key: it closes the drawer and sends the keyboard to the page.
+  const [wasOpen, setWasOpen] = useState(false);
+  const [openedOn, setOpenedOn] = useState(loc.key);
+  if (drawerOpen !== wasOpen) {
+    setWasOpen(drawerOpen);
+    if (drawerOpen) setOpenedOn(loc.key);
+  }
+  useEffect(() => setDrawer(false), [loc.key, setDrawer]);
 
   // A swipe from the left edge opens the tree.
   const start = useRef<number | null>(null);
@@ -56,20 +64,26 @@ export function PhoneShell() {
           <span>Bower</span>
         </NavLink>
       </nav>
-      {drawerOpen && (
-        <>
-          <div className={s.drawerScrim} onClick={() => setDrawer(false)} aria-hidden="true" />
-          <aside className={s.drawer} role="dialog" aria-modal="true" aria-label="Your folders">
-            <div className={s.drawerHead}>
-              <strong style={{ fontFamily: 'var(--font-display)', color: 'var(--heading)', fontSize: 18 }}>Your folders</strong>
-              <IconButton label="Close" onClick={() => setDrawer(false)}>
-                <Icon name="x" />
-              </IconButton>
-            </div>
-            <Explorer variant="drawer" />
-          </aside>
-        </>
-      )}
+      <Sheet
+        open={drawerOpen}
+        onOpenChange={setDrawer}
+        title="Your folders"
+        hideTitle
+        placement="left"
+        still={!birdMoves}
+        navigation={!drawerOpen && openedOn !== loc.key}
+        style={{ left: 0, width: 'min(340px, 88vw)', paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className={s.drawerBody}>
+          <div className={s.drawerHead}>
+            <strong aria-hidden="true" style={{ fontFamily: 'var(--font-display)', color: 'var(--heading)', fontSize: 18 }}>Your folders</strong>
+            <IconButton label="Close" onClick={() => setDrawer(false)}>
+              <Icon name="x" />
+            </IconButton>
+          </div>
+          <Explorer variant="drawer" />
+        </div>
+      </Sheet>
     </div>
   );
 }
