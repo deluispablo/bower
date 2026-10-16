@@ -175,8 +175,8 @@ export function filingMove(manifest: RunManifest, op: OperationV2): boolean {
 
 /**
  * Consumed dispositions (guard 13) for declared piles whose every member was
- * filed by this run: the published report, the member keys and the applied
- * moves (and the folder's Bin, when it went). A pile with a member not filed
+ * filed by this run (moved, or binned as already saved): the published report,
+ * the member keys and the applied moves and Bins (and the folder's Bin, when it went). A pile with a member not filed
  * keeps its declaration and gets none.
  */
 export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcome[], reportHash: string): Disposition[] {
@@ -185,13 +185,14 @@ export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcom
   for (const pile of manifest.capture.piles) {
     if (pile.source.kind !== 'declared') continue;
     const files = new Set(manifest.capture.members.filter((m) => m.pileId === pile.pileId).map((m) => m.file.fileId));
-    const moves = manifest.operations.filter((o) => filingMove(manifest, o) && o.effect.kind === 'move' && files.has(o.effect.before.fileId));
+    const moves = manifest.operations.filter((o) => (filingMove(manifest, o) || savedBin(manifest, o)) && (o.effect.kind === 'move' || o.effect.kind === 'bin') && files.has(o.effect.before.fileId));
     const bin = manifest.operations.find((o) => o.effect.kind === 'bin' && o.effect.before.fileId === pile.anchor?.fileId);
     const applied = (o: OperationV2): EffectEvidence | null => {
       const outcome = byOp.get(o.operationId);
       return outcome?.state === 'applied' ? outcome.evidence : null;
     };
-    if (!moves.length || moves.length !== files.size || !moves.every((o) => applied(o))) continue;
+    const covered = new Set(moves.flatMap((o) => ('before' in o.effect && o.effect.before ? [o.effect.before.fileId] : [])));
+    if (!moves.length || covered.size !== files.size || !moves.every((o) => applied(o))) continue;
     const operations = [...moves, ...(bin && applied(bin) ? [bin] : [])].flatMap((o) => {
       const evidence = applied(o);
       return evidence ? [{ operationId: o.operationId, evidence }] : [];
