@@ -207,18 +207,18 @@ export function BowerScreen() {
         <LoadError state={rulesState} />
         {prose && (
           <>
-            <p id="rules-written" className={s.label}>
+            <h3 id="rules-written" className={s.label}>
               Written in your rules note
-            </p>
+            </h3>
             <div role="region" aria-labelledby="rules-written" className={s.written}>
               <Markdown text={prose} link={link} />
             </div>
-            <div className={s.ruleFoot}>
+            <div className={s.proseFoot}>
               <span className="muted">Bower follows these too. To change them, edit the note.</span>
               <Link to={noteRoute('Rules.md')}>Open your rules note</Link>
             </div>
             {!!rules?.length && (
-              <p className={s.label}>Added in Bower</p>
+              <h3 className={s.label}>Added in Bower</h3>
             )}
           </>
         )}

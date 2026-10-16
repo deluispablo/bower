@@ -100,12 +100,10 @@ for (const width of [375, 1440]) {
     // AC1: a rule added in Bower reads in the prose's weight and size, not bold.
     const remove = main.getByRole('button', { name: /^Remove the rule: / }).first();
     await expect(remove).toBeVisible();
-    const rule = await remove.evaluate((b) => {
-      const text = b.closest('li')?.firstElementChild;
-      const c = text ? getComputedStyle(text) : null;
-      return { size: c?.fontSize, weight: c?.fontWeight };
-    });
-    expect(rule).toEqual({ size: prose.size, weight: prose.weight });
+    // The probe is the element holding the rule's words, found by its text, whatever wraps it.
+    const ruleWords = ((await remove.getAttribute('aria-label')) ?? '').replace(/^Remove the rule: /, '');
+    const rule = await look(main.getByRole('listitem').getByText(ruleWords, { exact: true }));
+    expect({ size: rule.size, weight: rule.weight }).toEqual({ size: prose.size, weight: prose.weight });
 
     // AC2: the two group labels look the same, and stand out from the text they label.
     const labels = ['Written in your rules note', 'Added in Bower'].map((name) => main.getByRole('heading', { level: 3, name, exact: true }));
@@ -143,14 +141,27 @@ for (const width of [375, 1440]) {
     const section = panel.locator('section', { has: page.getByRole('heading', { name: 'Rules', exact: true }) });
     const items = section.getByRole('listitem');
     await expect(items.first()).toBeVisible();
+    // The rule text is the item's first element; a pending status beside it stays outside the clamp, visible.
     const fit = await items.evaluateAll((lis) => lis.map((li) => {
-      const line = parseFloat(getComputedStyle(li).lineHeight);
-      return { text: li.textContent ?? '', lines: li.getBoundingClientRect().height / line };
+      const el = li.firstElementChild as HTMLElement;
+      const line = parseFloat(getComputedStyle(el).lineHeight);
+      const clamped = el.getBoundingClientRect().height / line;
+      const saved = [el.style.webkitLineClamp, el.style.display, el.style.overflow];
+      el.style.webkitLineClamp = 'unset';
+      el.style.display = 'block';
+      el.style.overflow = 'visible';
+      const natural = el.getBoundingClientRect().height / line;
+      [el.style.webkitLineClamp, el.style.display, el.style.overflow] = saved;
+      const status = li.children[1]?.getBoundingClientRect();
+      return { text: el.textContent ?? '', clamped, natural, statusShown: status ? status.height > 0 && status.top >= el.getBoundingClientRect().bottom - 1 : true };
     }));
-    for (const item of fit) expect(item.lines, item.text).toBeLessThanOrEqual(2.05);
-    // Positive control: a rule long enough to need three lines at this width is there, whole, in the page.
-    const long = fit.find((i) => i.text.length > 100);
-    expect(long, 'a long rule in the panel').toBeTruthy();
+    for (const item of fit) {
+      expect(item.clamped, item.text).toBeLessThanOrEqual(2.05);
+      expect(item.statusShown, `status of ${item.text}`).toBe(true);
+    }
+    // Positive control: a rule that overflows two lines with the clamp off is there, whole, in the page.
+    const long = fit.find((i) => i.natural > 2.05);
+    expect(long, 'a rule over two lines with the clamp off').toBeTruthy();
     if (long) await expect(main.getByText(long.text, { exact: true })).toBeVisible();
     const noteLink = section.getByRole('link', { name: 'Your rules note', exact: true });
     await expect(noteLink).toBeVisible();

@@ -70,18 +70,14 @@ export function BowerPanel() {
         <h2 className={s.ph}>{countOr(prose === '' ? rules?.length : undefined, 'rule', 'Rules')}</h2>
         <LoadError state={rulesState} />
         <ul className={s.panelRules}>
-          {prose && (
-            <li>
-              <Link to={noteRoute('Rules.md')} className="muted">Your rules note</Link>
-            </li>
-          )}
           {(rules ?? []).slice(0, prose ? 4 : 5).map((r) => (
             <li key={r.id}>
-              {r.text}
+              <span className={s.panelRuleText}>{r.text}</span>
               {r.pending && <span className={s.waits}>Waits for the next tidy-up</span>}
             </li>
           ))}
         </ul>
+        {prose && <Link to={noteRoute('Rules.md')}>Your rules note</Link>}
       </section>
       <LoadError state={requestsState} />
       {asked.length > 0 && (
