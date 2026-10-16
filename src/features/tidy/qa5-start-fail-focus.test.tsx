@@ -80,5 +80,22 @@ describe('qa5-start-fail-focus: a failed start keeps the keyboard in the sheet',
     // Try again starts once more.
     fireEvent.click(again);
     expect(m.start).toHaveBeenCalledTimes(2);
+    // A duplicate press while the retry is pending does nothing; the next failure restores the retry, with focus.
+    await settle();
+    fireEvent.click(again);
+    expect(m.start).toHaveBeenCalledTimes(2);
+    await m.fail();
+    expect(within(m.sheet).getByRole('alert')).toHaveTextContent(FAILED);
+    const third = within(m.sheet).getByRole('button', { name: 'Try again' });
+    expect(third).not.toHaveAttribute('aria-disabled');
+    expect(third).toHaveFocus();
+    expect(m.start).toHaveBeenCalledTimes(2);
+  });
+
+  it('R3 same-act-double-press: two activations within one act start once', async () => {
+    const m = await mount();
+    const button = within(m.sheet).getByRole('button', { name: 'Tidy up 1 thing' });
+    act(() => { fireEvent.click(button); fireEvent.click(button); });
+    expect(m.start).toHaveBeenCalledOnce();
   });
 });
