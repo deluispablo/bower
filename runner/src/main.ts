@@ -291,7 +291,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   else await status.post('reading', totalOf(seen.total));
   await status.post('writing', totalOf(seen.total));
   const context = createOwnershipContext();
-  const plan = admittedPlan(token, drive, opts.provider(drive, rootId, context));
+  const plan = admittedPlan(grant.manifest, drive,opts.provider(drive, rootId, context));
   const end = await timing.time('apply', () => runOperations({
     rootId,
     runId: opts.runId,
