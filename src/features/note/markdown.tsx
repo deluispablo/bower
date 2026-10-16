@@ -1,5 +1,6 @@
 import type { Note } from '@/data/types';
 import { LIST_MARK, TASK_BOX } from '@/data/tasks';
+import { tableCells } from '@/data/search-text';
 import type { ReactNode } from 'react';
 import { Checkbox } from '@/ui/Field';
 
@@ -123,7 +124,7 @@ export function Markdown({ text, link, taskRegions, onToggle, headingLevel }: Ma
     if (line.trim().startsWith('|')) {
       const rows: string[][] = [];
       while (i < lines.length && (lines[i] ?? '').trim().startsWith('|')) {
-        const cells = (lines[i] ?? '').trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const cells = tableCells(lines[i] ?? '');
         if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) rows.push(cells);
         i++;
       }

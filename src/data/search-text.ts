@@ -16,23 +16,30 @@ export function searchLines(n: Pick<Note, 'summary' | 'currentState' | 'body' | 
   ].filter((l) => l.trim());
 }
 
-/** A line of markdown as a person reads it: no links' brackets, task boxes, table pipes or list marks. Search matches this, not the markdown. */
-export function plainText(line: string): string {
-  const cells = /^\s*\|/.test(line) ? line.split('|').map((c) => c.trim()).filter(Boolean) : null;
-  if (cells) line = cells.join(', ');
-  return line
-    .replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, (_m, target: string, _a, alias: string | undefined) => alias ?? target)
-    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')
-    .replace(/^\s*(#{1,6}|[-*+]|\d+[.)])\s+/, '')
-    .replace(/^\s*\|\s*|\s*\|\s*$/g, '')
-    .replace(/\s*\|\s*/g, ', ')
-    .replace(/\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g, (_m, b?: string, i?: string, c?: string) => b ?? i ?? c ?? '')
-    .trim();
+/**
+ * The cells of one table row, the app's one table reader (GFM tables extension): outer pipes dropped, split on
+ * unescaped `|`, `\|` read as `|`, each cell trimmed, empty cells kept in place.
+ */
+export function tableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'));
 }
 
-/** A matching line, short enough to show under a result. */
+/** A line of markdown as a person reads it: no links' brackets, task boxes, table pipes or list marks. Search matches this, not the markdown. */
+export function plainText(line: string): string {
+  const table = /^\s*\|/.test(line);
+  if (table) line = tableCells(line).filter(Boolean).join(', ');
+  line = line
+    .replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, (_m, target: string, _a, alias: string | undefined) => alias ?? target)
+    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')
+    .replace(/^\s*(#{1,6}|[-*+]|\d+[.)])\s+/, '');
+  // A table row's pipes are already its cell breaks; any left are literal.
+  if (!table) line = line.replace(/^\s*\|\s*|\s*\|\s*$/g, '').replace(/\s*\|\s*/g, ', ');
+  return line.replace(/\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g, (_m, b?: string, i?: string, c?: string) => b ?? i ?? c ?? '').trim();
+}
+
+/** A matching line, already plain text, short enough to show under a result. */
 export function plainSnippet(line: string): string {
-  return plainText(line).slice(0, 120);
+  return line.slice(0, 120);
 }
 
 /** Where a hit lives, as the result shows it. */
