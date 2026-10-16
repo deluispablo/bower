@@ -36,7 +36,7 @@ const FAKE_ONLY = 'the journey checks what the tidy-up wrote into the pretend Dr
 async function addNote(page: Page, words: string): Promise<void> {
   await open(page, '/add');
   await page.getByRole('textbox', { name: 'What is this?' }).fill(words);
-  await page.getByRole('button', { name: 'Put the note in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add to the inbox' }).click();
   await expect(inbox(page).getByRole('link', { name: new RegExp(words) })).toBeVisible();
 }
 
@@ -105,7 +105,7 @@ async function addLink(page: Page, address: string): Promise<void> {
   await inbox(page).getByRole('button', { name: 'Add a pile' }).click();
   await page.getByRole('textbox', { name: 'Paste a link' }).fill(address);
   await page.getByRole('button', { name: 'Add link' }).click();
-  await page.getByRole('button', { name: 'Put 1 thing in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add 1 thing to the inbox' }).click();
   await expect(inbox(page).getByRole('link', { name: new RegExp(address.replace(/\./g, '\\.')) })).toBeVisible();
 }
 

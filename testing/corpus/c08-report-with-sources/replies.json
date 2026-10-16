@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden day briefing.txt",
+        "to": "Projects/Garden day",
+        "name": "Garden day briefing.txt",
+        "note": {
+          "name": "Garden day readiness report.md",
+          "summary": "The garden day needs a confirmed rain plan before setup.",
+          "body": "# Garden day readiness report\n\nThe garden day can proceed outdoors, but the shelter decision remains open. Alex should confirm the shelter before inviting helpers to set up: the rain plan depends on that choice.\n\n## Readiness\n\n| Work | What is known | What remains |\n| --- | --- | --- |\n| Tables | The committee can lend 4 tables. | Alex must collect them on 2026-10-23. |\n| Water | The shared tap works. | Helpers must bring watering cans. |\n| Shelter | The hall is unavailable on 2026-10-24. | The committee has not confirmed the canopy. |\n\n## Recommended next steps\n\nConfirm the canopy before 2026-10-18. If it is unavailable, ask the committee for another rain plan before confirming the outdoor setup. Collect the tables on 2026-10-23 and tell helpers to bring watering cans. These steps depend on the committee's confirmation; this report does not treat an unconfirmed canopy as booked.\n\n## Limits\n\nThe briefing does not give a canopy capacity, a hire price or a weather forecast. No conclusion about shelter capacity or cost follows from the available facts.\n\n## Sources\n\n- [[Garden day briefing.txt]]: table collection, water and shelter facts, dated 2026-10-10.\n- [[Garden day]]: the shelter decision deadline and project context.\n"
+        }
+      }
+    ]
+  }
+]

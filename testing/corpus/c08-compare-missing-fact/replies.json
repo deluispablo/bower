@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Shortlist briefing.txt",
+        "to": "Projects/Flat hunt",
+        "name": "Shortlist briefing.txt",
+        "note": {
+          "name": "Shortlist comparison.md",
+          "summary": "Cobble Row has the shorter commute; its deposit is not stated.",
+          "body": "# Shortlist comparison\n\nCobble Row offers a shorter commute, while Larkspur Lane has the lower rent and a stated deposit. Alex has not chosen a flat; the missing Cobble Row deposit prevents a complete comparison of upfront costs.\n\n| Flat | Rent | Commute | Deposit | Status |\n| --- | --- | --- | --- | --- |\n| [[Larkspur Lane flat]] | 1,450 a month | 24 min | 1,450 | viewing done |\n| [[Cobble Row flat]] | 1,580 a month | 18 min | Not stated | viewing booked |\n\n## Trade-offs\n\nIf commute matters most, Cobble Row deserves a viewing. If lower rent and known upfront costs matter more, Larkspur Lane is easier to assess now. Ask for the Cobble Row deposit before deciding; missing information is not a zero deposit. No affordability claim follows without Alex's budget.\n\n## Sources\n\n- [[Shortlist briefing.txt]]: the shortlist facts as of 2026-10-10.\n- [[Larkspur Lane flat]]: rent, commute, deposit and viewing status.\n- [[Cobble Row flat]]: rent, commute, missing deposit and viewing status.\n- [[Flat hunt]]: Alex's commute preference and undecided status.\n"
+        }
+      }
+    ]
+  }
+]

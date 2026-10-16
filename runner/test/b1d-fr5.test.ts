@@ -67,7 +67,7 @@ it('b1d-fr5 1 crossing MOC prefix', async () => {
     const skips = r.consoleLines.filter((line) => !line.startsWith('timing:')
       && /skip|left out|omit/i.test(line) && /MOC|map|Collection|prefix/i.test(line));
     if (role === 'unrelated') {
-      expect.soft(media(r, id), 'an unrelated crossing MOC is never read in full').toHaveLength(0);
+      expect.soft(media(r, id), 'the planner never reads an unrelated crossing MOC in full; only lint\'s one maintenance read (AC20) may').toHaveLength(1);
       expect.soft(skips, 'one console line explains the skipped MOC').toHaveLength(1);
       expect.soft(r.after[map], 'skipping leaves the complete owned note intact').toBe(text);
     } else {

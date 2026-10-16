@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Sources, Unsubscribe } from './sources';
-import { BowerError } from './types';
+import { BowerError, type Rule } from './types';
 
 const Ctx = createContext<Sources | null>(null);
 
@@ -73,6 +73,13 @@ export const usePiles = () => useLoad((s) => s.vault.piles(), (s, cb) => s.vault
 export const usePilesListed = () => useLoad(async (s) => (await s.vault.pilesListed?.()) ?? null, (s, cb) => s.vault.subscribe(cb));
 export const useQuestions = () => useLoad((s) => s.vault.questions(), (s, cb) => s.vault.subscribe(cb));
 export const useRules = () => useLoad((s) => s.vault.rules(), (s, cb) => s.vault.subscribe(cb));
+export const useRulesProse = () => useLoad(async (s) => (await s.vault.rulesProse?.()) ?? '', (s, cb) => s.vault.subscribe(cb));
+/** The rules section's two reads as one: one error (the rules', else the prose's) and one retry for both. */
+export function useRulesSection(): { rules: Rule[] | undefined; prose: string | undefined; error: BowerError | null; reload: () => void } {
+  const rules = useRules();
+  const prose = useRulesProse();
+  return { rules: rules.data, prose: prose.data, error: rules.error ?? prose.error, reload: () => { rules.reload(); prose.reload(); } };
+}
 export const useSuggestions = () => useLoad((s) => s.vault.suggestions(), (s, cb) => s.vault.subscribe(cb));
 export const useRun = () => useLoad((s, again) => s.runs.current({ again }), (s, cb) => s.runs.subscribe(cb));
 export const useNote = (path: string) =>

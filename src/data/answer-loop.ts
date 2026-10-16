@@ -9,6 +9,8 @@
  *   changes only, in which the model computes the update and the yes grants that one write, while the section still
  *   reads as asked about (`state-yes-writes`); "Keep mine" starts none and closes the question.
  * - a type proposal: a run of your changes only; boolean yes grants its frozen payload, text supplies person words.
+ * - a large request (B12d, `q-request-`): a yes starts a run of your changes only, which applies its frozen first part with
+ *   no model; a no starts none and settles the request at the next tidy-up.
  * Every other answer starts none and waits for the next tidy-up: a no, or a choice that changes nothing, closes its
  * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule.
  * While a run is going, an answer starts none now: the Worker keeps it, and when that run ends its person object starts
@@ -37,6 +39,7 @@ export function answerRun(q: Question, yes: QuestionAnswer): AnswerRun | null {
   const about = subjectOf(q);
   if (about.kind === 'proposal') return yes === true || typeof yes === 'object' && 'text' in yes ? { scope: 'instructions' } : null;
   if (about.kind === 'state' || about.kind === 'pair') return { scope: 'instructions' };
+  if (about.kind === 'request') return yes === true ? { scope: 'instructions' } : null;
   if (about.kind === 'inbox') return SUBJECT.test(about.id) ? { scope: 'all', subject: about.id } : null;
   return null;
 }

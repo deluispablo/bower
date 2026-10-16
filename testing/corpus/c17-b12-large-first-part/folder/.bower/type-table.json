@@ -3,18 +3,13 @@
   "rows": [
     {
       "id": "concept",
+      "match": ["reading"],
+      "template": "concept",
       "properties": {
-        "review_state": {
-          "type": "enum",
-          "values": [
-            "new",
-            "reviewed"
-          ]
-        }
+        "status": { "type": "enum", "values": ["active", "closed"] },
+        "review_state": { "type": "enum", "values": ["new", "reviewed"] }
       },
-      "table": [
-        "review_state"
-      ]
+      "table": ["review_state"]
     }
   ]
 }

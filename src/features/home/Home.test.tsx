@@ -657,3 +657,22 @@ describe('Q1b Home questions', () => {
     expect(f.answer).toHaveBeenCalledExactlyOnceWith('q-ask-paper', { option: 'folder-garden' });
   });
 });
+
+describe('design-polish: pile titles on Home', () => {
+  it('AC2 pile-titles-one-font: a loose thing named by its file and a pile named by its words use the same title style', async () => {
+    const base = loadingSources();
+    const at = Date.now();
+    const piles: Pile[] = [
+      { id: 'words', path: 'Inbox/Receipts', text: 'Receipts from the weekend', createdAt: at, items: [{ id: 'r', name: 'r.pdf', kind: 'pdf', origin: 'From this computer' }] },
+      { id: 'loose', path: 'Inbox/curry-clipping.example.url', text: '', createdAt: at - 1, items: [{ id: 'c', name: 'curry-clipping.example.url', kind: 'link', origin: 'From the browser' }] },
+    ];
+    const doors: Record<string, unknown> = { piles: async () => piles, pilesListed: async () => piles, uploadNotice: async () => null, subscribe: () => () => undefined };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Home /></DataProvider></MemoryRouter>);
+    const loose = await screen.findByText('curry-clipping.example');
+    const words = screen.getByText('Receipts from the weekend');
+    expect(loose.id).toBe('pile-name-loose');
+    expect(loose).not.toHaveClass('mono');
+    expect(loose.className).toBe(words.className);
+  });
+});

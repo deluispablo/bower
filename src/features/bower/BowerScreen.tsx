@@ -3,7 +3,9 @@ import { useRef, useState } from 'react';
 import { shortDay } from '@/app/words';
 import { report, undoToast } from '@/ui/report';
 import { startRun } from '@/features/tidy/start-run';
-import { useRequests, useRules, useRun, useSources } from '@/data/provider';
+import { Link } from 'react-router';
+import { noteRoute } from '@/app/paths';
+import { useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Segmented } from '@/ui/Segmented';
 import { Button } from '@/ui/Button';
@@ -14,7 +16,7 @@ import { useUi } from '@/app/ui-store';
 import { RULE_EXAMPLES } from '@/data/examples';
 import { canDictate, dictate } from './dictation';
 import { isRunning } from '@/features/tidy/run-words';
-import { Inline } from '@/features/note/markdown';
+import { Inline, Markdown } from '@/features/note/markdown';
 import { useNoteLink } from '@/features/note/note-link';
 import { useIsDesktop } from '@/ui/media';
 import { FailedChanges } from './FailedChanges';
@@ -28,8 +30,8 @@ import s from './bower.module.css';
  */
 export function BowerScreen() {
   const { vault, runs } = useSources();
-  const rulesState = useRules();
-  const { data: rules } = rulesState;
+  const rulesState = useRulesSection();
+  const { rules, prose } = rulesState;
   const runState = useRun();
   const { data: run } = runState;
   const [text, setText] = useState('');
@@ -38,6 +40,8 @@ export function BowerScreen() {
   const link = useNoteLink();
   const requestsState = useRequests();
   const { data: requests } = requestsState;
+  const saving = useRef(false);
+  const [busy, setBusy] = useState(false);
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
@@ -49,7 +53,9 @@ export function BowerScreen() {
 
   const send = async (): Promise<void> => {
     const t = text.trim();
-    if (!t) return;
+    if (!t || saving.current) return;
+    saving.current = true;
+    setBusy(true);
     try {
       if (kind === 'rule') {
         await vault.addRule(t);
@@ -63,6 +69,9 @@ export function BowerScreen() {
       composerRef.current?.focus();
     } catch (e) {
       report(e, 'That did not send. Try again.');
+    } finally {
+      saving.current = false;
+      setBusy(false);
     }
   };
 
@@ -159,7 +168,7 @@ export function BowerScreen() {
           ) : (
             <span />
           )}
-          <Button size="sm" type="submit" disabled={!text.trim()}>
+          <Button size="sm" type="submit" disabled={busy || !text.trim()}>
             <Icon name="send" size={16} /> {kind === 'rule' ? 'Keep this rule' : 'Send'}
           </Button>
         </div>
@@ -203,7 +212,24 @@ export function BowerScreen() {
           Bower follows these in every tidy-up. They are kept with your notes, in your Bower folder.
         </p>
         <LoadError state={rulesState} />
-        <ul>
+        {prose && (
+          <>
+            <h3 id="rules-written" className={s.label}>
+              Written in your rules note
+            </h3>
+            <div role="region" aria-labelledby="rules-written" className={s.written}>
+              <Markdown text={prose} link={link} headingLevel={4} />
+            </div>
+            <div className={s.proseFoot}>
+              <span className="muted">Bower follows these too. To change them, edit the note.</span>
+              <Link to={noteRoute('Rules.md')}>Open your rules note</Link>
+            </div>
+            {!!rules?.length && (
+              <h3 className={s.label}>Added in Bower</h3>
+            )}
+          </>
+        )}
+        <ul className={s.ruleList}>
           {(rules ?? []).map((r) => (
             <li key={r.id} className={r.pending ? s.pending : undefined}>
               <span className={s.ruleText}>{r.pending ? `"${r.text}"` : r.text}</span>

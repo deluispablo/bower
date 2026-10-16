@@ -10,6 +10,8 @@ export const NOTE_TEMPLATES = {
   area: { sections: ['Standard to maintain', 'Current state', 'Notes', 'Timeline'], body: 'Notes', timeline: true, immutable: false },
   moc: { sections: ['Overview', 'Notes', 'Sources'], body: 'Overview', timeline: false, immutable: false },
   profile: { sections: ['Profile', 'My notes', 'Timeline'], body: 'Profile', timeline: true, immutable: false },
+  /** A request's document: Bower's leading `document` region, then the person's My notes (c08-document-format). */
+  'document': { sections: ['Document', 'My notes', 'Timeline'], body: 'Document', timeline: true, immutable: false },
 } as const;
 
 export type NoteTemplate = keyof typeof NOTE_TEMPLATES;

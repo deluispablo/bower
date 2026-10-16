@@ -184,7 +184,7 @@ test('C07: a contradiction asks a question linking both sources', async ({ page 
   const words = 'Flat 3 rent is now £1,550';
   await open(page, '/add', 'empty');
   await page.locator('textarea').first().fill(words);
-  await page.getByRole('button', { name: 'Put the note in the inbox' }).click();
+  await page.getByRole('button', { name: 'Add to the inbox' }).click();
   await expect(page.getByRole('status').getByText(/in the inbox/)).toBeVisible();
   await expect(page).toHaveURL(/\/(?:\?|$)/);
   await tidyUpAll(page);

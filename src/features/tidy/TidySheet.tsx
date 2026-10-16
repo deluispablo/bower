@@ -1,11 +1,12 @@
 import { LoadError } from '@/ui/LoadError';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { report } from '@/ui/report';
 import { startRun } from './start-run';
 import { pileName, thingsIn, waitingIn } from '@/data/piles';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
+import { usePrefs } from '@/app/prefs';
 import { plural } from '@/app/words';
 import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
@@ -53,9 +54,13 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
   const { data: piles } = pilesState;
   const { runs } = useSources();
   const [busy, setBusy] = useState(false);
+  // A ref, so two presses in one render start once. Waiting keeps the focus: aria-disabled, not disabled (as on the pile page).
+  const starting = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const count = waitingIn(piles);
   const start = async (): Promise<void> => {
+    if (starting.current) return;
+    starting.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -64,6 +69,7 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
       setError(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again.');
       if (!(e instanceof BowerError)) console.error(e);
     } finally {
+      starting.current = false;
       setBusy(false);
     }
   };
@@ -111,7 +117,7 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
             <Button variant="ghost" onClick={() => useUi.getState().setTidy(false)}>
               Not now
             </Button>
-            <Button block onClick={() => void start()} disabled={busy}>
+            <Button block onClick={() => void start()} aria-disabled={busy || undefined}>
               {busy ? 'Starting…' : error ? 'Try again' : `Tidy up ${plural(count, 'thing')}`}
             </Button>
           </>
@@ -125,6 +131,8 @@ function RunView({ run }: { run: RunState }) {
   const now = useNow(isRunning(run));
   const { setTidy, startReplay } = useUi();
   const { runs } = useSources();
+  // The same condition useRunWatcher notifies on, read on render.
+  const notifies = usePrefs((p) => p.notifyRuns) && typeof Notification !== 'undefined' && Notification.permission === 'granted';
   return (
     <div>
       <TidyScene phase={run.phase} scope={run.scope} {...(run.report ? { filed: run.report.filed.length } : {})} />
@@ -151,7 +159,7 @@ function RunView({ run }: { run: RunState }) {
       )}
       {run.phase === 'done' && run.report && <RunLinks report={run.report} onOpen={() => setTidy(false)} />}
       <p className={s.clock}>{runClock(run, now)}</p>
-      <div className={s.actions}>
+      <div className={s.pinned}>
         {run.phase === 'done' && !hasReplay(run) ? (
           <Button
             block
@@ -190,9 +198,12 @@ function RunView({ run }: { run: RunState }) {
             </Button>
           </>
         ) : (
-          <Button variant="ghost" block onClick={() => setTidy(false)}>
-            Hide. Tell me when it ends
-          </Button>
+          <>
+            <p className={s.hideLine}>{notifies ? 'Bower tells you here when it ends, or with a notification if you are in another app.' : 'Bower tells you here when it ends.'}</p>
+            <Button variant="ghost" block onClick={() => setTidy(false)}>
+              Hide this
+            </Button>
+          </>
         )}
       </div>
     </div>

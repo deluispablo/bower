@@ -1,4 +1,5 @@
-.sheet { }
+/* Focus scrolling leaves room for the pinned actions row, so a focused link is never hidden behind it (WCAG 2.4.11; https://developer.mozilla.org/docs/Web/CSS/scroll-padding-bottom). */
+.sheet { scroll-padding-bottom: 9rem; }
 .stage { position: relative; height: 150px; display: flex; align-items: flex-end; justify-content: center; margin-top: 4px; }
 .title { font: 700 24px/1.2 var(--font-display); letter-spacing: -0.025em; color: var(--heading); margin-top: 10px; }
 .detail { color: var(--text-muted); font-size: 16px; margin-top: 4px; min-height: 48px; }
@@ -14,6 +15,11 @@
 .clock { margin-top: 14px; font-size: 15px; color: var(--text); }
 .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .actions > :first-child { flex: 1; }
+/* The run sheet's buttons stay in reach: sticky inside the sheet's own scroll box (a negative bottom equal to the sheet's padding ends it flush at the sheet edge), its own padding keeps the buttons off the edge and clear of the home indicator. */
+.pinned { position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom)); z-index: 1; display: flex; gap: 8px; flex-wrap: wrap; background: var(--bg-alt); margin: 16px -20px calc(-24px - env(safe-area-inset-bottom)); padding: 12px 20px calc(24px + env(safe-area-inset-bottom)); }
+.pinned > button:first-of-type { flex: 1; }
+.hideLine { flex: 1 0 100%; font-size: 15px; color: var(--text-muted); }
+@media (min-width: 900px) { .pinned { bottom: -26px; margin: 16px -26px -26px; padding: 12px 26px 26px; } }
 .piles { list-style: none; margin: 14px 0 0; padding: 0; }
 .piles li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--heading); }
 .piles li span:nth-child(2) { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

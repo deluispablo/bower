@@ -13,6 +13,9 @@ import type { Question } from '../../src/data/contracts/types';
 import { subjectOf } from '../../src/data/contracts/questions';
 import { distinctPaths } from '../../src/data/spine/report';
 import { timelineBullets } from '../../src/data/vault/note-format';
+import { displayName, nameOf } from '../../src/data/contracts/tree';
+import { linkTarget } from '../../src/data/contracts/links';
+import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
 export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C13', 'C15'] as const;
@@ -39,6 +42,8 @@ export type CorpusBetween =
   /** A words pile the person adds before the press: `p-<press>-<n>`, `n` counting only that press's words steps. */
   | { kind: 'words'; line: string }
   | { kind: 'edit'; path: string; text: string }
+  /** A note the person adds (a later arrival) before the press, in a folder that is there. */
+  | { kind: 'create'; path: string; text: string }
   | { kind: 'move'; path: string; to: string }
   | { kind: 'answer'; question: { id: string } | QuestionSubjectExpectation; yes: boolean };
 
@@ -53,6 +58,8 @@ export type QuestionSubjectExpectation =
   | { kind: 'pair'; notes: [string, string] }
   | { kind: 'state'; note: string }
   | { kind: 'inbox'; path: string }
+  /** A large request's one question (B12d). */
+  | { kind: 'request' }
   | { kind: 'folder' };
 
 export interface CorpusCase {
@@ -120,7 +127,22 @@ export interface NoteExpectation {
 /** An `under` folder may use `*` for any run of characters inside one folder name ("Areas/Pay*"). */
 export interface Placement { files: string[]; allowed: Array<{ under: string; linking?: string }> }
 
+/** The done row of the request whose text is `request` (c09-score AC1): its `done` read apart from every other row's. */
+export interface AnswerExpectation {
+  request: string;
+  contains?: string[];
+  excludes?: string[];
+  /** The paths the row's `[[links]]` resolve to, in order of first appearance, each once. */
+  links?: string[];
+}
+
+/** A GFM table of the note at `path`: its header cells and its body rows, exactly and in order (c09-score AC2). */
+export interface TableExpectation { path: string; header: string[]; rows: string[][] }
+
 export interface Expected {
+  /** One answer per request, read from `.bower/requests.json` as JSON. */
+  answers?: AnswerExpectation[];
+  tables?: TableExpectation[];
   /** One expectation per press, including the first. Top-level expectations still check the final press. */
   runs?: Expected[];
   /** Compare the raw UTF-8 range with the seeded note; a missing or ambiguous range fails. */
@@ -259,9 +281,92 @@ function resolves(target: string, after: Readonly<Record<string, string>>): bool
   });
 }
 
+const EXPECTED_KEYS = ['runs', 'protectedRanges', 'properties', 'files', 'placement', 'unchanged', 'notes', 'linksResolve', 'report', 'answers', 'tables'];
+const ANSWER_KEYS = ['request', 'contains', 'excludes', 'links'];
+const TABLE_KEYS = ['path', 'header', 'rows'];
+/** A misspelt key is unmet, never skipped; only these four places refuse one (c09-score AC3). */
+const unknownKeys = (value: unknown, known: string[], where: string): string[] =>
+  value && typeof value === 'object' ? Object.keys(value).filter((k) => !known.includes(k)).map((k) => `${where}: unknown key "${k}"`) : [];
+
+/** The files a `[[target]]` could mean: its whole path (a note without `.md`), else the files with that name. */
+function linkCandidates(target: string, after: Readonly<Record<string, string>>): string[] {
+  const key = linkTarget(target);
+  const all = Object.keys(after);
+  const whole = all.filter((p) => displayName(p).toLowerCase() === key || p.toLowerCase() === key);
+  return whole.length ? whole : all.filter((p) => nameOf(p).toLowerCase() === key || displayName(nameOf(p)).toLowerCase() === key);
+}
+
+function scoreAnswer(want: AnswerExpectation, rows: ReadonlyArray<{ text: string; done?: string }>, after: Readonly<Record<string, string>>): string[] {
+  const unmet = unknownKeys(want, ANSWER_KEYS, `answers "${want.request}"`);
+  // A row with no `done`, or an empty one, is not done; with the same words twice, the one that has `done` counts.
+  const found = rows.filter((r) => r.text === want.request && r.done);
+  if (found.length !== 1) return [...unmet, found.length ? `answers: ${found.length} rows for "${want.request}"` : `answers: no done row for "${want.request}"`];
+  const done = found[0]?.done ?? '';
+  const at = `answers "${want.request}"`;
+  for (const c of want.contains ?? []) if (!done.includes(c)) unmet.push(`${at}: lacks "${c}"`);
+  for (const c of want.excludes ?? []) if (done.includes(c)) unmet.push(`${at}: has "${c}"`);
+  if (want.links) {
+    const got: string[] = [];
+    let clear = true;
+    for (const m of done.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
+      const name = m[1] ?? '';
+      const files = linkCandidates(name, after);
+      if (files.length !== 1) { clear = false; unmet.push(`${at}: link [[${name}]] ${files.length ? `could be ${files.length} files` : 'does not resolve'}`); }
+      else if (!got.includes(files[0] ?? '')) got.push(files[0] ?? '');
+    }
+    if (clear && JSON.stringify(got) !== JSON.stringify(want.links)) unmet.push(`${at}: links [${got.join(', ')}], expected [${want.links.join(', ')}]`);
+  }
+  return unmet;
+}
+
+/** The cells of one table row: outer pipes dropped, `\|` read as `|`, each cell trimmed. */
+const cells = (line: string): string[] => line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'));
+const DELIMITER = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+/** The GFM tables of a note outside fenced code: a header row, a delimiter row of as many cells, then body rows up to a blank line. */
+function tablesOf(text: string): Array<{ header: string[]; rows: string[][] }> {
+  const lines = text.split('\n');
+  const found: Array<{ header: string[]; rows: string[][] }> = [];
+  let fence = '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const open = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    // A closing fence: the same character, at least as long, only spaces after it (GFM).
+    if (fence) { if (new RegExp(`^\\s{0,3}\\${fence[0]}{${fence.length},}\\s*$`).test(line)) fence = ''; continue; }
+    if (open) { fence = open; continue; }
+    const header = cells(line);
+    if (!line.includes('|') || !DELIMITER.test(lines[i + 1] ?? '') || cells(lines[i + 1] ?? '').length !== header.length) continue;
+    const rows: string[][] = [];
+    // The table ends at a blank line or another block (heading, quote, fence); the outer scan resumes there.
+    for (i += 2; i < lines.length && (lines[i] ?? '').trim() && !/^\s{0,3}(#{1,6}(\s|$)|>|`{3,}|~{3,})/.test(lines[i] ?? ''); i++) rows.push(header.map((_, c) => cells(lines[i] ?? '')[c] ?? ''));
+    found.push({ header, rows });
+    i--;
+  }
+  return found;
+}
+
+function scoreTable(want: TableExpectation, after: Readonly<Record<string, string>>): string[] {
+  const at = `tables ${want.path}`;
+  const unmet = unknownKeys(want, TABLE_KEYS, at);
+  const text = after[want.path];
+  if (text === undefined) return [...unmet, `${at}: missing note`];
+  const same = tablesOf(text).filter((t) => JSON.stringify(t.header) === JSON.stringify(want.header));
+  if (same.length !== 1) return [...unmet, `${at}: ${same.length ? `${same.length} tables` : 'no table'} with header [${want.header.join(', ')}]`];
+  const got = same[0]?.rows ?? [];
+  if (JSON.stringify(got) !== JSON.stringify(want.rows)) unmet.push(`${at}: rows ${JSON.stringify(got)}, expected ${JSON.stringify(want.rows)}`);
+  return unmet;
+}
+
 export function score(input: ScoreInput): Score {
   const { expected, before, after, lastRun } = input;
-  const unmet: string[] = [];
+  const unmet: string[] = [...unknownKeys(expected, EXPECTED_KEYS, 'expected'), ...list(expected.runs).flatMap((r, i) => unknownKeys(r, EXPECTED_KEYS, `runs[${i}]`))];
+  if (expected.answers) {
+    let file: unknown = null;
+    try { file = JSON.parse(after[SYSTEM.requests] ?? ''); } catch { /* not JSON: unmet below */ }
+    if (!isRunnerFile(SYSTEM.requests, file)) unmet.push(`answers: ${SYSTEM.requests} is not a requests file`);
+    else for (const a of expected.answers) unmet.push(...scoreAnswer(a, file.done, after));
+  }
+  for (const t of expected.tables ?? []) unmet.push(...scoreTable(t, after));
   for (const p of expected.files?.present ?? []) if (matching(after, p).length === 0) unmet.push(`missing file: ${p}`);
   for (const p of expected.files?.absent ?? []) for (const found of matching(after, p)) unmet.push(`file should not exist: ${found}`);
   for (const { files, allowed } of [expected.placement ?? []].flat()) {

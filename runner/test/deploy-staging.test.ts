@@ -117,6 +117,8 @@ function checkout(): Checkout {
   mkdirSync(join(repo, 'api'));
   mkdirSync(join(repo, 'runner'));
   copyFileSync(SCRIPT, join(repo, 'scripts', 'deploy-staging.sh'));
+  // The guards it shares with the production cutover (cutover-rollback R3), once they live in their own file.
+  if (existsSync(join(ROOT, 'scripts', 'deploy-lib.sh'))) copyFileSync(join(ROOT, 'scripts', 'deploy-lib.sh'), join(repo, 'scripts', 'deploy-lib.sh'));
   copyFileSync(join(ROOT, 'api', 'wrangler.jsonc'), join(repo, 'api', 'wrangler.jsonc'));
   writeFileSync(join(repo, 'runner', 'package.json'), '{}\n');
   writeFileSync(join(repo, '.gitignore'), 'dist\nnode_modules\n.env*\n.dev.vars\n');
@@ -424,6 +426,7 @@ Current Version ID: 00000000-0000-0000-0000-000000000000`;
     expect(other.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
     const none = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: 'APP_ORIGIN: "https://bower-staging.example.test"' });
     expect(none.status).not.toBe(0);
+    expect(none.stderr).toMatch(/no upload line for bower-staging/);
     expect(none.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
     const fine = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: `${echoed.split('Uploaded')[0]}Uploaded bower-staging (2.10 sec)` });
     expect(fine.status).toBe(0);

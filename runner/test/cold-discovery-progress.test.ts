@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
+import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { RUNNER_WRITES, SYSTEM, type RetrievalFile } from '../../src/data/vault/layout';
@@ -284,8 +285,78 @@ describe('cold discovery keeps its reading progress', () => {
     expect(held.after[SYSTEM.index], 'the index is not rewritten from a partial view').toBe(warm.after[SYSTEM.index]);
   });
 
+  it('AC3 cold-discovery-progress-unreadable-kept (b8c-unreadable): a held run keeps a refusal Drive gave for a stored version that had no evidence', async () => {
+    const b = await cold(10);
+    const warm = await press(b, 1);
+    const stored = stateOf(warm);
+    const refused = b.id(record(3));
+    // An older entry: no owner and no lint, and no index, so discovery reads its prefix again.
+    const old = Object.fromEntries(Object.entries(stored?.files ?? {}).map(([id, n]) => {
+      if (id !== refused) return [id, n];
+      const { owner: _owner, type: _type, lint: _lint, ...rest } = n as typeof n & { owner?: unknown; type?: unknown; lint?: unknown };
+      return [id, rest];
+    }));
+    await edit(b, (await b.drive.listAll(b.root)).find((f) => f.name === 'retrieval.json')?.id ?? '', JSON.stringify({ ...stored, files: old }));
+    await b.drive.trash((await b.drive.listAll(b.root)).find((f) => b.drive.pathOf(f.id, b.root) === SYSTEM.index)?.id ?? '');
+    for (let i = 100; i < 500; i++) await b.drive.createText(b.id('Archive'), `Record ${i}.md`, note(`Alex keeps record ${i}.`));
+    const held = await idle(b, 2, (next) => async (input, init) => {
+      const u = url(input);
+      if (u.pathname === `/drive/v3/files/${refused}` && u.searchParams.get('alt') === 'media') {
+        return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
+      }
+      return next(input, init);
+    });
+    expect(held.after[SYSTEM.index], 'the run was held').toBeUndefined();
+    const lint: unknown = (stateOf(held)?.files[refused] as { lint?: unknown } | undefined)?.lint;
+    expect(lint, 'the refusal is kept beside the same stored version').toBe('unreadable');
+    // The next held run, with the note readable again but unchanged, does not ask for it (no cap slot).
+    const next = await idle(b, 3);
+    expect(prefixed(next), 'a refused note of an unchanged version is not fetched again').not.toContain(refused);
+  });
+
+  it('AC2 b8c-unreadable-lint-progress: a held run keeps a lint-loop refusal for an older same-version entry', async () => {
+    const b = await cold(10, { [record(3)]: note('Alex keeps record 3.', 'Record 3 evidence. '.repeat(300)), [MAP]: MAP_TEXT });
+    const warm = await press(b, 1);
+    const stored = stateOf(warm);
+    const refused = b.id(record(3));
+    const map = b.id(MAP);
+    const files = Object.fromEntries(Object.entries(stored?.files ?? {}).map(([id, n]) => {
+      const entry: MaintenanceNote = { ...n };
+      if (id === refused) delete entry.lint;
+      // The map's whole read follows lint and stops this run after the refusal has been recorded.
+      if (id === map) { delete entry.moc; delete entry.members; }
+      return [id, entry];
+    }));
+    await edit(b, (await b.drive.listAll(b.root)).find((f) => f.name === 'retrieval.json')?.id ?? '', JSON.stringify({ ...stored, files }));
+    let refusals = 0;
+    let exhausted = false;
+    const held = await idle(b, 2, (next) => async (input, init) => {
+      const u = url(input);
+      if (u.searchParams.get('alt') === 'media' && !new Headers(init?.headers).has('range')) {
+        if (u.pathname === `/drive/v3/files/${refused}`) {
+          refusals++;
+          return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
+        }
+        if (u.pathname === `/drive/v3/files/${map}`) { exhausted = true; throw new LedgerExhausted(0); }
+      }
+      return next(input, init);
+    });
+    expect(refusals, 'lint tried the whole note once').toBe(1);
+    expect(exhausted, 'the run was held after lint').toBe(true);
+    expect(held.code).toBe(0);
+    expect(stateOf(held)?.files[refused], 'progress enriches the stored version with its refusal').toEqual({ ...files[refused], lint: 'unreadable' });
+    expect(held.after[HEALTH_NAME], 'a held run does not publish partial findings').toBe(warm.after[HEALTH_NAME]);
+    const next = await idle(b, 3);
+    expect(next.code).toBe(0);
+    expect(next.traffic.filter((t) => t.url.pathname === `/drive/v3/files/${refused}` && t.url.searchParams.get('alt') === 'media'),
+      'the refused version takes no read on retry').toEqual([]);
+    expect(next.after[HEALTH_NAME]).toContain('- Could not read [[Archive/Record 003|Record 003]]: Bower will try again when it changes.');
+  });
+
   it('AC3 cold-discovery-progress-exhausted-later: a run that meets the ledger after its discovery completed keeps every note it read; the next run reads no other prefix', async () => {
-    const b = await cold(40);
+    // b8c-unreadable: a permanent refusal is now decided for its version, so the owed check comes from a note past the
+    // 4,096-byte prefix: discovery's prefix read answers and maintenance's whole read of it meets the ledger.
+    const b = await cold(40, { [record(5)]: note('Alex keeps record 5.', 'Record 5 evidence. '.repeat(300)) });
     const refused = b.id(record(5));
     const seeded = await contents(b);
     const turns = { count: 0 };
@@ -293,11 +364,9 @@ describe('cold discovery keeps its reading progress', () => {
     let reads = 0;
     const first = await press(b, 1, (next) => async (input, init) => {
       const u = url(input);
-      if (u.pathname === `/drive/v3/files/${refused}` && u.searchParams.get('alt') === 'media' && new Headers(init?.headers).get('Range')) {
+      if (u.pathname === `/drive/v3/files/${refused}` && u.searchParams.get('alt') === 'media') {
         reads++;
-        // Discovery's read is refused, so the note owes its check; maintenance's read of it then meets the ledger.
-        if (reads === 1) return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
-        if (reads === 2) { atExhaustion = turns.count; throw new LedgerExhausted(0); }
+        if (!new Headers(init?.headers).get('Range')) { atExhaustion = turns.count; throw new LedgerExhausted(0); }
       }
       return next(input, init);
     }, turns);
@@ -309,7 +378,8 @@ describe('cold discovery keeps its reading progress', () => {
     const asked = maintenanceReads();
     const second = await press(b, 2).finally(() => asked.stop());
     // The provider's link reads of matched notes (claude.ts) are no discovery read, and are not counted (ruling).
-    expect(asked.ids.has(refused), 'the probe sees the refused note read again inside the ledger').toBe(true);
+    expect(second.traffic.some((t) => t.method === 'GET' && !t.range && t.url.searchParams.get('alt') === 'media' && t.url.pathname.endsWith(`/${refused}`)),
+      'the owed whole read comes in the next run').toBe(true);
     expect(prefixed(second).filter((id) => id !== refused && asked.ids.has(id)), 'the next run\'s discovery reads no other prefix again').toEqual([]);
     expect(report(second).filed).toHaveLength(1);
   });

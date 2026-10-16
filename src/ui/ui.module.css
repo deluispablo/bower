@@ -204,6 +204,8 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   font: inherit;
   outline: none;
 }
+/* the global ring would draw a second one on the typing part: the box draws the one */
+.fieldBox :is(input, textarea):focus-visible { outline: none; }
 .fieldBox.stack { flex-direction: column; align-items: stretch; gap: 0; padding: 12px 14px; }
 .pill { border-radius: 999px; }
 .field::placeholder,

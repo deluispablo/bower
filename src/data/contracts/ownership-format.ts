@@ -6,7 +6,7 @@ export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
 export const ABOUT_REGIONS = ['about-you', 'about-working-on', 'about-preferences'] as const;
 export type AboutRegion = typeof ABOUT_REGIONS[number];
-export type BowerRegion = MocRegion | 'profile' | TemplateRegion | AboutRegion | 'rules-added';
+export type BowerRegion = MocRegion | 'profile' | 'document' | TemplateRegion | AboutRegion | 'rules-added';
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -129,11 +129,19 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
   return out;
 }
 
+/**
+ * The characters of a byte-order mark at the start of `text`: none or one. The mark (U+FEFF, bytes EF BB BF) is not
+ * text (Unicode FAQ, "UTF-8, UTF-16, UTF-32 & BOM"), so what reads the first line reads it after the mark, as a v2
+ * note's reading does (`parseOwnership`); a mark anywhere else is text.
+ */
+const markLength = (text: string): number => (text.charCodeAt(0) === 0xfeff ? 1 : 0);
+
 /** A plain note's layout: only its last `## Timeline` heading, to the end of the note; nothing else is framed. */
 function plainLayout(raw: string): Layout {
   const text = raw.replace(/\r\n/g, '\n');
   const after = text.lastIndexOf('\n## Timeline\n');
-  const at = after >= 0 ? after + 1 : text.startsWith('## Timeline\n') ? 0 : -1;
+  const mark = markLength(text);
+  const at = after >= 0 ? after + 1 : text.startsWith('## Timeline\n', mark) ? mark : -1;
   if (at < 0) return { front: null, frontEnd: 0, current: null, timeline: null, bowerNote: null };
   const byteAt = byteTable(raw, text.length);
   return { front: null, frontEnd: 0, current: null, timeline: { start: byteAt[at] ?? 0, end: byteAt[text.length] ?? 0 }, bowerNote: null };
@@ -160,7 +168,8 @@ function byteTable(raw: string, textLength: number): Uint32Array {
 
 function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const text = raw.replace(/\r\n/g, '\n');
-  const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
+  const mark = markLength(text);
+  const close = text.startsWith('---\n', mark) ? text.indexOf('\n---', 3 + mark) : -1;
   if (close < 0) {
     const personal = { start: 0, end: bytes.length };
     return { status: 'plain', personal, layout: plainLayout(raw), tasks: tasks(bytes, personal, false) };
@@ -208,7 +217,7 @@ function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
     ? { 'moc-overview': section(overview[0]), 'moc-figures': { start: members[0].start, end: members[0].start }, 'moc-members': section(members[0]) } : undefined;
   const layout: Layout = {
     ...(moc ? { moc } : {}),
-    front: span(4, close + 1),
+    front: span(4 + mark, close + 1),
     frontEnd: rawByteAt(frontEnd),
     current: current && span(current.start, current.end),
     // A heading follows the line break before it; a section ends where the next heading starts.
@@ -238,7 +247,7 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
     // expected: fatal UTF-8 validation exposes a typed refusal, without I/O or replacement decoding.
     return finish({ status: 'invalid', reason: 'invalid-encoding' });
   }
-  const prefix = raw.startsWith('\ufeff') ? 3 : 0;
+  const prefix = markLength(raw) * 3; // the mark's bytes, EF BB BF
   const sourceLines = lines(bytes, { start: prefix, end: bytes.length });
   const first = sourceLines[0];
   // An unterminated front matter keeps the old interpretation. Plain notes may still carry additive regions.
@@ -262,7 +271,7 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
       if (previous || fence || !line.text.trimStart().startsWith('<!-- bower:ownership')) return false;
       // Complete older markers without a format declaration remain ordinary personal text.
       // Additive marks and damaged boundaries enter the framing check and cannot grant a fresh append.
-      return ![...OWNERS, ...MOC_REGIONS, 'profile', ...TEMPLATE_REGIONS].some((region) =>
+      return ![...OWNERS, ...MOC_REGIONS, 'profile', 'document', ...TEMPLATE_REGIONS].some((region) =>
         line.text === `<!-- bower:ownership/2 begin ${region} -->`
         || line.text === `<!-- bower:ownership/2 end ${region} -->`);
     });
@@ -290,8 +299,9 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
       fence = fenceAfter(line.text, fence);
       return !previous && !fence && line.text.startsWith('<!-- bower:ownership/2 begin');
     });
-    owners = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
-      ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
+    // Each leading region has its own sequence: a document is not a project, and neither takes the other's.
+    owners = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->' ? [...TEMPLATE_REGIONS, ...OWNERS]
+      : firstRegion?.text === '<!-- bower:ownership/2 begin document -->' ? ['document', ...OWNERS] : [...OWNERS];
   }
   const spans: Partial<Record<Owner | BowerRegion, ByteSpan>> = {};
   let next = 0;

@@ -53,7 +53,7 @@ test('a pile can be added', async ({ page }) => {
   await page.getByLabel('What is this?').fill('Car insurance renewal');
   await page.getByLabel('Paste a link').fill('https://insurer.example/renewal');
   await page.getByRole('button', { name: 'Add link' }).click();
-  await page.getByRole('button', { name: /Put 1 thing in the inbox/ }).click();
+  await page.getByRole('button', { name: /Add 1 thing to the inbox/ }).click();
   await expect(page.getByRole('region', { name: 'Inbox' }).getByRole('link', { name: /Car insurance renewal/ })).toBeVisible();
 });
 

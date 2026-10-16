@@ -1,9 +1,9 @@
 {
   "id": "c17-b12-large-first-part",
   "capability": "C17",
-  "title": "A set of 201 waits for one yes and offers 200 most recent members",
+  "title": "A set of 201 waits for one yes; the yes writes exactly the first 200",
   "covers": "model",
-  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50; pending scripted proof",
+  "source": "new; TL-P4-39 B12/class F, F6/F7/F8/F11/U4; TL-P4-41 through TL-P4-50",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -227,22 +227,22 @@
     "Resources/Reading/Reading 201.md"
   ],
   "presses": [
+    {},
     {
       "between": [
         {
+          "kind": "create",
+          "path": "Resources/Reading/Late reading.md",
+          "text": "---\nby: bower\ntype: concept\nsummary: Alex adds a late reading note.\nstatus: active\ncreated: 2026-10-07\nreview_state: new\n---\n\n## Notes\nAdded after the first question; this is not permission to widen its answer.\n"
+        },
+        {
           "kind": "answer",
           "question": {
-            "id": "$question:change-1"
+            "kind": "request"
           },
           "yes": true
         }
       ]
-    },
-    {
-      "request": {
-        "kind": "tidy",
-        "text": "Now the rest of the Reading review: set review_state to reviewed on the active Reading concepts not already covered by that review."
-      }
     }
   ]
 }

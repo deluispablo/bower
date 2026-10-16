@@ -10,24 +10,45 @@ import { Checkbox } from '@/ui/Field';
  */
 export type LinkFn = (target: string, label: string, key: string) => ReactNode;
 
-function inline(text: string, link: LinkFn, keyBase: string): ReactNode[] {
-  const out: ReactNode[] = [];
+interface Token {
+  kind: 'text' | 'link' | 'strong' | 'em' | 'code';
+  text: string;
+  target?: string;
+}
+
+/** The one matcher, in a single pass: what `inline` renders and `shown` reads cannot differ. */
+function tokens(text: string): Token[] {
+  const out: Token[] = [];
   const re = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
   let last = 0;
   let m: RegExpExecArray | null;
-  let k = 0;
   while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const key = `${keyBase}-${k++}`;
-    if (m[1]) out.push(link(m[1], m[2] ?? m[1], key));
-    else if (m[3]) out.push(<strong key={key}>{m[3]}</strong>);
-    else if (m[4]) out.push(<em key={key}>{m[4]}</em>);
-    else if (m[5]) out.push(<code key={key}>{m[5]}</code>);
+    if (m.index > last) out.push({ kind: 'text', text: text.slice(last, m.index) });
+    if (m[1]) out.push({ kind: 'link', text: m[2] ?? m[1], target: m[1] });
+    else if (m[3]) out.push({ kind: 'strong', text: m[3] });
+    else if (m[4]) out.push({ kind: 'em', text: m[4] });
+    else if (m[5]) out.push({ kind: 'code', text: m[5] });
     last = re.lastIndex;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push({ kind: 'text', text: text.slice(last) });
   return out;
 }
+
+function inline(text: string, link: LinkFn, keyBase: string): ReactNode[] {
+  return tokens(text).map((t, k) => {
+    const key = `${keyBase}-${k}`;
+    if (t.kind === 'link') return link(t.target ?? t.text, t.text, key);
+    if (t.kind === 'strong') return <strong key={key}>{t.text}</strong>;
+    if (t.kind === 'em') return <em key={key}>{t.text}</em>;
+    if (t.kind === 'code') return <code key={key}>{t.text}</code>;
+    return t.text;
+  });
+}
+
+/** What a cell shows: wikilinks as their labels, bold, italics and code without their marks. */
+const shown = (c: string): string => tokens(c).map((t) => t.text).join('');
+/** A number, optionally signed, with a currency sign, separators, a percent sign or a short unit ("24 min"). */
+const NUMBER = /^[-+]?[£$€]?\d[\d,.]*\s?(%|[A-Za-z]{1,4})?$/;
 
 /** One line of text with wikilinks, bold and code (for Current state, Timeline, Bower's note). */
 export function Inline({ text, link }: { text: string; link: LinkFn }) {
@@ -40,10 +61,15 @@ interface MarkdownProps {
   taskRegions?: Note['taskRegions'];
   /** Makes task boxes tickable; gets the task's position among the note's tasks. */
   onToggle?: (index: number) => void;
+  /** The level (1-6) the note's shallowest heading takes, for a note shown under a heading of its own. */
+  headingLevel?: number;
 }
 
-export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
-  const lines = text.split('\n');
+export function Markdown({ text, link, taskRegions, onToggle, headingLevel }: MarkdownProps) {
+  // CommonMark leaves HTML comments out of a reader that renders no HTML. shortcut: single-line comments only (the
+  // data layer counts task lines one by one), a comment over several lines stays as text.
+  const lines = text.split('\n').map((l) => l.replace(/<!--.*?-->/g, ''));
+  const top = Math.min(4, ...lines.map((l) => /^(#{1,4})\s/.exec(l)?.[1]?.length ?? 4));
   let task = -1;
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -57,10 +83,12 @@ export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
     }
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     if (h) {
-      const level = Math.min(4, (h[1]?.length ?? 2) + 0);
+      const depth = h[1]?.length ?? 2;
       const content = inline(h[2] ?? '', link, key);
       const id = headingId(h[2] ?? '');
-      blocks.push(level <= 2 ? <h2 key={key} id={id}>{content}</h2> : <h3 key={key} id={id}>{content}</h3>);
+      // With headingLevel the shallowest heading takes that level and the rest keep their gap, down to h6.
+      const Tag = headingLevel ? (`h${Math.min(6, headingLevel + depth - top)}` as 'h4') : depth <= 2 ? 'h2' : 'h3';
+      blocks.push(<Tag key={key} id={id}>{content}</Tag>);
       i++;
       continue;
     }
@@ -101,7 +129,7 @@ export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
       }
       const [head, ...body] = rows;
       blocks.push(
-        <div key={key} className="md-table">
+        <div key={key} className="md-table" role="region" tabIndex={0} aria-label={`Table: ${(head ?? []).map(shown).join(', ')}`}>
           <table>
             {head && (
               <thead>
@@ -110,7 +138,7 @@ export function Markdown({ text, link, taskRegions, onToggle }: MarkdownProps) {
             )}
             <tbody>
               {body.map((r, ri) => (
-                <tr key={ri}>{r.map((c, j) => <td key={j}>{inline(c, link, `${key}-${ri}-${j}`)}</td>)}</tr>
+                <tr key={ri}>{r.map((c, j) => <td key={j} className={NUMBER.test(shown(c)) ? 'md-num' : undefined}>{inline(c, link, `${key}-${ri}-${j}`)}</td>)}</tr>
               ))}
             </tbody>
           </table>

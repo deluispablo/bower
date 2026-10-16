@@ -2,7 +2,7 @@
   "id": "c08-compare-missing-fact",
   "capability": "C08",
   "title": "A comparison explains trade-offs and a missing deposit",
-  "covers": "model",
+  "covers": "scripted",
   "source": "new (C08 prep; source-backed comparison)",
   "scope": "all",
   "allowWeb": false,

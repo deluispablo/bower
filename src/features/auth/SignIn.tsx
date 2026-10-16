@@ -39,10 +39,10 @@ export function SignIn() {
   // Arriving from "Delete my account": said once.
   const [bye] = useState(() => {
     try {
-      return sessionStorage.getItem('bower:bye') === '1';
+      return sessionStorage.getItem('bower:bye');
     } catch {
       // expected: no storage; nothing to say.
-      return false;
+      return null;
     }
   });
   useEffect(() => {
@@ -54,7 +54,7 @@ export function SignIn() {
   }, []);
   return (
     <div className={s.wrap}>
-      <div className={s.art}>
+      <header className={s.art}>
         <span className={s.brand}>
           <BowerMark size={30} />
           <span>Bower</span>
@@ -63,11 +63,11 @@ export function SignIn() {
           <PoseBower pose="idle" size={180} className={s.bird} />
           <Court />
         </div>
-      </div>
+      </header>
       <main className={s.panel}>
         {bye && (
           <p className={s.bye} role="status">
-            Your account is gone. Your notes stay in your Drive.
+            {bye === 'signed-out' ? 'Signed out. This device forgot you.' : 'Your account is gone. Your notes stay in your Drive.'}
           </p>
         )}
         <h1 className={s.hero}>Your Drive, tidied by a bowerbird.</h1>

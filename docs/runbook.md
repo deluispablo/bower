@@ -4,7 +4,7 @@ How the owner sets up, deploys, rotates and recovers the Bower staging Worker. I
 
 No real values live here. `<staging origin>` is the staging address (an `https://` origin with no path), `FOLDER_ID` is a Drive folder id, and the only address is `you@example.com`. The owner's own GitHub names (`deluispablo`, `bower-home`) are the one exception the project allows.
 
-Not covered yet, because they arrive in P4: the Claude credential for the runner, the production Worker's name and its deploy, and rate limits.
+The last part, "Production", covers the replaced production: deploy and rollback, the read-only precheck, rate limits, the OAuth publishing state and incidents. `<production origin>` is the production address.
 
 ## Accounts
 
@@ -122,3 +122,72 @@ The instance repository keeps its run history, which holds no folder content.
 - **A lost dispatch.** If a press is admitted but no job ever starts because `GITHUB_TOKEN` is missing, wrong or expired, nothing is dispatched again: the alarm's lookup on GitHub needs the same token, so at the stale deadline, 17 minutes after the press, the run ends failed with "This tidy-up took too long and stopped. Try again." The Worker's log says why. With no token: `tidy dispatch is not configured: no GitHub token`, then `tidy recovery is not configured: no GitHub token`. With a wrong or expired one: `tidy dispatch failed: status 401`, then `tidy lookup failed: status 401` (403 or 404 for a token without access to the instance repository). Check `GITHUB_TOKEN`, check the Actions tab of the instance repository for a run named `tidy <run id> <attempt>`, fix the cause and press again.
 - **A failed `saving`.** The run reached its last phase but the report did not land. The run ends failed with the cause, and nothing is repeated: a new press reads the folder first and skips what is already there. Check the run's log in the instance repository's Actions tab.
 - **Restoring the code from the backup.** Only accepted `main` is copied to the private repository `deluispablo/bower-app`. To recover, clone that repository into a new directory, check out `main`, run `pnpm install --frozen-lockfile`, and redeploy with `deploy-staging.sh` once `main` is local again. The backup holds code only: not secrets, ignored files, Cloudflare configuration or anyone's Drive. Set the secrets above again with `wrangler secret put`.
+
+## Production
+
+Production is the Worker named `bower-api`, which holds the app and the Worker on one origin, `<production origin>`. It replaces the original app. `scripts/deploy-staging.sh` refuses it on purpose, so a production deploy is always by hand, by the technical lead, after the owner has approved the moment and the rollback. Nothing here is run on production without that approval.
+
+### Before the first deploy
+
+1. **Secrets.** Set the four required secrets and `GITHUB_TOKEN` on `bower-api` as in "Secrets", each with `npx wrangler secret put NAME` from `api/`. Use new values, never staging's. The original app's `SESSION_SECRET` and `TOKEN_ENC_KEY` are not reused: nobody is signed in on the new app, and people sign in once.
+2. **OAuth client.** Add `<production origin>/auth/callback` and `<production origin>` to the client, as in "The Google OAuth client". See "The OAuth publishing state" below.
+3. **Instance repository.** Run `scripts/new-instance.sh OWNER/NAME <production origin>` for the repository production uses. Then set the Claude credential there: run `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R OWNER/NAME` and paste the value at the prompt. It is the one secret the workflow reads. Set the repository variable `BOWER_PROVIDER` to `claude`, and optionally `BOWER_MODEL` and `BOWER_MAX_TURNS`, under Settings, Secrets and variables, Actions, Variables.
+4. **Rate limits.** They must be in place before the first deploy. See "Rate limits at the cutover".
+5. **The precheck.** It runs after the deploy and before any tidy-up. See "The read-only precheck".
+
+### Deploy
+
+From a clean checkout of the accepted local `main`, by the technical lead, never by an agent. `scripts/cutover.sh` does the guards, the build, the scan, the deploy to `bower-api` and the `/health` and `/status` checks, and prints the rollback line. Its header is the detailed reference. It reads `api/wrangler.production.jsonc`, which holds the production name, its own KV namespace and its own rate-limit namespace ids; the owner makes that file, and the script checks it.
+
+1. Run the dry run first and read what it would do: `scripts/cutover.sh --dry-run <main short SHA> <production origin> api/wrangler.production.jsonc`.
+2. Then the same without `--dry-run`: `scripts/cutover.sh <main short SHA> <production origin> api/wrangler.production.jsonc`. Write down the rollback line it prints: it names the version that was live before.
+3. Run `scripts/new-instance.sh OWNER/NAME <production origin>` again whenever `runner/` changed.
+4. Watch `npx wrangler tail bower-api --format json` while the first real sign-in and tidy-up go through.
+
+### Rollback
+
+The app is served by the Worker, so one rollback returns both the app and the Worker.
+
+1. **Return to the last good version.** Dry run first: `scripts/rollback.sh --dry-run <version id> <production origin>`. Then the same without `--dry-run`: `scripts/rollback.sh <version id> <production origin>`, with the version id the cutover printed. It makes exactly that version live and checks that the origin answers 200. Then check that `/health` names the old SHA.
+2. **If Cloudflare refuses the rollback**, usually because a person-object schema step was added since (steps are only ever appended), do not undo the schema. The script only runs from the tip of local `main`, and the real `main` stays where it is, so work in a scratch clone: `git clone . ../bower-last-good`, `cd ../bower-last-good`, `git reset --hard <last good SHA>`, `pnpm install --frozen-lockfile`. From there run `scripts/cutover.sh --dry-run <last good SHA> <production origin> <path to api/wrangler.production.jsonc>`, then the same without `--dry-run`, as in "Deploy". The old code must still read the stored data, so a release that adds a step is tested against that before it ships (see the compatibility rule in `docs/ARCHITECTURE.md`).
+3. **The runner.** A rollback of the Worker does not change the instance repository. If the runner changed too, run `scripts/new-instance.sh OWNER/NAME <production origin>` from the checkout of the last good commit.
+4. **Back to the original app.** The original's version stays listed in `npx wrangler deployments list` for `bower-api`. Run `scripts/rollback.sh --dry-run <version id> <production origin>` and then `scripts/rollback.sh <version id> <production origin>` with the original's version id. People signed in to the new app sign in again; their folders and notes are untouched. A tidy-up running at that moment stops without reporting.
+5. **Rehearse it.** Before the cutover, practise steps 1 and 2 on staging: deploy an older SHA with `scripts/deploy-staging.sh`, then the newer one, and write down how long it took. Also run both scripts with `--dry-run`.
+
+### The read-only precheck
+
+The precheck is the first time the new app reads the owner's real folder, so it only reads. Run it after the production deploy and before any tidy-up is pressed.
+
+1. Make a short-lived token by hand with the `drive.readonly` scope only (for example in the Google OAuth Playground). Never paste it into a chat, an issue or a file.
+2. Run `BOWER_DRIVE_TOKEN=<token> pnpm -C runner precheck FOLDER_ID`. It reads the folder once and prints the report as JSON on stdout.
+3. Read the exit code. Exit `0`: the folder was checked. Exit `1`: a read failed or a pile's note was not checked. Exit `2`: wrong arguments or token, so fix them and run it again.
+4. Read the JSON. Any `refused` or `notChecked` entry, or exit `1`, means stop and roll back as above.
+5. Afterwards, in Drive, open the Bower folder's version history. Nothing should show a change made at the time of the precheck.
+6. If anything reads wrongly, stop, roll back as above and note what you saw. Do not fix data by hand.
+
+### Rate limits at the cutover
+
+Three per-minute limits guard the Worker, set under `ratelimits` in `api/wrangler.jsonc`: `AUTH_RATE_LIMIT` (20 for `/auth/login`, per client address), `DRIVE_RATE_LIMIT` (30 for `/drive/token`, per person) and `VAULT_RATE_LIMIT` (60 for `/vault`, per person). Tidy-ups keep their own daily quota, `DAILY_RUN_LIMIT`. Over a limit the Worker answers 429 `rate-limited` with `Retry-After`, and the app shows its existing plain sentence.
+
+1. **Give production its own bindings.** The namespace ids in the file are made up for this repository. In the production config, give each of the three a namespace id that no other binding in the Cloudflare account uses (Cloudflare's Rate Limiting binding needs one per counter).
+2. **A missing binding fails closed**, with a 500 `internal` on that route, never an open door. So after the deploy, check that sign-in, `/drive/token` and `/vault` answer for a signed-in person and that the tail shows no `missing` or `failed` line for a limit.
+3. **Limits are approximate.** The count is per Cloudflare location and eventually consistent, so a person near a limit may pass or be refused a little early.
+4. **If real use hits a limit,** raise the number in the config and redeploy. Do not remove a binding.
+
+### The OAuth publishing state
+
+The client's publishing status decides who can sign in and how long a sign-in lasts. Before the cutover, check it in the Google Cloud console under Google Auth platform, Audience, and write the answer down.
+
+- **Testing.** Only listed test users can sign in, and Google expires their refresh tokens after 7 days (https://developers.google.com/identity/protocols/oauth2#expiration). Each person then meets the signed-out screen about once a week and signs in again. Nothing is lost. This suits the owner's own accounts and nobody else.
+- **In production.** Tokens stay valid. The `drive` scope is restricted, so people beyond the owner's own accounts need Google's verification before it is right to invite them; an unverified client shows a warning and has a cap on new users. The owner decides who uses Bower, and that decides whether to start verification.
+- **A change of state** is made in the console by the owner only, and is followed by one fresh sign-in with each test account to confirm it works.
+
+### Incidents
+
+First read `npx wrangler tail bower-api --format json` with no status filter (a handled 500 shows as "ok"), and the Actions tab of the instance repository for runs named `tidy <run id> <attempt>`. Never paste a token or a folder's content into a chat or an issue.
+
+- **Revoked access.** A person (or Google) revoked Bower's access. The first call that needs Drive forgets the stored token, retires their sessions and answers 401 `signed-out`, and a running tidy-up stops without reporting. Nothing in their folder changes. They sign in again and Google asks for consent. If many people hit this at once, it is not them: check the OAuth publishing state (a Testing client expires tokens after 7 days), then `GOOGLE_CLIENT_SECRET`, then whether `TOKEN_ENC_KEY` was changed (see "Rotation").
+- **Drive outage.** Check Google's status dashboard (https://www.google.com/appsstatus/dashboard/). While Drive fails, calls get 5xx or time out, the app says plainly that a change could not be confirmed, and a tidy-up that cannot finish ends failed ("This tidy-up took too long and stopped. Try again.") at the stale deadline at the latest. Nothing needs fixing and nothing should be redeployed: the runner never repeats work already saved, so people press again once Drive is back. If a tidy-up stays stuck well past 17 minutes, see "Recovery".
+- **Model outage.** Check the provider's status page (https://status.claude.com). A model that fails or is overloaded ends the run failed with a plain sentence, and the log in the instance repository's Actions tab shows the cause. If the credential is refused or expired, make a new one with `claude setup-token`, set it with `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R OWNER/NAME`, and press again. Do not set `BOWER_PROVIDER` back to the scripted provider on production to keep tidy-ups "working": it files by a fixed script that means nothing, so a failed run is the honest answer. During a long outage, tell people rather than changing code.
+- **A bad release.** If `/health` or sign-in breaks right after a deploy, roll back first ("Rollback"), then look for the cause.
+- **After any incident**, write down the time, what people saw, what you did and what you changed, with no folder content in it.
