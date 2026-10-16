@@ -47,7 +47,7 @@ export const useTabs = create<Tabs>((set, get) => ({
     const { owner } = get();
     if (owner === who) return;
     // Tabs kept for an earlier person (or for no one known) are not theirs to see.
-    set(owner === null ? { owner: who } : { owner: who, tabs: [{ id: 1, route: '/' }], active: 1 });
+    set({ owner: who, tabs: [{ id: 1, route: '/' }], active: 1 });
   },
   follow: (route) => {
     const { tabs, active } = get();
@@ -81,7 +81,7 @@ export const useTabs = create<Tabs>((set, get) => ({
     set({ tabs: next, active: newActive?.id ?? 1 });
     return active === id ? (newActive ?? null) : null;
   },
-  reset: () => set({ tabs: [{ id: 1, route: '/' }], active: 1 }),
+  reset: () => set({ tabs: [{ id: 1, route: '/' }], active: 1, owner: null }),
   relocate: (fromRoute, toRoute) =>
     set({
       tabs: get().tabs.map((t) => (t.route === fromRoute || t.route.startsWith(`${fromRoute}/`) ? { ...t, route: toRoute + t.route.slice(fromRoute.length) } : t)),

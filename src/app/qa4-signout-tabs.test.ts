@@ -47,4 +47,13 @@ describe('qa4-signout-tabs: sign-out forgets whose tabs these were', () => {
     useTabs.getState().forPerson('someone@example.com');
     expect(useTabs.getState()).toMatchObject({ tabs: [{ id: 1, route: '/' }], owner: 'someone@example.com' });
   });
+
+  it('R3 combined: after a later tab change, the next person still gets one tab on Home and owns it', () => {
+    useUi.getState().forgetPerson();
+    forgetThisPerson();
+    useTabs.getState().open('/settings');
+    useTabs.getState().forPerson('someone@example.com');
+    expect(useTabs.getState()).toMatchObject({ tabs: [{ id: 1, route: '/' }], active: 1, owner: 'someone@example.com' });
+    expect(useTabs.getState().tabs).toHaveLength(1);
+  });
 });
