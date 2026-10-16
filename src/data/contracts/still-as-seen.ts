@@ -48,6 +48,13 @@ export interface NotAsSeenCause {
 /** The same folders, in any order. */
 export const sameParents = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((p) => b.includes(p));
 
+/**
+ * The folder a write goes into (a create's, a move's) is there, a folder, and out of the Bin, as read right before the
+ * send. Where it is and what it is called are no version of what it holds, so nothing else is compared. The runner's
+ * fence (`SeenFiles.assert`) and the app's move (`DriveVault.move`) ask it.
+ */
+export const openFolder = (now: { folder: boolean; trashed?: boolean } | null): boolean => !!now && now.folder && now.trashed !== true;
+
 /** Why the stored file is not as `seen` says, or null while it still is. */
 export function notAsSeen(seen: SeenExpectation, now: StoredNow | null): NotAsSeenReason | null {
   // Gone: Drive keeps no file, or it is in the Bin when the write expects it out (or out when it expects it in).
