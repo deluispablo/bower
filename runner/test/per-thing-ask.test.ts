@@ -187,6 +187,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     keepKeys: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', extra: 1 }] })),
     keepNote: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/None.md' }] })),
     keepNotAsked: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/Flat hunt/Flat hunt.md' }] })),
+    memory: edit((i) => ({ ...i, forget: Array.from({ length: 21 }, (_, n) => ({ factId: `fact-${n + 1}` })) })),
   };
   // A view needs a type, a request and a Bower map, which the offer-and-flat case has not: these change the skills tally's view.
   const viewBad: Record<ViewKind, (view: unknown) => unknown[]> = {
