@@ -150,9 +150,28 @@ export interface Proposal {
   payload: { kind: string; row: TypeRow } | { kind: 'view'; home: ViewHome; definition: ViewDefinition };
 }
 
+/** A value a request's op carries, never `unknown`: the Worker's RPC types keep it (as a view's declaration does). */
+export type RequestValue = string | number | boolean | null | object;
+/** One op a large request applies to every note of its set (B12d): a property or a tag; a move or a rename never waits for a yes. */
+export type RequestOp = { kind: 'property'; key: string; mode: 'set' | 'union'; value: RequestValue } | { kind: 'tag'; mode: 'add' | 'remove'; value: string };
+/**
+ * The part of a large request a question freezes (B12d R35): the request, its set and ops as the model gave them, and the
+ * first 200 members in the set's order; a yes applies exactly these. `requestAskOk` checks it, one contract.
+ */
+export interface RequestPart {
+  id: string;
+  title: string;
+  set: { type: string; folderId: string; recursive: boolean; where?: object };
+  ops: RequestOp[];
+  members: string[];
+  total: number;
+}
+
 export interface Question {
   /** Frozen proposal identity and payload, never supplied by an answer. */
   proposal?: Proposal;
+  /** A large request waiting for its yes (`q-request-<record id>`): the part a yes applies, never supplied by an answer. */
+  request?: RequestPart;
   options?: Pick<QuestionOption, 'id' | 'label'>[];
   /** Pile words at asking, so an edit resets the asking. */
   words?: string;
