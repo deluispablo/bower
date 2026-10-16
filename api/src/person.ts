@@ -7,7 +7,6 @@ import { dispatchOutcome, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
 import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling } from './recovery.js';
 import type { Recovery, RecoveryWatch } from './recovery.js';
-import { timingSafeEqual } from './crypto.js';
 import { TABLES_AT_DELETE, migrate, readSchemaVersion } from './person-schema.js';
 import { ACTIVE_PHASES, PHASE_RANK } from '../../src/data/contracts/run-phases.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
@@ -1113,7 +1112,7 @@ export class Person extends DurableObject<Env> {
   /**
    * Keeps the ticket hashed to `hash` as `attempt`'s of the going run `runId` (worker contract, "Runner wire"; TL-P3-18),
    * minted by the alarm's dispatch (`claimDispatch`) and sent in the payload. Only its SHA-256 is kept, with the attempt
-   * and an expiry at `now` + 60 min; it retires the run's earlier tickets (kept, never deleted), so an older attempt's
+   * and an expiry at `now` + TICKET_TTL_MS (65 min); it retires the run's earlier tickets (kept, never deleted), so an older attempt's
    * ticket answers `stale-attempt`. False, with nothing written, for an attempt not newer than the kept one or a run
    * unknown or ended.
    */
@@ -1165,7 +1164,7 @@ export class Person extends DurableObject<Env> {
   private goneTicket(hash: string, now: number): boolean {
     this.pruneGone(now);
     const row = this.ctx.storage.sql.exec<{ hash: string }>('SELECT hash FROM run_ticket WHERE run_id = ? AND hash = ?', GONE_RUN, hash).toArray()[0];
-    return row !== undefined && timingSafeEqual(row.hash, hash);
+    return row !== undefined;
   }
 
   /**
@@ -1265,7 +1264,8 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * The ticket hashed to `hash` for `runId` (compared in constant time), and what it is at `now`: `live`;
+   * The ticket hashed to `hash` for `runId` (looked up by its hash, so a lookup's timing reveals nothing usable), and
+   * what it is at `now`: `live`;
    * `superseded` (retired, with a newer attempt's ticket kept for the run); `retired` (its run ended); or
    * `unknown` (no such ticket, or expired).
    */
@@ -1278,7 +1278,7 @@ export class Person extends DurableObject<Env> {
     const row = sql
       .exec<TicketRow>('SELECT hash, attempt, expires_at, retired, report_seq, report_phase FROM run_ticket WHERE run_id = ? AND hash = ?', runId, hash)
       .toArray()[0];
-    if (row === undefined || !timingSafeEqual(row.hash, hash)) return { kind: 'unknown' };
+    if (row === undefined) return { kind: 'unknown' };
     if (row.retired === 1) {
       const newer = sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM run_ticket WHERE run_id = ? AND attempt > ?', runId, row.attempt).one().n;
       return newer > 0 ? { kind: 'superseded' } : { kind: 'retired', row };

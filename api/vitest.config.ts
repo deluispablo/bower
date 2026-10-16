@@ -14,9 +14,6 @@ export default defineConfig({
           // base64 of 32 zero bytes: a fixture, not a real key.
           TOKEN_ENC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
           GITHUB_TOKEN: 'test-github-token',
-          ADMIN_KEY: 'test-admin-key',
-          VAPID_PUBLIC_KEY: 'test-vapid-public-key',
-          VAPID_PRIVATE_KEY: 'test-vapid-private-key',
         },
       },
     }),
