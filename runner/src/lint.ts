@@ -29,7 +29,7 @@ const keys = (path: string): string[] => {
  */
 export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, files: readonly string[],
   after: Readonly<Record<string, { path: string }>>): string {
-  const sorted = Object.entries(notes).map(([id, note]) => ({ ...note, id })).sort((a, b) => a.path.localeCompare(b.path));
+  const sorted = Object.entries(notes).map(([id, note]) => ({ ...note, lint: note.lint === 'unreadable' ? undefined : note.lint, refused: note.lint === 'unreadable', id })).sort((a, b) => a.path.localeCompare(b.path));
   const placed = new Map(sorted.map((note) => [note.path, after[note.id]?.path]));
   // A title two notes share is shown as their places, so the duplicate-name line can tell them apart (R3).
   // Counted over every visible .md file: the checked notes leave out some places (the Inbox).
@@ -43,7 +43,7 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   };
   const targets = files.flatMap(keys);
   const notePaths = sorted.map((note) => ({ path: note.path, keys: keys(note.path) }));
-  const unchecked = sorted.filter((note) => !note.lint);
+  const unchecked = sorted.filter((note) => !note.lint && !note.refused);
   const broken: string[] = [];
   const inbound = new Map<string, number>();
   for (const note of sorted) {
@@ -82,11 +82,13 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   const tags = bower.filter((note) => (note.lint?.tags ?? 0) > NOTE_TAGS_MAX)
     .map((note) => `- Too many tags: ${link(note.path)} has ${note.lint?.tags ?? 0}; Bower keeps ${NOTE_TAGS_MAX} at most.`);
   // An orphan needs the whole inbound graph; About me and Rules are the notes the app opens directly, never linked to.
-  const orphans = unchecked.length ? [] : bower.filter((note) => !inbound.has(note.path) && !isRoot(note.path)
+  const orphans = sorted.some((note) => !note.lint) ? [] : bower.filter((note) => !inbound.has(note.path) && !isRoot(note.path)
     && !isHub(note.path, nameOf(note.path), note.type ?? undefined)).map((note) => `- Nothing links to ${link(note.path)}.`);
   const notChecked = unchecked.filter((note) => placed.get(note.path)).map((note) => `- Waiting: ${link(note.path)}. Bower will check it next time.`);
+  const couldNotRead = sorted.filter((note) => note.refused && placed.get(note.path))
+    .map((note) => `- Could not read ${link(note.path)}: Bower will try again when it changes.`);
   const findings = [...broken, ...duplicates, ...sharedSummaries, ...summaries, ...long, ...dated, ...tags, ...orphans];
-  const lines = [...notChecked, ...findings];
+  const lines = [...notChecked, ...couldNotRead, ...findings];
   return '---\nsummary: What Bower found when it checked the links and names in your notes.\nby: bower\n---\n\n## Bower\'s note\n'
     + (lines.length ? lines.join('\n') : 'No findings in the checked notes.') + '\n';
 }

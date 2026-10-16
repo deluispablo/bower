@@ -330,7 +330,13 @@ export async function withProgress(drive: RunnerDrive, run: { rootId: string; ru
     if (path !== undefined && !isHidden(path) && path.split('/')[0] !== 'Inbox') files[id] = { ...stored, path };
   }
   for (const [id, note] of Object.entries(snapshot)) {
-    if (files[id]?.version === note.version) continue;
+    const stored = files[id];
+    if (stored?.version === note.version) {
+      // A same-version entry without usable evidence takes what this run found (a refusal included), so a held run keeps it.
+      const found = lints[id] ?? note.lint;
+      if (found && !lintEvidenceOk(stored.lint)) files[id] = { ...stored, lint: found };
+      continue;
+    }
     const entry: MaintenanceNote = { ...note, ...(lints[id] ? { lint: lints[id] } : {}) };
     // A map's text and members come only from a completing run's whole snapshot (R15).
     delete entry.moc;
@@ -443,10 +449,11 @@ const cut = (f: DriveFile, text?: string): boolean => f.size !== undefined ? f.s
   : text === undefined || new TextEncoder().encode(text).length >= PREFIX_BYTES - 3;
 const lintOf = (f: DriveFile, path: string, text: string | null): LintEvidence | undefined =>
   text === null || cut(f, text) ? undefined : lintFacts(path, text) ?? undefined;
-/** A note Drive refuses to give is named as not checked (AC16); retries and waits still stop the run. */
-function unreadable(error: unknown): void {
+/** A note Drive refuses for good is recorded 'unreadable' for its version (b8c-unreadable); retries and waits still stop the run. */
+function unreadable(error: unknown): 'unreadable' {
   if (failureKind(error) !== 'permanent') throw error;
   console.error(error);
+  return 'unreadable';
 }
 
 /** A type row's stored `views` (B11): its list, or none. */
@@ -709,7 +716,7 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
  * maintenance's ledger refuses (`exhausted`): what completed is kept, the rest waits for the next run.
  */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false,
-  lints: Record<string, LintEvidence> = {}): Promise<{ snapshot: Notes; read: number; exhausted?: LedgerExhausted }> {
+  lints: Record<string, LintEvidence | 'unreadable'> = {}): Promise<{ snapshot: Notes; read: number; exhausted?: LedgerExhausted }> {
   const limit = limiter(prefix ? READ_AHEAD : 1, (error) => error instanceof LedgerExhausted);
   let exhausted: LedgerExhausted | undefined;
   let read = 0;
@@ -723,11 +730,14 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     // Malformed or absent lint evidence is rebuilt from one read of this version (R26).
     const evidence = same && lintEvidenceOk(cached.lint) ? cached.lint : undefined;
     let text: string | null;
+    let refused: 'unreadable' | undefined;
     try {
       // A stored entry holding what a read of its version gives (its owner too) is reused with or without the
       // projection (R3); an older entry without one needs its prefix when the projection is missing.
       const map = VaultIndex.isHub(path, f.name) && cached?.type === undefined;
-      if (same && !map && (!prefix || cached.owner !== undefined)) text = await drive.keptPrefix(f) ?? null;
+      // A refusal already recorded for this version is decided: no read, whatever the map or owner conditions say.
+      if (evidence === 'unreadable') text = null;
+      else if (same && !map && (!prefix || cached.owner !== undefined)) text = await drive.keptPrefix(f) ?? null;
       else { read++; text = await drive.readPrefix(f, cold); }
     } catch (error) {
       // Drive also reports a trashed media read as not-found; other failures still stop the run.
@@ -736,7 +746,7 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
         drop(f.id);
         return [];
       }
-      unreadable(error);
+      refused = unreadable(error);
       text = null;
     }
     let entry: MaintenanceNote = same ? { path, version: cached.version, summary: cached.summary, coverage: cached.coverage,
@@ -746,7 +756,7 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     else if (cached?.owner === 'bower' || cached?.owner === 'person') entry = { ...entry, owner: cached.owner,
       ...(cached.type === null || typeof cached.type === 'string' ? { type: cached.type } : {}) };
     // Kept apart from the planner's notes, so lint evidence never reaches the model input (AC17).
-    const lint = lintOf(f, path, text) ?? evidence;
+    const lint = lintOf(f, path, text) ?? evidence ?? refused;
     if (lint) lints[f.id] = lint;
     // Previously frozen complete bytes remain usable only for the exact indexed version.
     const moc = same && typeof cached?.moc?.text === 'string' ? mocSnapshot(cached.moc.text) : null;
@@ -823,7 +833,7 @@ export async function refreshPlanning(drive: RunnerDrive, rootId: string) {
   // A type-table edit is hidden, yet it can change or invalidate any map's declared figures (R35).
   // Its current and its previous path each count, so a rename away, a Bin, a create or an edit all refresh.
   const tableChanged = !!feed?.changes.some((c) => ix.pathOf(c.fileId) === SYSTEM.typeTable || previous.pathOf(c.fileId) === SYSTEM.typeTable);
-  const lints: Record<string, LintEvidence> = {};
+  const lints: Record<string, LintEvidence | 'unreadable'> = {};
   const { snapshot, read, exhausted } = await snapshotNotes(drive, ix, state, drop, !state || !ix.file(SYSTEM.index), lints);
   return { index: projectIndex(snapshot), listing: [...files.values()], ix, old, state, cursor, changes, tableChanged, snapshot, lints, read, drop, exhausted };
 }
@@ -889,7 +899,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && !await formulasOwed() && await healthKept()) {
     return old ? cursorOnly(drive, manifest, ix, old, state, cursor) : manifest;
   }
-  // Evidence absent, malformed or unreadable before is rebuilt from one read of this version (R26).
+  // Absent or malformed evidence is rebuilt from one read of this version (R26).
   const reads = limiter(READ_AHEAD, (error) => error instanceof LedgerExhausted);
   // A run reads at most NOTE_READS notes for the index and lint together, lint's in path order; the notes left stay owed
   // for the next run, and the index's own reads (a cold folder) are never refused.
@@ -903,14 +913,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       const lint = cut(f) ? lintFacts(note.path, await drive.readListedText(f)) ?? undefined : lintOf(f, note.path, await drive.readPrefix(f));
       if (lint) note.lint = lint;
     } catch (error) {
-      if (!(error instanceof BowerError) || error.code !== 'not-found') unreadable(error);
+      if (!(error instanceof BowerError) || error.code !== 'not-found') note.lint = unreadable(error);
       else console.error(error);
     }
   })));
   // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
   for (const [id, note] of Object.entries(snapshot)) {
     const before = files.get(id);
-    if (note.moc || !before) continue;
+    if (note.moc || !before || note.lint === 'unreadable') continue;
     // Declared figures need the map's full text, even when the declaration runs past the indexed prefix (R37); the
     // whole read is then validated by the same ownership parser.
     const prefix = note.incomplete ? await drive.keptPrefix(before) ?? '' : '';
