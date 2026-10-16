@@ -2699,8 +2699,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       outcomes.push({ m, reasons: why, updated: [...planned.keys()].filter((id) => !m.members.includes(id)) });
       // Each done member leaves one row, at the admission time; the requests write below keeps them (R45, AC25).
       for (const r of m.results) if (m.members.includes(r.memberId) && !why.has(r.memberId)) recentNew.push({ key: await recentKey(r.memberId, r.ops, r.move), at: opts.requestedAt });
-      mapSettled = true;
     }
+    // Every settled map, an empty set too, runs the recent rows' cleanup below (R45, R46).
+    mapSettled = true;
   }
   // A settled map's result note (B12c R32, R69-R77, R85): in its set's folder, named after every name the run gives (the
   // members' moves first, then the requests oldest first), linked by title or, when another note has it, by place.

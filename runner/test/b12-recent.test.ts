@@ -412,3 +412,27 @@ describe('B12e the large case runs to its fourth press', () => {
     for (const path of ['Reading 201', 'Late reading']) expect(run.after[`Resources/Reading/${path}.md`], path).toContain('review_state: reviewed\n');
   }, 600_000);
 });
+
+describe('B12e review round 1: a retry and an empty set', () => {
+  it('AC26 b12-recent-retry-fresh: a refused reply\'s skips do not carry into its retry, which asks for another change', async () => {
+    const f = await folder();
+    await press(f, (ctx) => opsMap(ctx, [REVIEWED]));
+    let calls = 0;
+    // The first reply repeats the recorded change beside a row outside the selection (refused); the retry asks another change.
+    const again = await press(f, (ctx) => (calls++ === 0 ? { ...opsMap(ctx, [REVIEWED], 'Review the rest'), things: [{ fileId: 'made-up-missing', to: HUNT }] }
+      : opsMap(ctx, [SHORTLIST], 'Review the rest')), { words: 'Shortlist the active offers in Job hunt.' });
+    expect(calls, 'the first reply was refused and asked once more').toBe(2);
+    for (const path of [FERRO, MALLO]) expect(again.after[path], path).toMatch(/shortlist/);
+    for (const line of ['Done: 2', 'Skipped from recent results: 0']) expect(flat(again), line).toContain(`${line}\n`);
+  });
+
+  it('AC25 b12-recent-empty-set-cleanup: a map whose set is empty still settles and drops expired and unreadable rows, logged', async () => {
+    const kept = { key: '00000000000000aa', at: DAY - 1000 };
+    const f = await folder({ [SYSTEM.requests]: JSON.stringify({ v: 1, done: [], recent: [kept, { key: '00000000000000bb', at: DAY - MONTH - 1 }, { key: 'not hex', at: 'soon' }] }) });
+    const run = await press(f, (ctx) => ({ ...empty, maps: [{ requestId: ctx.request, title: 'Review offers', set: { ...set(ctx), where: { op: 'eq', property: 'status', value: 'archived' } }, ops: [REVIEWED] }] }),
+      { words: 'Mark the archived offers in Job hunt as reviewed.' });
+    expect((JSON.parse(run.after[SYSTEM.requests] ?? '{}') as { done: Array<{ id: string }> }).done.map((r) => r.id), 'the request settled').toEqual(['press-1']);
+    expect(recent(run), 'the expired and unreadable rows went').toEqual([kept]);
+    expect(vi.mocked(console.error).mock.calls.flat().map(String).some((l) => /recent/i.test(l)), 'logged').toBe(true);
+  });
+});

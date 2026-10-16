@@ -733,6 +733,8 @@ function mapsReader(read: ScriptedRead, listing: readonly DriveFile[], ix: Vault
     }
   };
   const prepare = async (value: unknown): Promise<void> => {
+    // Skips belong to the reply being checked: a refused reply's never carry into its retry.
+    skipped.clear();
     for (const entry of isRecord(value) && Array.isArray(value.maps) ? value.maps.filter(isRecord) : []) {
       const set = entry.set;
       const row = isRecord(set) ? types.find((r) => r.id === set.type) : undefined;      if (isRecord(set) && row && typeof set.folderId === 'string' && folders.some((f) => f.id === set.folderId) && !sets.has(JSON.stringify(set))
