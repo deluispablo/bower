@@ -58,6 +58,21 @@ describe('c09-score AC1: an answer is read per request, as JSON', () => {
     expect(unmet(result, `answers "${ASKED}": links [${LISTING}, ${TERMS}, ${OLD}], expected [${LISTING}, ${TERMS}]`)).toHaveLength(1);
   });
 
+  it('AC1 c09-score-done-absent: a row with no done, or an empty done, is not done', () => {
+    for (const row of [{ text: ASKED }, { text: ASKED, done: '' }]) {
+      const result = run(answers({ contains: [] }), { ...files, [REQUESTS]: requests([row]) });
+      expect(unmet(result, `answers: no done row for "${ASKED}"`), JSON.stringify(row)).toHaveLength(1);
+    }
+  });
+
+  it('AC1 c09-score-done-duplicate: with the same words twice, the row that has done counts', () => {
+    const open = { text: ASKED };
+    for (const rows of [[open, { text: ASKED, done: ANSWER }], [{ text: ASKED, done: ANSWER }, open]]) {
+      const result = run(answers({ contains: ['1,450'], links: [LISTING, TERMS] }), { ...files, [REQUESTS]: requests(rows) });
+      expect(result).toEqual({ pass: true, unmet: [] });
+    }
+  });
+
   it('AC1 c09-score-not-json: a requests file that is not JSON, or not its shape, is unmet', () => {
     for (const text of ['{"v":1,"done":[', '{"v":1,"rows":[]}\n']) {
       const result = run(answers({ contains: ['1,450'] }), { ...files, [REQUESTS]: text });
@@ -96,6 +111,19 @@ describe('c09-score AC2: a table is read as rows', () => {
     expect(unmet(result, `tables ${NOTE}: no table with header [${HEADER.join(', ')}]`)).toHaveLength(1);
   });
 
+  it('AC2 c09-score-table-end: a heading, quote or fence right after the table is not a row', () => {
+    const rows = table(ROWS).split('\n').slice(0, -3).join('\n');
+    for (const next of ['## Notes', '> Quoted', '```\ncode\n```', '~~~\ncode\n~~~']) {
+      expect(run(tables, { [NOTE]: `${rows}\n${next}\n` })).toEqual({ pass: true, unmet: [] });
+    }
+  });
+
+  it('AC2 c09-score-fence-close: a fence line with trailing text does not close it; a real close does', () => {
+    const inside = `\`\`\`\n${table(ROWS)}\n\`\`\`not-a-close\n`;
+    expect(unmet(run(tables, { [NOTE]: inside }), `tables ${NOTE}: no table`)).toHaveLength(1);
+    expect(run(tables, { [NOTE]: `\`\`\`\ncode\n\`\`\`  \n${table(ROWS)}` })).toEqual({ pass: true, unmet: [] });
+  });
+
   it('AC2 c09-score-missing: a missing note or header is unmet', () => {
     expect(unmet(run(tables, {}), `tables ${NOTE}: missing note`)).toHaveLength(1);
     const other = expecting({ tables: [{ path: NOTE, header: ['Flat', 'Rent'], rows: [] }] });
@@ -111,5 +139,17 @@ describe('c09-score AC3: an expectation the scorer does not know is unmet, never
     expect(unmet(run(answers({ contain: ['1,450'] }), after), `answers "${ASKED}": unknown key "contain"`)).toHaveLength(1);
     expect(run(expecting({ tables: [{ path: NOTE, header: HEADER, rows: ROWS, row: [] }] }), { [NOTE]: table(ROWS) }).unmet)
       .toEqual([`tables ${NOTE}: unknown key "row"`]);
+  });
+
+  it('AC3 c09-score-nested-typo: a typo inside a press\'s answer is caught when that press is scored, not at the top', () => {
+    const after = { ...files, [REQUESTS]: requests([{ text: ASKED, done: ANSWER }]) };
+    const press = answers({ contain: ['1,450'] });
+    expect(unmet(run(press, after), `answers "${ASKED}": unknown key "contain"`)).toHaveLength(1);
+    expect(run(expecting({ runs: [press] }), after).unmet.filter((line) => line.includes('unknown key'))).toEqual([]);
+  });
+
+  it('AC3 c09-score-four-places: only the four places refuse a key; a note expectation is left as it is', () => {
+    const result = run(expecting({ notes: [{ path: NOTE, contain: ['x'] }] }), { [NOTE]: table(ROWS) });
+    expect(result.unmet.filter((line) => line.includes('unknown key'))).toEqual([]);
   });
 });
