@@ -86,7 +86,7 @@ describe('B8b lint and the health note through main', () => {
     const run = await runScripted(c);
     for (const path of Object.keys(c.folder)) expect(run.after[path]).toBe(c.folder[path]);
     expect(run.after[HEALTH] ?? '', 'personal broken links and Bower-only checks are reported').toContain('Missing plan');
-    expect(run.after[HEALTH]).not.toMatch(/Fence ghost|Tilde ghost|summary.*Plot diary|orphan.*Plot diary|tags?.*Plot diary/i);
+    expect(run.after[HEALTH]).not.toMatch(/Fence ghost|Tilde ghost|summary.*Plot diary|Nothing links to.*Plot diary|tags?.*Plot diary/i);
     expect(run.after[HEALTH]).toContain('Loose thought');
     expect(run.after[HEALTH]).toMatch(/summary/i);
     expect(run.after[HEALTH]).toMatch(/tags?/i);
@@ -245,8 +245,8 @@ describe('B8b lint and the health note through main', () => {
     const run = await runOnDrive(base.c, base.drive, base.root, { around, claude: replySequence([empty]), pacing }, 1);
     expect(run.after[HEALTH], 'incomplete evidence must have an honest coverage note').toBeDefined();
     expect(run.after[HEALTH]).not.toContain('No findings in the checked notes.');
-    expect(run.after[HEALTH]).not.toMatch(/orphan/i);
-    expect(run.after[HEALTH]).toMatch(/unchecked|not checked|could not (?:be )?check/i);
+    expect(run.after[HEALTH]).not.toMatch(/Nothing links to/);
+    expect(run.after[HEALTH]).toMatch(/- Waiting: /);
   });
   it('AC16 control: complete broken-link evidence is preserved for reporting', async () => {
     const c = await fixture('report-only-grammar');
@@ -481,7 +481,7 @@ describe('B8b lint and the health note through main', () => {
     const base = await setup();
     const first = await press(base);
     const health = first.after[HEALTH] ?? '';
-    const orphan = (text: string) => text.split('\n').filter((line) => line.includes('Loose thought') && /orphan/i.test(line));
+    const orphan = (text: string) => text.split('\n').filter((line) => line.includes('Loose thought') && /Nothing links to/.test(line));
     expect(orphan(health), 'Loose thought has no inbound link but its own').toHaveLength(1);
     base.traffic.length = 0;
     const second = await press(base, 2);
@@ -508,11 +508,11 @@ describe('B8b lint and the health note through main', () => {
       });
     };
     const first = await runOnDrive(base.c, base.drive, base.root, { around, claude: replySequence([empty]), pacing }, 1);
-    expect(first.after[HEALTH] ?? '', 'the unread note is named as not checked').toMatch(/unchecked|not checked|could not (?:be )?check/i);
+    expect(first.after[HEALTH] ?? '', 'the unread note is named as not checked').toMatch(/- Waiting: /);
     faulty = false;
     const second = await press(base, 2);
     expect(second.after[HEALTH], 'readable again, its broken link is found').toContain('Missing plan');
-    expect(second.after[HEALTH]).not.toMatch(/unchecked|not checked|could not (?:be )?check/i);
+    expect(second.after[HEALTH]).not.toMatch(/- Waiting: /);
   });
 
   // Spec review round 2 of b8b: the coordinator's five rulings (ruling 3 is the coherent AC19 retarget above).
@@ -617,10 +617,10 @@ describe('B8b lint and the health note through main', () => {
     const run = await runScripted(c);
     expect(run.code).toBe(0);
     const lines = (run.after[HEALTH] ?? '').split('\n');
-    expect(lines.filter((line) => /not checked/i.test(line)), 'the inbound graph is complete').toEqual([]);
+    expect(lines.filter((line) => /^- Waiting: /.test(line)), 'the inbound graph is complete').toEqual([]);
     expect(lines.filter((line) => line.includes('About me')), 'About me has no inbound link and no finding').toEqual([]);
-    expect(lines.filter((line) => line.includes('[[Rules]]')), 'nor Rules, the other note the app opens directly').toEqual([]);
-    expect(lines.filter((line) => /orphan/i.test(line) && line.includes('Loose thought'))).toHaveLength(1);
+    expect(lines.filter((line) => /\[\[Rules[|\]]/.test(line)), 'nor Rules, the other note the app opens directly').toEqual([]);
+    expect(lines.filter((line) => /Nothing links to/.test(line) && line.includes('Loose thought'))).toHaveLength(1);
   });
 
   it('AC11 round 3 ruling 5: missing summary is judged on the parsed field, never on the display substitute', async () => {
@@ -632,7 +632,7 @@ describe('B8b lint and the health note through main', () => {
     const run = await runScripted(c);
     expect(run.code).toBe(0);
     const lines = (run.after[HEALTH] ?? '').split('\n');
-    expect(lines.filter((line) => /not checked/i.test(line)), 'all three are checked').toEqual([]);
+    expect(lines.filter((line) => /^- Waiting: /.test(line)), 'all three are checked').toEqual([]);
     const missing = lines.filter((line) => /missing summary/i.test(line));
     expect(missing.some((line) => line.includes('Seed list')), 'an absent summary is missing').toBe(true);
     expect(missing.some((line) => line.includes('Pot sizes')), 'a quoted-empty summary is missing').toBe(true);
