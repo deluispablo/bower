@@ -485,15 +485,16 @@ describe('the Claude provider', () => {
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn })).toBe(0);
 
-    const lines = said.filter((l) => l.startsWith('timing:'));
+    // The run line comes first, then one model-call line per call, in the same log entry.
+    const lines = said.flatMap((l) => l.split('\n')).filter((l) => l.startsWith('timing:'));
     expect(lines).toHaveLength(1);
     const line = lines[0] ?? '';
     expect(line.length).toBeLessThan(460);
     // Numbers and phase names only: every field is name=number, but how the run ended.
     const fields = Object.fromEntries(line.replace(/^timing: /, '').split(' ').map((f) => f.split('=') as [string, string]));
-    expect(Object.keys(fields)).toEqual(['end', 'total', 'start', 'token', 'reads', 'model', 'api', 'turns', 'in', 'out', 'input', 'sections', 'apply', 'checkpoints', 'report', 'status', 'drive', 'region']);
+    expect(Object.keys(fields)).toEqual(['end', 'total', 'start', 'token', 'reads', 'model', 'api', 'turns', 'in', 'out', 'input', 'sections', 'apply', 'checkpoints', 'report', 'status', 'drive', 'region', 'cache']);
     expect(fields.end).toBe('done');
-    for (const [name, value] of Object.entries(fields)) if (name !== 'end') expect(value, name).toMatch(name === 'checkpoints' ? /^\d+\/[1-9]\d*$/ : name === 'drive' ? /^(?:\w+:\d+\/\d+,?)+$/ : name === 'region' ? /^[\w-]+$/ : name === 'input' ? /^[0-9a-f]{12}$/ : name === 'sections' ? /^prompt:[0-9a-f]{6},tree:[0-9a-f]{6},things:[0-9a-f]{6},notes:[0-9a-f]{6}(?:,rules:[0-9a-f]{6})?$/ : /^\d+$/);
+    for (const [name, value] of Object.entries(fields)) if (name !== 'end') expect(value, name).toMatch(name === 'checkpoints' ? /^\d+\/[1-9]\d*$/ : name === 'cache' ? /^\d+\/\d+$/ : name === 'drive' ? /^(?:\w+:\d+\/\d+,?)+$/ : name === 'region' ? /^[\w-]+$/ : name === 'input' ? /^[0-9a-f]{12}$/ : name === 'sections' ? /^prompt:[0-9a-f]{6},tree:[0-9a-f]{6},things:[0-9a-f]{6},notes:[0-9a-f]{6}(?:,rules:[0-9a-f]{6})?$/ : /^\d+$/);
     // Both semantic calls return this recorded usage: sum wall/API time, turns and tokens.
     expect(fields).toMatchObject({ model: '82500', api: '81960', turns: '2', in: '10240', out: '7780' });
     expect(line).not.toContain(TOKEN);

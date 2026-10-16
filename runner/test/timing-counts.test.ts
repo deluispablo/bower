@@ -24,7 +24,7 @@ describe('timing counts', () => {
     expect(Object.fromEntries(Object.entries(phases).map(([k, v]) => [k, v.calls])))
       .toEqual({ token: 0, reads: 25, model: 0, apply: 66, checkpoints: 4, report: 10, status: 0, runner: 2 });
     // Existing fields keep their names and order; the new ones come last.
-    expect(run.timing).toMatch(/^timing: end=done total=\d+ start=\d+ token=\d+ reads=\d+ model=\d+ api=\d+ turns=\d+ in=\d+ out=\d+ apply=\d+ checkpoints=\d+\/\d+ report=\d+ status=\d+ drive=\S+ region=eastus$/);
+    expect(run.timing).toMatch(/^timing: end=done total=\d+ start=\d+ token=\d+ reads=\d+ model=\d+ api=\d+ turns=\d+ in=\d+ out=\d+ apply=\d+ checkpoints=\d+\/\d+ report=\d+ status=\d+ drive=\S+ region=eastus cache=0\/0$/);
   });
 
   it('reading the type table: one media read', async () => {
