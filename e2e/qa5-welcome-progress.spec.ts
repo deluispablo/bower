@@ -4,9 +4,14 @@
  */
 import { expect, test } from './fixtures';
 import { expectAxeClean } from './axe';
+import { resize } from './viewport';
 
 for (const [step, heading, progress] of [[0, 'Throw it in', 'Step 1 of 3'], [2, 'Find it later', 'Step 3 of 3']] as const) {
-  test(`qa5-welcome-progress: AC3 welcome-progress-axe: step ${step + 1} says ${progress} and passes axe`, async ({ page }) => {
+  test(`qa5-welcome-progress: AC3 welcome-progress-axe: step ${step + 1} says ${progress} and passes axe`, async ({ page }, testInfo) => {
+    // The phone project is Pixel 7 (412px); the contract is 375 and 1440.
+    const phone = testInfo.project.name === 'phone';
+    if (phone) await resize(page,{ width: 375, height: 812 });
+    expect(page.viewportSize()?.width).toBe(phone ? 375 : 1440);
     await page.goto(`/welcome?step=${step}&scenario=default&time=instant`);
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
     const main = page.getByRole('main');

@@ -90,7 +90,8 @@ function WelcomeSteps() {
     const st = STEPS[step];
     return (
       <main className={s.page}>
-        <div className={s.dots} aria-label={`Step ${step + 1} of ${STEPS.length}`}>
+        <p className="sr-only">{`Step ${step + 1} of ${STEPS.length}`}</p>
+        <div className={s.dots} aria-hidden="true">
           {STEPS.map((_, i) => (
             <span key={i} className={i === step ? s.dotOn : ''} />
           ))}
