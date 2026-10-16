@@ -246,7 +246,9 @@ describe('B8b lint and the health note through main', () => {
     expect(run.after[HEALTH], 'incomplete evidence must have an honest coverage note').toBeDefined();
     expect(run.after[HEALTH]).not.toContain('No findings in the checked notes.');
     expect(run.after[HEALTH]).not.toMatch(/Nothing links to/);
-    expect(run.after[HEALTH]).toMatch(/- Waiting: /);
+    // b8c-unreadable: a permanent refusal (403 forbidden) is named as such, never as waiting.
+    expect(run.after[HEALTH]).toContain(`- Could not read [[Resources/Gardening/Plot diary|Plot diary]]: Bower will try again when it changes.`);
+    expect(run.after[HEALTH]).not.toMatch(/- Waiting: /);
   });
   it('AC16 control: complete broken-link evidence is preserved for reporting', async () => {
     const c = await fixture('report-only-grammar');
@@ -508,11 +510,15 @@ describe('B8b lint and the health note through main', () => {
       });
     };
     const first = await runOnDrive(base.c, base.drive, base.root, { around, claude: replySequence([empty]), pacing }, 1);
-    expect(first.after[HEALTH] ?? '', 'the unread note is named as not checked').toMatch(/- Waiting: /);
+    expect(first.after[HEALTH] ?? '', 'the unread note is named as could not read').toContain('- Could not read [[Resources/Gardening/Plot diary|Plot diary]]');
     faulty = false;
+    // b8c-unreadable: the refusal is kept for that version, so Bower tries again once Alex changes the note.
+    const id = idOf(first, DIARY) ?? '';
+    const diary = await base.drive.get(id);
+    await base.drive.writeText(id, `${first.after[DIARY] ?? ''}Alex checked the plot again.\n`, diary.modifiedTime);
     const second = await press(base, 2);
     expect(second.after[HEALTH], 'readable again, its broken link is found').toContain('Missing plan');
-    expect(second.after[HEALTH]).not.toMatch(/- Waiting: /);
+    expect(second.after[HEALTH]).not.toMatch(/- Waiting: |Could not read/);
   });
 
   // Spec review round 2 of b8b: the coordinator's five rulings (ruling 3 is the coherent AC19 retarget above).

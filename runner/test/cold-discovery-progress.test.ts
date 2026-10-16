@@ -285,7 +285,9 @@ describe('cold discovery keeps its reading progress', () => {
   });
 
   it('AC3 cold-discovery-progress-exhausted-later: a run that meets the ledger after its discovery completed keeps every note it read; the next run reads no other prefix', async () => {
-    const b = await cold(40);
+    // b8c-unreadable: a permanent refusal is now decided for its version, so the owed check comes from a note past the
+    // 4,096-byte prefix: discovery's prefix read answers and maintenance's whole read of it meets the ledger.
+    const b = await cold(40, { [record(5)]: note('Alex keeps record 5.', 'Record 5 evidence. '.repeat(300)) });
     const refused = b.id(record(5));
     const seeded = await contents(b);
     const turns = { count: 0 };
@@ -293,11 +295,9 @@ describe('cold discovery keeps its reading progress', () => {
     let reads = 0;
     const first = await press(b, 1, (next) => async (input, init) => {
       const u = url(input);
-      if (u.pathname === `/drive/v3/files/${refused}` && u.searchParams.get('alt') === 'media' && new Headers(init?.headers).get('Range')) {
+      if (u.pathname === `/drive/v3/files/${refused}` && u.searchParams.get('alt') === 'media') {
         reads++;
-        // Discovery's read is refused, so the note owes its check; maintenance's read of it then meets the ledger.
-        if (reads === 1) return new Response(JSON.stringify({ error: { code: 403, message: 'Made-up refused read', errors: [{ reason: 'forbidden' }] } }), { status: 403 });
-        if (reads === 2) { atExhaustion = turns.count; throw new LedgerExhausted(0); }
+        if (!new Headers(init?.headers).get('Range')) { atExhaustion = turns.count; throw new LedgerExhausted(0); }
       }
       return next(input, init);
     }, turns);
@@ -309,7 +309,8 @@ describe('cold discovery keeps its reading progress', () => {
     const asked = maintenanceReads();
     const second = await press(b, 2).finally(() => asked.stop());
     // The provider's link reads of matched notes (claude.ts) are no discovery read, and are not counted (ruling).
-    expect(asked.ids.has(refused), 'the probe sees the refused note read again inside the ledger').toBe(true);
+    expect(second.traffic.some((t) => t.method === 'GET' && !t.range && t.url.searchParams.get('alt') === 'media' && t.url.pathname.endsWith(`/${refused}`)),
+      'the owed whole read comes in the next run').toBe(true);
     expect(prefixed(second).filter((id) => id !== refused && asked.ids.has(id)), 'the next run\'s discovery reads no other prefix again').toEqual([]);
     expect(report(second).filed).toHaveLength(1);
   });
