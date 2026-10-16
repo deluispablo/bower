@@ -95,6 +95,8 @@ export interface VaultSource {
   questions(): Promise<Question[]>;
   answer(id: string, yes: QuestionAnswer): Promise<void>;
   rules(): Promise<Rule[]>;
+  /** The person's own text in the rules note, as the note page shows it, or ''. Only a source that reads a rules note file has it. */
+  rulesProse?(): Promise<string>;
   requests(): Promise<Request[]>;
   /** `intent`: one per intended request (a press whose words are sent again after a wait); sent again, it is that request. */
   addRequest(text: string, intent?: string): Promise<Request>;

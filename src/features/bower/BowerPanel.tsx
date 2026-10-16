@@ -1,6 +1,7 @@
 import { LoadError } from '@/ui/LoadError';
 import { Link, useNavigate } from 'react-router';
-import { useQuestions, useRequests, useRules, useRun, useSources } from '@/data/provider';
+import { useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
+import { noteRoute } from '@/app/paths';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
 import { useUi } from '@/app/ui-store';
@@ -16,8 +17,8 @@ export function BowerPanel() {
   const { data: run, loading: runLoading } = runState;
   const questionsState = useQuestions();
   const { data: qs } = questionsState;
-  const rulesState = useRules();
-  const { data: rules } = rulesState;
+  const rulesState = useRulesSection();
+  const { rules, prose } = rulesState;
   const requestsState = useRequests();
   const { data: requests } = requestsState;
   const asked = (requests ?? []).filter((r) => !r.done);
@@ -65,10 +66,16 @@ export function BowerPanel() {
         </section>
       )}
       <section>
-        <h2 className={s.ph}>{countOr(rules?.length, 'rule', 'Rules')}</h2>
+        {/* With the person's own text there is no count to claim; while that is unknown, none either. */}
+        <h2 className={s.ph}>{countOr(prose === '' ? rules?.length : undefined, 'rule', 'Rules')}</h2>
         <LoadError state={rulesState} />
         <ul className={s.panelRules}>
-          {(rules ?? []).slice(0, 5).map((r) => (
+          {prose && (
+            <li>
+              <Link to={noteRoute('Rules.md')} className="muted">Your rules note</Link>
+            </li>
+          )}
+          {(rules ?? []).slice(0, prose ? 4 : 5).map((r) => (
             <li key={r.id}>
               {r.text}
               {r.pending && <span className={s.waits}>Waits for the next tidy-up</span>}
