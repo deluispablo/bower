@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/runner.mjs",
+    "precheck": "esbuild src/precheck.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/precheck.mjs && node dist/precheck.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
