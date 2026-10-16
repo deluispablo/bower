@@ -14,6 +14,22 @@ import { B_FAILURE } from '../../src/data/spine/scripted';
 import { driveEffects } from '../../src/data/spine/engine';
 import { runTidy } from '../src/main';
 import { providerFor } from '../src/provider';
+import type { Settled } from '../../src/data/spine/engine';
+import type { OperationV2 } from '../../src/data/contracts/run-manifest';
+
+/** Focused maintain probe: the real maintenanceEffects, its targets narrowed by `narrow`, its returned outcome kept. */
+const probe = vi.hoisted(() => ({ narrow: undefined as ((op: OperationV2) => OperationV2) | undefined, settled: [] as Settled[] }));
+vi.mock('../src/index', async (original) => {
+  const real = await original<typeof import('../src/index')>();
+  return { ...real, maintenanceEffects: (...args: Parameters<typeof real.maintenanceEffects>) => {
+    const effects = real.maintenanceEffects(...args);
+    return { ...effects, apply: async (...[op, ...rest]: Parameters<typeof effects.apply>) => {
+      const settled = await effects.apply(probe.narrow ? probe.narrow(op) : op, ...rest);
+      probe.settled.push(settled);
+      return settled;
+    } };
+  } };
+});
 
 const DAY = Date.UTC(2026, 9, 7, 9);
 const HUNT = 'Projects/Job hunt';
@@ -37,7 +53,7 @@ beforeEach(() => {
   });
   vi.setSystemTime(DAY);
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { probe.narrow = undefined; probe.settled = []; vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 /** A Bower MOC, framed as maintain writes one, whose front matter may declare views (one JSON line, `bower_views`). */
 function map(title: string, views?: unknown[], by = 'by: bower\n'): string {
@@ -130,6 +146,63 @@ describe('audit-runner-refusals', () => {
     expect(run.after[MAP]).toContain('Alex added this line during the run.');
     expect(retrieval(run).views?.[`${mapId}/active-offer-skills`], 'no record for figures that were not written').toBeUndefined();
     expect(phase(run), 'a refused map write fails no run').toBe('done');
+  });
+
+  it('gap R1 audit-runner-refusals-mixed-outcome: a refused map among applied targets leaves the maintain applied', async () => {
+    const f = await folder({ [MAP]: map('Job hunt', [SKILLS]), ...OFFERS }, { [MAP]: HUNT });
+    const mapId = await f.id(MAP);
+    const run = await press(f, async () => {
+      await f.drive.writeText(mapId, `${await f.drive.readText(mapId)}Alex added this line during the run.\n`, (await f.drive.get(mapId)).modifiedTime);
+      return { kind: 'tidy-intent', v: 1, things: [] };
+    });
+    const records = Object.entries(run.after).filter(([path]) => path.startsWith(`${SYSTEM.dir}/runs/`));
+    const manifest = JSON.parse(records.find(([path]) => /\/manifest-[0-9a-f]+\.json$/.test(path))?.[1] ?? '{}') as
+      { operations?: Array<{ operationId: string; effect: { kind: string } }> };
+    const head = records.map(([path, text]) => ({ revision: Number(/\/checkpoint-(\d+)-/.exec(path)?.[1] ?? -1), text }))
+      .filter((c) => c.revision >= 0).sort((a, b) => b.revision - a.revision)[0];
+    const maintain = manifest.operations?.find((o) => o.effect.kind === 'maintain');
+    const outcome = (JSON.parse(head?.text ?? '{}') as { outcomes?: Array<{ operationId: string; state: string }> })
+      .outcomes?.find((o) => o.operationId === maintain?.operationId);
+    expect(maintain, 'the run declared a maintain').toBeDefined();
+    expect(run.after[MAP]).toContain('Alex added this line during the run.');
+    expect(outcome?.state, 'the applied targets decide the maintain, not the refused map').toBe('applied');
+  });
+
+  /** Keeps only the maps' targets, in `order`: the maintain's last target is the last map. */
+  const onlyMaps = (order: string[]) => (op: OperationV2): OperationV2 => {
+    if (op.effect.kind !== 'maintain') return op;
+    const targets = op.effect.inputs.targets ?? [];
+    return { ...op, effect: { ...op.effect, inputs: { ...op.effect.inputs,
+      targets: order.flatMap((id) => targets.filter((t) => t.fileId === id)) } } };
+  };
+  const SIDE = 'Projects/Side/Side.md';
+  const editDuringRun = (f: Folder, id: string) => async () => {
+    await f.drive.writeText(id, `${await f.drive.readText(id)}Alex added this line during the run.\n`, (await f.drive.get(id)).modifiedTime);
+    return { kind: 'tidy-intent', v: 1, things: [] };
+  };
+
+  it('gap R1 audit-runner-refusals-last-map-refused: a refused final map keeps the applied map\'s outcome', async () => {
+    const f = await folder({ [MAP]: map('Job hunt', [SKILLS]), [SIDE]: map('Side', [SKILLS]), ...OFFERS }, { [MAP]: HUNT, [SIDE]: HUNT });
+    const [mapId, sideId] = [await f.id(MAP), await f.id(SIDE)];
+    probe.narrow = onlyMaps([sideId, mapId]);
+    const run = await press(f, editDuringRun(f, mapId));
+    expect(run.after[MAP]).toContain('Alex added this line during the run.');
+    expect(run.after[SIDE], 'the other map was written').toContain('TypeScript');
+    expect(probe.settled.length, 'one maintain').toBe(1);
+    const [settled] = probe.settled;
+    expect(settled?.state, 'the applied map decides the maintain, not the refused one after it').toBe('applied');
+    expect(settled?.state === 'applied' ? settled.evidence.file.fileId : undefined).toBe(sideId);
+    expect(phase(run)).toBe('done');
+  });
+
+  it('gap R1 audit-runner-refusals-all-refused: every target refused returns the refused outcome and the run ends', async () => {
+    const f = await folder({ [MAP]: map('Job hunt', [SKILLS]), ...OFFERS }, { [MAP]: HUNT });
+    const mapId = await f.id(MAP);
+    probe.narrow = onlyMaps([mapId]);
+    const run = await press(f, editDuringRun(f, mapId));
+    expect(run.after[MAP]).toContain('Alex added this line during the run.');
+    expect(probe.settled.map((s) => s.state), 'the refused map is the maintain\'s outcome').toEqual(['rejected']);
+    expect(phase(run), 'a maintain whose every target was refused leaves no run in saving').not.toBe('saving');
   });
 
   it('AC2 audit-runner-refusals-plan-refused: a planned manifest the engine refuses before any write reports the ordinary failure', async () => {

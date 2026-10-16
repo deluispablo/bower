@@ -1208,6 +1208,8 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         write.settle(settled.state === 'applied' ? { file: settled.evidence.file, text: result.text } : 'refused');
       }
       let last: Settled | undefined;
+      // A refused map's outcome ends the maintain only when no target applied (ruling R1).
+      let refused: Settled | undefined;
       // Person-facing projections, then retrieval (holding the health id), health and the log (R20).
       const rank = (target: NonNullable<Maintain['inputs']['targets']>[number]): number =>
         target.kind === 'log' || target.kind === 'log-folder' ? 3 : target.kind === 'health' ? 2 : Number(target.path === SYSTEM.retrieval);
@@ -1305,15 +1307,23 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         // Reconciliation always reads live evidence; only this fresh precheck reuses exact declared bytes.
         if (kind?.cachedCheck && before && beforeContent) cachedCheck = { file: file(before), trashed: false,
           content: { size: beforeContent.size, sha256: beforeContent.sha256 } };
+        let written: Settled;
         try {
-          last = await ordinary.apply(sub, subHead(target.fileId), w, manifest, async () => target.fileId);
+          written = await ordinary.apply(sub, subHead(target.fileId), w, manifest, async () => target.fileId);
         } finally {
           cachedCheck = undefined;
         }
-        if (last.state !== 'applied') {
-          if (kind === aboutTarget) return last;
-          throw unavailable();
+        if (written.state !== 'applied') {
+          if (kind === aboutTarget) return written;
+          if (kind || !owned) throw unavailable();
+          // A map the person saved after Bower read it: their change wins, as in the formulas loop (R10); its figures
+          // claim nothing and the next run reads it whole.
+          figures.forget(target.fileId);
+          console.error(new BowerError(written.failure.code, written.failure.message), { operationId: op.operationId, fileId: target.fileId });
+          refused = written;
+          continue;
         }
+        last = written;
         if (health) reached.health = last;
         if (owned && state.files[target.fileId]) {
           state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
@@ -1322,7 +1332,10 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           state.listing = state.listing?.map((f) => f.id === target.fileId ? file(written) : f);
         }
       }
-      if (!last) throw unavailable();
+      if (!last) {
+        if (refused) return refused;
+        throw unavailable();
+      }
       // Even a fully reconciled partial effect was already named by the opening checkpoint.
       await sending();
       return last;
