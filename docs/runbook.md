@@ -137,34 +137,33 @@ Production is the Worker named `bower-api`, which holds the app and the Worker o
 
 ### Deploy
 
-From a clean checkout of the accepted local `main`, the fallback steps of "Deploys" with the production names:
+From a clean checkout of the accepted local `main`, by the technical lead, never by an agent. `scripts/cutover.sh` does the guards, the build, the scan, the deploy to `bower-api` and the `/health` and `/status` checks, and prints the rollback line. Its header is the detailed reference. It reads `api/wrangler.production.jsonc`, which holds the production name, its own KV namespace and its own rate-limit namespace ids; the owner makes that file, and the script checks it.
 
-1. `pnpm install --frozen-lockfile`, then `env -u VITE_API_URL pnpm build`. Scan `dist/` for secrets and for any address but `you@example.com`, as `deploy-staging.sh` does.
-2. From `api/`, with the production config (name `bower-api`, its own KV namespace and its own rate-limit namespace ids): `npx wrangler deploy --var APP_ORIGIN:<production origin> --var API_ORIGIN:<production origin> --var APP_VERSION:<main short SHA> --var GITHUB_REPO:OWNER/NAME`. The output must name `bower-api`.
-3. Before and after the deploy, run `npx wrangler deployments list` from `api/` and write down the version id that was live before. It is the one to return to if the deploy goes wrong.
-4. Run the checks in "Deploys" (`/`, a deep link, `/landing/`, `/health` naming the SHA, `/me` and `/runner/runs/x/token` answering 401 JSON) and wait out version skew as described there.
-5. Run `scripts/new-instance.sh OWNER/NAME <production origin>` again whenever `runner/` changed.
-6. Watch `npx wrangler tail bower-api --format json` while the first real sign-in and tidy-up go through.
+1. Run the dry run first and read what it would do: `scripts/cutover.sh --dry-run <main short SHA> <production origin> api/wrangler.production.jsonc`.
+2. Then the same without `--dry-run`: `scripts/cutover.sh <main short SHA> <production origin> api/wrangler.production.jsonc`. Write down the rollback line it prints: it names the version that was live before.
+3. Run `scripts/new-instance.sh OWNER/NAME <production origin>` again whenever `runner/` changed.
+4. Watch `npx wrangler tail bower-api --format json` while the first real sign-in and tidy-up go through.
 
 ### Rollback
 
 The app is served by the Worker, so one rollback returns both the app and the Worker.
 
-1. **Return to the last good version.** `npx wrangler deployments list` from `api/` names the recent versions. `npx wrangler rollback <version id> --message "<one sentence>"` makes one of them live at once. Then check that `/health` names the old SHA.
-2. **If Cloudflare refuses the rollback**, usually because a person-object schema step was added since (steps are only ever appended), do not undo the schema. Check out the last good commit on a clean tree and redeploy it as in "Deploy". The old code must still read the stored data, so a release that adds a step is tested against that before it ships (see the compatibility rule in `docs/ARCHITECTURE.md`).
+1. **Return to the last good version.** Dry run first: `scripts/rollback.sh --dry-run <version id> <production origin>`. Then the same without `--dry-run`: `scripts/rollback.sh <version id> <production origin>`, with the version id the cutover printed. It makes exactly that version live and checks that the origin answers 200. Then check that `/health` names the old SHA.
+2. **If Cloudflare refuses the rollback**, usually because a person-object schema step was added since (steps are only ever appended), do not undo the schema. The script only runs from the tip of local `main`, and the real `main` stays where it is, so work in a scratch clone: `git clone . ../bower-last-good`, `cd ../bower-last-good`, `git reset --hard <last good SHA>`, `pnpm install --frozen-lockfile`. From there run `scripts/cutover.sh --dry-run <last good SHA> <production origin> <path to api/wrangler.production.jsonc>`, then the same without `--dry-run`, as in "Deploy". The old code must still read the stored data, so a release that adds a step is tested against that before it ships (see the compatibility rule in `docs/ARCHITECTURE.md`).
 3. **The runner.** A rollback of the Worker does not change the instance repository. If the runner changed too, run `scripts/new-instance.sh OWNER/NAME <production origin>` from the checkout of the last good commit.
-4. **Back to the original app.** The original's version stays listed in `npx wrangler deployments list` for `bower-api`. Rolling back to it restores the original app and Worker. People signed in to the new app sign in again; their folders and notes are untouched. A tidy-up running at that moment stops without reporting.
-5. **Rehearse it.** Before the cutover, practise steps 1 and 3 on staging: deploy an older SHA with `scripts/deploy-staging.sh`, then the newer one, and write down how long it took.
+4. **Back to the original app.** The original's version stays listed in `npx wrangler deployments list` for `bower-api`. Run `scripts/rollback.sh --dry-run <version id> <production origin>` and then `scripts/rollback.sh <version id> <production origin>` with the original's version id. People signed in to the new app sign in again; their folders and notes are untouched. A tidy-up running at that moment stops without reporting.
+5. **Rehearse it.** Before the cutover, practise steps 1 and 2 on staging: deploy an older SHA with `scripts/deploy-staging.sh`, then the newer one, and write down how long it took. Also run both scripts with `--dry-run`.
 
 ### The read-only precheck
 
 The precheck is the first time the new app reads the owner's real folder, so it only reads. Run it after the production deploy and before any tidy-up is pressed.
 
-1. Sign in to the new app with the owner's account. Open Home, a few notes, the piles and the search. Compare what you see with the same folder in Drive, open in another tab.
-2. Do not press Tidy up, edit a note, add a pile or accept a suggestion. The app writes nothing on its own while you only look.
-3. Read `npx wrangler tail bower-api --format json` as you go. There should be no 500, no `signed-out` and no `rate-limited`.
-4. Afterwards, in Drive, open the Bower folder's version history. Nothing should show a change made at the time of the precheck.
-5. If anything reads wrongly (a note missing, a count that disagrees, garbled text), stop, roll back as above and note what you saw. Do not fix data by hand.
+1. Make a short-lived token by hand with the `drive.readonly` scope only (for example in the Google OAuth Playground). Never paste it into a chat, an issue or a file.
+2. Run `BOWER_DRIVE_TOKEN=<token> pnpm -C runner precheck FOLDER_ID`. It reads the folder once and prints the report as JSON on stdout.
+3. Read the exit code. Exit `0`: the folder was checked. Exit `1`: a read failed or a pile's note was not checked. Exit `2`: wrong arguments or token, so fix them and run it again.
+4. Read the JSON. Any `refused` or `notChecked` entry, or exit `1`, means stop and roll back as above.
+5. Afterwards, in Drive, open the Bower folder's version history. Nothing should show a change made at the time of the precheck.
+6. If anything reads wrongly, stop, roll back as above and note what you saw. Do not fix data by hand.
 
 ### Rate limits at the cutover
 
