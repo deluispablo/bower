@@ -6,7 +6,7 @@ export interface ByteSpan { readonly start: number; readonly end: number }
 export type MocRegion = 'moc-overview' | 'moc-figures' | 'moc-members';
 export const ABOUT_REGIONS = ['about-you', 'about-working-on', 'about-preferences'] as const;
 export type AboutRegion = typeof ABOUT_REGIONS[number];
-export type BowerRegion = MocRegion | 'profile' | TemplateRegion | AboutRegion | 'rules-added';
+export type BowerRegion = MocRegion | 'profile' | 'document' | TemplateRegion | AboutRegion | 'rules-added';
 export type Owner = 'current' | 'personal' | 'timeline' | 'bower-note';
 export type OwnershipFailure = 'unsupported-version' | 'damaged-boundary' | 'invalid-encoding';
 export interface PersonalTask {
@@ -271,7 +271,7 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
       if (previous || fence || !line.text.trimStart().startsWith('<!-- bower:ownership')) return false;
       // Complete older markers without a format declaration remain ordinary personal text.
       // Additive marks and damaged boundaries enter the framing check and cannot grant a fresh append.
-      return ![...OWNERS, ...MOC_REGIONS, 'profile', ...TEMPLATE_REGIONS].some((region) =>
+      return ![...OWNERS, ...MOC_REGIONS, 'profile', 'document', ...TEMPLATE_REGIONS].some((region) =>
         line.text === `<!-- bower:ownership/2 begin ${region} -->`
         || line.text === `<!-- bower:ownership/2 end ${region} -->`);
     });
@@ -299,8 +299,9 @@ export function parseOwnership(bytes: Uint8Array, mode?: 'prefix'): OwnershipRes
       fence = fenceAfter(line.text, fence);
       return !previous && !fence && line.text.startsWith('<!-- bower:ownership/2 begin');
     });
-    owners = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->'
-      ? [...TEMPLATE_REGIONS, ...OWNERS] : [...OWNERS];
+    // Each leading region has its own sequence: a document is not a project, and neither takes the other's.
+    owners = firstRegion?.text === '<!-- bower:ownership/2 begin goal -->' ? [...TEMPLATE_REGIONS, ...OWNERS]
+      : firstRegion?.text === '<!-- bower:ownership/2 begin document -->' ? ['document', ...OWNERS] : [...OWNERS];
   }
   const spans: Partial<Record<Owner | BowerRegion, ByteSpan>> = {};
   let next = 0;

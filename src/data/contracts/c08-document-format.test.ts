@@ -69,6 +69,7 @@ describe('c08-document-format', () => {
   it.each([
     ['a My notes heading', `${BODY}\n\n## My notes\nmine`], ['a Timeline heading', `${BODY}\n\n## Timeline\n- 2026-10-16 · Done.`],
     ['a Current state heading', `${BODY}\n\n## Current state\n- open`], ['an ownership marker', `${BODY}\n<!-- bower:ownership/2 end document -->`],
+    ['an unindented begin marker', `${BODY}\n<!-- bower:ownership/2 begin personal -->`],
   ])('AC5 c08-document-format-unsafe-body: a body with %s is not written, beside the valid twin that is', (_name, body) => {
     expect(written(), 'the valid twin').toBe(EXPECTED);
     expect(() => serializeNote(document(body))).toThrow('Bower could not write this note safely.');
@@ -85,5 +86,58 @@ describe('c08-document-format', () => {
     const moved = EXPECTED.replace(frame('document', `${BODY}\n`) + '\n', '') + '\n' + frame('document', `${BODY}\n`);
     expect(parseOwnership(new TextEncoder().encode(EXPECTED)).status, 'the leading twin').toBe('v2');
     expect(parseOwnership(new TextEncoder().encode(moved)).status).toBe('invalid');
+  });
+
+  it.each([
+    ['a fenced heading and marker', `${BODY}\n\n\`\`\`markdown\n## My notes\n<!-- bower:ownership/2 end document -->\n\`\`\``],
+    ['a quoted heading', `${BODY}\n\n> ## Timeline`], ['an indented heading', `${BODY}\n\n    ## Current state`],
+    ['an escaped marker', `${BODY}\n\n\\<!-- bower:ownership/2 end document -->`], ['an escaped heading', `${BODY}\n\n\\## My notes`],
+    ['a heading of another level', `${BODY}\n\n### Timeline`],
+    ['an indented marker', `${BODY}\n\n    <!-- bower:ownership/2 end document -->`],
+  ])('AC5 c08-document-format-example-text: a body with %s is ordinary text, written and read back whole', (_name, body) => {
+    const text = serializeNote(document(body));
+    expect(span(text, 'document')).toBe(`${body}\n`);
+    expect(parseNote('Shortlist comparison.md', text).body).toBe(`${body}\n\n## My notes\n`);
+  });
+
+  it('AC3 c08-document-format-personal-headings: personal Document, Current state and Timeline headings keep their text and task ownership', () => {
+    const mine = '## Document\nMy own reading.\n- [ ] Mine one\n## Current state\n- [ ] Mine two\n## Timeline\nMy dates.\n```md\n## Timeline\n- [ ] Example\n```\n- [ ] Mine three\n';
+    const text = EXPECTED.replace(frame('personal', '## My notes\n\n'), frame('personal', `## My notes\n\n${mine}`)).replace(`${BODY}\n`, `${BODY}\n- [ ] Bower's step\n`);
+    const note = parseNote('Shortlist comparison.md', text);
+    expect(note.body).toBe(`${BODY}\n- [ ] Bower's step\n\n## My notes\n${mine.trimEnd()}`);
+    expect(note.timeline.map((t) => t.text)).toEqual(['Written for a request you made.']);
+    // The display counts every checkbox line, a fenced example too; only a real one in My notes is the person's.
+    expect(note.taskRegions).toEqual(['bower', 'personal', 'personal', 'bower', 'personal']);
+    for (const index of [0, 3]) expect(() => toggleTaskInText(text, index)).toThrow('Bower keeps this line unchanged.');
+    for (const [index, label] of [[1, 'Mine one'], [2, 'Mine two'], [4, 'Mine three']] as const) {
+      expect(toggleTaskInText(text, index).text, label).toBe(text.replace(`- [ ] ${label}`, `- [x] ${label}`));
+    }
+    expect(() => toggleTaskInText(text, 5)).toThrow();
+  });
+
+  it('AC4 c08-document-format-task-regions: displayed taskRegions follow mixed tasks, fenced examples and empty labels', () => {
+    const body = `${BODY}\n\n- [ ] Bower one\n- [ ]   \n\`\`\`\n- [ ] Example\n\`\`\`\n- [x] Bower two`;
+    const mine = '## My notes\n\n- [ ]   \n```\n- [ ] Example\n```\n- [ ] Mine\n';
+    const text = serializeNote(document(body)).replace(frame('personal', '## My notes\n\n'), frame('personal', mine));
+    expect(parseNote('Shortlist comparison.md', text).taskRegions).toEqual(['bower', 'bower', 'bower', 'bower', 'bower', 'bower', 'personal']);
+    expect(() => toggleTaskInText(text, 0)).toThrow('Bower keeps this line unchanged.');
+    expect(toggleTaskInText(text, 6).text).toBe(text.replace('- [ ] Mine', '- [x] Mine'));
+  });
+
+  it.each([
+    ['whitespace', '  \n\n  Lead and trail  \n\n\n'], ['CRLF', 'First line\r\nSecond line\r\n\r\n| a | b |\r\n'],
+    ['literal headings', '```\n## My notes\n## Timeline\n```\n   ## Document'], ['tabs and trailing spaces', '\tIndented\t \nTrailing   '],
+  ])('AC1 c08-document-format-verbatim: a %s body is written byte for byte', (_name, body) => {
+    expect(span(serializeNote(document(body)), 'document')).toBe(`${body}\n`);
+  });
+
+  it('AC2 c08-document-format-independent-regions: a document inside a project, and goal regions inside a document, are damaged', () => {
+    const goal = '<!-- bower:ownership/2 begin goal -->\n## Goal\n\n<!-- bower:ownership/2 end goal -->\n';
+    const nextSteps = '<!-- bower:ownership/2 begin next-steps -->\n## Next steps\n\n<!-- bower:ownership/2 end next-steps -->\n';
+    const project = EXPECTED.replace(frame('document', `${BODY}\n`), `${goal}\n${nextSteps}\n${frame('document', `${BODY}\n`)}`);
+    const documented = EXPECTED.replace(frame('document', `${BODY}\n`), `${frame('document', `${BODY}\n`)}\n${goal}\n${nextSteps}`);
+    expect(parseOwnership(new TextEncoder().encode(project)).status).toBe('invalid');
+    expect(parseOwnership(new TextEncoder().encode(documented)).status).toBe('invalid');
+    expect(parseOwnership(new TextEncoder().encode(EXPECTED)).status, 'the plain twin').toBe('v2');
   });
 });
