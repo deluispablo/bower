@@ -16,7 +16,7 @@ const LOOSE = `${GARDEN}/Loose thought`;
 const RETRIEVAL = '.bower/retrieval.json';
 const bowerNote = (summary: string, body: string): string => `---\nsummary: ${summary}\nby: bower\n---\n\n## My thoughts\n${body}\n`;
 const lines = (run: CaseRun): string[] => (run.after[HEALTH] ?? '').split('\n');
-const lineAbout = (run: CaseRun, path: string): string[] => lines(run).filter((line) => line.includes(`[[${path}]]`));
+const lineAbout = (run: CaseRun, path: string): string[] => lines(run).filter((line) => line.includes(`[[${path}|`) || line.includes(`[[${path}]]`));
 
 /** The b8b grammar fixture plus `edit`, seeded once; each press is a real main run on the same Drive. */
 async function folder(edit: (files: Record<string, string>) => void = () => undefined) {
@@ -60,9 +60,9 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     const first = await base.press(1);
     expect(first.code).toBe(0);
     expect(lineAbout(first, LONG).join('\n'), 'the broken link past the prefix is found').toMatch(/broken link.*Lost seed list/i);
-    expect(lineAbout(first, LONG).join('\n'), 'a whole read leaves the long note checked').not.toMatch(/not checked/i);
+    expect(lineAbout(first, LONG).join('\n'), 'a whole read leaves the long note checked').not.toMatch(/- Waiting: /);
     // Its link to Loose thought counts in the inbound graph, and coverage is complete, so the orphan check runs.
-    expect(lineAbout(first, LOOSE).join('\n')).not.toMatch(/orphan/i);
+    expect(lineAbout(first, LOOSE).join('\n')).not.toMatch(/Nothing links to/);
     expect(first.after[`${LONG}.md`], 'report-only').toBe(longNote);
   });
   it('AC20 guard: one whole read per version, none for an unchanged version', async () => {
@@ -99,16 +99,16 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     expect(base.noteReads().length, 'lint reads at most 200 notes a run').toBeLessThanOrEqual(200);
     const health = lines(second);
     const total = BULK + 4;
-    const left = health.filter((line) => /not checked/i.test(line));
+    const left = health.filter((line) => /- Waiting: /.test(line));
     expect(left, 'each note left for next time is named, so the lines are the honest count').toHaveLength(total - 200);
     expect(left.join('\n'), 'a note the cap left is not claimed unreadable').not.toMatch(/could not read/i);
-    expect(health.join('\n'), 'no orphan or clean claim on partial coverage').not.toMatch(/orphan|No findings in the checked notes/i);
+    expect(health.join('\n'), 'no orphan or clean claim on partial coverage').not.toMatch(/Nothing links to|No findings in the checked notes/);
     base.traffic.length = 0;
     const third = await base.press(4);
     expect(third.code).toBe(0);
     expect(base.noteReads().length, 'the next run reads only the notes still owed').toBe(total - 200);
-    expect(lines(third).join('\n'), 'complete again').not.toMatch(/not checked/i);
-    expect(lineAbout(third, LOOSE).join('\n'), 'the orphan check returns once coverage is complete').toMatch(/orphan/i);
+    expect(lines(third).join('\n'), 'complete again').not.toMatch(/- Waiting: /);
+    expect(lineAbout(third, LOOSE).join('\n'), 'the orphan check returns once coverage is complete').toMatch(/Nothing links to/);
   });
   it('AC21 control: an older retrieval file within the cap is caught up in one run', async () => {
     const base = await folder();
@@ -145,9 +145,9 @@ describe('B8c coverage and the Bower-note checks through main', () => {
     const run = await base.press(1);
     const found = lines(run).filter((line) => /summary/i.test(line) && /same|duplicate|share/i.test(line));
     expect(found, 'one finding for the pair').toHaveLength(1);
-    expect(found[0]).toContain(`[[${a}]]`);
-    expect(found[0]).toContain(`[[${b}]]`);
-    expect(found[0], 'a person\'s summary is never compared (Q3)').not.toContain(`[[${person}]]`);
+    expect(found[0]).toContain(`[[${a}|`);
+    expect(found[0]).toContain(`[[${b}|`);
+    expect(found[0], 'a person\'s summary is never compared (Q3)').not.toContain(`[[${person}|`);
   });
   it('AC23 control: missing summaries are no shared summary', async () => {
     const base = await folder((files) => { files[`${GARDEN}/Bare.md`] = '---\nby: bower\n---\n\n## My thoughts\nBare. [[Gardening]]\n'; });
