@@ -487,13 +487,21 @@ export class DriveHttp implements DriveApi {
     return out;
   }
 
-  /** A structural write can change which roots contain a file or a new folder.
-   * Forget both halves together; the next search lists its root once afresh.
-   * Existing VaultIndexes keep their own immediate updates without extra reads.
+  /** A write can change which roots contain a file or a folder: each listed root takes it in or lets it go from the
+   * write's own answer (write-through, as TanStack Query's "Updates from mutation responses"), so no search lists again.
+   * The Bin is left to each search's `trashed = false`: a file written under a binned folder is found once it is restored.
+   * shortcut: a folder moved out of the root keeps its descendants known and searched; the app never moves one out,
+   * else drop the root's cache here.
    */
   private changed(file: DriveFile): DriveFile {
-    this.known.clear();
-    this.searchParents.clear();
+    for (const [root, known] of this.known) {
+      const inside = file.parents.some((p) => p === root || known.has(p));
+      if (inside) known.add(file.id);
+      else known.delete(file.id);
+      if (!file.folder) continue;
+      const parents = (this.searchParents.get(root) ?? [root]).filter((id) => id !== file.id);
+      this.searchParents.set(root, inside && !file.trashed ? [...parents, file.id] : parents);
+    }
     return file;
   }
 

@@ -364,7 +364,7 @@ describe('DriveHttp', () => {
     expect(full?.url.searchParams.get('q')).toContain("'new-folder' in parents");
   });
 
-  it('full-text search sees new uploads and relists after binning or restoring them', async () => {
+  it('full-text search sees new uploads, binning and restoring them without listing again', async () => {
     const sends: Array<(drive: DriveHttp) => Promise<unknown>> = [
       (d) => d.createText('ROOT', 'Created.md', 'matching words'),
       (d) => d.putChunk('https://www.googleapis.com/upload/session', 0, new Blob(['matching words']), 14),
@@ -392,13 +392,13 @@ describe('DriveHttp', () => {
       await d.listAll('ROOT');
       await send(d);
       expect((await d.fullText('ROOT', 'matching')).map((f) => f.id)).toEqual(['added']);
-      expect(lists).toBe(2);
+      expect(lists).toBe(1);
       await d.trash('added');
       expect(await d.fullText('ROOT', 'matching')).toEqual([]);
-      expect(lists).toBe(3);
+      expect(lists).toBe(1);
       await d.untrash('added');
       expect((await d.fullText('ROOT', 'matching')).map((f) => f.id)).toEqual(['added']);
-      expect(lists).toBe(4);
+      expect(lists).toBe(1);
     }
   });
 
@@ -506,5 +506,114 @@ describe('a resend of a write to an existing file', () => {
     await expect(run(d)).resolves.toMatchObject({ id: 'f1' });
     expect(sent()).toBe(2);
     expect(seen.landed).toBe(1);
+  });
+});
+
+describe('audit-write-speed', () => {
+  it('AC1 audit-write-speed-no-relist-after-write: a create, a move, a Bin and a restore keep full-text search inside the folder without listing it again', async () => {
+    type Wire = ReturnType<typeof file> & { trashed?: boolean };
+    const store = new Map<string, Wire>([['d1', file('d1', 'Place', 'ROOT', true)], ['n1', file('n1', 'Note.md', 'd1')]]);
+    let lists = 0;
+    const s = stub((c) => {
+      if (c.method === 'POST') {
+        // A folder is created by a JSON body naming its parent; a note by a multipart upload (into d1 here).
+        const made = c.url.pathname.includes('/upload/') ? file('n2', 'New.md', 'd1') : file('d2', 'Later', (JSON.parse(String(c.body)) as { parents: string[] }).parents[0] ?? 'ROOT', true);
+        store.set(made.id, made);
+        return json(made);
+      }
+      if (c.method === 'PATCH') {
+        const id = c.url.pathname.split('/').at(-1) ?? '';
+        const was = store.get(id);
+        if (!was) return json({ error: { code: 404 } }, 404);
+        const body = JSON.parse(String(c.body)) as { trashed?: boolean };
+        const to = c.url.searchParams.get('addParents');
+        const next: Wire = { ...was, ...(to ? { parents: [to] } : {}), ...(body.trashed !== undefined ? { trashed: body.trashed } : {}) };
+        store.set(id, next);
+        return json(next);
+      }
+      const q = c.url.searchParams.get('q') ?? '';
+      const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
+      const full = q.startsWith('fullText');
+      if (!full) lists++;
+      return json({ files: [...store.values()].filter((f) => !f.trashed && parents.includes(f.parents[0]) && (!full || !f.mimeType.endsWith('folder'))) });
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    await d.listAll('ROOT');
+    const listed = lists;
+    const found = async (): Promise<string[]> => (await d.fullText('ROOT', 'word')).map((f) => f.id).sort();
+    await d.createText('d1', 'New.md', 'word');
+    expect(await found()).toEqual(['n1', 'n2']);
+    await d.createFolder('ROOT', 'Later');
+    await d.update('n1', { addParent: 'd2', removeParent: 'd1' });
+    expect(await found()).toEqual(['n1', 'n2']);
+    expect(s.calls.filter((c) => c.url.searchParams.get('q')?.startsWith('fullText')).at(-1)?.url.searchParams.get('q')).toContain("'d2' in parents");
+    await d.trash('n2');
+    expect(await found()).toEqual(['n1']);
+    await d.untrash('n2');
+    expect(await found()).toEqual(['n1', 'n2']);
+    expect(lists, 'the folder is listed once, and each write updates what was listed').toBe(listed);
+  });
+
+  /** A pretend Drive keeping its files by id: a file in a binned folder is in the Bin too, as Drive answers it. */
+  const driveOf = (uploadsInto: string, ...files: Array<ReturnType<typeof file>>) => {
+    type Wire = ReturnType<typeof file> & { trashed?: boolean };
+    const store = new Map<string, Wire>(files.map((f) => [f.id, f]));
+    const binned = (f: Wire | undefined): boolean => !!f && (!!f.trashed || f.parents.some((p) => binned(store.get(p))));
+    const answer = (f: Wire): Response => json({ ...f, trashed: binned(f) });
+    const counts = { lists: 0, made: 0 };
+    const s = stub((c) => {
+      if (c.method === 'POST') {
+        const f = c.url.pathname.includes('/upload/') ? file(`new${++counts.made}`, 'New.md', uploadsInto)
+          : file(`dir${++counts.made}`, 'Place', (JSON.parse(String(c.body)) as { parents: string[] }).parents[0] ?? 'ROOT', true);
+        store.set(f.id, f);
+        return answer(f);
+      }
+      if (c.method === 'PATCH') {
+        const id = c.url.pathname.split('/').at(-1) ?? '';
+        const was = store.get(id);
+        if (!was) return json({ error: { code: 404 } }, 404);
+        const body = JSON.parse(String(c.body)) as { trashed?: boolean };
+        const to = c.url.searchParams.get('addParents');
+        const next: Wire = { ...was, ...(to ? { parents: [to] } : {}), ...(body.trashed !== undefined ? { trashed: body.trashed } : {}) };
+        store.set(id, next);
+        return answer(next);
+      }
+      const q = c.url.searchParams.get('q') ?? '';
+      const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
+      const full = q.startsWith('fullText');
+      if (!full) counts.lists++;
+      return json({ files: [...store.values()].filter((f) => !binned(f) && parents.includes(f.parents[0]) && (!full || !f.mimeType.endsWith('folder'))) });
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    const found = async (root: string): Promise<string[]> => (await d.fullText(root, 'word')).map((f) => f.id).sort();
+    return { d, found, counts };
+  };
+
+  it('AC1 audit-write-speed-every-root: a move between two listed folders updates both, with no listing again', async () => {
+    const { d, found, counts } = driveOf('R1', file('a', 'Here', 'R1', true), file('n1', 'Note.md', 'a'), file('b', 'There', 'R2', true));
+    await d.listAll('R1');
+    await d.listAll('R2');
+    const listed = counts.lists;
+    expect(await found('R1')).toEqual(['n1']);
+    expect(await found('R2')).toEqual([]);
+    await d.update('n1', { addParent: 'b', removeParent: 'a' });
+    expect(await found('R1')).toEqual([]);
+    expect(await found('R2')).toEqual(['n1']);
+    expect(counts.lists, 'neither folder is listed again').toBe(listed);
+  });
+
+  it('AC1 audit-write-speed-binned-folder: a folder put in the Bin hides what is under it; its restore brings it all back, a note written under it meanwhile too', async () => {
+    const { d, found, counts } = driveOf('d3', file('d1', 'Place', 'ROOT', true), file('d3', 'Inner', 'd1', true), file('n3', 'Deep.md', 'd3'));
+    await d.listAll('ROOT');
+    const listed = counts.lists;
+    expect(await found('ROOT')).toEqual(['n3']);
+    await d.trash('d1');
+    expect(await found('ROOT')).toEqual([]);
+    const late = await d.createText('d3', 'Late.md', 'word');
+    expect(late.trashed, 'Drive answers a file written in a binned folder as in the Bin').toBe(true);
+    expect(await found('ROOT')).toEqual([]);
+    await d.untrash('d1');
+    expect(await found('ROOT')).toEqual([late.id, 'n3'].sort());
+    expect(counts.lists, 'the folder is listed once').toBe(listed);
   });
 });
