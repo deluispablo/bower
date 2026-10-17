@@ -763,9 +763,9 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     if (text !== null) entry = { ...entry, ...indexedFront(text) };
     else if (cached?.owner === 'bower' || cached?.owner === 'person') entry = { ...entry, owner: cached.owner,
       ...(cached.type === null || typeof cached.type === 'string' ? { type: cached.type } : {}) };
-    // Kept apart from the planner's notes, so lint evidence never reaches the model input (AC17).
+    // The planner gets the version's links and tags from here (c12-map); its input projection drops `lint` (AC17).
     const lint = lintOf(f, path, text) ?? evidence ?? refused;
-    if (lint) lints[f.id] = lint;
+    if (lint) { lints[f.id] = lint; entry = { ...entry, lint }; }
     // Previously frozen complete bytes remain usable only for the exact indexed version.
     const moc = same && typeof cached?.moc?.text === 'string' ? mocSnapshot(cached.moc.text) : null;
     if (moc) entry = { ...entry, moc,
@@ -871,11 +871,6 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   // Unfinished discovery declares nothing from a partial view (R6, R10); the run keeps its progress (`withProgress`).
   if (refreshed.exhausted) throw refreshed.exhausted;
   let { listing, snapshot } = refreshed;
-  // Maintenance freezes each note with its lint evidence; the planner saw the same notes without it.
-  snapshot = Object.fromEntries(Object.entries(snapshot).map(([id, note]) => {
-    const lint = refreshed.lints[id];
-    return [id, lint ? { ...note, lint } : note];
-  }));
   const { ix, old, state, cursor, changes, drop } = refreshed;
   const files = new Map(listing.map((f) => [f.id, f]));
   const ledgerFile = ix.file('.bower/observations.jsonl');

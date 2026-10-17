@@ -85,11 +85,12 @@ it('b1d-fr4 1 shown candidates bound notes and parents', async () => {
   const cap = await setup({ folder: { ...folder, ...many }, inbox: words }); await seedState(cap);
   const capped = select(cap);
   capped.items = capped.items.map((item) => ({ ...item,
-    destination: { parentId: cap.id('Projects/Remote search'), name: 'Developer offers' } }));
+    destination: { parentId: cap.id('Resources/Gardening'), name: 'Developer offers' } }));
   const cappedRun = await run(cap, [capped, empty]);
-  expect(candidates(cappedRun.frames[0], sourceId(cap))).toHaveLength(30);
-  expect(candidates(cappedRun.frames[0], sourceId(cap))).not.toContain(cap.id('Projects/Remote search'));
-  expect.soft(cappedRun.code, 'a parent omitted by the 30-candidate cap is not visible').toBe(1);
+  // c12-map: 31 matches give 12 notes, so every shown note's folder fits; a folder no shown note sits in stays unseen.
+  expect(candidates(cappedRun.frames[0], sourceId(cap)).filter((id) => (cap.ix.pathOf(id) ?? '').endsWith('.md'))).toHaveLength(12);
+  expect(candidates(cappedRun.frames[0], sourceId(cap))).not.toContain(cap.id('Resources/Gardening'));
+  expect.soft(cappedRun.code, 'a parent no shown note sits in is not visible').toBe(1);
 });
 
 it('b1d-fr4 2 destination hub counts within five', async () => {
