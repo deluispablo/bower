@@ -116,3 +116,41 @@ it('AC22 c06-links-panel-no-reason: only a "See also" line is a reason; other li
   expect(document.querySelector('.muted')).toBeNull();
   expect(screen.queryByText(/does not link|who builds it|same roof/)).toBeNull();
 });
+
+// Review gaps c06-links-panel, rulings 6-9.
+it('AC21 c06-links-panel-markers: a "+" item, a numbered item and an indented line give their rows\' reasons (ruling 6)', () => {
+  const list = panel(noteOf('+ See also [[Plan]]: the roof plan.\n1. See also [[Rent review]]: same landlord.\n    see also [[Cedar]]: the boards.', [PLAN, RENT, HERE]));
+  expect(reasonOf(row(list('Links to'), PLAN))).toBe('the roof plan.');
+  expect(reasonOf(row(list('Links to'), RENT))).toBe('same landlord.');
+  expect(reasonOf(row(list('Links to'), HERE))).toBe('the boards.');
+});
+
+it('AC22 c06-links-panel-fence: a "See also" in closed or unclosed fenced code gives no reason; the one outside shows (ruling 7)', () => {
+  const closed = panel(noteOf('```\nSee also [[Plan]]: an example.\n```\nSee also [[Plan]]: the roof plan.', [PLAN]));
+  expect(reasonOf(row(closed('Links to'), PLAN))).toBe('the roof plan.');
+  cleanup();
+  const open = panel(noteOf('See also [[Plan]]: the roof plan.\n~~~\nSee also [[Rent review]]: an example.', [PLAN, RENT]));
+  expect(reasonOf(row(open('Links to'), PLAN))).toBe('the roof plan.');
+  expect(row(open('Links to'), RENT).textContent).toBe(`Rent review${AT_HUB}`);
+});
+
+it('AC22 c06-links-panel-empty: an empty or blank reason is none; the first nonempty one wins (ruling 8)', () => {
+  const list = panel(noteOf('See also [[Plan]]: \nSee also [[Plan]]:    \nSee also [[Plan]]: the roof plan.\nSee also [[Rent review]]: ', [PLAN, RENT]));
+  expect(reasonOf(row(list('Links to'), PLAN))).toBe('the roof plan.');
+  expect(row(list('Links to'), RENT).textContent, 'a blank reason keeps the breadcrumb').toBe(`Rent review${AT_HUB}`);
+});
+
+it('AC21 c06-links-panel-identity: title, path and alias spellings of one note give one row with the first nonempty reason (ruling 9)', () => {
+  const list = panel(noteOf('See also [[Projects/Garden shelter/Plan]]: \nSee also [[plan|the plan]]: the roof plan.\nSee also [[Plan]]: a later word.', [PLAN]));
+  expect(within(list('Links to')).getAllByRole('link')).toHaveLength(1);
+  expect(reasonOf(row(list('Links to'), PLAN))).toBe('the roof plan.');
+});
+
+it('AC21 c06-links-panel-shared: a shared bare title gives its reason to the same row in either listing order (ruling 9)', () => {
+  for (const links of [[HERE, THERE], [THERE, HERE]]) {
+    const list = panel(noteOf('See also [[Cedar]]: the boards.', links));
+    expect(reasonOf(row(list('Links to'), THERE)), 'the first path in code-point order').toBe('the boards.');
+    expect(row(list('Links to'), HERE).textContent).toBe(`Cedar${AT_HUB}`);
+    cleanup();
+  }
+});

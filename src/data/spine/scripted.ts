@@ -53,26 +53,50 @@ export { SET_ASIDE, listedPiles };
 /** A [[link]] in a model's words: its target before any `|` alias or `#` heading (a `^block` stays for `linkTarget`). */
 export const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
 
-/**
- * C06 (R1-R4), the one link rule of a model's authored words, for the reply check (runner claude.ts) and the planner:
- * each [[link]] outside a fenced code block (the one link grammar, CommonMark 0.31.2 §4.5), its target as `linkTarget`
- * reads it without `.md`, and whether its line says why (R2: a letter or digit is left once its links, a leading list
- * marker and the words "see also", "related", "source(s)", "link(s)" and "and" are taken out).
- */
-export function authoredLinks(text: string): Array<{ target: string; reason: boolean }> {
-  const out: Array<{ target: string; reason: boolean }> = [];
+/** A leading list marker ("-", "*", "+", "1." or "1)") of a Markdown line, after any indentation. */
+const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u;
+
+/** The lines of `text` outside fenced code blocks (the one link grammar, CommonMark 0.31.2 §4.5). */
+function* unfenced(text: string): Generator<string> {
   let fence: Fence | null = null;
   for (const line of text.split(/\r?\n/)) {
     const previous = fence;
     fence = fenceAfter(line, fence);
-    if (previous || fence) continue;
+    if (!previous && !fence) yield line;
+  }
+}
+
+/**
+ * C06 (R1-R4), the one link rule of a model's authored words, for the reply check (runner claude.ts) and the planner:
+ * each [[link]] outside a fenced code block, its target as `linkTarget` reads it without `.md`, and whether its line
+ * says why (R2: a letter or digit is left once its links, a leading list marker and the words "see also", "related",
+ * "source(s)", "link(s)" and "and" are taken out).
+ */
+export function authoredLinks(text: string): Array<{ target: string; reason: boolean }> {
+  const out: Array<{ target: string; reason: boolean }> = [];
+  for (const line of unfenced(text)) {
     const links = [...line.matchAll(WIKI_LINK)];
-    const rest = line.replace(WIKI_LINK, ' ').replace(/^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
+    const rest = line.replace(WIKI_LINK, ' ').replace(LIST_MARKER, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
     const reason = /[\p{L}\p{N}]/u.test(rest);
     for (const m of links) {
       const target = linkTarget(m[1] ?? '').replace(/\.md$/, '');
       if (target) out.push({ target, reason });
     }
+  }
+  return out;
+}
+
+/**
+ * C06 R17: the reasons a note's body gives its links, from lines `See also [[X]]: <why>` (after any indentation and a
+ * list marker) outside fenced code; the target as `authoredLinks` reads it, the reason to the end of its line. An
+ * empty or blank reason is none.
+ */
+export function linkReasons(body: string): Array<{ target: string; reason: string }> {
+  const out: Array<{ target: string; reason: string }> = [];
+  for (const line of unfenced(body)) {
+    const m = /^\s*see also (\[\[[^\]]*\]\]): (.*)$/iu.exec(line.replace(LIST_MARKER, ' '));
+    const target = m?.[1] ? authoredLinks(m[1])[0]?.target : undefined;
+    if (target && m?.[2]?.trim()) out.push({ target, reason: m[2] });
   }
   return out;
 }
