@@ -1,0 +1,29 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Garden notice.txt",
+        "to": "Projects/Garden visit",
+        "name": "Garden notice.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Garden visit/Saltmere garden visit.md",
+        "text": "The garden may close on 2026-10-18 if heavy rain is forecast; no decision has been made and the notice does not cancel the booking.",
+        "cites": "$file:Garden notice.txt",
+        "marker": "uncertain",
+        "alsoCites": [
+          "Projects/Garden visit/Visit booking.txt"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Later rent terms.txt",
+        "to": "Projects/Flat hunt",
+        "name": "Later rent terms.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Flat hunt/Larkspur Lane flat.md",
+        "text": "Rent was 1,450 a month through 2026-09-30; the later terms give 1,580 a month from 2026-10-01.",
+        "cites": "$file:Later rent terms.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

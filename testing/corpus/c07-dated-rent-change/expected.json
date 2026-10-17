@@ -3,11 +3,11 @@
     "present": [
       "Projects/Flat hunt/Larkspur Lane flat.md",
       "Projects/Flat hunt/Earlier rent terms.txt",
-      "Projects/Flat hunt/Later rent terms.txt",
-      "Projects/Flat hunt/Later rent terms.md"
+      "Projects/Flat hunt/Later rent terms.txt"
     ],
     "absent": [
-      "Inbox/*"
+      "Inbox/*",
+      "Projects/Flat hunt/Later rent terms.md"
     ]
   },
   "unchanged": [
@@ -17,33 +17,84 @@
     {
       "path": "Projects/Flat hunt/Larkspur Lane flat.md",
       "contains": [
-        "## Current state\n- Rent through 2026-09-30: 1,450 a month.",
         "Alex likes the kitchen window."
       ],
+      "excludes": [
+        "Contradiction:",
+        "Uncertain:",
+        "(inferred)"
+      ],
       "timeline": [
-        "2026-09-02 \u00b7 The earlier terms say rent through 2026-09-30 is 1,450 a month. \u00b7 [[Earlier rent terms.txt]]",
-        "Rent was 1,450 through 2026-09-30; the later terms say 1,580 from 2026-10-01. These apply to different periods.",
-        "[[Later rent terms.txt]]"
+        "2026-09-02 · The earlier terms say rent through 2026-09-30 is 1,450 a month. · [[Earlier rent terms.txt]]",
+        "Rent was 1,450 a month through 2026-09-30; the later terms give 1,580 a month from 2026-10-01. · [[Later rent terms.txt]]"
       ],
       "timelineCount": 2
-    },
-    {
-      "path": "Projects/Flat hunt/Later rent terms.md",
-      "contains": [
-        "The later terms say rent from 2026-10-01 is 1,580 a month, replacing the earlier period.\n\nSources: [[Earlier rent terms.txt]] and [[Later rent terms.txt]].\nRelated: [[Larkspur Lane flat]]."
-      ]
     }
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
-    "created": [
-      "Projects/Flat hunt/Later rent terms.md"
-    ],
-    "updated": [
-      "Projects/Flat hunt/Larkspur Lane flat.md"
-    ],
-    "setAside": 0,
+    "filed": 0,
+    "created": [],
+    "updated": [],
     "questionsExactly": 0
-  }
+  },
+  "runs": [
+    {
+      "notes": [
+        {
+          "path": "Projects/Flat hunt/Larkspur Lane flat.md",
+          "contains": [
+            "Alex likes the kitchen window."
+          ],
+          "excludes": [
+            "Contradiction:",
+            "Uncertain:",
+            "(inferred)"
+          ],
+          "timeline": [
+            "2026-09-02 · The earlier terms say rent through 2026-09-30 is 1,450 a month. · [[Earlier rent terms.txt]]",
+            "Rent was 1,450 a month through 2026-09-30; the later terms give 1,580 a month from 2026-10-01. · [[Later rent terms.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Flat hunt/Larkspur Lane flat.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Flat hunt/Larkspur Lane flat.md",
+          "contains": [
+            "Alex likes the kitchen window."
+          ],
+          "excludes": [
+            "Contradiction:",
+            "Uncertain:",
+            "(inferred)"
+          ],
+          "timeline": [
+            "2026-09-02 · The earlier terms say rent through 2026-09-30 is 1,450 a month. · [[Earlier rent terms.txt]]",
+            "Rent was 1,450 a month through 2026-09-30; the later terms give 1,580 a month from 2026-10-01. · [[Later rent terms.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }
