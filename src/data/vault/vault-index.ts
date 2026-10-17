@@ -12,6 +12,22 @@ import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
 import { linkTarget } from '../contracts/links';
 
+/**
+ * C06 R4 and C09 (ruling 11), the one link rule: what a link target (lower case, no `.md`, as `authoredLinks` gives it)
+ * names among the folder's file paths: one note, by its whole path without `.md` or by its title; one other file, by
+ * its whole path or its full name; a name two files share (give its path); or nothing.
+ */
+export function linkIdentity(target: string, paths: Iterable<string>): { note: string } | { file: string } | 'two notes share' | null {
+  const all = [...paths];
+  const notes = all.filter((path) => path.endsWith('.md')
+    && (target.includes('/') ? path.slice(0, -3).toLowerCase() : displayName(nameOf(path)).toLowerCase()) === target);
+  if (notes.length > 1) return 'two notes share';
+  if (notes[0] !== undefined) return { note: notes[0] };
+  const files = all.filter((path) => (target.includes('/') ? path : nameOf(path)).toLowerCase() === target);
+  if (files.length > 1) return 'two notes share';
+  return files[0] === undefined ? null : { file: files[0] };
+}
+
 export class VaultIndex {
   private files = new Map<string, DriveFile>();
   private paths = new Map<string, string>();
@@ -125,7 +141,10 @@ export class VaultIndex {
     return { ids, names };
   }
 
-  /** Script neighbourhood: whole-word matches, folder maps, then one resolved link hop. */
+  /**
+   * Script neighbourhood: whole-word matches, folder maps, then one resolved link hop. `notes` may hold originals (C09
+   * R14, with an empty summary): matched by their name, or reached by a link.
+   */
   neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[] }>>): string[] {
     const ignored = new Set(['a', 'an', 'the', 'is', 'has', 'for', 'and', 'of', 'to', 'alex', 'txt', 'md', 'pdf']);
     const tokens = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
@@ -137,12 +156,12 @@ export class VaultIndex {
     const matches = ids.filter((id) => !maps.has(id) && tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);
     const hubs = [...maps].filter((id) => matches.some((match) => this.byId(match)?.parents[0] === this.byId(id)?.parents[0])
       || tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);
+    // The one link rule over the whole folder (C09 ruling 11): a name two files share anywhere reaches neither.
+    const paths = [...this.paths].flatMap(([id, path]) => (this.files.get(id)?.folder === false ? [path] : []));
     const resolve = (link: string): string | undefined => {
-      const path = linkTarget(link).replace(/\.md$/i, '');
-      const exact = ids.find((id) => this.pathOf(id)?.toLowerCase() === `${path}.md`);
-      if (exact) return exact;
-      const found = ids.filter((id) => (this.byId(id)?.name ?? '').replace(/\.md$/i, '').toLowerCase() === path.toLowerCase());
-      return found.length === 1 ? found[0] : undefined;
+      const named = linkIdentity(linkTarget(link).replace(/\.md$/, ''), paths);
+      const id = named && typeof named === 'object' ? this.ids.get('note' in named ? named.note : named.file) : undefined;
+      return id && ids.includes(id) ? id : undefined;
     };
     const neighbours = [...new Set([...matches, ...hubs].flatMap((id) => (notes[id]?.links ?? []).flatMap((link) => {
       const target = resolve(link); return target ? [target] : [];
