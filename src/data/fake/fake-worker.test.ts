@@ -2632,6 +2632,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         if (!file) throw new Error('no loose file');
         if (why === 'changed') await w.drive.writeText(file.id, '%PDF edited', file.modifiedTime);
         if (why === 'not-checked') {
+          // The listing carries no checksum for it yet, so the digest falls back to a download (inbox-read-slow ruling 7).
+          const list = w.drive.listAll.bind(w.drive);
+          vi.spyOn(w.drive, 'listAll').mockImplementation(async (...a: Parameters<typeof list>) => (await list(...a)).map((f) => (f.id === file.id ? { ...f, sha256: undefined, size: undefined } : f)));
           const real = w.drive.storedDigest.bind(w.drive);
           vi.spyOn(w.drive, 'storedDigest').mockImplementation(async (id) => {
             if (id === file.id) throw driveError('offline');

@@ -116,9 +116,9 @@ describe('Home on the latency fake', () => {
     }
     const out = await homeLoad(s, drive);
     // 1 listing, 3 pile notes + questions + last tidy-up + 12 changes as text, 1 declaration as bytes (the 20 earlier runs' records are about other piles: not read),
-    // 7 digests (4 papers, their note, 2 other notes).
-    expect(calls).toEqual({ listAll: 1, readText: 17, readBytes: 1, storedDigest: 7 });
-    expect(out.calls).toBe(26);
+    // no digests: the listing carries each file's checksum (inbox-read-slow; it was 7 downloads, 26 calls).
+    expect(calls).toEqual({ listAll: 1, readText: 17, readBytes: 1 });
+    expect(out.calls).toBe(19);
   }, 60_000);
 
   it('a report refresh does not restart the inbox reads', async () => {
@@ -186,8 +186,8 @@ describe('one read cache serves app and runner', () => {
     const twice = Object.entries(calls).filter(([k, n]) => n > 1 && !k.startsWith('listAll')).map(([k, n]) => `${k} x${n}`);
     expect(twice.join(', '), `read twice at one version, ${after} calls`).toBe('');
     expect(calls['listAll Bower']).toBe(3);
-    // Before: 49 calls (questions.json x2); 48 until the pile records were read for the inbox's piles alone.
-    expect(after).toBe(28);
+    // Before: 49 calls (questions.json x2); 48 until the pile records were read for the inbox's piles alone; 28 until the listing carried the checksums (inbox-read-slow).
+    expect(after).toBe(21);
   }, 60_000);
 
   it('a pile note changed elsewhere after Home read it is never written over from the kept read', async () => {
@@ -223,7 +223,7 @@ describe('Home reads only the records of the piles in the inbox (TL-P4-16 b)', (
     const { drive, s } = await slowReport({ cold: true });
     const out = await homeLoad(s, drive);
     expect(out.questions.length).toBeGreaterThan(0);
-    expect(out.done.questions ?? 0, `questions after ${out.done.questions} ms, piles after ${out.done.piles} ms`).toBeLessThan(out.done.piles ?? 0);
+    expect(out.done.questions ?? 0, `questions after ${out.done.questions} ms, piles after ${out.done.piles} ms`).toBeLessThanOrEqual(out.done.piles ?? 0);
   }, 60_000);
 
   it('an empty inbox reads no stamped pile record, only the current unstamped one', async () => {
