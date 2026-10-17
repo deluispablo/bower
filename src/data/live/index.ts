@@ -391,17 +391,19 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       await forgetPerson(who);
     };
   }
+  // Signing out and leaving Bower let the lease go as on every source.
+  if (guard) session = leavingLetsGo(session, guard);
   {
     const leave = session.deleteAccount.bind(session);
-    // Leaving Bower removes the uploads this device kept for that person, once the Worker agreed.
-    session.deleteAccount = async (): Promise<void> => {
+    // Leaving Bower removes the uploads this device kept for that person, once the Worker agreed and the lease
+    // went: a sign-in while this device forgets asks the server afresh. A Proxy, since the guarded one owns deleteAccount.
+    const forgetting = async (): Promise<void> => {
       const who = knownAccount;
       await leave();
       await forgetPerson(who);
     };
+    session = new Proxy(session, { get: (target, key, receiver) => (key === 'deleteAccount' ? forgetting : Reflect.get(target, key, receiver)) });
   }
-  // Signing out and leaving Bower let the lease go as on every source.
-  if (guard) session = leavingLetsGo(session, guard);
   fresh();
   const vault = door(v, () => v, vaultListeners, connectVault);
   vaultDoor = vault;
