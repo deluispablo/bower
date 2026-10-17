@@ -43,14 +43,14 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c08-report-with-sources | C08 | model | new (C08 prep; report through the existing thing.note boundary) |
 | c08-compare-missing-fact | C08 | model | new (C08 prep; comparison with a missing deposit and trade-off prose) |
 | c08-revise-keeps-personal-text | C08 | model | new (C08 prep; same-document revision, personal text and history) |
-| c09-burst-pipe | C09 | model | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
+| c09-burst-pipe | C09 | scripted | bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
 | c10-fresh-result-cited | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
 | c10-stale-result-withheld | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
 | c10-denied-keeps-prior-result | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
-| c09-original-over-summary | C09 | model | new (C09 prep: original over stale summary) |
-| c09-two-source-answer | C09 | model | new (C09 prep: two sources, exact identities) |
-| c09-not-in-sources | C09 | model | new (C09 prep: honest missing evidence) |
+| c09-original-over-summary | C09 | scripted | new (C09 prep: original over stale summary) |
+| c09-two-source-answer | C09 | scripted | new (C09 prep: two sources, exact identities) |
+| c09-not-in-sources | C09 | scripted | new (C09 prep: honest missing evidence) |
 | c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
 | c10-web-allowed | C10 | scripted | p2-journey:C10 (allowed) |
 | c10-web-denied | C10 | scripted | p2-journey:C10 (denied) |
@@ -305,3 +305,13 @@ ids remain, but their letters prove current-source outcomes. The packing guide s
 the text limit; both supplied PDFs in `c15-more-context-bounded` are read whole and each gets a source
 note. The unread scan stays in the inbox with one question. Created-file expectations include the
 first run's health note. These cases do not assert repeated context exchanges or OCR.
+
+## C09 question cases
+
+The five `c09-*` cases are scripted. Four have `replies.json` and score through production `main` in
+`runner/test/c09-corpus.test.ts` with two model calls each: the reply's `answers` entry becomes the request's done row,
+byte for byte, and nothing else is written but the first run's health note. `c09-closest-flat` keeps the demo
+provider's answer. Each checks its answer per request, never `.bower/requests.json` as text, with two expectation keys:
+
+- `answers`: per request, the done row in `.bower/requests.json` (read as JSON) whose text equals `request`: its `done` has every `contains`, no `excludes`, and its `[[links]]` resolve by the one name rule to exactly `links`, in order.
+- `tables`: per note at `path`, exactly one GFM table outside fenced code whose header cells equal `header`, with body rows equal to `rows`, in order.

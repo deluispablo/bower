@@ -120,6 +120,8 @@ describe('new-instance.sh', () => {
     expect(tidy).toContain('node runner/dist/runner.mjs');
     expect(tidy).toContain('BOWER_API_URL: ${{ vars.BOWER_API_URL }}');
     expect(tidy).toMatch(/^permissions:/m);
+    // GitHub's runner unless BOWER_RUNS_ON names the person's own (self-hosted) runner.
+    expect(tidy).toContain("runs-on: ${{ vars.BOWER_RUNS_ON || 'ubuntu-latest' }}");
     // No expression reads the ticket, the one secret read is the Claude credential (TL-P4-01), and nothing is echoed.
     const expressions = [...tidy.matchAll(/\$\{\{[^}]*\}\}/g)].map((m) => m[0]);
     expect(expressions.join(' ')).not.toMatch(/ticket/i);

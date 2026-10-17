@@ -16,25 +16,26 @@
     "Projects/Flat hunt/Deposit terms.txt",
     "Archive/Old flat/Listing.txt"
   ],
-  "notes": [
+  "answers": [
     {
-      "path": ".bower/requests.json",
+      "request": "What are the rent and deposit for the Larkspur Lane flat?",
       "contains": [
         "1,450",
-        "1,600",
-        "[[Projects/Flat hunt/Listing.txt]]",
-        "[[Projects/Flat hunt/Deposit terms.txt]]"
+        "1,600"
       ],
       "excludes": [
-        "900",
-        "[[Archive/Old flat/Listing.txt]]"
+        "900"
+      ],
+      "links": [
+        "Projects/Flat hunt/Listing.txt",
+        "Projects/Flat hunt/Deposit terms.txt"
       ]
     }
   ],
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [],
     "setAside": 0,
     "questions": [],

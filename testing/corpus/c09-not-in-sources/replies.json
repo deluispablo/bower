@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "answers": [
+      {
+        "requestId": "$request:change-1",
+        "text": "The stored listing, [[Projects/Flat hunt/Larkspur Lane listing.txt]], does not say whether pets are allowed."
+      }
+    ]
+  }
+]

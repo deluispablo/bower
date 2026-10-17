@@ -112,7 +112,9 @@ export function phaseAwareClaude(
     const rows = (key: string): Record<string, unknown>[] => Array.isArray(intent[key])
       ? (intent[key] as unknown[]).filter((v): v is Record<string, unknown> => !!v && typeof v === 'object') : [];
     const placed = [...rows('things'), ...rows('notes'), ...rows('asks')];
-    const used = new Set([...placed.flatMap((r) => [r.fileId, r.pileId]),
+    // A request's result (C09 answers, C08 documents and revisions) uses the request's journal item.
+    const results = [...rows('answers'), ...rows('documents'), ...rows('revisions')];
+    const used = new Set([...placed.flatMap((r) => [r.fileId, r.pileId]), ...results.map((r) => r.requestId),
       ...[...rows('lines'), ...rows('states')].map((r) => r.cites)].filter((id): id is string => typeof id === 'string'));
     if (Array.isArray(intent.bin)) intent.bin.forEach((id) => used.add(id));
     const available = context.sources?.map((s) => s.itemId) ?? context.piles.flatMap((pile) =>
@@ -152,7 +154,16 @@ export function phaseAwareClaude(
         const matches = exact ? [exact] : titles.get(link) ?? [];
         return matches.length === 1 ? matches : [];
       });
-      const wants = [...new Set([...targetPaths, row?.basis, ...pairPaths, ...links,
+      // A result wants the document it revises and what it links: a note by its path or title, an original by its path or a name no other file has.
+      const own = results.filter((r) => r.requestId === itemId);
+      const cited = [...own.flatMap((r) => typeof r.path === 'string' ? [r.path] : []), ...own.flatMap((r) => parseNote('', [r.text, r.body]
+        .filter((t): t is string => typeof t === 'string').join('\n')).links)]
+        .flatMap((link) => {
+          const matches = paths.has(link) ? [link] : paths.has(`${link}.md`) ? [`${link}.md`]
+            : [...titles.get(link) ?? [], ...[...paths].filter(([path, file]) => !file.folder && !path.endsWith('.md') && file.name === link).map(([path]) => path)];
+          return matches.length === 1 ? matches : [];
+        });
+      const wants = [...new Set([...targetPaths, row?.basis, ...pairPaths, ...links, ...cited,
         ...(journal.has(itemId) ? unboundPaths : [])]
         .flatMap((path) => typeof path === 'string' && paths.get(path) && !paths.get(path)?.folder ? [paths.get(path)?.id ?? ''] : []))];
       return { itemId, kind: 'unknown', destination, wants };

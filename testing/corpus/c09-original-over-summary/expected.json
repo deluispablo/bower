@@ -12,20 +12,23 @@
     "Projects/Flat hunt/Larkspur Lane offer.md",
     "Projects/Flat hunt/Larkspur Lane offer.txt"
   ],
-  "notes": [
+  "answers": [
     {
-      "path": ".bower/requests.json",
+      "request": "When must Alex reply to the Larkspur Lane offer?",
       "contains": [
         "21 October 2026",
-        "14 October 2026",
-        "[[Projects/Flat hunt/Larkspur Lane offer.txt]]"
+        "14 October 2026"
+      ],
+      "links": [
+        "Projects/Flat hunt/Larkspur Lane offer.txt",
+        "Projects/Flat hunt/Larkspur Lane offer.md"
       ]
     }
   ],
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [],
     "setAside": 0,
     "questions": [],

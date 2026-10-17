@@ -2,7 +2,7 @@
   "id": "c09-original-over-summary",
   "capability": "C09",
   "title": "Answer from the stored original when its summary is stale",
-  "covers": "model",
+  "covers": "scripted",
   "source": "new (TL-P4-31 ruling 1; C09 preparation for lead review)",
   "scope": "instructions",
   "allowWeb": false,
