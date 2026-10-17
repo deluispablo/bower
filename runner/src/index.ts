@@ -1,6 +1,6 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { frontValues, indexedFront, lintFacts, noteRefusal, ownershipError, propertyValue, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
+import { frontValues, indexedFront, LINT_EVIDENCE_VERSION, lintFacts, noteRefusal, ownershipError, propertyValue, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
 import type { TypeRow, TypeTable } from '../../src/data/contracts/types';
 import { computedBy, VIEW_LIMITS } from '../../src/data/contracts/view-format';
 import { evaluateAggregate, evaluateFormulas, EVALUATOR_VERSION, inSetFolder, setMembers, storedFormulas, storedViews, viewBlock, type SetNote } from './views';
@@ -323,7 +323,7 @@ export async function withProgress(drive: RunnerDrive, run: { rootId: string; ru
     if (stored?.version === note.version) {
       // A same-version entry without usable evidence takes what this run found (a refusal included), so a held run keeps it.
       const found = lints[id] ?? note.lint;
-      if (found && !lintEvidenceOk(stored.lint)) files[id] = { ...stored, lint: found };
+      if (found && !(lintEvidenceOk(stored.lint) && (stored.lint === 'unreadable' || stored.lint.v === LINT_EVIDENCE_VERSION))) files[id] = { ...stored, lint: found };
       continue;
     }
     const entry: MaintenanceNote = { ...note, ...(lints[id] ? { lint: lints[id] } : {}) };
@@ -365,10 +365,12 @@ const rawHash = (text: string): Promise<string> => sha256Hex(new TextEncoder().e
  * bytes say `by: bower`; `text` is its bytes when this check would change them. Undefined: Bower creates its own.
  */
 async function healthNote(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, manifest: RunManifest,
-  inputs: Pick<Maintain['inputs'], 'folderId' | 'snapshot' | 'listing'>): Promise<{ file: DriveFile; text?: string } | undefined> {
+  inputs: Pick<Maintain['inputs'], 'folderId' | 'snapshot' | 'listing'>, declaration: MaintenanceDeclaration): Promise<{ file: DriveFile; text?: string } | undefined> {
   const stored = state?.health ? ix.byId(state.health) : undefined;
   if (!stored || stored.folder || stored.parents.length !== 1 || stored.parents[0] !== inputs.folderId || ix.pathOf(stored.id) !== stored.name) return undefined;
-  const healthText = healthOf(inputs, plannedPlaces(drive, manifest, inputs));
+  const outcomes = plannedOutcomes(drive, manifest);
+  const after = refreshed({ ...inputs, account: '', cursor: '', changes: [], operationIds: outcomes.map((o) => o.operationId) }, outcomes, manifest);
+  const healthText = healthOf(inputs, after.files, manifest, outcomes, declaration);
   // Listed bytes that are this very check prove both identity and no change, without a read.
   if (stored.sha256 === await rawHash(healthText)) return { file: stored };
   const text = await drive.readListedText(stored);
@@ -376,10 +378,28 @@ async function healthNote(drive: RunnerDrive, ix: VaultIndex, state: RetrievalSt
 }
 
 /** Health from the frozen start of the run, named at each note's place after it (`after`, by id; amended ruling 3). */
-function healthOf(inputs: Pick<Maintain['inputs'], 'folderId' | 'snapshot' | 'listing'>, after: Notes): string {
+function healthOf(inputs: Pick<Maintain['inputs'], 'folderId' | 'snapshot' | 'listing'>, after: Notes, manifest: RunManifest,
+  outcomes: readonly Outcome[], declaration?: MaintenanceDeclaration): string {
   const ix = VaultIndex.build(inputs.folderId, (inputs.listing ?? []).map(file));
   const files = [...ix.entries()].flatMap(([path]) => ix.file(path)?.folder === false && !isHidden(path) ? [path] : []);
-  return renderHealth(inputs.snapshot ?? {}, files, after);
+  const admittedOriginals = [...ix.entries()].flatMap(([path]) => {
+    const f = ix.file(path);
+    return f && !f.folder && !/\.md$/i.test(path) && path.includes('/') && !isHidden(path)
+      && path.split('/')[0] !== 'Inbox' ? [{ id: f.id, path }] : [];
+  });
+  for (const outcome of outcomes) {
+    if (outcome.state !== 'applied') continue;
+    const effect = manifest.operations.find((op) => op.operationId === outcome.operationId)?.effect;
+    if (effect?.kind === 'bin') ix.drop(effect.before.fileId);
+    else if (effect?.kind === 'move' || effect?.kind === 'create-folder') ix.put(file(outcome.evidence.file));
+  }
+  const originals = admittedOriginals.flatMap(({ id, path }) => {
+    const after = ix.pathOf(id) ?? null;
+    return after === null || !/\.md$/i.test(after) && after.includes('/') && !isHidden(after) && after.split('/')[0] !== 'Inbox'
+      ? [{ path, after }] : [];
+  });
+  return renderHealth(inputs.snapshot ?? {}, files, after,
+    declaration ?? { at: new Date(manifest.requestedAt).toISOString(), sources: [] }, originals);
 }
 
 /**
@@ -387,15 +407,14 @@ function healthOf(inputs: Pick<Maintain['inputs'], 'folderId' | 'snapshot' | 'li
  * run settles; apply renders from the settled outcomes instead. Moves, new folders and bins are what move a note.
  * shortcut: a refused move or bin can leave health naming the planned place until the next run, rare in normal use.
  */
-function plannedPlaces(drive: RunnerDrive, manifest: RunManifest, inputs: Pick<Maintain['inputs'], 'folderId' | 'snapshot' | 'listing'>): Notes {
+function plannedOutcomes(drive: RunnerDrive, manifest: RunManifest): Outcome[] {
   const parent = (target: { fileId: string } | { createdBy: string }): string => 'fileId' in target ? target.fileId : target.createdBy;
-  const outcomes = manifest.operations.flatMap(({ operationId, effect }): Outcome[] => {
+  return manifest.operations.flatMap(({ operationId, effect }): Outcome[] => {
     const f: SeenFile | undefined = effect.kind === 'move' ? { ...effect.before, parents: [parent(effect.parent)], name: effect.name }
       : effect.kind === 'create-folder' ? { fileId: operationId, name: effect.name, parents: [parent(effect.parent)], folder: true, modifiedTime: new Date(manifest.requestedAt).toISOString() }
       : effect.kind === 'bin' ? effect.before : undefined;
     return f ? [{ operationId, state: 'applied', evidence: { file: f, trashed: effect.kind === 'bin', content: null, provenance: drive.provenance } }] : [];
   });
-  return refreshed({ ...inputs, account: '', cursor: '', changes: [], operationIds: outcomes.map((o) => o.operationId) }, outcomes, manifest).files;
 }
 
 async function readState(drive: RunnerDrive, rootId: string, old: DriveFile | undefined): Promise<RetrievalState | undefined> {
@@ -437,7 +456,7 @@ const NOTE_READS = 200;
 const cut = (f: DriveFile, text?: string): boolean => f.size !== undefined ? f.size > PREFIX_BYTES
   : text === undefined || new TextEncoder().encode(text).length >= PREFIX_BYTES - 3;
 const lintOf = (f: DriveFile, path: string, text: string | null): LintEvidence | undefined =>
-  text === null || cut(f, text) ? undefined : lintFacts(path, text) ?? undefined;
+  text === null || cut(f, text) ? undefined : lintFacts(path, text, true) ?? undefined;
 /** A note Drive refuses for good is recorded 'unreadable' for its version (b8c-unreadable); retries and waits still stop the run. */
 function unreadable(error: unknown): 'unreadable' {
   if (failureKind(error) !== 'permanent') throw error;
@@ -717,7 +736,7 @@ async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: Retrieva
     const cached = state?.files[f.id];
     const same = cached?.version === f.modifiedTime;
     // Malformed or absent lint evidence is rebuilt from one read of this version (R26).
-    const evidence = same && lintEvidenceOk(cached.lint) ? cached.lint : undefined;
+    const evidence = same && lintEvidenceOk(cached.lint) && (cached.lint === 'unreadable' || cached.lint.v === LINT_EVIDENCE_VERSION) ? cached.lint : undefined;
     let text: string | null;
     let refused: 'unreadable' | undefined;
     try {
@@ -877,8 +896,24 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const f = files.get(id);
     return !note.lint && !!f && f.size !== undefined;
   };
-  const healthKept = async (): Promise<boolean> => !state?.health || !Object.entries(snapshot).some(([id, note]) => owed(id, note))
-    && await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }) !== undefined;
+  const healthDeclaration: MaintenanceDeclaration = { at: new Date(manifest.requestedAt).toISOString(), sources: [] };
+  for (const path of [SYSTEM.tags, SYSTEM.typeTable]) {
+    const source = ix.file(path);
+    if (!source || source.folder) continue;
+    try {
+      healthDeclaration.sources.push(await readSource(drive, path, source));
+    } catch (error) {
+      if (error instanceof LedgerExhausted || !(error instanceof BowerError) || failureKind(error) === 'wait') throw error;
+      console.error(error);
+      (healthDeclaration.unavailable ??= []).push({ path, file: seen(source) });
+    }
+  }
+  const healthKept = async (): Promise<boolean> => {
+    if (!state?.health) return true;
+    if (Object.entries(snapshot).some(([id, note]) => owed(id, note))) return false;
+    const kept = await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }, healthDeclaration);
+    return kept !== undefined && kept.text === undefined;
+  };
   // Maps that declare views owe their figures again after any type-table edit, even on an idle run (R35).
   const figuresOwed = refreshed.tableChanged && Object.values(state?.files ?? {}).some((n) => n.moc && frontValues(n.moc.text)?.bower_views !== undefined);
   // Formulas owe their values on a new as-of day since a record, or after a type-table edit (R52).
@@ -902,8 +937,9 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const f = files.get(id);
     if (!f) return;
     try {
-      // A note past the prefix is read whole once per version through the shared read cache.
-      const lint = cut(f) ? lintFacts(note.path, await drive.readListedText(f)) ?? undefined : lintOf(f, note.path, await drive.readPrefix(f));
+      // Long notes and hubs share their whole read with later maintenance; other short notes need only the prefix.
+      const lint = cut(f) || hub(note.path, note) ? lintFacts(note.path, await drive.readListedText(f), true)
+        : lintOf(f, note.path, await drive.readPrefix(f));
       if (lint) note.lint = lint;
     } catch (error) {
       if (!(error instanceof BowerError) || error.code !== 'not-found') note.lint = unreadable(error);
@@ -965,7 +1001,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   if (new Set(kinds.map((kind) => kind.path)).size !== kinds.length) throw unavailable();
   const paths = [...kinds.map((kind) => kind.path), SYSTEM.retrieval, ...(missingLogFolder ? [logFolder] : []), ...(logPath ? [logPath] : [])];
   const missing = paths.filter((path) => !ix.file(path));
-  const health = await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) });
+  const health = await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }, healthDeclaration);
   const holders: Holder[] = [...missing.map(() => ({})), ...(health ? [] : [{}])];
   await reserveFor(drive.fencedWrites(), holders);
   const targets: NonNullable<Maintain['inputs']['targets']> = [];
@@ -1019,7 +1055,10 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     places.set(healthId, { path: name, file: health ? seen(health.file)
       : { fileId: healthId, name, parents: [rootId], folder: false, modifiedTime: new Date(manifest.requestedAt).toISOString() } });
     const bytes = health?.text === undefined ? undefined : new TextEncoder().encode(health.text);
-    targets.push({ path: name, kind: 'health', fileId: healthId, parentId: rootId, ...(health && bytes ? { beforeContent: { encoding: 'utf8',
+    for (const source of [...healthDeclaration.sources, ...healthDeclaration.unavailable ?? []]) {
+      places.set(source.file.fileId, { file: source.file, path: source.path });
+    }
+    targets.push({ path: name, kind: 'health', declaration: healthDeclaration, fileId: healthId, parentId: rootId, ...(health && bytes ? { beforeContent: { encoding: 'utf8',
       size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: health.file.modifiedTime } } : {}) });
   }
   const capture = { ...manifest.capture, places: [...places.values()] };
@@ -1250,7 +1289,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         const owned = !isRunnerPath(target.path) && !health;
         const logEvidence = log && (before || replaying.has(op.operationId)) ? await drive.evidence(target.fileId) : null;
         const logBefore = logEvidence ? await drive.readListedText(logEvidence.file) : '# Log\n';
-        const rendered = log ? appendLog(logBefore, events) : health ? healthOf(op.effect.inputs, state.files) : kind ? kind.render(target.declaration, state, head.outcomes, manifest)
+        const rendered = log ? appendLog(logBefore, events) : health ? healthOf(op.effect.inputs, state.files, manifest, head.outcomes, target.declaration) : kind ? kind.render(target.declaration, state, head.outcomes, manifest)
           : owned ? mocEdit(target.fileId, state.files, members, await figures.render(target.fileId))
           : target.path === SYSTEM.retrieval ? JSON.stringify(figures.retrieval(state)) : undefined;
         if (!kind && owned && !rendered) continue;

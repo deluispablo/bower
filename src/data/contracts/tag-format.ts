@@ -22,9 +22,9 @@ export type TagVocabulary = { tags: string[]; growth: boolean };
 /**
  * The one reader of `.bower/tags.json` (stored bytes or null): missing is empty with growth on; an invalid file
  * disables tags for the run (empty, growth off): one BowerError, its cause the details, is logged with
- * `console.error` and returned, bytes untouched; over 30 stays readable with growth frozen.
+ * `console.error` and returned, bytes untouched; over 30 stays readable with growth frozen. Health's frozen read disables logging.
  */
-export function readTagList(bytes: string | null): TagVocabulary & { error?: BowerError } {
+export function readTagList(bytes: string | null, logError = true): TagVocabulary & { error?: BowerError } {
   if (bytes === null) return { tags: [], growth: true };
   try {
     const parsed: unknown = JSON.parse(bytes);
@@ -33,7 +33,7 @@ export function readTagList(bytes: string | null): TagVocabulary & { error?: Bow
     throw new Error('The tag list has an entry that is not a canonical tag, or is not a version 1 list.');
   } catch (cause) {
     const error = new BowerError('unknown', 'Bower could not read your tag list, so it will not use tags this time.', undefined, { cause });
-    console.error(error);
+    if (logError) console.error(error);
     return { tags: [], growth: false, error };
   }
 }
