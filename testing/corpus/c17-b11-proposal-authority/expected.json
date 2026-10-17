@@ -17,6 +17,13 @@
   ],
   "notes": [
     {
+      "path": "Projects/Job hunt/Ferrowick offer.md",
+      "contains": [
+        "See also [[Job hunt]]: this offer belongs to the job search.",
+        "See also [[Old offer]]: both offers have the same reply deadline."
+      ]
+    },
+    {
       "path": "Projects/Job hunt/Job hunt.md",
       "contains": [
         "## Figures"
