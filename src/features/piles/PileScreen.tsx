@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { report } from '@/ui/report';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
@@ -487,9 +487,23 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const held = !!pile.noteLocked;
   const off = locked || held;
   const changed = text.trim() !== pile.text;
+  const showSave = changed && !off;
+  // The words a save is still sending: leaving the box again or pressing Save meanwhile does not send them twice.
+  const pending = useRef<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Save went away holding the keyboard, or it fell to the page's body: back to the box (focus.ts: never to nothing).
+  const hadSave = useRef(showSave);
+  useLayoutEffect(() => {
+    if (hadSave.current === showSave) return;
+    hadSave.current = showSave;
+    const at = document.activeElement;
+    if (!showSave && (!at || at === document.body || !at.isConnected)) box.current?.focus();
+  }, [showSave]);
   const save = async (): Promise<void> => {
-    setBusy(true);
     const words = text.trim();
+    if (pending.current === words) return;
+    pending.current = words;
+    setBusy(true);
     sending.set(pile.id, words);
     try {
       await vault.updatePile(pile.id, text, base);
@@ -511,6 +525,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       report(e, 'The note did not save. Try again.');
     } finally {
       if (sending.get(pile.id) === words) sending.delete(pile.id);
+      if (pending.current === words) pending.current = null;
       setBusy(false);
     }
   };
@@ -521,6 +536,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       </label>
       <Textarea
         id="pile-note-text"
+        ref={box}
         rows={3}
         value={text}
         disabled={off}
@@ -541,8 +557,8 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         </p>
       )}
       <div className={s.noteFoot}>
-        {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
-        {changed && !off && (
+        {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : changed ? 'Not saved yet.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
+        {showSave && (
           <Button size="sm" disabled={busy} onClick={() => void save()}>
             {busy ? 'Saving…' : 'Save the note'}
           </Button>
