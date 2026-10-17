@@ -43,9 +43,11 @@ What to write:
 - "lines" (optional): at most 20 Timeline lines, each at most 200 characters with no link, only on the notes
   below; "cites" names a thing you file, and Bower links it as the source, or a pile of words only. A note's Timeline only grows. Look in each
   thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.
-  When a thing disagrees with a note, never change it silently: the line gives both figures, the note's and the
-  thing's, and cites the thing.
-  Bower writes a marker's label; inferred has no figures; contradiction needs both cites.
+  A disagreement is two claims about the same thing, detail and period that cannot both hold: never change the note
+  silently and never pick one by its date. Give one line with marker "contradiction" stating both claims, citing the
+  thing, the other file in "alsoCites"; ask nothing. A claim for another period, or one that says it
+  replaces the earlier claim is ordinary history, no marker. A possible change with a condition is "uncertain";
+  inferred has no figures. Bower writes a marker's label.
 - "states" (optional): a note's whole "## Current state" as it should read now, at most 8 lines of at most
   200 characters with no link, only for a note below whose state the thing changes (a status, a count, a date),
   at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the
