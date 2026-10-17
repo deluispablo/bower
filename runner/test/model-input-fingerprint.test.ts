@@ -26,6 +26,17 @@ const AT = Date.UTC(2026, 9, 7, 9);
 
 const bytesOf = (path: string): Uint8Array => new Uint8Array(readFileSync(resolve(ROOT, path)));
 
+/** The call's `--system-prompt-file`, read while the call runs (c12-prefix); `null` when it names none. */
+const systemOf = (call: ClaudeCall): string | null => {
+  const at = call.args.indexOf('--system-prompt-file');
+  return at < 0 ? null : readFileSync(call.args[at + 1] ?? '', 'utf8');
+};
+/** What the model reads on a call: its prompt file, then its stdin. */
+const modelRead = (call: ClaudeCall | undefined, system: string | null | undefined): string => {
+  expect(system ?? null, 'the call names its prompt file (c12-prefix)').not.toBeNull();
+  return `${system ?? ''}\n${call?.input ?? ''}`;
+};
+
 function fakeScripted(drive: FakeDrive): ScriptedRead {
   const reads = fakeRead(drive);
   return { ...reads, piles: (rootId) => listedPiles(reads, rootId), provenance: 'fake-stored' };
@@ -85,14 +96,14 @@ describe('model input fingerprint', () => {
     // The corpus case runs through main() on the Drive v3 fake with a fake spawn: the runner's own reads decide what the model sees.
     const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
     if (!c) throw new Error('the C04 garden newsletter case is missing');
-    const calls: ClaudeCall[] = [];
+    const calls: ClaudeCall[] = []; const systems: Array<string | null> = [];
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
+    await runWithClaude(c, async (call) => (calls.push(call), systems.push(systemOf(call)), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
     // Selection precedes the refused execution and its one retry; the first call carries selection input.
     expect(calls).toHaveLength(3);
 
-    // Normalize the input using the shared function
-    const input = calls[0]?.input ?? '';
+    // c12-prefix: what the model reads is the prompt file, then the call's stdin; the fingerprint form normalizes both.
+    const input = modelRead(calls[0], systems[0]);
     const normalized = normalizeModelInput(input);
 
     // Verify against golden file (must exist; golden files are not created by tests)
@@ -104,12 +115,17 @@ describe('model input fingerprint', () => {
     // Pins the prompt bytes the model reads (not the fingerprint form): a fingerprint change must not move them.
     const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
     if (!c) throw new Error('the C04 garden newsletter case is missing');
-    const calls: ClaudeCall[] = [];
+    const calls: ClaudeCall[] = []; const systems: Array<string | null> = [];
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
-    // TL-P4-42 addendum 5: stable-prefix key reorder only: index, runId, admission, piles, notes, folders.
+    await runWithClaude(c, async (call) => (calls.push(call), systems.push(systemOf(call)), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
+    // c12-prefix: the prompt file (fixed instructions, the boundary, the run context), then the selection's stdin.
+    const raw = modelRead(calls[0], systems[0]);
+    const lines = raw.split('\n');
+    expect(lines[0]).toBe('You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.');
+    expect(lines.filter((l) => l === '__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__')).toHaveLength(1);
+    expect(raw.slice(raw.indexOf('\nSelect context first.') + 1)).toBe(calls[0]?.input);
     const rawGoldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.raw.golden.txt');
-    expect(calls[0]?.input ?? '').toBe(readFileSync(rawGoldenPath, 'utf8'));
+    expect(raw).toBe(readFileSync(rawGoldenPath, 'utf8'));
   });
 
   it('the timing line carries the model input fingerprint', async () => {
@@ -117,14 +133,14 @@ describe('model input fingerprint', () => {
     const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
     if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
 
-    const calls: ClaudeCall[] = [];
+    const calls: ClaudeCall[] = []; const systems: Array<string | null> = [];
     const timing = new RunTiming();
-    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+    const spawn: ClaudeSpawn = async (call) => (calls.push(call), systems.push(systemOf(call)), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })), timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
 
-    // The timing line should have the model input fingerprint (calculated on the normalized input)
-    const modelInput = calls[0]?.input ?? '';
+    // The timing line has the model input fingerprint, on the normalized prompt file and selection stdin (c12-prefix).
+    const modelInput = modelRead(calls[0], systems[0]);
     const normalized = normalizeModelInput(modelInput);
     const expectedHash = createHash('sha256').update(normalized).digest('hex').slice(0, 12);
     const line = timing.line('done');
@@ -346,7 +362,7 @@ describe('model input order', () => {
     const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: drive, root: root })) }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
-    const sent = JSON.parse((calls[0]?.input ?? '').split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string }> }> };
+    const sent = JSON.parse((calls[0]?.input ?? '').split('\n').findLast((l) => l.startsWith('{')) ?? '{}') as { piles: Array<{ things: Array<{ name: string }> }> };
     const lists = sent.piles.map((p) => p.things.map((t) => t.name));
     expect(lists.some((l) => l.length > 2)).toBe(true);
     for (const names of lists) expect(names).toEqual([...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
