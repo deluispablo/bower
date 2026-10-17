@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 
 import { isAdmissionManifest } from '../../src/data/spine/admission.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
+import { CryptoError, decrypt, encrypt, importEncryptionKey } from './crypto.js';
 import type { Env } from './env.js';
 import { dispatchOutcome, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
@@ -439,8 +440,11 @@ export class Person extends DurableObject<Env> {
     );
   }
 
-  /** The cached Drive access token, or null when none is kept or it expires before `usableUntil` (epoch ms). */
-  cachedDriveToken(usableUntil: number): DriveAccessToken | null {
+  /**
+   * The cached Drive access token, or null when none is kept, it expires before `usableUntil` (epoch ms), or it cannot
+   * be decrypted (kept in plaintext before sec-hardening, or under a rotated key): a miss, so it is simply refetched.
+   */
+  async cachedDriveToken(usableUntil: number): Promise<DriveAccessToken | null> {
     const row = this.ctx.storage.sql
       .exec<{ access_token: string | null; access_expires_at: number | null }>(
         'SELECT access_token, access_expires_at FROM account WHERE id = 1',
@@ -449,14 +453,20 @@ export class Person extends DurableObject<Env> {
     if (row?.access_token == null || row.access_expires_at == null || row.access_expires_at <= usableUntil) {
       return null;
     }
-    return { accessToken: row.access_token, expiresAt: row.access_expires_at };
+    try {
+      return { accessToken: await decrypt(row.access_token, await importEncryptionKey(this.env.TOKEN_ENC_KEY)), expiresAt: row.access_expires_at };
+    } catch (err) {
+      if (!(err instanceof CryptoError) || err.code === 'bad_key') throw err;
+      return null;
+    }
   }
 
-  /** Keeps a freshly minted access token until it expires. */
-  cacheDriveToken(token: DriveAccessToken): void {
+  /** Keeps a freshly minted access token until it expires, encrypted with TOKEN_ENC_KEY as the refresh token is. */
+  async cacheDriveToken(token: DriveAccessToken): Promise<void> {
+    const encrypted = await encrypt(token.accessToken, await importEncryptionKey(this.env.TOKEN_ENC_KEY));
     this.ctx.storage.sql.exec(
       'UPDATE account SET access_token = ?, access_expires_at = ? WHERE id = 1',
-      token.accessToken,
+      encrypted,
       token.expiresAt,
     );
   }
