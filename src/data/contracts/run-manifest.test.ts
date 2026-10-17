@@ -2,7 +2,7 @@ import { RUNNER_WRITES } from '../vault/layout';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { parseRunManifest, parseRunManifestV2, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
+import { lintEvidenceOk, parseRunManifest, parseRunManifestV2, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
 import { parseRunCheckpoint } from './run-checkpoint';
 
 const dir = 'testing/fixtures/run-recovery-contract/';
@@ -598,7 +598,7 @@ describe('run manifests fix capture and operation identity', () => {
     ['a megabyte', 'x'.repeat(1024 * 1024)],
   ])('refuses empty, control or over-1024-byte journal record ID: %s', async (_what, recordId) => {
     await refuse(bytes(variant((value) => { set(value, ['capture', 'journal', 0, 'recordId'], recordId); })), 'shape');
-  });
+  }, 30_000); // the megabyte row hashes a megabyte manifest twice: about 1 s locally, over 5 s on CI's 2-core runners
 
   it.each([
     ['identical pile copy', (value: Manifest): void => { value.capture.piles.push(...value.capture.piles.slice(1, 2).map(clone)); }],
@@ -1162,4 +1162,54 @@ it('b8 monthly maintain permission is one captured month and parent, never anoth
     { kind: 'hot' }, { fileId: 'child-a' }, { declaration: { at: time, sources: [{ path: target.path, file: month, text: '# Log\n', content: verifiedText('# Log\n') }] } }]) {
     expect((await parse({ ...target, ...change })).ok).toBe(false);
   }
+});
+it('b8c2 evidence preserves stored tags and requires a complete versioned shape', () => {
+  const old = { links: [], tags: 3, summary: true };
+  const full = { ...old, v: 1, status: null, template: null, active: [], tagList: ['', '', 'Garden Plots'], original: null, refused: null };
+  expect(lintEvidenceOk(old), 'old manifests remain readable').toBe(true);
+  expect(lintEvidenceOk(full), 'stored tags are evidence, not generated slugs').toBe(true);
+  for (const key of ['status', 'template', 'active', 'tagList', 'original', 'refused']) {
+    const missing = Object.fromEntries(Object.entries(full).filter(([field]) => field !== key));
+    expect(lintEvidenceOk(missing), `missing ${key}`).toBe(false);
+  }
+  for (const change of [{ v: 2 }, { active: ['2026-02-30'] }, { tagList: [3] }, { refused: 'other' }, { status: 3 }]) {
+    expect(lintEvidenceOk({ ...full, ...change })).toBe(false);
+  }
+  expect(lintEvidenceOk({ ...full, refused: 'newer' })).toBe(true);
+  expect(lintEvidenceOk({ ...full, refused: 'damaged' })).toBe(true);
+});
+
+it('b8c2 health declarations bind only captured tag and type sources with verified bytes', async () => {
+  const value = rich();
+  const health = seen('health-id', 'Bower health.md', 'fake-root');
+  const tags = seen('tags-id', 'tags.json', 'bower-system');
+  const types = seen('types-id', 'type-table.json', 'bower-system');
+  value.capture.places.push({ file: health, path: health.name }, { file: tags, path: '.bower/tags.json' },
+    { file: types, path: '.bower/type-table.json' });
+  const sources = [tags, types].map((file) => ({ path: `.bower/${file.name}`, file, text: '{}', content: verifiedText('{}') }));
+  const declaration = { at: new Date(value.requestedAt).toISOString(), sources };
+  const target = { path: health.name, kind: 'health', fileId: health.fileId, parentId: 'fake-root', declaration };
+  const parse = (change: object) => parseRunManifestV2(bytes(b4Seal({ ...value, v: 2, reportPlan: [], operations: [
+    { operationId: 'maintain', ordinal: 0, dependsOn: [], effect: { kind: 'maintain', inputs: { folderId: 'fake-root',
+      account: 'ACCOUNT_ID', cursor: 'cursor', changes: [], operationIds: [], health: health.fileId, targets: [clone({ ...target, ...change })] } } },
+  ] })), 'fake-root', RUNNER_WRITES);
+  expect((await parse({})).ok).toBe(true);
+  expect((await parse({ declaration: undefined })).ok, 'old health manifests still replay').toBe(true);
+  const unavailable = sources.map(({ path, file }) => ({ path, file }));
+  expect((await parse({ declaration: { ...declaration, sources: [], unavailable } })).ok,
+    'unavailable inputs retain their captured identity, without claiming verified bytes').toBe(true);
+  for (const changed of [
+    { ...declaration, unavailable },
+    { ...declaration, sources: [], unavailable: [unavailable[0], unavailable[0]] },
+    { ...declaration, sources: [], unavailable: [{ ...unavailable[0], path: '.bower/private.json' }] },
+    { ...declaration, sources: [], unavailable: [{ ...unavailable[0], file: { ...tags, name: 'other.json' } }] },
+    { ...declaration, sources: [], unavailable: [{ ...unavailable[0], text: 'invented bytes' }] },
+  ]) expect((await parse({ declaration: changed })).ok).toBe(false);
+  for (const changed of [
+    { ...declaration, at: '2026-12-01T00:00:00.000Z' },
+    { ...declaration, sources: [sources[0], sources[0]] },
+    { ...declaration, sources: [{ ...sources[0], path: '.bower/observations.jsonl' }] },
+    { ...declaration, sources: [{ ...sources[0], file: { ...tags, modifiedTime: '2026-12-01T00:00:00.000Z' } }] },
+    { ...declaration, sources: [{ ...sources[0], text: 'changed' }] },
+  ]) expect((await parse({ declaration: changed })).ok).toBe(false);
 });

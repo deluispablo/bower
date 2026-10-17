@@ -244,17 +244,22 @@ describe('B7 through production main', () => {
   it('b7-runner-path-admission', async () => {
     const b = await fixture(); const r = await control(b);
     const m = frozen(r);
-    const before = await b.drive.get(b.id(TAGS));
-    const text = b.c.folder[TAGS] ?? '';
+    const before = await b.drive.get(b.id(SYSTEM.questions));
+    const text = await b.drive.readText(before.id);
     const content = { encoding: 'utf8' as const, size: new TextEncoder().encode(text).length, sha256: sha256Sync(text) };
     const original = { operationId: 'a'.repeat(64), ordinal: 0, dependsOn: [], effect: {
-      kind: 'write-runner-json' as const, before: { fileId: before.id, name: 'questions.json', parents: before.parents,
+      kind: 'write-runner-json' as const, before: { fileId: before.id, name: before.name, parents: before.parents,
         modifiedTime: before.modifiedTime, folder: false },
       beforeContent: { ...content, provenance: 'adapter-read' as const, observedModifiedTime: before.modifiedTime },
       path: SYSTEM.questions, text, content } };
     const own = b.id(SYSTEM.dir);
     const took = { taken: b.admission, deferred: [] };
+    if (!m.capture.places.some((p) => p.file.fileId === before.id)) {
+      m.capture.places.push({ file: original.effect.before, path: SYSTEM.questions });
+    }
     expect(outsideAdmitted({ ...m, operations: [original] }, took, own)).toBeNull();
+    const mismatch = { ...original, effect: { ...original.effect, before: { ...original.effect.before, fileId: b.id(TAGS) } } };
+    expect(outsideAdmitted({ ...m, operations: [mismatch] }, took, own), 'a questions path cannot alias the captured tags identity').not.toBeNull();
     for (const path of ['.bower/private.json', '.bower/index.md/hidden.json', 'Resources/tags.json']) {
       const effect = { ...original.effect, before: { ...original.effect.before, name: path.split('/').at(-1) ?? '',
         ...(path.startsWith('Resources/') ? { parents: [b.id('Resources')] } : {}) }, path };
@@ -263,8 +268,13 @@ describe('B7 through production main', () => {
     }
     expect(readable('.bower/private.json', { v: 1, tags: [] })).toBe(false);
     expect(RUNNER_WRITES as readonly string[], 'the declared runner-only list admits exactly tags.json').toContain(TAGS);
+    const tags = await b.drive.get(b.id(TAGS));
+    const tagText = await b.drive.readText(tags.id);
+    const tagContent = { encoding: 'utf8' as const, size: new TextEncoder().encode(tagText).length, sha256: sha256Sync(tagText) };
     const allowed = { ...m, operations: [{ ...original, effect: { ...original.effect,
-      before: { ...original.effect.before, name: 'tags.json' }, path: TAGS } }] } as RunManifest;
+      before: { fileId: tags.id, name: tags.name, parents: tags.parents, modifiedTime: tags.modifiedTime, folder: false },
+      beforeContent: { ...tagContent, provenance: 'adapter-read', observedModifiedTime: tags.modifiedTime },
+      path: TAGS, text: tagText, content: tagContent } }] } as RunManifest;
     expect(outsideAdmitted(allowed, took, own)).toBeNull();
   });
 

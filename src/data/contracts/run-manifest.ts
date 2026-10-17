@@ -4,7 +4,7 @@ import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, t
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { NOTE_TAGS_MAX, readTagList, TAG_LIST_MAX } from './tag-format';
-import { frontValues, parseNote, propertyValue, readTypeTable, scalarList, typeRowOk, typeTableOk } from './note-format';
+import { dateOk, LINT_EVIDENCE_VERSION, frontValues, parseNote, propertyValue, readTypeTable, scalarList, typeRowOk, typeTableOk } from './note-format';
 import { VIEW_LIMITS, computedBy, viewFault } from './view-format';
 import { BowerError, type TypeRow, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote, consolidationOk } from './observations';
@@ -121,10 +121,15 @@ export type EditText = {
   /** A property-set edit's tag list as the run read it (B12 R54), so the guard holds its tags to B7's vocabulary. */
   tags?: string;
 };
-/** Lint evidence of one checked note version (B8): its links, stored tag count and whether its parsed summary is set; absent means not checked. */
-export type LintEvidence = { links: string[]; tags: number; summary: boolean };
+/** Stored lint facts or parser refusal; the version and appendix fields are absent only in older manifests. */
+export type LintEvidence = { links: string[]; tags: number; summary: boolean;
+  v?: typeof LINT_EVIDENCE_VERSION; status?: string | null; template?: string | null; active?: string[];
+  tagList?: string[]; original?: string | null; refused?: 'newer' | 'damaged' | null;
+};
 export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[]; lint?: LintEvidence | 'unreadable' };
-export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[] };
+export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[];
+  unavailable?: { path: string; file: SeenFile }[];
+};
 /** `health`: the id of Bower's health note (TL-P4-50 Q6), kept in retrieval; a target of kind `health` names it. */
 export type Maintain = { kind: 'maintain'; inputs: { folderId: string; account: string; cursor: string; changes: string[]; operationIds: string[]; targets?: { path: string; fileId: string; parentId: string; beforeContent?: VerifiedContent; kind?: string; declaration?: MaintenanceDeclaration }[]; snapshot?: Record<string, MaintenanceNote>; listing?: SeenFile[]; log?: string; health?: string } };
 export type EffectV2 = Effect | EditText | Maintain;
@@ -463,7 +468,9 @@ function maintain(value: unknown): value is Maintain {
     && (value.inputs.log === undefined || text(value.inputs.log))
     && (value.inputs.targets === undefined || list(value.inputs.targets, (t) => closed(t, ['path', 'fileId', 'parentId'], ['beforeContent', 'kind', 'declaration'])
       && (t.kind === undefined || text(t.kind))
-      && (t.declaration === undefined || (text(t.kind) && closed(t.declaration, ['at', 'sources']) && rfc3339(t.declaration.at)
+      && (t.declaration === undefined || (text(t.kind) && closed(t.declaration, ['at', 'sources'], ['unavailable']) && rfc3339(t.declaration.at)
+        && (t.declaration.unavailable === undefined || t.kind === 'health'
+          && list(t.declaration.unavailable, (s) => closed(s, ['path', 'file']) && path(s.path) && seenFile(s.file) && !s.file.folder))
         && list(t.declaration.sources, (s) => closed(s, ['path', 'file', 'text', 'content']) && path(s.path) && seenFile(s.file)
           && !s.file.folder && typeof s.text === 'string' && verifiedContent(s.content) && s.content.observedModifiedTime === s.file.modifiedTime)))
       && path(t.path) && driveId(t.fileId) && driveId(t.parentId) && (t.beforeContent === undefined || verifiedContent(t.beforeContent))));
@@ -671,6 +678,7 @@ async function admit<M extends Manifest | ManifestV2>(
         const before = e.inputs.listing?.find((f) => f.fileId === target.fileId);
         const place = value.capture.places.find((p) => p.file.fileId === target.fileId)?.file;
         if (!maintenanceTargetOk(value, target) || target.fileId !== e.inputs.health || target.parentId !== expectedRootId
+          || target.declaration && target.declaration.at !== new Date(value.requestedAt).toISOString()
           || e.inputs.snapshot?.[target.fileId] !== undefined || !place || place.folder || place.parents.join() !== expectedRootId
           || (before ? !sameSeen(before, place) || !target.beforeContent || target.beforeContent.encoding !== 'utf8'
             || target.beforeContent.observedModifiedTime !== before.modifiedTime : target.beforeContent !== undefined))
@@ -1217,15 +1225,31 @@ async function planningArtifactsOk(value: Manifest | ManifestV2): Promise<boolea
 
 /** One rule for stored lint evidence, in a manifest and in retrieval: read evidence or the refusal record; anything else is no evidence (R26). */
 export function lintEvidenceOk(value: unknown): value is LintEvidence | 'unreadable' {
-  return value === 'unreadable' || closed(value, ['links', 'tags', 'summary']) && list(value.links, text) && integer(value.tags) && typeof value.summary === 'boolean';
+  if (value === 'unreadable') return true;
+  if (!record(value) || !list(value.links, text) || !integer(value.tags) || typeof value.summary !== 'boolean') return false;
+  if (value.v === undefined) return closed(value, ['links', 'tags', 'summary']);
+  return value.v === LINT_EVIDENCE_VERSION
+    && closed(value, ['v', 'links', 'tags', 'summary', 'status', 'template', 'active', 'tagList', 'original', 'refused'])
+    && (value.status === null || text(value.status)) && (value.template === null || text(value.template))
+    && list(value.active, (date) => text(date) && dateOk(date)) && list(value.tagList, text)
+    && (value.original === null || text(value.original)) && (value.refused === null || value.refused === 'newer' || value.refused === 'damaged');
 }
 
 /** Maintenance names must agree with captured identity and cannot alias protected memory. */
 export function maintenanceTargetOk(value: { capture: Capture; operations: readonly OperationV2[] }, target: NonNullable<Maintain['inputs']['targets']>[number]): boolean {
   const resolved = targetPath(value, { fileId: target.fileId });
   // The health note is a root note found by its id (TL-P4-50 Q6), whatever its current name.
-  if (target.kind === 'health') return resolved === target.path && !target.path.includes('/') && target.path.endsWith('.md')
-    && target.path !== 'About me.md' && target.declaration === undefined;
+  if (target.kind === 'health') {
+    const inputs = [...target.declaration?.sources ?? [], ...target.declaration?.unavailable ?? []];
+    return resolved === target.path && !target.path.includes('/') && target.path.endsWith('.md')
+    && target.path !== 'About me.md' && (target.declaration === undefined
+      || new Set(inputs.map((s) => s.path)).size === inputs.length
+      && inputs.every((source) => {
+        const place = value.capture.places.find((p) => p.file.fileId === source.file.fileId);
+        return (source.path === '.bower/tags.json' || source.path === '.bower/type-table.json')
+          && place?.path === source.path && !source.file.folder && sameSeen(place.file, source.file);
+      }));
+  }
   if (target.kind === 'log' || isMonthlyLogPath(target.path) || isMonthlyLogPath(resolved ?? '')) {
     const place = value.capture.places.find((p) => p.file.fileId === target.fileId);
     return target.kind === 'log' && resolved === target.path && isMonthlyLogPath(target.path)

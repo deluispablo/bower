@@ -26,6 +26,7 @@ import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
 import { renderLink } from './links';
 import { normalizeTag, NOTE_TAGS_MAX, tagListOk } from './tag-format';
+import type { LintEvidence } from './run-manifest';
 import { computedBy, VIEW_LIMITS, viewFault, type FormulaView } from './view-format';
 
 /** Frontmatter keys that are not properties. */
@@ -341,16 +342,22 @@ function linksIn(text: string): string[] {
   return out;
 }
 
-/** What lint keeps of one stored note version (TL-P4-50 Q4): its links by the one grammar, its stored tag count and
- * whether its parsed summary is set (never the retrieval substitute); null when unreadable. */
-export function lintFacts(path: string, raw: string): { links: string[]; tags: number; summary: boolean } | null {
+/** Bump when stored evidence needs another read; old manifests remain readable. */
+export const LINT_EVIDENCE_VERSION = 1;
+
+/** Read facts, not generation rules. Other callers still receive null on parser refusal (their prefix fallback). */
+export function lintFacts(path: string, raw: string, diagnostics = false): LintEvidence | null {
   try {
     const note = parseNote(path, raw);
-    return { links: note.links, tags: note.tags.length, summary: note.summary.trim() !== '' };
+    return { v: LINT_EVIDENCE_VERSION, links: note.links, tags: note.tags.length, summary: note.summary.trim() !== '',
+      status: note.status ?? null, template: frontValues(raw)?.bower_template ?? null,
+      active: note.timeline.map((entry) => entry.date).filter(dateOk), tagList: note.tags, original: note.original ?? null, refused: null };
   } catch (error) {
-    if (!noteRefusal(error)) throw error;
+    const refused = noteRefusal(error);
+    if (!refused) throw error;
     console.error(error);
-    return null;
+    return diagnostics ? { v: LINT_EVIDENCE_VERSION, links: [], tags: 0, summary: false, status: null, template: null,
+      active: [], tagList: [], original: null, refused } : null;
   }
 }
 
@@ -707,7 +714,7 @@ function seedTable(): TypeTable {
   ] satisfies [string, string[]][]).map(([id, match]) => ({ id, match, template: 'source', properties: {}, table: [] })) };
 }
 /** Bounded tolerant reader: bad rows are skipped; an unreadable envelope grants no write that run. */
-export function readTypeTable(text: string | null): { table: TypeTable; writeAllowed: boolean } {
+export function readTypeTable(text: string | null, diagnostics = false): { table: TypeTable; writeAllowed: boolean; skipped?: number } {
   if (text === null) return { table: seedTable(), writeAllowed: true };
   let value: unknown;
   try { value = JSON.parse(text); }
@@ -722,7 +729,7 @@ export function readTypeTable(text: string | null): { table: TypeTable; writeAll
     if (!typeRowOk(row, true) || seen.has(row.id)) return false;
     seen.add(row.id); return true;
   });
-  return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true };
+  return { table: { ...value, v: 1, rows: rows.length ? rows : seedTable().rows }, writeAllowed: true, ...(diagnostics ? { skipped: value.rows.length - rows.length } : {}) };
 }
 
 /** Locate direct JSON values for splicing only; JSON.parse and readTypeTable remain the validators. */
