@@ -3,11 +3,11 @@
     "present": [
       "Projects/Flat hunt/Larkspur Lane flat.md",
       "Projects/Flat hunt/Earlier listing.txt",
-      "Projects/Flat hunt/Later listing.txt",
-      "Projects/Flat hunt/Later listing.md"
+      "Projects/Flat hunt/Later listing.txt"
     ],
     "absent": [
-      "Inbox/*"
+      "Inbox/*",
+      "Projects/Flat hunt/Later listing.md"
     ]
   },
   "unchanged": [
@@ -21,29 +21,68 @@
         "Alex likes the kitchen window."
       ],
       "timeline": [
-        "2026-10-02 \u00b7 The earlier listing says rent from 2026-11-01 is 1,450 a month. \u00b7 [[Earlier listing.txt]]",
-        "The earlier listing says 1,450 a month; the later listing says 1,580 for the same period. Which is right is unclear.",
-        "[[Later listing.txt]]"
+        "2026-10-02 · The earlier listing says rent from 2026-11-01 is 1,450 a month. · [[Earlier listing.txt]]",
+        "Contradiction: The earlier listing gives 1,450 a month from 2026-11-01; the later listing gives 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]]) · [[Later listing.txt]]"
       ],
       "timelineCount": 2
-    },
-    {
-      "path": "Projects/Flat hunt/Later listing.md",
-      "contains": [
-        "The later listing says rent from 2026-11-01 is 1,580 a month. No reason for the difference is given.\n\nSources: [[Earlier listing.txt]] and [[Later listing.txt]].\nRelated: [[Larkspur Lane flat]]."
-      ]
     }
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
-    "created": [
-      "Projects/Flat hunt/Later listing.md"
-    ],
-    "updated": [
-      "Projects/Flat hunt/Larkspur Lane flat.md"
-    ],
-    "setAside": 0,
-    "questionsAtMost": 1
-  }
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "notes": [
+        {
+          "path": "Projects/Flat hunt/Larkspur Lane flat.md",
+          "contains": [
+            "## Current state\n- Rent from 2026-11-01: 1,450 a month.",
+            "Alex likes the kitchen window."
+          ],
+          "timeline": [
+            "2026-10-02 · The earlier listing says rent from 2026-11-01 is 1,450 a month. · [[Earlier listing.txt]]",
+            "Contradiction: The earlier listing gives 1,450 a month from 2026-11-01; the later listing gives 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]]) · [[Later listing.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Flat hunt/Larkspur Lane flat.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Flat hunt/Larkspur Lane flat.md",
+          "contains": [
+            "## Current state\n- Rent from 2026-11-01: 1,450 a month.",
+            "Alex likes the kitchen window."
+          ],
+          "timeline": [
+            "2026-10-02 · The earlier listing says rent from 2026-11-01 is 1,450 a month. · [[Earlier listing.txt]]",
+            "Contradiction: The earlier listing gives 1,450 a month from 2026-11-01; the later listing gives 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]]) · [[Later listing.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }
