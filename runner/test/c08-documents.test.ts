@@ -110,7 +110,8 @@ const PLACE = 'a document whose "to" is not one of the folders shown under Proje
 const TEXT = 'a document whose title, summary or body breaks the note rules: a title of at most 48 characters with no slash, a summary of one line of at most 200 characters, a body of at most 16,000 characters with no My notes, Timeline or Current state heading';
 // Round 1 ruling 9: a document's links take the one link rule's own kind (noteLink), as an answer's do (claude.ts, C09 R3).
 const NOT_SHOWN = 'a link to a note you were not shown: leave it out';
-const numbers = (n: string) => `a number that is in none of its sources: "${n}" in the document "${TITLE}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`;
+// The reason quotes the reply's figure, so the log gives the kind's own sentence (sec-hardening L4), as c09-answers does.
+const numbers = (_n: string) => 'a number that is in none of its sources';
 
 describe('c08-documents', () => {
   it('AC1 c08-documents-created: a document reply writes one document note, exactly, and the request\'s done row links it', async () => {
