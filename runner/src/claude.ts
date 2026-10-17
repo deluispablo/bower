@@ -18,7 +18,7 @@
  *   https://code.claude.com/docs/en/github-actions), passed in its environment only, never in an argument, the
  *   input, a log line or an error.
  * - The model and the turn cap come from the environment, `BOWER_MODEL` and `BOWER_MAX_TURNS`, starting from the
- *   original's: Sonnet (`run.sh` DEFAULT_MODEL) and the Worker's `DEFAULT_MAX_TURNS` (60, runbook "Rulebook v22
+ *   original's: Sonnet (`run.sh` DEFAULT_MODEL) and 60 turns (`DEFAULT_MAX_TURNS` below; runbook "Rulebook v22
  *   and the turn budget"). A setting that does not pass its check falls back with a warning naming the setting only.
  * - Its reply is intent only (TL-P4-01 P4-2): where each admitted thing goes and its new name (`intentOf`). The
  *   runner builds the run manifest from it with the scripted provider's planner (`planScripted` with `filing`), so
@@ -55,7 +55,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
-import { SHORTEN_SKIPPED, assignedTags, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows } from '../../src/data/vault/layout';
@@ -146,6 +146,13 @@ export class InvalidModelReply extends BowerError {
   constructor() { super('unknown', PLAN_REFUSED); }
 }
 
+/**
+ * The planner refusing a plan (`refused` in `scripted.ts`, `refuse` here), known by its sentence: never a used-up ledger,
+ * Drive or unreadable history, which end the run as they would without a model (validate, then retry only validation errors).
+ */
+const plannerRefusal = (error: unknown): error is BowerError => error instanceof BowerError && !(error instanceof LedgerExhausted)
+  && error.code === 'unknown' && (error.message === B_FAILURE || error.message === PLAN_REFUSED);
+
 /** The model and turn cap from the environment, each falling back to the original's with a warning. */
 export function claudeLimits(env: Readonly<Record<string, string | undefined>>): { model: string; maxTurns: number } {
   let model = env.BOWER_MODEL?.trim() || DEFAULT_MODEL;
@@ -176,10 +183,10 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
 
 /**
  * How much text the model is shown, in characters (about four to a token): each thing's text and all things' text in
- * one run; each note's text, how many notes, and all notes' text. A text past its bound is cut and ends with `CUT`,
- * saying how much was left out; one past the run's budget is not shown, and says so.
+ * one run; each note's text and all notes' text (the selection bounds how many). A text past its bound is cut and ends
+ * with `CUT`, saying how much was left out; one past the run's budget is not shown, and says so.
  */
-export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notes: 12, notesPerRun: 24_000 } as const;
+export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notesPerRun: 24_000 } as const;
 /**
  * What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. A Current
  * state's limits have one home, the manifest contract's write bound (`STATE_WRITE` in note-edit.ts).
@@ -439,7 +446,7 @@ const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'In
  * may update with their bounded text, and the folder paths under main folders. A read that fails stops the run as
  * any read does; only a text that cannot be made out is shown as none, with why.
  */
-async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, first: ReadonlySet<string> = new Set(), selected?: ReadonlySet<string>): Promise<Shown> {
+async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, first: ReadonlySet<string>, selected: ReadonlySet<string>): Promise<Shown> {
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
   const aboutFile = ix.file('About me.md');
@@ -524,7 +531,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   const requestNotes: Record<string, string[]> = {};
   const moves: ChangeEntry[] = [];
   for (const line of took.taken.journal) {
-    const rec: unknown = JSON.parse(await read.readText(line.fileId));
+    const rec = jsonOf(await read.readText(line.fileId));
     if (isJournalRecord(rec) && (rec.kind === 'rename' || rec.kind === 'move') && rec.from && rec.path) moves.push({ id: rec.id, at: rec.at, kind: rec.kind, what: rec.what, from: rec.from, path: rec.path });
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
     const file = listing.find((f) => f.id === line.fileId);
@@ -552,7 +559,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     }
   }
   const retrySources = new Set(history.map((h) => h.consent.sourceFileId));
-  const notes = await notesShown(read, listing, ix, first, named, selected && new Set([...selected].filter((id) => !suppressed.has(ix.pathOf(id) ?? ''))));
+  const notes = await notesShown(read, listing, ix, first, named, new Set([...selected].filter((id) => !suppressed.has(ix.pathOf(id) ?? ''))));
   // Repeating a line already shown is valid input, but grants no fresh consent or source evidence.
   // The planner's existing Timeline check still decides whether anything may be written.
   const presentLines = presentLinesOf(notes, listing, ix, run);
@@ -580,12 +587,11 @@ function presentLinesOf(notes: Shown['notes'], listing: readonly DriveFile[], ix
 }
 
 /**
- * The notes a model may add Timeline lines to, with their current text: Bower's own notes under the main folders
- * (marked by Bower, or a hub named as its folder), hubs first, then by path, at most `CONTEXT_BOUNDS.notes`; a note an
- * answer of yours is about (`first`, by file id: "Write it") before all of them, so the model always sees it.
+ * The notes the selection chose (`selected`, by file id) under the main folders, with their current text: a note a
+ * request names first, then one an answer of yours is about (`first`: "Write it"), then hubs, then by path.
  * `applyChanges` still refuses a line on a note that is not Bower's.
  */
-async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, first: ReadonlySet<string>, named: ReadonlySet<string>, selected?: ReadonlySet<string>): Promise<Shown['notes']> {
+async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix: VaultIndex, first: ReadonlySet<string>, named: ReadonlySet<string>, selected: ReadonlySet<string>): Promise<Shown['notes']> {
   const hubOf = (path: string): boolean => {
     const parts = path.split('/');
     return parts.length > 1 && parts.at(-1) === `${parts.at(-2) ?? ''}.md`;
@@ -593,14 +599,12 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   const candidates = listing.flatMap((f) => {
     const path = f.folder ? undefined : ix.pathOf(f.id);
     if (path === undefined || !/\.md$/i.test(path) || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) return [];
-    return (selected ? selected.has(f.id) : named.has(f.id) || f.appProperties?.by === 'bower' || hubOf(path)) ? [{ f, path, hub: hubOf(path) }] : [];
-  }).sort((a, b) => Number(named.has(b.f.id)) - Number(named.has(a.f.id)) || Number(first.has(b.f.id)) - Number(first.has(a.f.id)) || Number(b.hub) - Number(a.hub) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).slice(0, selected ? Number.MAX_SAFE_INTEGER : CONTEXT_BOUNDS.notes);
+    return selected.has(f.id) ? [{ f, path, hub: hubOf(path) }] : [];
+  }).sort((a, b) => Number(named.has(b.f.id)) - Number(named.has(a.f.id)) || Number(first.has(b.f.id)) - Number(first.has(a.f.id)) || Number(b.hub) - Number(a.hub) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   let room: number = CONTEXT_BOUNDS.notesPerRun;
   const notes: Shown['notes'] = [];
   for (const { f, path } of candidates) {
     if (room <= 0) break;
-    // The canonical projection already represents maps; only an explicit target needs their complete text.
-    if (!selected && !named.has(f.id) && !first.has(f.id) && (await read.indexedFront?.(f))?.type === 'moc') continue;
     // A note Drive refuses to give for good is not shown, so a line on it is refused as for any unseen note; retries still stop the run.
     const text = await read.readText(f.id).catch((error: unknown) => {
       if (failureKind(error) !== 'permanent') throw error;
@@ -885,7 +889,7 @@ async function forModel(read: ScriptedRead, run: ScriptedRun, all: Admitted, asi
   const listing = await read.listAll(run.rootId);
   const ix = VaultIndex.build(run.rootId, listing);
   for (const line of took.taken.journal) {
-    const rec: unknown = JSON.parse(await read.readText(line.fileId));
+    const rec = jsonOf(await read.readText(line.fileId));
     if (isJournalRecord(rec) && rec.kind === 'request' && namedNotes(listing, ix, rec.text ?? rec.what).some((n) => n.file.appProperties?.by !== 'bower')) return took;
   }
   const saved = duplicatesOf(listing, VaultIndex.build(run.rootId, listing), took.taken.piles.flatMap((p) => p.items.map((i) => i.fileId)));
@@ -911,13 +915,13 @@ const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toL
  */
 const HIDDEN_CHARS = /[\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/;
 /** One part of a name as the app allows it: recordable, at most MAX_NAME, not hidden, no edge spaces or hidden marks. */
-const partOk = (part: string): boolean =>
-  recordableName(part) && part.search(NAME_BREAKERS) < 0 && part.length <= MAX_NAME && !part.startsWith('.') && part.trim() === part && !HIDDEN_CHARS.test(part);
+const partOk = (part: string, max: number = MAX_NAME): boolean =>
+  recordableName(part) && part.search(NAME_BREAKERS) < 0 && part.length <= max && !part.startsWith('.') && part.trim() === part && !HIDDEN_CHARS.test(part);
 /** A folder path a model may file into: such parts under a main folder, none named like a note. */
 const placeOk = (to: unknown): to is string =>
   typeof to === 'string' && MAIN_FOLDERS.includes(to.split('/')[0] ?? '') && to.split('/').length <= 8 && to.split('/').every((part) => partOk(part) && !/\.md$/i.test(part));
 /** A new name a model may give: one such part, its extension not counted (as the app counts it, `contracts/tree.ts`). */
-const nameOk = (name: unknown): name is string => typeof name === 'string' && partOk(name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) && partOk(name);
+const nameOk = (name: unknown): name is string => typeof name === 'string' && partOk(name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) && partOk(name, Infinity);
 
 /**
  * Every reason Bower refuses a model's reply, by kind (TL-P4-08 addendum 4). Each one asks the model once more with
@@ -970,6 +974,7 @@ export const REFUSALS = {
   keepKeys: 'a note kept with keys outside the intent: give "kept" and "other"',
   keepNote: 'a note kept that is not two different notes below, each named once and the other given no line or state',
   keepNotAsked: 'a note kept that the person did not say yes to keeping as one',
+  memory: 'a memory effect past its bound or without admitted evidence',
   viewKeys: 'a view with keys outside the intent ({requestId, home: {kind: "moc", fileId} or {kind: "type-row", rowId}, mode: "install" or "propose", '
     + 'definition; for a formula installed in a type row an optional column: one of its outputs; to propose, the question\'s text, yes and no}) or a declaration the grammar refuses',
   viewBinding: "a view whose request is not one of the person's requests below, whose home is not one of Bower's maps below, or whose folder is not one of the main folders",
@@ -1207,10 +1212,11 @@ const inOrder = <T>(rules: ReadonlyArray<Rule<T>>, then: (value: T) => void = ()
 const EndsShape = z.array(z.strictObject({ factId: z.string(), quote: z.string().refine(validSummary) })).max(20).optional();
 const intentIssue = named('notIntent');
 const section = z.array(z.unknown(), intentIssue).optional();
+const memorySection = z.array(z.unknown(), named('memory')).optional();
 /** The reply as a whole: a tidy-up intent, v1, with only these lists. */
 const Envelope = z.strictObject({
   kind: z.literal('tidy-intent', intentIssue), v: z.literal(1, intentIssue), things: z.array(z.unknown(), intentIssue),
-  newTags: z.unknown().optional(), notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, views: section, maps: section, observations: section, forget: section, ends: section,
+  newTags: z.unknown().optional(), notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, views: section, maps: section, observations: memorySection, forget: memorySection, ends: memorySection,
 }, intentIssue);
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
@@ -1710,7 +1716,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   };
   const whole: Array<Rule<unknown>> = [
     // Ending words are no fact of their own, and a fact ends once (R35).
-    rule('keepNotAsked', () => new Set(ends.map((e) => e.factId)).size === ends.length && !ends.some((e) => observations.some((o) => {
+    rule('memory', () => new Set(ends.map((e) => e.factId)).size === ends.length && !ends.some((e) => observations.some((o) => {
       const text = isRecord(o) && typeof o.text === 'string' ? normalizedText(o.text) : null;
       return text !== null && (text.includes(normalizedText(e.quote)) || normalizedText(e.quote).includes(text));
     })) || 'two endings of one fact, or an ending whose words are also written as a fact'),
@@ -1746,13 +1752,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     lines: z.array(Line).max(AUTHORED.lines, named('tooManyLines')).optional(),
     states: z.array(State).optional(), asks: z.array(Asked).optional(), keep: z.array(Keep).optional(),
     askAfter: z.array(After).optional(), views: z.array(View).optional(), maps: z.array(MapEntry).optional(),
-    observations: z.array(z.unknown()).max(20, named('keepNotAsked')).optional().transform((value) => { observations = value ?? []; return value; }),
-    forget: z.array(z.strictObject({ factId: z.string(), quote: z.string().optional() }, named('keepNotAsked'))).max(20, named('keepNotAsked')).optional().transform((value) => { forget = value ?? []; return value; }),
-    // Memory refusals share Forget's kind, worded for endings (R35).
+    observations: z.array(z.unknown()).max(20, named('memory')).optional().transform((value) => { observations = value ?? []; return value; }),
+    forget: z.array(z.strictObject({ factId: z.string(named('memory')), quote: z.string(named('memory')).optional() }, named('memory'))).max(20, named('memory')).optional().transform((value) => { forget = value ?? []; return value; }),
+    // Endings share the memory kind, worded for endings (R35).
     ends: section.transform((value, ctx) => {
       const parsed = EndsShape.safeParse(value);
       if (!parsed.success) {
-        ctx.addIssue({ code: 'custom', message: 'keepNotAsked', params: { why: 'an ending that is not {factId, quote} with one short line of the person\'s exact words, at most 20 endings' } });
+        ctx.addIssue({ code: 'custom', message: 'memory', params: { why: 'an ending that is not {factId, quote} with one short line of the person\'s exact words, at most 20 endings' } });
         return z.NEVER;
       }
       ends = parsed.data ?? [];
@@ -2092,14 +2098,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', type: front?.type ?? indexed[file.id]?.type,
         ...(prefix ? { links: indexedFront(prefix, true).links } : {}) };
     }
-    const sources = shownTook.taken.piles.flatMap((pile) => {
+    const items = shownTook.taken.piles.flatMap((pile) => {
       const p = shown.piles.find((p) => p.pileId === pile.pileId);
       const things = thingsOf(pile);
-      return (things.length ? things.map((thing) => ({ itemId: thing.fileId, words: `${thing.name} ${p?.words ?? ''} ${p?.things.find((t) => t.fileId === thing.fileId)?.text ?? ''}` }))
-        : [{ itemId: pile.pileId, words: p?.words ?? '' }]).map((source) => ({ ...source,
-          ids: ix.neighbourhood(source.words, metadata) }));
+      return things.length ? things.map((thing) => ({ itemId: thing.fileId, words: `${thing.name} ${p?.words ?? ''} ${p?.things.find((t) => t.fileId === thing.fileId)?.text ?? ''}` }))
+        : [{ itemId: pile.pileId, words: p?.words ?? '' }];
     });
-    for (const line of shownTook.taken.journal) sources.push({ itemId: line.fileId, words: await read.readText(line.fileId), ids: Object.keys(indexed) });
+    for (const line of shownTook.taken.journal) items.push({ itemId: line.fileId, words: await read.readText(line.fileId) });
+    const sources: Array<(typeof items)[number] & { ids: string[] }> = [];
     const pinsFor = (itemId: string): string[] => [...new Set([
       ...answers.filter((a) => a.sourceId === itemId || subjectKey(a.question) === itemId).flatMap(answerPins),
       ...shown.requestNotes?.[itemId] ?? [],
@@ -2123,7 +2129,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
     };
     // Ordinary links use bounded prefixes; candidate maps need complete ownership regions from the same cache.
-    for (const source of sources) {
+    for (const source of items) {
       const waiting = ix.waitingRun(source.itemId) !== null;
       const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : ix.neighbourhood(source.words, metadata))])];
       await captureMaps(matched);
@@ -2146,7 +2152,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }))];
       const parents = listing.filter((f) => f.folder && (MAIN_FOLDERS.includes(ix.pathOf(f.id) ?? '')
         || notes.some((id) => ix.byId(id)?.parents.includes(f.id)))).map((f) => f.id);
-      source.ids = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId), ...listing.filter((file) => !file.folder && file.appProperties?.profile && file.appProperties.by === 'bower').map((file) => file.id), ...notes, ...parents])].slice(0, 30);
+      sources.push({ ...source, ids: [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId), ...listing.filter((file) => !file.folder && file.appProperties?.profile && file.appProperties.by === 'bower').map((file) => file.id), ...notes, ...parents])].slice(0, 30) });
     }
     await captureMaps(sources.flatMap((source) => source.ids));
     shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids.flatMap((id) => {
@@ -2357,14 +2363,18 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         sets: mapSets, noteTypes, skipped: mapSkipped, shownIds: new Set(Object.entries(shown.indexed ?? {}).flatMap(([id, n]) => (MAIN_FOLDERS.includes(n.path.split('/')[0] ?? '') ? [id] : []))) };
       // A request record of this run is the only authority to install (R7): never a document or the model's words.
       for (const line of shownTook.taken.journal) {
-        let rec: unknown;
-        try { rec = JSON.parse(await read.readText(line.fileId)); } catch (e) { if (!(e instanceof SyntaxError)) throw e; console.error('A file of your changes is not valid JSON'); }
+        const rec = jsonOf(await read.readText(line.fileId));
         if (isJournalRecord(rec) && rec.kind === 'request') (seen.requests as Map<string, { id: string; text: string }>).set(line.fileId, { id: rec.id, text: rec.text ?? rec.what });
       }
       let validatedPlan: RunManifest | undefined;
       const targets = new Set(Object.values(selection.allowedTargets).flat());
-      const journal = took.taken.journal.filter((line) =>
-        (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)));
+      // The plan's journal, for every plan of a reply: a request whose targets were not selected stays in the inbox for a
+      // later run; one a checked view or map installs or suggests, or whose large question has its answer, is taken.
+      const finalJournal = (filing: Filing): typeof took.taken.journal => {
+        const installing = new Set([...filing.views ?? [], ...filing.suggestions?.views ?? [], ...filing.maps ?? []].map((v) => v.requestId));
+        return took.taken.journal.filter((line) => (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id))
+          || asked.answered.has(line.fileId) || installing.has(seen.requests?.get(line.fileId)?.id ?? ''));
+      };
       // A question about a source whose own candidates fit 2 to 4 folders offers exactly those folders; Bower supplies the ids and labels.
       const offered = (asks: ReadonlyMap<string, Ask> | undefined): ReadonlyMap<string, Ask> | undefined => asks && new Map([...asks].map(([id, ask]) => {
         // The thing's own words (not its pile's, which may name a sibling's topic) pick among the candidates already shown for it.
@@ -2438,7 +2448,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const note = isRecord(row.note) ? row.note : {};
           const words = [note.summary, note.body, JSON.stringify(note.properties ?? {})].join('\n');
           const addedCurrency = Intl.supportedValuesOf('currency').some((currency) => {
-            const token = new RegExp(`\\b${currency}\\b`, 'iu');
+            // ISO 4217 codes are upper case: "all" is a word, not ALL.
+            const token = new RegExp(`\\b${currency}\\b`, 'u');
             return token.test(words) && !token.test(own);
           }) || [...words.matchAll(/\p{Sc}/gu)].some(([currency]) => !own.includes(currency));
           const linked = (target: string): boolean => shown.notes.some((note) =>
@@ -2455,12 +2466,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         }
         got.filing.shownFactIds = shown.aboutMe?.learned.factIds ?? [];
         if (got.filing.observations?.length || got.filing.forget?.length || got.filing.ends?.length || got.filing.profiles?.size) {
-          try { validatedPlan = await plannedWith(got.filing, got.held, shown.own, `with ${model}`, journal); }
+          try { validatedPlan = await plannedWith(got.filing, got.held, shown.own, `with ${model}`, finalJournal(got.filing)); }
           catch (error) {
-            if (!(error instanceof BowerError)) throw error;
+            if (!plannerRefusal(error)) throw error;
             console.error(error);
             return got.filing.profiles?.size ? no('noteBody', 'an ungrounded or overlong profile plan')
-              : no('keepNotAsked', 'a memory effect without admitted evidence or a chosen shown fact');
+              : no('memory', 'a memory effect without admitted evidence or a chosen shown fact');
           }
         }
         return got;
@@ -2470,17 +2481,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const shortened = await consolidation(validatedPlan);
         if (!shortened) return validatedPlan;
         try {
-          return await plannedWith(Object.assign(intent.filing, { consolidation: shortened }), intent.held, shown.own, `with ${model}`, journal);
+          return await plannedWith(Object.assign(intent.filing, { consolidation: shortened }), intent.held, shown.own, `with ${model}`, finalJournal(intent.filing));
         } catch (error) {
-          if (!(error instanceof BowerError)) throw error;
+          if (!plannerRefusal(error)) throw error;
           skipped(error.message);
           return validatedPlan;
         }
       }
-      // A request whose targets were not selected stays in the inbox for a later run; one a checked view installs or suggests is taken.
-      const installing = new Set([...intent.filing.views ?? [], ...intent.filing.suggestions?.views ?? [], ...intent.filing.maps ?? []].map((v) => v.requestId));
-      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, took.taken.journal.filter((line) =>
-        journal.includes(line) || asked.answered.has(line.fileId) || installing.has(seen.requests?.get(line.fileId)?.id ?? '')));
+      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, finalJournal(intent.filing));
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };
