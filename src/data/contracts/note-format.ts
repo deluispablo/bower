@@ -21,7 +21,7 @@
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry, type TypeRow, type TypeTable } from './types';
 import { timelineLine, parseTimelineLine } from './timeline-line';
-import { ABOUT_REGIONS, fenceAfter, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
+import { ABOUT_REGIONS, fenceAfter, markLength, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
 import { renderLink } from './links';
@@ -264,11 +264,11 @@ function frontOf(block: string, duplicates?: Set<string>, values = false): Map<s
 /**
  * B11 (R29): a note's raw front-matter values from its text or read prefix, for `propertyValue` (a quoted one its trim
  * would change kept quoted, B12 R55; a block list as one flow list of its items, R58); `null` when its front matter is
- * not all there. `duplicates` collects the keys
+ * not all there, after a byte-order mark too (as `parseOwnership` reads it). `duplicates` collects the keys
  * written on more than one line (coordinator ruling 4).
  */
 export function frontValues(raw: string, duplicates?: Set<string>): Record<string, string> | null {
-  const text = raw.replace(/\r\n/g, '\n');
+  const text = raw.slice(markLength(raw)).replace(/\r\n/g, '\n');
   if (!text.startsWith('---\n')) return {};
   const close = text.indexOf('\n---', 3);
   return close < 0 ? null : Object.fromEntries(frontOf(text.slice(4, close), duplicates, true));
