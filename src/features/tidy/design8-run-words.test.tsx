@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import { DemoWorld } from '@/data/demo/world';
 import type { Sources } from '@/data/sources';
-import type { FiledItem, RunReport, RunState } from '@/data/types';
+import { BowerError, type FiledItem, type RunReport, type RunState } from '@/data/types';
 import { BowerPanel } from '@/features/bower/BowerPanel';
 import { landedSummary, runDetail, runTitle } from './run-words';
 
@@ -78,6 +78,34 @@ describe('AC2 resting with an empty inbox', () => {
     const now = await panel(new DemoWorld({ scenario: 'default', scale: 'instant', latency: 0 }).sources());
     expect(await within(now).findByText('Resting. Tidy up when the inbox has what you want filed.', { exact: true })).toBeVisible();
   });
+
+  it('AC2 design8-run-words-resting-failed-refresh: after a failed refresh the card keeps its old line, then says nothing waits once the inbox reads again', async () => {
+    const real = new DemoWorld({ scenario: 'empty', scale: 'instant', latency: 0 }).sources();
+    let fail = false;
+    const heard = new Set<() => void>();
+    const sources: Sources = {
+      ...real,
+      vault: {
+        ...real.vault,
+        piles: () => (fail ? Promise.reject(new BowerError('offline', 'Your inbox could not be read. Try again.')) : real.vault.piles()),
+        subscribe: (cb) => {
+          heard.add(cb);
+          const off = real.vault.subscribe(cb);
+          return () => { heard.delete(cb); off(); };
+        },
+      },
+    };
+    const refresh = async (): Promise<void> => { await act(async () => { heard.forEach((cb) => cb()); }); };
+    const now = await panel(sources);
+    expect(await within(now).findByText('Resting. Nothing waiting in the inbox.', { exact: true })).toBeVisible();
+    fail = true;
+    await refresh();
+    expect(await within(now).findByText('Resting. Tidy up when the inbox has what you want filed.', { exact: true })).toBeVisible();
+    expect(within(now).queryByText('Resting. Nothing waiting in the inbox.', { exact: true })).toBeNull();
+    fail = false;
+    await refresh();
+    expect(await within(now).findByText('Resting. Nothing waiting in the inbox.', { exact: true })).toBeVisible();
+  });
 });
 
 describe('AC3 a month folder in words', () => {
@@ -93,6 +121,22 @@ describe('AC3 a month folder in words', () => {
 
   it('AC3 design8-run-words-plain: other folders keep their names (positive control)', () => {
     expect(landedSummary(done('all', { ...empty(), filed: [...filed('Projects/Flat hunt', 2), ...filed('Areas/Money', 1)] }))).toBe('Flat hunt got 2 and Money got 1.');
+  });
+
+  it('AC3 design8-run-words-boundaries: only a real month under a parent reads in words; anything else keeps its name as before', () => {
+    const one = (to: string): string => landedSummary(done('all', { ...empty(), filed: filed(to, 1) }));
+    expect(one('Resources/Receipts/2026-01')).toBe('January 2026 receipts got 1.');
+    expect(one('Resources/Receipts/2026-12')).toBe('December 2026 receipts got 1.');
+    expect(one('Resources/Receipts/2026-13')).toBe('Receipts 2026-13 got 1.');
+    expect(one('Resources/Receipts/2026-00')).toBe('Receipts 2026-00 got 1.');
+    expect(one('2026-09')).toBe('2026-09 got 1.');
+    expect(one('2026')).toBe('2026 got 1.');
+  });
+
+  it('AC3 design8-run-words-acronym: a parent in capitals keeps its case; a normal parent still lower-cases', () => {
+    const one = (to: string): string => landedSummary(done('all', { ...empty(), filed: filed(to, 1) }));
+    expect(one('Resources/NHS/2026-09')).toBe('September 2026 NHS got 1.');
+    expect(one('Resources/Receipts/2026-09')).toBe('September 2026 receipts got 1.');
   });
 });
 
