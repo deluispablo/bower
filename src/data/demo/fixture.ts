@@ -193,8 +193,6 @@ export type ScriptedRequest =
 
 /** What a lookup says when the web is off in Settings: nothing was looked up. */
 export const NOT_LOOKED_UP = 'Bower did not look anything up. Web lookups are off in Settings.';
-/** What the demo, which never looks anything up, says of a lookup with the web on: the same first sentence. */
-export const NOTHING_LOOKED_UP = 'Bower did not look anything up.';
 
 export const SCRIPTED_REQUESTS: readonly ScriptedRequest[] = [
   {

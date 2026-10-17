@@ -117,7 +117,7 @@ describe('Q1b tidy questions', () => {
     const f = await fixture([ask()]);
     await f.finish();
     expect(f.sheet).toHaveAccessibleName('Done. 0 things filed');
-    expect(within(f.sheet).getByRole('status')).toHaveTextContent('1 note brought up to date and 1 question for you.');
+    expect(within(f.sheet).getByRole('status')).toHaveTextContent('1 note brought up to date and 1 new question for you.');
     const links = within(f.sheet).getByRole('list', { name: 'Brought up to date' });
     expect(within(links).getByRole('link', { name: 'Papers' })).toHaveAttribute('href', '/note/Areas/Home/Papers.md');
     const card = sheetCard(f.sheet);

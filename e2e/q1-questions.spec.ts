@@ -307,7 +307,7 @@ for (const source of ['demo', 'fake'] as const) {
       const sheet = await start(page);
       await page.evaluate(() => (window as unknown as { __q1Fixture: BrowserFixture }).__q1Fixture.finish());
       await expect(sheet).toHaveAccessibleName('Done. 0 things filed');
-      await expect(sheet.getByRole('status')).toHaveText('1 note brought up to date and 1 question for you.');
+      await expect(sheet.getByRole('status')).toHaveText('1 note brought up to date and 1 new question for you.');
       const links = sheet.getByRole('list', { name: 'Brought up to date', exact: true });
       await expect(links.getByRole('link', { name: 'Papers' })).toHaveAttribute('href', '/note/Areas/Home/Papers.md');
       expect(await sheetCard(page).evaluate((el) => {

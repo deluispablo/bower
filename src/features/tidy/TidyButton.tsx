@@ -1,13 +1,13 @@
 import { usePiles, useRun } from '@/data/provider';
 import { waitingIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
-import { replayWaiting, isRunning, runShort, stoppedUnseen } from './run-words';
+import { replayWaiting, isRunning, runShort, stoppedUnseen, watchLine } from './run-words';
 import s from './tidy.module.css';
 
 /**
  * Tidy up says what it does, in words: an icon alone did not. On the
  * desktop it sits at the top right, always in reach; it becomes the run's
- * status while one goes, and "Watch" when a result has not been seen.
+ * status while one goes, and "Watch what Bower did" when a result has not been seen.
  */
 export function TidyButton() {
   const { data: run } = useRun();
@@ -30,7 +30,7 @@ export function TidyButton() {
   if (run && replayWaiting(run))
     return (
       <button type="button" className={s.tidyBtn} onClick={() => startReplay(run.id)}>
-        {runShort(run)}. Watch
+        {watchLine(run)}
       </button>
     );
   return (
