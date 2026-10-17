@@ -4,7 +4,7 @@
  * (`?source=fake`), where it holds Alex's folder in the browser.
  */
 import { BowerError, type ErrorCode } from '../types';
-import { sha256 } from '../vault/hashes';
+import { sha256, sha256Sync } from '../vault/hashes';
 import { md5Hex } from '../contracts/hashes';
 import { FOLDER, toFile } from './drive-http';
 import { ancestryLookup, changesError, decodePrefix, drainChanges, driveError, PREFIX_BYTES, resolveDriveScope, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveChange, type DriveChangePage, type DriveChanges, type DriveFile, type DrivePatch, type DriveScope, type FaultHook, type FencedCall, type FencedDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
@@ -169,9 +169,24 @@ export class FakeDrive implements DriveApi {
     return names.join('/');
   }
 
-  async listAll(rootId: string): Promise<DriveFile[]> {
+  /** With `checksums`, each content file also carries the `sha256` and `size` Drive keeps, as the real listing's fields do. */
+  async listAll(rootId: string, opts: { checksums?: boolean } = {}): Promise<DriveFile[]> {
     await this.gate();
-    return this.live(rootId).map((f) => this.listed(f));
+    const out: DriveFile[] = [];
+    for (const f of this.live(rootId)) {
+      const listed = this.listed(f);
+      if (!opts.checksums || f.meta.folder) { out.push(listed); continue; }
+      // Text is hashed at once, so a listing takes no more turns than a plain one; only a Blob waits for Web Crypto.
+      const d = f.bytesUnavailable ? (f.sha256 !== undefined && f.meta.size !== undefined ? { size: f.meta.size, sha256: f.sha256 } : null)
+        : typeof f.content === 'string' || f.content === null ? this.textDigest(f.content) : await this.digestOfStored(f);
+      out.push(d ? { ...listed, ...d } : listed);
+    }
+    return out;
+  }
+
+  private textDigest(text: string | null): { size: number; sha256: string } {
+    const bytes = new TextEncoder().encode(text ?? '');
+    return { size: bytes.byteLength, sha256: sha256Sync(bytes) };
   }
 
   async get(id: string, opts: { checksums?: boolean; binned?: boolean } = {}): Promise<DriveFile> {

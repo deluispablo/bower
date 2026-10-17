@@ -256,6 +256,11 @@ export class DriveVault implements VaultSource {
     this.listeners.forEach((l) => l());
   }
 
+  /** A listing no caller waits for (after a refused write): its failure is logged, and the next call lists again; none once closed. */
+  private refreshAside(): void {
+    this.refresh().catch((e) => { if (this.current()) console.error(e); });
+  }
+
   subscribe(cb: () => void): Unsubscribe {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
@@ -525,7 +530,7 @@ export class DriveVault implements VaultSource {
       written = await this.once(f, { text: out.text }, (op, fence) => this.drive.writeText(f.id, out.text, f.modifiedTime, op, { fence }));
     } catch (e) {
       // Changed somewhere else: show the new version, write nothing.
-      if (e instanceof BowerError && e.code === 'conflict') void this.refresh();
+      if (e instanceof BowerError && e.code === 'conflict') this.refreshAside();
       throw e;
     }
     ix.put(this.keepSeen(f, written));
@@ -1017,6 +1022,9 @@ export class DriveVault implements VaultSource {
   }
 
   private async digestFresh(f: DriveFile): Promise<Digest> {
+    // The listing carries what Drive stored: no download. A Docs file keeps none (`unchecked`); one just written is not listed yet.
+    if (f.sha256 !== undefined && f.size !== undefined) return { size: f.size, sha256: f.sha256 };
+    if (f.unchecked) throw new NoDigest();
     // The Drive says what it stored; one that must read the file is given the bytes the text read already holds.
     // None stored: not kept, so the next listing asks again. The digest is what is kept; the bytes behind it are not.
     const d = await this.drive.storedDigest(f.id, (await this.bytesFromText(f)) ?? undefined);
@@ -1189,7 +1197,7 @@ export class DriveVault implements VaultSource {
     // A draft is saved only over the words it started from (RFC 9110 §13.1.1, If-Match): words changed elsewhere
     // since are never replaced unseen; the person looks again, and their draft stays on the screen.
     if (base !== undefined && pile.text !== base.trim()) {
-      void this.refresh();
+      this.refreshAside();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }
     const text = input.trim();
@@ -1290,7 +1298,7 @@ export class DriveVault implements VaultSource {
       } catch (e) {
         // Refused or let go: nothing more is kept for it, and the pile is shown as it is now.
         if (this.intended.kept(key) === undefined) this.pileNoteSent.delete(key);
-        if (notAsSeenReason(e) !== null) void this.refresh();
+        if (notAsSeenReason(e) !== null) this.refreshAside();
         throw e;
       }
       this.pileNoteSent.delete(key);
@@ -1711,7 +1719,7 @@ export class DriveVault implements VaultSource {
     if (!this.ix) {
       const p = (async () => {
         const root = await this.rootId();
-        const ix = VaultIndex.build(root, await this.drive.listAll(root));
+        const ix = VaultIndex.build(root, await this.drive.listAll(root, { checksums: true }));
         if (this.current()) this.listed = ix;
         return ix;
       })();
@@ -2082,7 +2090,7 @@ export class DriveVault implements VaultSource {
     try {
       return await checkStillAsSeen(seen, () => byId(this.drive, id), CHANGED_ELSEWHERE, { unanswered: isNoAnswer, ...(landed ? { landed } : {}) });
     } catch (e) {
-      if (notAsSeenReason(e) !== null) void this.refresh();
+      if (notAsSeenReason(e) !== null) this.refreshAside();
       throw e;
     }
   }
@@ -2110,7 +2118,7 @@ export class DriveVault implements VaultSource {
       // Changed or gone since it was read (a lost answer's read found it so): the fence's refusal, with its reason.
       const reason = notAsSeen(seen, now);
       if (reason === null) throw e;
-      void this.refresh();
+      this.refreshAside();
       throw notAsSeenError(reason, CHANGED_ELSEWHERE);
     }
   }

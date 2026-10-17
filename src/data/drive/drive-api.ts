@@ -90,7 +90,8 @@ export interface WriteOptions {
 
 export interface DriveApi extends ResumableDrive {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
-  listAll(rootId: string): Promise<DriveFile[]>;
+  /** Every file under a root; with `checksums`, each content file's `sha256` and `size` (one Drive keeps none of is `unchecked`). */
+  listAll(rootId: string, opts?: { checksums?: boolean }): Promise<DriveFile[]>;
   /** A file as Drive keeps it now; with `checksums`, its content's `md5Checksum` too; with `binned`, even in the Bin. */
   get(id: string, opts?: { checksums?: boolean; binned?: boolean }): Promise<DriveFile>;
   readText(id: string): Promise<string>;
