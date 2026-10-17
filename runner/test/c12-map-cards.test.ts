@@ -8,10 +8,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeModelInput } from '../src/model-input';
-import { AT, lastJson } from './corpus-run';
+import { AT, lastJson, splitPrompt } from './corpus-run';
 import { paging } from './drive-v3';
 import * as support from './b1-planning-support';
-import { HUB, PERSONAL, candidates, fileIntent, report, run, seedState, select, setup, type Frame } from './b1-planning-support';
+import { HUB, PERSONAL, candidates, fileIntent, folder, note, report, run, seedState, select, setup, type Frame, type Item } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -90,14 +90,81 @@ describe('nothing is cut at 800 notes (c12-map-cards)', () => {
     const large = support.largeFolder(800, 60, 25);
     const b = await setup(large); await seedState(b);
     const selected = select(b, [], large.to); const intent = fileIntent(b, large.to);
+    // Each thing wants its first card and is filed into that card's folder, named by its map row: cards resolve.
+    const placed = new Map<string, string>(); const unresolved: string[] = [];
     const r = await run(b, [selected, intent], { beforeReply: async (turn, frame) => {
       if (turn !== 1) return;
-      selected.items = selected.items.flatMap((item) => { const wants = candidates(frame, item.itemId).slice(0, 1); return wants.length ? [{ ...item, wants }] : []; });
-      intent.things = intent.things.filter((t) => selected.items.some((i) => i.itemId === t.fileId));
+      const cards = (call(frame).cards ?? []) as Card[]; const rows = (context(frame).map ?? []) as MapRow[];
+      for (const s of (call(frame).sources ?? []) as Array<{ itemId: string; candidates: unknown[] }>) {
+        if (!s.candidates.length || s.candidates.some((id) => !cards.some((c) => c.id === id))) unresolved.push(s.itemId);
+      }
+      selected.items = selected.items.flatMap((item): Item[] => {
+        const id = candidates(frame, item.itemId)[0]; const card = cards.find((c) => c.id === id);
+        const row = rows.find((at) => card && at.path === card.path.slice(0, card.path.lastIndexOf('/')));
+        if (!id || !row) return [];
+        placed.set(item.itemId, row.path);
+        return [{ ...item, wants: [id], destination: row.id }];
+      });
+      intent.things = intent.things.flatMap((t) => { const to = placed.get(t.fileId); return to ? [{ ...t, to }] : []; });
     } });
     expect(r.code).toBe(0);
-    expect(r.frames[0]?.prompt ?? '', 'no cut marker in what the model reads').not.toMatch(/index cut|folders cut/);
+    for (const [i, f] of r.frames.entries()) {
+      expect(f.prompt, `call ${i + 1}: no cut marker in its prompt file or stdin`).not.toMatch(/index cut|folders cut/);
+      expect(f.call.input, `call ${i + 1}: no cut marker in its stdin`).not.toMatch(/index cut|folders cut/);
+    }
     expect(((context(r.frames[0]).map ?? []) as MapRow[]).filter((row) => /\/Topic \d+$/.test(row.path)), 'every topic folder has its row').toHaveLength(60);
+    expect(unresolved, 'every source names at least one candidate, each a card').toEqual([]);
+    expect(placed.size, 'every thing has a candidate whose folder is a map row').toBe(25);
     expect(report(r).filed, 'every thing has a candidate and is filed').toHaveLength(25);
+    for (const [fileId, at] of placed) expect(r.pathsById[fileId], 'filed into its candidate\'s folder').toMatch(new RegExp(`^${at}/`));
   }, 120_000);
+});
+
+describe('a folder map past its bound (c12-map-cards)', () => {
+  it('AC5 c12-map-cards-folders-cut: a map past 32,000 characters is cut in path order and marked, and a new folder waits', async () => {
+    // 160 folders, each with its hub (the note named as its folder) and a long summary: about 50,000 characters of rows.
+    const groups = Object.fromEntries(Array.from({ length: 160 }, (_, i) => {
+      const name = `Group ${String(i).padStart(3, '0')}`;
+      return [`Resources/${name}/${name}.md`, note(`Alex keeps remote offer group ${i} ${'x'.repeat(180)}.`)];
+    }));
+    const b = await setup({ folder: { ...folder, ...groups } }); await seedState(b);
+    const selection = select(b);
+    selection.items[0] = { ...selection.items[0] as Item, destination: { parentId: b.id('Projects/Remote search'), name: 'Missing remote offers' } };
+    const r = await run(b, [selection, selection]);
+    expect(r.frames.length, 'the run reached the model').toBeGreaterThan(0);
+    const prompt = r.frames[0]?.prompt ?? '';
+    expect(prompt, 'the old marker is gone').not.toContain('index cut');
+    const { instructions } = splitPrompt(prompt);
+    expect(instructions, 'the cut is said in words the model reads, outside the data').toContain('folders cut');
+    expect(instructions, 'and says a missing folder proves nothing').toMatch(/no match does not mean no destination/);
+    const map = (context(r.frames[0]).map ?? []) as MapRow[];
+    const all = [...(await b.drive.listAll(b.root))].flatMap((f) => {
+      const path = f.folder ? b.ix.pathOf(f.id) : undefined;
+      return path && MAIN.includes(path.split('/')[0] ?? '') ? [path] : [];
+    }).sort();
+    expect(map.length, 'some rows are kept').toBeGreaterThan(0);
+    expect(map.length, 'and some are cut').toBeLessThan(all.length);
+    expect(JSON.stringify(map).length, 'the map keeps its own 32,000-character bound').toBeLessThanOrEqual(32_000);
+    expect(map.map((row) => row.path), 'the kept rows are the first in path order').toEqual(all.slice(0, map.length));
+    expect(Object.values(r.pathsById), 'a cut map cannot justify a new folder: the thing waits').not.toContain('Projects/Remote search/Missing remote offers');
+  }, 120_000);
+});
+
+describe('a map\'s members (c12-map-cards)', () => {
+  it('AC6 c12-map-cards-moc-members: a Bower map\'s card names its members by card id, in both calls', async () => {
+    const map = 'Resources/Collection/Collection.md'; const member = 'Resources/Collection/Record.md';
+    const regions = { current: '', personal: 'PADDING\n', timeline: '', 'bower-note': '', 'moc-overview': '## Overview\nA collection.\n',
+      'moc-figures': '## Figures\n0 notes.\n', 'moc-members': '## Notes\n- [[Record]]\n' };
+    const moc = '---\nsummary: Remote developer offers.\ntype: moc\nby: bower\nbower_format: ownership/2\n---\n\n'
+      + Object.entries(regions).map(([owner, body]) => `<!-- bower:ownership/2 begin ${owner} -->\n${body}<!-- bower:ownership/2 end ${owner} -->\n`).join('\n');
+    const b = await setup({ folder: { ...folder, [map]: moc, [member]: note('Ceramic glazing.') } }); await seedState(b);
+    const r = await run(b, [select(b, [b.id(map)]), fileIntent(b)]);
+    expect(r.frames, 'selection, then execution').toHaveLength(2);
+    for (const [i, f] of r.frames.entries()) {
+      const cards = (call(f).cards ?? []) as Card[];
+      expect(cards.find((c) => c.id === b.id(map)), `call ${i + 1}: the map's card names its member`)
+        .toEqual({ id: b.id(map), path: map, summary: 'Remote developer offers.', type: 'moc', members: [b.id(member)] });
+      expect(cards.map((c) => c.id), `call ${i + 1}: the member is a card too`).toContain(b.id(member));
+    }
+  }, 60_000);
 });
