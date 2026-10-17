@@ -8,7 +8,7 @@ import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply, report } from './b1-planning-support';
-import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 beforeEach(() => {
@@ -101,7 +101,7 @@ async function press(c: LoadedCase, script: Script, o: { around?: (f: typeof glo
   const gardening = (await drive.listAll(root)).find((f) => f.folder && f.name === 'Gardening')?.id ?? '';
   const calls: Call[] = [];
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, attempt, phase): Promise<ClaudeExit> => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     if (frame.synopsis) {
       calls.push({ phase: 'synopsis', call, frame });
       const value = script.synopsis ? script.synopsis(frame.synopsis, call) : VALID(frame.synopsis);
@@ -251,7 +251,9 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
     for (const marker of ['RULES_MARKER', 'ABOUT_MARKER', 'Alex wants to keep the path clear', '# Index']) expect(s?.call.input, `no ${marker} in the synopsis input`).not.toContain(marker);
     expect(modelOf(s?.call as ClaudeCall), 'the cheap summarizer tier').toMatch(/haiku/i);
     expect(modelOf(s?.call as ClaudeCall)).not.toBe(modelOf(selection?.call as ClaudeCall));
-    const without = (call: ClaudeCall | undefined) => (call?.args ?? []).filter((_, i, all) => all[i - 1] !== '--model');
+    // c12-prefix: only the planning calls name the run's prompt file; the synopsis keeps its own prompt on stdin.
+    expect(s?.call.args, 'the synopsis sees no run context').not.toContain('--system-prompt-file');
+    const without = (call: ClaudeCall | undefined) => (call?.args ?? []).filter((_, i, all) => all[i - 1] !== '--model' && ![all[i], all[i - 1]].includes('--system-prompt-file'));
     expect(without(s?.call), 'the same isolated, tool-less arguments').toEqual(without(selection?.call));
   });
 
@@ -473,7 +475,7 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
     const calls: string[] = [];
     const gardening = (await first.drive.listAll(first.root)).find((f) => f.folder && f.name === 'Gardening')?.id ?? '';
     const again: ClaudeSpawn = phaseAwareClaude(async (call, _s, _a, ph) => {
-      const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+      const frame = frameOf(call) as Frame;
       if (frame.synopsis) { calls.push('synopsis'); return reply(VALID(frame.synopsis)); }
       calls.push(ph);
       if (ph === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: gardening, wants: [] })), asks: [] });

@@ -4,7 +4,7 @@ import type { Proposal, Question, TypeRow } from '../../src/data/contracts/types
 import { loadCase } from '../src/corpus';
 import { readTypeTable } from '../../src/data/contracts/note-format';
 import { phaseAwareClaude } from './b1-planning-support';
-import { AT, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 
 const TABLE = '.bower/type-table.json';
@@ -39,7 +39,7 @@ async function run(names: string[], proposals: Proposal[] = [], prior: Question[
   const replies: unknown[] = [];
   const result = await runOnDrive(c, drive, root, { pacing: { sleep: async () => undefined },
     claude: phaseAwareClaude(async (call) => {
-      const shown = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
+      const shown = frameOf(call) as {
         piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>;
       };
       const intent = { kind: 'tidy-intent', v: 1,

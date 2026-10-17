@@ -82,7 +82,7 @@ it.each([
 
 it('AC7 b9-marker-prompt: the execution call tells the model the two optional fields', async () => {
   const { result } = await execute({});
-  const prompt = result.frames[1]?.call.input ?? '';
+  const prompt = result.frames[1]?.prompt ?? '';
   expect(prompt).toContain('"marker"');
   expect(prompt).toContain('"alsoCites"');
   for (const word of ['contradiction', 'uncertain', 'inferred']) expect(prompt).toContain(word);

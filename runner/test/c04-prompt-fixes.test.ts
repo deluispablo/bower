@@ -9,14 +9,14 @@ import { basename, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
-import { runScripted, runWithClaude } from './corpus-run';
+import { dataOf, promptOf, runScripted, runWithClaude, splitPrompt } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 afterEach(() => vi.restoreAllMocks());
 
 interface Context { piles: Array<{ pileId: string; words: string; things: Array<{ fileId: string; name: string }> }> }
-const contextOf = (input: string): Context => JSON.parse(input.split('\n').at(-1) ?? '{}') as Context;
+const contextOf = (input: string): Context => dataOf<Context>(input);
 const envelope = (result: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(result), usage: { input_tokens: 10, output_tokens: 10 } });
 
 async function offerAndFlat(): Promise<LoadedCase> {
@@ -46,7 +46,7 @@ function reply(id: Id, over: Overrides = {}): unknown {
 /** The array observes execution validation; the helper separately answers selection. */
 function answering(replies: Array<(id: Id) => unknown>, calls: ClaudeCall[] = []): ClaudeSpawn {
   return phaseAwareClaude(async (call, _step, attempt, phase) => {
-    if (phase === 'execution') calls.push(call);
+    if (phase === 'execution') calls.push({ ...call, input: promptOf(call) });
     const ids = new Map(contextOf(call.input).piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     const make = replies[phase === 'selection' ? replies.length - 1 : Math.min(attempt, replies.length - 1)] ?? ((): unknown => '');
     return { code: 0, stderr: '', cut: null, stdout: envelope(make((name) => ids.get(name) ?? `no ${name}`)) };
@@ -124,7 +124,7 @@ describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
     const calls: ClaudeCall[] = [];
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await runWithClaude(c, answering([(id) => reply(id)], calls));
-    const prompt = (calls[0]?.input ?? '').split('\n').slice(0, -1).join('\n');
+    const prompt = splitPrompt(calls[0]?.input ?? '').instructions;
     // Every place a case expects something to land (not the inbox, not Bower's own files): its stem, and each capitalised word of a stem written with a wildcard.
     const paths = (v: unknown): string[] => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(paths) : []);
     const stems = new Set<string>();

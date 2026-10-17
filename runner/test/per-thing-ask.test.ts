@@ -11,14 +11,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as noteEdit from '../../src/data/contracts/note-edit';
 import { REFUSALS, type ClaudeCall, type ClaudeSpawn, type RefusalKind } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
-import { replySequence, runWithClaude } from './corpus-run';
+import { lastJson, promptOf, replySequence, runWithClaude } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 afterEach(() => vi.restoreAllMocks());
 
 interface Context { piles: Array<{ pileId: string; words: string; things: Array<{ fileId: string; name: string }> }> }
-const contextOf = (input: string): Context => JSON.parse(input.split('\n').at(-1) ?? '{}') as Context;
+const contextOf = (input: string): Context => lastJson<Context>(input);
 const envelope = (result: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result, usage: { input_tokens: 10, output_tokens: 10 } });
 
 async function offerAndFlat(): Promise<LoadedCase> {
@@ -46,10 +46,11 @@ function filed(id: Id): Intent {
 }
 
 /** Execution observations keep validation retry counts; selection uses the final execution ids.
- * `claude` answering each call with the next of `replies` (the last one again after that), keeping the calls. */
+ * `claude` answering each call with the next of `replies` (the last one again after that), keeping the calls, each
+ * with all the model reads as its input (`promptOf`, c12-prefix). */
 function answering(replies: Array<(ctx: Context, id: Id) => string>, calls: ClaudeCall[] = []): ClaudeSpawn {
   return phaseAwareClaude(async (call, _step, attempt, phase) => {
-    if (phase === 'execution') calls.push(call);
+    if (phase === 'execution') calls.push({ ...call, input: promptOf(call) });
     const ctx = contextOf(call.input);
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     const reply = replies[phase === 'selection' ? replies.length - 1 : Math.min(attempt, replies.length - 1)] ?? (() => '');

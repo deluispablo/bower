@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
 import type { ClaudeCall, ClaudeExit } from '../src/claude';
-import { AT, caseReplies, replySequence, runWithClaude } from './corpus-run';
+import { frameOf, AT, caseReplies, replySequence, runWithClaude } from './corpus-run';
 
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(AT);
@@ -47,7 +47,7 @@ describe('B10 corpus cases through main', () => {
     let made = 0;
     const shown: Record<'selection' | 'execution', string[]> = { selection: [], execution: [] };
     const run = await runWithClaude(c, async (call) => {
-      const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { synopsis?: unknown; selection?: unknown; piles?: Array<{ things: Array<{ text?: string | null }> }> };
+      const frame = frameOf(call) as { synopsis?: unknown; selection?: unknown; piles?: Array<{ things: Array<{ text?: string | null }> }> };
       if (frame.synopsis) made++;
       else shown[frame.selection === undefined ? 'selection' : 'execution'].push((frame.piles ?? []).flatMap((p) => p.things).map((t) => t.text ?? '').join('\n'));
       return model(call);
@@ -109,7 +109,7 @@ async function recorded(c: Awaited<ReturnType<typeof longPair>>, replies: unknow
   const spawn = replySequence(replies);
   const out: Array<{ kind: string; name?: string; reply: string }> = [];
   const run = await runWithClaude(c, async (call) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { synopsis?: { name: string }; selection?: unknown };
+    const frame = frameOf(call) as { synopsis?: { name: string }; selection?: unknown };
     const exit = await spawn(call);
     const reply = String((JSON.parse(exit.stdout) as { result?: unknown }).result);
     out.push(frame.synopsis ? { kind: 'synopsis', name: frame.synopsis.name, reply } : { kind: frame.selection === undefined ? 'selection' : 'execution', reply });

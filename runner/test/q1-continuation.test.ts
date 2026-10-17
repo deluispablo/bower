@@ -5,6 +5,7 @@
  * Request identity: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
  */
 import { phaseAwareClaude } from './b1-planning-support';
+import { frameOf, promptOf } from './corpus-run';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -72,7 +73,11 @@ interface Manifest {
   operations: Array<{ effect: { kind: string; before?: { fileId: string; modifiedTime: string; name: string; parents: string[] }; path?: string; text?: string } }>;
   reportPlan: Array<{ value: { questions: Array<Record<string, unknown>> } }>;
 }
-const shownOf = (call: ClaudeCall): Shown => JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Shown;
+/** What each call read (c12-prefix: the prompt file is gone after the run), recorded while it runs. */
+const read = new WeakMap<ClaudeCall, { shown: Shown; prompt: string }>();
+const record = (call: ClaudeCall): void => { read.set(call, { shown: frameOf<Shown>(call), prompt: promptOf(call) }); };
+const shownOf = (call: ClaudeCall): Shown => read.get(call)?.shown ?? frameOf<Shown>(call);
+const promptRead = (call: ClaudeCall | undefined): string => (call && read.get(call)?.prompt) ?? '';
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false,
   duration_ms: 1, duration_api_ms: 1, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 const reply = (intent: unknown) => ({ code: 0, stderr: '', cut: null, stdout: envelope(intent) });
@@ -168,7 +173,7 @@ async function world(model: (w: World, call: ClaudeCall, step: number, attempt: 
     return root;
   };
   const claude = phaseAwareClaude(async (call, step, attempt, phase) => {
-    calls.push(call); expect(holder.world).toBeDefined();
+    calls.push(call); record(call); expect(holder.world).toBeDefined();
     return reply(model(holder.world as World, call, step, attempt, phase));
   }, () => {
     if (!holder.world) throw new Error('The question fixture must be seeded before its model calls.');
@@ -338,7 +343,7 @@ describe('Q1a stored answers through production entry points', () => {
       const extraB = await w.drive.createFolder(w.ids.job, 'Letters');
       const candidates = [w.ids.home, w.ids.job, extraA.id, extraB.id];
       const spawn: ClaudeSpawn = async (call) => {
-        expect.soft(candidates.slice(0, count).every((id) => call.input.includes(id)), 'script exposes candidate folder ids it grounds').toBe(true);
+        expect.soft(candidates.slice(0, count).every((id) => promptOf(call).includes(id)), 'script exposes candidate folder ids it grounds').toBe(true);
         return reply({ ...emptyIntent, asks: [{ fileId: w.ids.unclear, ...yesNo,
         options: candidates.slice(0, count).map((folderId) => ({ folderId, label: 'A place' })) }] });
       };
@@ -1268,7 +1273,7 @@ describe('Q1a fix round 1 through production entry points', () => {
     expect(shown.answers).toContainEqual(expect.objectContaining({ answer: PERSON, pileId: a.subject }));
     expect.soft(shown.answers, 'other-pile text is not an anonymous answer in A\'s run')
       .not.toContainEqual(expect.objectContaining({ answer: pending }));
-    expect.soft(w.calls[0]?.input, 'another subject\'s person words never enter this planner input').not.toContain(pending);
+    expect.soft(promptRead(w.calls[0]), 'another subject\'s person words never enter this planner input').not.toContain(pending);
     expect(await w.drive.evidence(other.id)).toEqual(before);
   }, 60_000);
 });
@@ -1403,7 +1408,7 @@ describe('Q1a fix round 3 through production entry points', () => {
     await w.drive.update(w.ids.clear, { addParent: w.ids.pile, removeParent: w.ids.home });
     const clearBytes = await w.drive.readText(w.ids.clear);
     const spawn = (later?: string): ClaudeSpawn => async (call) => {
-      w.calls.push(call);
+      w.calls.push(call); record(call);
       const intent = placements(w, later);
       const admitted = new Set(shownOf(call).piles.flatMap((p) => p.things.map((t) => t.fileId)));
       return reply({ ...intent, things: intent.things.filter((t) => admitted.has(t.fileId)) });

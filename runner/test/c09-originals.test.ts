@@ -10,7 +10,7 @@ import { VaultIndex } from '../../src/data/vault/vault-index';
 import { CONTEXT_BOUNDS, type ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply, seedState, type Base } from './b1-planning-support';
-import { runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, promptOf, runOnDrive, seedCase, systemOf, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -101,12 +101,14 @@ async function ask(words: string | string[], wants: string[] | Record<string, st
   const hunt = await id(HUNT);
   const refused = o.refuse ? await id(o.refuse) : undefined;
   const selection: Frame[] = []; const execution: Frame[] = []; const prompts: string[] = []; const selectionPrompts: string[] = [];
-  const media: string[] = [];
+  const media: string[] = []; const systems: Array<string | null> = []; const inputs: string[] = [];
   let attempt = 0;
   const wanted = (itemId: string): string[] => Array.isArray(wants) ? wants : wants[asked.get(itemId) ?? ''] ?? [];
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
-    const prompt = call.input.split('\n').slice(0, -1).join('\n');
+    // c12-prefix: the model reads the prompt file (the fixed text, the run context), then the call's stdin.
+    const frame = frameOf(call) as Frame;
+    const prompt = promptOf(call);
+    systems.push(systemOf(call)); inputs.push(call.input);
     if (phase === 'selection') {
       selection.push(frame); selectionPrompts.push(prompt);
       return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: hunt,
@@ -128,7 +130,7 @@ async function ask(words: string | string[], wants: string[] | Record<string, st
     answerStart: { scope, requestId: 'c09-originals-run' }, env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up-credential-c09' } }, 1);
   const candidatesOf = (requestId: string | undefined) => (selection[0]?.sources ?? []).find((s) => s.itemId === requestId)?.candidates.flatMap((x) => x.path ? [x.path] : []) ?? [];
   const reads = async (path: string) => { const fileId = await id(path); return media.filter((m) => m === fileId).length; };
-  return { run, candidates: candidatesOf(ids[0]), candidatesOf, selection, execution, prompts, selectionPrompts, requestId: ids[0] ?? '', ids, reads };
+  return { run, candidates: candidatesOf(ids[0]), candidatesOf, selection, execution, prompts, selectionPrompts, systems, inputs, requestId: ids[0] ?? '', ids, reads };
 }
 const doneFor = (run: CaseRun, words: string) => ((JSON.parse(run.after[SYSTEM.requests] ?? '{"done":[]}') as { done: Array<{ text: string; done?: string }> }).done)
   .filter((r) => r.text === words).map((r) => r.done);
@@ -228,6 +230,22 @@ describe('c09-originals', () => {
   it('AC6 c09-originals-prompt: the execution prompt says what "files" holds when an original is shown', async () => {
     const { prompts } = await ask(RENT, [LISTING]);
     expect(prompts[0]).toMatch(/"files"/);
+  });
+
+  // c12-prefix spec review round 1 ruling 1: the files clause is fixed text; the files shown are call text.
+  it('c12-prefix ruling 1 c09-originals-prefix: an original shown leaves the prompt file as a run with no files has it; the files are on stdin', async () => {
+    const shown = await ask(RENT, [LISTING]);
+    const none = await ask(RENT, []);
+    expect(shown.execution[0]?.files, 'the original is shown').toBeDefined();
+    expect(none.execution[0]?.files, 'no original is shown').toBeUndefined();
+    expect(shown.systems.length, 'every planning call names its prompt file').toBeGreaterThan(0);
+    expect(shown.systems.every((s) => s !== null)).toBe(true);
+    expect(shown.systems[shown.systems.length - 1], 'the same prompt file with or without files').toBe(none.systems[none.systems.length - 1]);
+    expect(shown.systems[0]).toMatch(/"files": originals shown for a request, read-only/);
+    expect(shown.systems[0], 'the files shown are not in the prompt file').not.toContain('Rent: 1,450 a month.\nDeposit: 1,600.');
+    const stdin = JSON.parse(shown.inputs[shown.inputs.length - 1] ?? '{}') as { notes?: unknown; files?: Array<{ path: string }> };
+    expect(stdin.files?.map((f) => f.path), 'the files shown are on the execution stdin').toEqual([LISTING]);
+    expect(Object.keys(stdin).indexOf('files'), 'right after the notes').toBe(Object.keys(stdin).indexOf('notes') + 1);
   });
 
   // Review ledger c09-originals rulings 4-15: the reds the implementer writes first.

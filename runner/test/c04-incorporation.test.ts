@@ -18,7 +18,7 @@ import type { AdmissionManifest } from '../../src/data/spine/admission';
 import type { RunManifest } from '../../src/data/spine/records';
 import { claudeProvider, type ClaudeCall, type ClaudeExit, type ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
-import { runWithClaude } from './corpus-run';
+import { dataOf, frameOf, promptOf, runWithClaude } from './corpus-run';
 import { RUN_ID, fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
@@ -42,7 +42,7 @@ interface Context {
 }
 
 /** The prepared context: the JSON line at the end of the input. */
-const contextOf = (input: string): Context => JSON.parse(input.split('\n').at(-1) ?? '{}') as Context;
+const contextOf = (input: string): Context => dataOf<Context>(input);
 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 
@@ -86,8 +86,8 @@ describe('what the model is shown (P4-3)', () => {
     expect(source).toBeDefined();
     const selection = { items: [{ itemId: source?.fileId, kind: 'unknown', destination: garden, wants: [hubFile.id] }], asks: [] };
     const spawn: ClaudeSpawn = async (call) => {
-      calls.push(call);
-      const phase = (JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { selection?: unknown }).selection;
+      calls.push({ ...call, input: promptOf(call) });
+      const phase = (frameOf(call) as { selection?: unknown }).selection;
       return { code: 0, stderr: '', cut: null, stdout: envelope(phase === undefined ? selection : 'not intent') } satisfies ClaudeExit;
     };
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -236,7 +236,7 @@ describe('the C04 slice through the Claude provider (P4-3)', () => {
     if (!c) throw new Error('no c04-garden-newsletter');
     const reply = readFileSync(new URL('./fixtures/claude/reply-c04-garden.json', import.meta.url), 'utf8');
     const calls: ClaudeCall[] = [];
-    const run = await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: reply }));
+    const run = await runWithClaude(c, async (call) => (calls.push({ ...call, input: promptOf(call) }), { code: 0, stderr: '', cut: null, stdout: reply }));
     expect(run.code).toBe(0);
     // The reply names the newsletter as the context showed it, with its text.
     const shown = contextOf(calls[0]?.input ?? '').piles.flatMap((p) => p.things);
@@ -286,7 +286,7 @@ async function gardenFolder(extra: Record<string, string> = {}, inbox: Record<st
 /** Plans the garden folder from `intent` (with the newsletter's file id put in for NEWS), keeping the input. */
 async function planned(g: Awaited<ReturnType<typeof gardenFolder>>, intent: (news: string) => unknown, calls: ClaudeCall[] = []): Promise<RunManifest> {
   const news = g.took.taken.piles.flatMap((p) => p.items).find((i) => i.name === 'Community garden newsletter, autumn.pdf')?.fileId ?? '';
-  const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope(intent(news)) });
+  const spawn: ClaudeSpawn = async (call) => (calls.push({ ...call, input: promptOf(call) }), { code: 0, stderr: '', cut: null, stdout: envelope(intent(news)) });
   return claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })) }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))(g.took);
 }
 
@@ -343,7 +343,7 @@ describe('the C04 slice, review round (P4-3)', () => {
     const bytesRead: string[] = [];
     const counted: ScriptedRead = { ...read, readBytes: (id) => (bytesRead.push(id), read.readBytes(id)) };
     const calls: ClaudeCall[] = [];
-    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') });
+    const spawn: ClaudeSpawn = async (call) => (calls.push({ ...call, input: promptOf(call) }), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') });
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: phaseAwareClaude(spawn, () => ({ drive: g.drive, root: g.root })) }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, counted)(g.took)).rejects.toThrow();
     const things = new Map(contextOf(calls[0]?.input ?? '').piles.flatMap((p) => p.things).map((t) => [t.name, t as ShownThing & { pagesNotRead?: number }]));

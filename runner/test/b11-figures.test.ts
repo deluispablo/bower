@@ -11,7 +11,7 @@ import { SYSTEM } from '../../src/data/vault/layout';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 import { manifests, observe, writes, type Observation } from './b23-hot-observe';
 
@@ -113,7 +113,7 @@ async function press(f: Folder, intent: (frame: Record<string, unknown>) => unkn
   const calls: string[] = [];
   const frames: Array<Record<string, unknown>> = [];
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown> & { sources?: Array<{ itemId: string }> };
+    const frame = frameOf(call) as Record<string, unknown> & { sources?: Array<{ itemId: string }> };
     calls.push(phase);
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: inbox.length ? 'offer' : 'unknown',
       destination: hunt, wants: [] })), asks: [] });

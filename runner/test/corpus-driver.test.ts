@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase, score, type Expected } from '../src/corpus';
-import { runWithClaude } from './corpus-run';
+import { frameOf, runWithClaude } from './corpus-run';
 
 it("the scorer counts questions exactly and checks a pair's subject", () => {
   const pairSubject = { kind: 'pair' as const, notes: ['Projects/A.md', 'Projects/B.md'] as [string, string] };
@@ -23,7 +23,7 @@ it("a case's between step runs between two runs", async () => {
   const person = `${c.folder[path]}\nAlex wants an amber kitchen.\n`;
   const run = await runWithClaude({ ...c, between: [{ kind: 'edit', path, text: person }] }, async (call) => {
     calls.push(call.input);
-    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
+    const context = frameOf(call) as {
       selection?: unknown; sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
       foldersById: Record<string, string>;
     };
