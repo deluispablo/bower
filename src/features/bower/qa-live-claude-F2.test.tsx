@@ -7,13 +7,14 @@
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import { loadingSources } from '@/testing/loading-sources';
 import { BowerScreen } from './BowerScreen';
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   sessionStorage.clear();
 });
 
@@ -149,5 +150,34 @@ describe('qa-live-claude F2: a save never clears newer words', () => {
     await v.release();
     expect(screen.queryByRole('button', { name: /Sending/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Send/ })).toBeEnabled();
+  });
+
+  it('F2 raw-words-cleared: the words sent are the box as it was at Send, so trailing spaces still clear', async () => {
+    const v = heldVault();
+    show(v.vault);
+    fireEvent.change(box(), { target: { value: `${FIRST} ` } });
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    await waitFor(() => expect(v.sent).toHaveLength(1));
+    await v.release();
+    expect(v.sent[0]?.text).toBe(FIRST);
+    await waitFor(() => expect(box()).toHaveValue(''));
+  });
+
+  it('F2 blocked-storage-kept: with storage blocked, words typed while a request saves stay when it ends', async () => {
+    const blocked = (): never => {
+      throw new DOMException('blocked', 'SecurityError');
+    };
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(blocked);
+    const v = heldVault();
+    show(v.vault);
+    fireEvent.change(box(), { target: { value: FIRST } });
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    await waitFor(() => expect(v.sent).toHaveLength(1));
+    fireEvent.change(box(), { target: { value: SECOND } });
+    await v.release();
+    expect(v.sent.map((s) => s.text)).toEqual([FIRST]);
+    expect(box()).toHaveValue(SECOND);
   });
 });
