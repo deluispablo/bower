@@ -4413,7 +4413,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         TextEncoder.prototype.encode = encode;
       }
       expect(encoded).toBeLessThan(ENCODE_BOUND);
-    }, 30_000);
+      // No wall-clock limit: the encoded-characters bound above is the time bound. A timeout here only fired on slow
+      // machines, and the run it could not stop starved the tests after it into their own timeouts.
+    }, 0);
 
     // TL-P2-20 R3-7 m9: a build that reads manifest versions names a later one plainly, and leaves the run saving;
     // only for the very bytes the run recorded (their digest is the name's), never for damaged ones.
