@@ -12,7 +12,7 @@ import { SYSTEM, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCase } from '../src/corpus';
-import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 
 const WATER = 'Resources/Rainwater/Rainwater.md';
@@ -77,7 +77,7 @@ async function run(b: Base, selection: unknown, execution: unknown, retry = exec
   const frames: Frame[] = [];
   const errorsAt = vi.mocked(console.error).mock.calls.length;
   const claude: ClaudeSpawn = async (call: ClaudeCall) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     frames.push({ ...frame, input: call.input });
     const isSelection = frame.sources !== undefined && frame.selection === undefined;
     const value = isSelection ? selection : /^Your reply was refused:/m.test(call.input) ? retry : execution;

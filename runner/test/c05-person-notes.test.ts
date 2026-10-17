@@ -9,7 +9,7 @@ import type { RunReport, Question } from '../../src/data/contracts/types';
 import { ASK_GONE, subjectOf } from '../../src/data/contracts/questions';
 import { parseRunCheckpoint, verifyCheckpointChain } from '../../src/data/contracts/run-checkpoint';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { AT, caseReplies, redispatchCase, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, caseReplies, redispatchCase, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 import { RunRecords, RUNS_NAME } from '../../src/data/spine/records';
 import * as c05Whys from '../../src/data/spine/scripted';
@@ -47,7 +47,7 @@ async function fixture(): Promise<LoadedCase> {
 
 function reply(make: (ctx: Context, source: string) => unknown, shown: Context[] = [], wants: string[] = []): ClaudeSpawn {
   return phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Context & {
+    const ctx = frameOf(call) as Context & {
       sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
       foldersById: Record<string, string>;
     };

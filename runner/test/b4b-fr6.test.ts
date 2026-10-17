@@ -13,7 +13,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -104,7 +104,7 @@ async function execute(f: Fixture, factId: string, quote?: string) {
   const frames: Frame[] = [];
   const refusals: string[] = [];
   const claude = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((source) => ({
       itemId: source.itemId, kind: 'unknown', destination, wants: [],
     })), asks: [] });

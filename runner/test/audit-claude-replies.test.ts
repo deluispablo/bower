@@ -15,7 +15,7 @@ import { REFUSALS, type ClaudeCall, type ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { LedgerExhausted, RunTiming } from '../src/timing';
 import { note, phaseAwareClaude, reply as replied, run as runPlanning, select, setup, type Base } from './b1-planning-support';
-import { AT, redispatchCase, replySequence, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, redispatchCase, replySequence, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
@@ -93,7 +93,7 @@ const habitObservation = { source: { pileId: 'p-1' }, section: 'about-you', cate
 const habitCase = (): LoadedCase => ({ ...wordsCase(), inbox: [{ line: `Remember this: ${HABIT(15)}`, files: [] }], folder: { ...MEMORY_FOLDER, ...HABIT_FOLDER } });
 /** `spawn`, with the consolidation and judge calls answered here: each fact cut to its first clause, every line supported. */
 const consolidating = (spawn: ClaudeSpawn): ClaudeSpawn => phaseAwareClaude(async (call) => {
-  const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { consolidation?: { facts: Array<{ n: number; text: string }> }; judge?: { lines: Array<{ n: number }> } };
+  const ctx = frameOf(call) as { consolidation?: { facts: Array<{ n: number; text: string }> }; judge?: { lines: Array<{ n: number }> } };
   if (ctx.consolidation) return replied({ lines: ctx.consolidation.facts.map((f) => ({ text: `${f.text.split(',')[0]?.replace(/\.$/, '')}.`, facts: [f.n], form: 'current' })) });
   if (ctx.judge) return replied({ verdicts: ctx.judge.lines.map((l) => ({ n: l.n, supported: true, reason: 'Made-up reason: it follows from its facts.' })) });
   return spawn(call);
@@ -260,7 +260,7 @@ const envelope = (result: unknown): string => JSON.stringify({ type: 'result', s
 function answering(replies: Array<(id: Id) => unknown>, calls: ClaudeCall[] = []): ClaudeSpawn {
   return phaseAwareClaude(async (call, _step, attempt, phase) => {
     if (phase === 'execution') calls.push(call);
-    const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
+    const ctx = frameOf(call) as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     const make = replies[phase === 'selection' ? replies.length - 1 : Math.min(attempt, replies.length - 1)] ?? (() => null);
     return { code: 0, stderr: '', cut: null, stdout: envelope(JSON.stringify(make((name) => ids.get(name) ?? `no ${name}`))) };

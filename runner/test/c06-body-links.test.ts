@@ -140,7 +140,7 @@ it('AC6 guard c06-body-links-one-rule: a path to one of two notes that share a n
 it('AC7 c06-body-links-prompt: the execution prompt asks for 0 to 5 related notes shown, each with its reason, and hub news only (R6)', async () => {
   const base = await fixture();
   const result = await run(base, [select(base, [JOB].map(base.id), 'Projects/Job hunt'), offer(base, GOOD)]);
-  const input = result.frames[1]?.call.input ?? '';
+  const input = result.frames[1]?.prompt ?? '';
   const instructions = input.slice(0, input.lastIndexOf('\n'));
   expect(instructions).toMatch(/You plan one Bower tidy-up/);
   expect(instructions, 'zero is valid (ruling 5)').toMatch(/0 to 5 related notes shown below/);

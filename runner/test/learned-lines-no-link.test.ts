@@ -8,7 +8,7 @@ import { parseTimelineLine, timelineLine } from '../../src/data/contracts/timeli
 import type { RunReport } from '../../src/data/contracts/types';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
-import { replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const ABOUT = 'About me.md';
@@ -60,6 +60,8 @@ const written = (run: CaseRun) => [...report(run)?.created ?? [], ...report(run)
 const phase = (run: CaseRun) => run.wire?.statuses.at(-1)?.phase;
 
 /** A made-up folder with these facts cited in About me; each press is an instructions run through main with a scripted model. */
+/** What the model reads of About me (c12-prefix: in the run context), kept while each call runs. */
+type Shown = { aboutMe?: { learned: { text: string } } };
 async function folder(facts: readonly Seeded[] = FACTS) {
   const c: LoadedCase = { id: 'learned-lines-no-link', capability: 'C05', title: 'Alex keeps learned facts', covers: 'model', source: 'new',
     scope: 'instructions', allowWeb: false, dir: tmpdir(), folderBinary: {}, inboxBinary: {}, expected: {}, rubric: '', questions: [],
@@ -68,9 +70,9 @@ async function folder(facts: readonly Seeded[] = FACTS) {
   const drive = fixedDrive();
   const root = await seedCase(drive, c);
   const aboutId = (await drive.listAll(root)).find((file) => drive.pathOf(file.id, root) === ABOUT)?.id;
-  const inputs: string[] = [];
+  const inputs: Shown[] = [];
   const replies = replySequence([NOTHING]);
-  const claude: ClaudeSpawn = async (call) => { inputs.push(call.input); return replies(call); };
+  const claude: ClaudeSpawn = async (call) => { inputs.push(frameOf<Shown>(call)); return replies(call); };
   let presses = 0;
   const press = () => runOnDrive(c, drive, root, { claude, pacing: { baseMs: 0, sleep: async () => {} } }, ++presses);
   return { drive, aboutId, inputs, press };
@@ -91,8 +93,7 @@ it('AC1 learned-lines-uncited: a run over learned lines citing [[Your words]] or
 it('AC2 learned-lines-uncited-position-4: the model sees the learned lines with no citation', async () => {
   const f = await folder();
   expect(phase(await f.press())).toBe('done');
-  const shown = f.inputs.flatMap((input) => {
-    const frame = JSON.parse(input.split('\n').at(-1) ?? '{}') as { aboutMe?: { learned: { text: string } } };
+  const shown = f.inputs.flatMap((frame) => {
     return frame.aboutMe ? [frame.aboutMe.learned.text] : [];
   });
   expect(shown.length, 'the run shows About me to the model').toBeGreaterThan(0);

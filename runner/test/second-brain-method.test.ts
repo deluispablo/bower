@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { intentOf, type ClaudeCall, type ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
 import { extract } from '../src/extract';
-import { runWithClaude } from './corpus-run';
+import { dataOf, promptOf, runWithClaude } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const LOG = resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubric-changes.md');
@@ -18,7 +18,7 @@ const LOG = resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubri
 afterEach(() => vi.restoreAllMocks());
 
 interface Context { piles: Array<{ pileId: string; words: string; things: Array<{ fileId: string; name: string }> }> }
-const contextOf = (input: string): Context => JSON.parse(input.split('\n').at(-1) ?? '{}') as Context;
+const contextOf = (input: string): Context => dataOf<Context>(input);
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 
 async function corpusCase(id: string): Promise<LoadedCase> {
@@ -30,7 +30,7 @@ async function corpusCase(id: string): Promise<LoadedCase> {
 /** `claude` answering with the intent `make` builds from the context it was shown. */
 function answering(make: (ctx: Context, id: (name: string) => string) => unknown, calls: ClaudeCall[] = []): ClaudeSpawn {
   return async (call) => {
-    calls.push(call);
+    calls.push({ ...call, input: promptOf(call) });
     const ctx = contextOf(call.input);
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     return { code: 0, stderr: '', cut: null, stdout: envelope(make(ctx, (name) => ids.get(name) ?? `no ${name}`)) };
@@ -69,8 +69,10 @@ describe('the second-brain method (TL-P4-08)', () => {
     expect(text).toMatch(/at most 5 of the notes below/);
     expect(text).toMatch(/a status, a date, a deadline or an amount/);
     expect(text).toMatch(/outcome first/);
-    // Bounded: the instructions stay short (raised from 9,000 for the C06 and C07 lines: specs/c07-disagreement/spec.md R8).
-    expect(text.length).toBeLessThan(10_000);
+    // Bounded: the instructions stay short (raised from 9,000 for the C06 and C07 lines: specs/c07-disagreement/spec.md R8;
+    // raised from 10,000 by c12-prefix ruling 2: the one cached fixed text says every clause a run may need, 12,094 today).
+    const fixed = text.split('\n__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__\n')[0] ?? '';
+    expect(fixed.length, 'the fixed text, above the boundary').toBeLessThan(12_500);
   });
 
   it('an ambiguous thing stays in the inbox with a question and the run goes on', async () => {

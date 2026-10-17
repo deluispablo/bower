@@ -13,7 +13,7 @@ import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import type { Request, RunReport } from '../../src/data/contracts/types';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCase, type LoadedCase } from '../src/corpus';
-import { AT, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { API, paging, RUN_ID } from './drive-v3';
 import { finishedBefore } from './earlier-runs';
 import { countsOf } from './modelled';
@@ -80,7 +80,7 @@ async function appRequest(drive: FakeDrive, root: string, words = WORDS): Promis
 
 function reply(line = false, wants = [PATH]): ClaudeSpawn {
   return async (call) => {
-    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
+    const context = frameOf(call) as {
       piles: Array<{ things: Array<{ name: string; fileId: string }> }>;
       notes: Array<{ path: string }>;
       selection?: unknown;

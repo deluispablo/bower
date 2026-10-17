@@ -188,12 +188,12 @@ it('b1d-fr4 5 real link changes alter the fingerprint', async () => {
     b.admission.id = `fr4-fingerprint-${i}`;
     const r = await run(b, [{ items: [], asks: [] }, empty], { press: i + 1 });
     expect(r.code).toBe(0);
-    const first = r.frames[0]; expect(first?.call.input).toContain('index cut:');
+    const first = r.frames[0]; expect(first?.prompt).toContain('index cut:');
     const target = b.id(`Resources/Gardening/${link}.md`);
     expect(candidates(first, sourceId(b))).toContain(target);
     const sources = first?.value.sources as Array<{ candidates: Array<Record<string, unknown>> }>;
     expect(sources[0]?.candidates.find((row) => row.id === target)).toEqual({ id: target });
-    inputs.push(first?.call.input ?? '');
+    inputs.push(first?.prompt ?? '');
     const timing = r.consoleLines.find((line) => line.startsWith('timing:')) ?? '';
     const fingerprint = /\binput=([a-f0-9]{12})\b/.exec(timing)?.[1];
     expect(fingerprint).toBeDefined(); fingerprints.push(fingerprint ?? '');

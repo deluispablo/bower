@@ -17,7 +17,7 @@ import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layou
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
 import { loadCase } from '../src/corpus';
-import { AT, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { AT, frameOf, lastJson, promptOf, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive } from './drive-v3';
 import { planningIndex } from '../src/index';
 import { RunnerDrive } from '../src/drive';
@@ -54,7 +54,8 @@ export function largeFolder(notes: number, folders: number, things: number) {
 }
 export interface Item { itemId: string; kind: string; destination: string | { parentId: string; name: string }; wants: string[] }
 export interface Selection { items: Item[]; asks: unknown[] }
-export interface Frame { call: ClaudeCall; value: Record<string, unknown>; events: Observation[] }
+/** A planning call: the JSON it reads (run context and call text as one record) and all it reads (`promptOf`). */
+export interface Frame { call: ClaudeCall; value: Record<string, unknown>; prompt: string; events: Observation[] }
 export interface Traffic { method: string; url: URL; range: string | null; sent: number; got: number }
 export type Base = Awaited<ReturnType<typeof setup>>;
 
@@ -78,7 +79,7 @@ export function phaseAwareClaude(
   let selected: ClaudeExit | undefined;
   const spawn: ClaudeSpawn = async (call) => {
     const { drive, root, admission } = fixture(call);
-    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as {
+    const context = lastJson(call.input) as {
       piles: Array<{ pileId: string; things: Array<{ fileId: string }> }>;
       sources?: Array<{ itemId: string }>; selection?: unknown;
     };
@@ -228,7 +229,7 @@ export async function run(base: Base, replies: unknown[], options: {
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const frames: Frame[] = []; const events: Observation[] = []; const traffic: Traffic[] = [];
   const claude = phaseAwareClaude(async (call) => {
-    const frame = { call, value: JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown>, events: [...events] };
+    const frame = { call, value: frameOf(call), prompt: promptOf(call), events: [...events] };
     frames.push(frame);
     await options.beforeReply?.(frames.length, frame);
     return reply(replies[Math.min(frames.length - 1, replies.length - 1)], frames.length);
@@ -308,7 +309,7 @@ export function leavesForNextRun(result: Awaited<ReturnType<typeof run>>) {
 }
 
 /** Find the script's candidate rows without pinning a particular serialized prefix or per-item container. */
-export function candidates(frame: Frame | undefined, itemId: string): string[] {
+export function candidates(frame: Pick<Frame, 'value'> | undefined, itemId: string): string[] {
   const lists: string[][] = [];
   const visit = (value: unknown, key = '', owner?: string): void => {
     if (Array.isArray(value)) {

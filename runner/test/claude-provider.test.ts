@@ -29,6 +29,7 @@ import { outsideAdmitted } from '../src/spine/admitted';
 import { main } from '../src/main';
 import { candidates, phaseAwareClaude, type PlanningFixture } from './b1-planning-support';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
+import { frameOf, promptOf } from './corpus-run';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 /** A made-up credential: what the test looks for in every captured line. */
@@ -102,10 +103,12 @@ async function eventFile(): Promise<string> {
 }
 
 /** A recorded execution reply after a fixture-bound selection, keeping every call. */
-function recordedClaude(reply: Partial<ClaudeExit> & { stdout: string }, fixture: PlanningFixture): { calls: ClaudeCall[]; spawn: (call: ClaudeCall) => Promise<ClaudeExit> } {
-  const calls: ClaudeCall[] = [];
+/** The calls, and what the model reads on each (`promptOf`, `frameOf`, c12-prefix), recorded while each runs. */
+function recordedClaude(reply: Partial<ClaudeExit> & { stdout: string }, fixture: PlanningFixture) {
+  const calls: ClaudeCall[] = []; const prompts: string[] = []; const values: Array<Record<string, unknown>> = [];
   const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, ...reply }), () => fixture);
-  return { calls, spawn: async (call) => { calls.push(call); return respond(call); } };
+  const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); prompts.push(promptOf(call)); values.push(frameOf(call)); return respond(call); };
+  return { calls, prompts, values, spawn };
 }
 
 /** The recorded success with its intent changed by `edit`: a reply that is JSON but outside the intent. */
@@ -191,7 +194,7 @@ describe('the Claude provider', () => {
     const { wire } = await wired();
     const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
-    const prompt = claude.calls[0]?.input ?? '';
+    const prompt = claude.prompts[0] ?? '';
     expect(prompt).toMatch(/fits no folder below[^.]*goes to Resources/);
     expect(prompt).toMatch(/Projects hold a goal with an end date, Areas an ongoing responsibility with no end date/);
     expect(prompt).not.toMatch(/the rules/);
@@ -235,7 +238,7 @@ describe('the Claude provider', () => {
     expect(calls).toHaveLength(2);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
     const selectionContext = JSON.parse(claudeInput(calls[0])) as Record<string, unknown>;
-    expect(candidates(calls[0] ? { call: calls[0], value: selectionContext, events: [] } : undefined, admission.piles[0]?.items[0]?.fileId ?? ''))
+    expect(candidates(calls[0] ? { value: selectionContext } : undefined,admission.piles[0]?.items[0]?.fileId ?? ''))
       .toContain(areas?.id);
     const listing = await wire.drive.listAll(wire.folderId);
     expect(listing.filter((f) => f.folder && f.name === 'Finance')).toHaveLength(1);
@@ -265,7 +268,7 @@ describe('the Claude provider', () => {
     await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
     const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
-    const context = JSON.parse((claude.calls[0]?.input ?? '').split('\n').at(-1) ?? '{}') as { rules?: string };
+    const context = (claude.values[0] ?? {}) as { rules?: string };
     expect(context.rules?.length).toBeLessThan(long.length);
     expect(context.rules).toMatch(/\[cut here: \d+ more characters of the rules not shown; the list may go on\]$/);
   });
@@ -326,7 +329,7 @@ describe('the Claude provider', () => {
 
     expect(claude.calls).toHaveLength(2);
     const value = JSON.parse(claudeInput(claude.calls[0])) as Record<string, unknown>;
-    expect(candidates({ call: claude.calls[0] as ClaudeCall, value, events: [] }, admission.piles.flatMap((p) => p.items).find((t) => t.name === 'Payslip_Aug.pdf')?.fileId ?? '')).toContain(hub.id);
+    expect(candidates({ value },admission.piles.flatMap((p) => p.items).find((t) => t.name === 'Payslip_Aug.pdf')?.fileId ?? '')).toContain(hub.id);
     expect((await wire.drive.listAll(wire.folderId)).some((f) => wire.drive.pathOf(f.id, wire.folderId) === 'Areas/Money/Statements')).toBe(true);
     const last = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'last-run.json');
     expect(JSON.stringify(JSON.parse(await wire.drive.readText(last?.id ?? '')))).not.toContain('New area');
@@ -534,7 +537,10 @@ describe('the Claude provider', () => {
     expect(call?.command).toBe('claude');
     const args = call?.args ?? [];
     const flag = (name: string): string | undefined => args[args.indexOf(name) + 1];
-    expect(args[0]).toBe('-p');
+    // A planning call first names its prompt file (c12-prefix), in the run's own folder, outside the model's cwd.
+    expect(args.slice(0, 2)).toEqual(['--system-prompt-file', expect.stringMatching(/\/system-prompt\.md$/)]);
+    expect(args[1]?.startsWith(`${call?.cwd ?? ''}/`)).toBe(false);
+    expect(args[2]).toBe('-p');
     expect(flag('--output-format')).toBe('json');
     // Model and turn cap from the environment; the start is Sonnet and the original's DEFAULT_MAX_TURNS.
     expect(flag('--model')).toBe('claude-sonnet-5-5');

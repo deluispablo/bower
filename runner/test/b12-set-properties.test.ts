@@ -15,7 +15,7 @@ import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { LedgerExhausted, RunTiming } from '../src/timing';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -103,7 +103,7 @@ async function press(f: Folder, intent: Intent, o: { words?: string; inbox?: { n
   const calls: string[] = [];
   let attempt = 0;
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown> & { sources?: Array<{ itemId: string }> };
+    const frame = frameOf(call) as Record<string, unknown> & { sources?: Array<{ itemId: string }> };
     calls.push(phase);
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'offer', destination: hunt, wants: [] })), asks: [] });
     return reply(await intent({ request: request?.id ?? '', hunt, id: f.id, frame }, attempt++));

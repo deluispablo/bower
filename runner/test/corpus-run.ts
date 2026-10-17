@@ -2,6 +2,7 @@
  * Runs a corpus case with the scripted provider over the runner's pretend Drive v3 (as `main.test.ts` does) and
  * returns what the scorer needs: the folder after the run and the parsed `last-run.json`.
  */
+import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,10 +25,52 @@ import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-
 
 export const AT = Date.UTC(2026, 9, 7, 9);
 
+/**
+ * What the model reads on a call (c12-prefix): its `--system-prompt-file`, then `\n`, then stdin; stdin alone for a call
+ * that names none. Call it inside the spawn: the file is removed with the run's folder.
+ */
+export function promptOf(call: ClaudeCall): string {
+  const system = systemOf(call);
+  return system === null ? call.input : `${system}\n${call.input}`;
+}
+
+/** A call's `--system-prompt-file` text, or `null` when it names none; read inside the spawn, as `promptOf`. */
+export function systemOf(call: ClaudeCall): string | null {
+  const at = call.args.indexOf('--system-prompt-file');
+  return at < 0 ? null : readFileSync(call.args[at + 1] ?? '', 'utf8');
+}
+
+/**
+ * A prompt (`promptOf`) as instructions and data: the fixed text above the boundary and every line below it that is not
+ * JSON (the type table, the call's task, a retry note), then the JSON lines below it (the run context, the call text).
+ */
+export function splitPrompt(prompt: string): { instructions: string; data: string } {
+  const [fixed = '', below = prompt] = prompt.includes('\n__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__\n') ? prompt.split('\n__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__\n') : ['', prompt];
+  const lines = below.split('\n');
+  return { instructions: [fixed, ...lines.filter((l) => !l.startsWith('{'))].join('\n'), data: lines.filter((l) => l.startsWith('{')).join('\n') };
+}
+
+/** The JSON lines of a prompt (`promptOf`), the run context's and the call's, as one record; what `frameOf` gives in the spawn. */
+export const dataOf = <T = Record<string, unknown>>(prompt: string): T =>
+  Object.assign({}, ...splitPrompt(prompt).data.split('\n').filter(Boolean).map((l) => JSON.parse(l) as object)) as T;
+
+/** The last JSON line of a text, parsed: a retry note comes after it (c12-prefix). */
+export const lastJson = <T = Record<string, unknown>>(text: string): T =>
+  JSON.parse(text.split('\n').findLast((l) => l.startsWith('{')) ?? '{}') as T;
+
+/**
+ * The JSON the model reads on a call, the run context's line (the prompt file's last) and the call's own, as one record;
+ * typed as the caller reads it, as `JSON.parse` is.
+ */
+export function frameOf<T = Record<string, unknown>>(call: ClaudeCall): T {
+  const system = systemOf(call);
+  return { ...(system === null ? {} : lastJson<object>(system)), ...lastJson<object>(call.input) } as T;
+}
+
 /** The planner's two phases are told apart for `claude`; a synopsis call (B10) goes to it as it is, in no phase. */
 function withPhases(claude: ClaudeSpawn, fixture: () => PlanningFixture): ClaudeSpawn {
   const phased = phaseAwareClaude(claude, fixture);
-  return (call) => 'synopsis' in (JSON.parse(call.input.split('\n').at(-1) ?? '{}') as object) ? claude(call) : phased(call);
+  return (call) => 'synopsis' in (lastJson(call.input) as object) ? claude(call) : phased(call);
 }
 
 async function ensureFolder(drive: FakeDrive, root: string, cache: Map<string, string>, path: string): Promise<string> {
@@ -354,7 +397,7 @@ export function replySequence(all: unknown[]): ClaudeSpawn {
       }) })) ?? [],
   });
   const execution = async (call: ClaudeCall, turn: number) => {
-    const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
+    const ctx = lastJson(call.input) as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
     // B11 selectors (R13): `$note:<path>` and `$folder:<path>` by the seeded Drive's paths, `$request:<record id>` by the
     // journal file holding that record.
@@ -392,7 +435,7 @@ export function replySequence(all: unknown[]): ClaudeSpawn {
   });
   const started = new Set<string>();
   return async (call) => {
-    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { admission?: string; selection?: unknown; synopsis?: Parameters<typeof synopsis>[0] };
+    const context = lastJson(call.input) as { admission?: string; selection?: unknown; synopsis?: Parameters<typeof synopsis>[0] };
     if (context.synopsis) return synopsis(context.synopsis);
     const key = `${call.cwd}/${context.admission ?? ''}`;
     // A redispatch test can supply selection itself; an execution-only sequence then begins at execution.

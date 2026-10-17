@@ -16,7 +16,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -110,7 +110,7 @@ async function execute(f: Fixture, make: unknown | ((frame: Frame) => unknown), 
   const frames: Frame[] = []; const inputs: string[] = []; const refusals: string[] = [];
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
     inputs.push(call.input);
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     if (phase === 'selection') {
       const preview = typeof make === 'function' ? (make as (frame: Frame) => unknown)(frame) : make;
       const asks = preview && typeof preview === 'object' && 'asks' in preview ? preview.asks : [];

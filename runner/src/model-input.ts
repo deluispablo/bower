@@ -7,7 +7,7 @@
  * already gives the ECMAScript number and string forms RFC 8785 requires). Lines that are not JSON are kept as written.
  * An id-only reference retains its stable path from the context, rather than losing which note it names. Other
  * stable ids are kept; only rows carrying their own path can discard the redundant fresh physical id.
- * The model input itself is not changed.
+ * The model input itself is not changed. Since c12-prefix the input is the prompt file, then the selection's stdin.
  */
 const FIXED: Readonly<Record<string, string | number>> = {
   runId: 'RUN_ID',
@@ -54,17 +54,25 @@ function canonical(value: unknown): string {
   return `{${members.join(',')}}`;
 }
 
-function normalizeLine(line: string): string {
-  if (!line.startsWith('{') && !line.startsWith('[')) return line;
-  let parsed: unknown;
+/** A line parsed as JSON, or `undefined` when it is not JSON. */
+function parsed(line: string): unknown {
+  if (!line.startsWith('{') && !line.startsWith('[')) return undefined;
   try {
-    parsed = JSON.parse(line);
+    return JSON.parse(line) as unknown;
   } catch {
-    return line;
+    return undefined;
   }
+}
+
+/**
+ * The id-to-path references of the `indexed` and `foldersById` of every JSON line: since c12-prefix the run context (the
+ * prompt file) names them and the call text (stdin) uses them, so they normalize as one input.
+ */
+function referencesOf(values: readonly unknown[]): Map<string, string> {
   const references = new Map<string, string>();
-  if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const context = parsed as Record<string, unknown>;
+  for (const value of values) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) continue;
+    const context = value as Record<string, unknown>;
     for (const key of ['indexed', 'foldersById']) {
       const rows = context[key];
       if (rows === null || typeof rows !== 'object' || Array.isArray(rows)) continue;
@@ -74,9 +82,12 @@ function normalizeLine(line: string): string {
       }
     }
   }
-  return canonical(fixKeys(parsed, references));
+  return references;
 }
 
 export function normalizeModelInput(input: string): string {
-  return input.split('\n').map(normalizeLine).join('\n');
+  const lines = input.split('\n');
+  const values = lines.map(parsed);
+  const references = referencesOf(values);
+  return lines.map((line, i) => (values[i] === undefined ? line : canonical(fixKeys(values[i], references)))).join('\n');
 }

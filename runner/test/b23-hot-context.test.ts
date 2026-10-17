@@ -9,7 +9,7 @@ import { RUNNER_WRITES } from '../../src/data/vault/layout';
 import { isJournalRecord, type JournalRecord } from '../../src/data/contracts/journal-record';
 import { parseRules, serializeRules } from '../../src/data/contracts/rules-format';
 import * as hotModule from '../src/hot';
-import { AT, caseReplies, replySequence, runScripted } from './corpus-run';
+import { AT, caseReplies, promptOf, replySequence, runScripted } from './corpus-run';
 import { HOT, empty, manifests, observe, pacing, requiredFunction, runOnDrive, section, setup, writes,
   type Observation } from './b23-hot-observe';
 
@@ -58,14 +58,17 @@ it('B3b hot: filing writes hot once and the next prompt puts it at position 6', 
   const inbox = (await drive.listAll(root)).find((f) => f.folder && f.name === 'Inbox');
   expect(inbox).toBeDefined();
   await drive.createText(inbox?.id ?? '', 'Next step.txt', 'Alex asks for the next garden step.', { pile: 'next-step', asAdded: 'Next step.txt' });
-  const spawn = vi.fn(replySequence([{ ...empty, asks: [{ fileId: '$file:Next step.txt',
-    text: 'Should this stay with the garden?', yes: 'Yes', no: 'No' }] }]));
+  const sequence = replySequence([{ ...empty, asks: [{ fileId: '$file:Next step.txt',
+    text: 'Should this stay with the garden?', yes: 'Yes', no: 'No' }] }]);
+  // c12-prefix: what the model reads (the prompt file, then stdin), kept while each call runs.
+  const prompts: string[] = [];
+  const spawn = vi.fn((call: Parameters<typeof sequence>[0]) => (prompts.push(promptOf(call)), sequence(call)));
   vi.setSystemTime(AT + 1);
   events.length = 0;
   const next = await runOnDrive(c, drive, root, { pacing, claude: spawn, around: observe(drive, root, events) }, 2);
   expect(next.code).toBe(0);
   expect(spawn).toHaveBeenCalled();
-  const input = (spawn.mock.calls[0]?.[0].input ?? '').replace(/\\n/g, '\n');
+  const input = (prompts[0] ?? '').replace(/\\n/g, '\n');
   // Pin serialized prefix position by content, leaving the builder's wire shape to B1d.
   const beforeHot = [input.indexOf('Kinds of document'), input.indexOf('Rules control.'),
     input.indexOf('Alex keeps a quiet garden.'), input.indexOf('[[Mulch notice]]')];

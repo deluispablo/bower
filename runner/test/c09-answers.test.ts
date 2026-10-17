@@ -10,7 +10,7 @@ import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { HEALTH_NAME } from '../src/lint';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { promptOf, frameOf, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -92,8 +92,8 @@ async function press(f: Folder, words: string[], wants: string[], intent: (ctx: 
   const frames: Array<{ phase: string; frame: Record<string, unknown> }> = [];
   let attempt = 0;
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown> & Frame;
-    calls.push(call.input);
+    const frame = frameOf(call) as Record<string, unknown> & Frame;
+    calls.push(promptOf(call));
     frames.push({ phase, frame });
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: hunt,
       wants: s.candidates.filter((c) => wants.includes(c.path)).map((c) => c.id) })), asks: [] });

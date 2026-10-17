@@ -16,7 +16,7 @@ import { RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { promptOf, frameOf, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -131,10 +131,10 @@ async function press(f: Folder, words: string | readonly string[] | null, make: 
   const calls: string[] = []; const inputs: string[] = []; const refusals: string[] = []; const frames: Frame[] = [];
   const garden = await f.id('Projects/Garden');
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, attempt, kind) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     calls.push(kind);
     if (kind === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: garden, wants: [] })), asks: [] });
-    inputs.push(call.input); frames.push(frame);
+    inputs.push(promptOf(call)); frames.push(frame);
     const refusal = /^Your reply was refused:.*$/m.exec(call.input)?.[0];
     if (refusal) refusals.push(refusal);
     return reply(make(frame, attempt));
