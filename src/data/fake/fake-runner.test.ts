@@ -6,6 +6,7 @@ import { thingsIn } from '../piles';
 import { seedFakeDrive } from './seed';
 import { OWN_FILES, planRun } from './fake-runner';
 import { grounded } from '../spine/grounded';
+import { NOTHING_DONE } from '../spine/scripted';
 import { B_FAILURE, type FakeRunServiceOptions } from './fake-run-service';
 import { tidyUp, type TidyUpResult } from '@/testing/tidy-up';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
@@ -176,7 +177,9 @@ describe('the fake runner', () => {
     await vault.addRequest('Put my visa papers together');
     await vault.addRule('anything from the dentist goes in health');
     const out = await tidyUp(drive, root, 'instructions');
-    expect(out.phase === 'done' && out.report.requests).toEqual(['Put my visa papers together']);
+    // qa7-refused-words: the pretend planner does nothing for the chore, so it is not listed done.
+    expect(out.phase === 'done' && out.report.requests).toBeUndefined();
+    expect((await fresh().requests())[0]?.done).toBe(NOTHING_DONE);
     expect(out.phase === 'done' && out.report.rulesWorded).toBe(1);
   });
 
@@ -213,7 +216,8 @@ describe('the fake runner', () => {
     if (out.phase !== 'done') throw new Error('failed');
     expect(out.report.filed).toEqual([]);
     const after = fresh();
-    expect((await after.requests())[0]).toMatchObject({ text: 'Put my id papers together', done: expect.stringMatching(/^Done/) as unknown });
+    // qa7-refused-words: a request the run did nothing for says so.
+    expect((await after.requests())[0]).toMatchObject({ text: 'Put my id papers together', done: NOTHING_DONE });
     expect(await after.piles()).toHaveLength(piles);
   });
 
@@ -263,8 +267,9 @@ describe('the fake runner', () => {
     expect(question?.text).toBe('Which flat is closest to Ferrowick?');
     expect(question?.done).toContain('[[Flat 7, Cobble Row]] has the shortest commute, 18 minutes');
     expect(question?.done).toContain('[[Industrial Designer, Ferrowick]]');
-    expect(chore?.done).toBe('Done. See what changed in your folders.');
-    expect(out.report.requests).toEqual(['Which flat is closest to Ferrowick?', 'Put my id papers together']);
+    // qa7-refused-words: the chore the run did nothing for says so, and only the question is done.
+    expect(chore?.done).toBe(NOTHING_DONE);
+    expect(out.report.requests).toEqual(['Which flat is closest to Ferrowick?']);
     expect(await fresh().piles()).toHaveLength(piles);
   });
 
@@ -273,7 +278,8 @@ describe('the fake runner', () => {
     await vault.addRequest('Which flat is closest to Ferrowick?');
     const out = await tidyUp(drive, root, 'instructions');
     if (out.phase !== 'done') throw new Error('failed');
-    expect((await fresh().requests())[0]?.done).toBe('Done. See what changed in your folders.');
+    // qa7-refused-words: the plain line for a request the run did nothing for.
+    expect((await fresh().requests())[0]?.done).toBe(NOTHING_DONE);
   });
 
   // c10-web-on-off (TL-P2-40 (2)): a lookup says what it did, with the web off and on.
@@ -331,7 +337,8 @@ describe('the fake runner', () => {
     const out = await tidyUp(drive, root, 'instructions');
     if (out.phase !== 'done') throw new Error('failed');
     expect(out.manifest.operations.some((o) => o.effect.kind === 'create-text' && o.effect.purpose === 'generated')).toBe(false);
-    expect((await fresh().requests())[0]?.done).toBe('Done. See what changed in your folders.');
+    // qa7-refused-words: the plain line for a request the run did nothing for.
+    expect((await fresh().requests())[0]?.done).toBe(NOTHING_DONE);
   });
 
   // c07-contradiction-question (TL-P2-40): new words that disagree with a stored note ask a question linking both.

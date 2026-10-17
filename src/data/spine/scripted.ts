@@ -28,6 +28,7 @@ import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answe
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
+import { fenceAfter, type Fence } from '../contracts/ownership-format';
 import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -48,6 +49,46 @@ import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseO
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
 
 export { SET_ASIDE, listedPiles };
+
+/** A [[link]] in a model's words: its target before any `|` alias or `#` heading (a `^block` stays for `linkTarget`). */
+export const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
+
+/**
+ * C06 (R1-R4), the one link rule of a model's authored words, for the reply check (runner claude.ts) and the planner:
+ * each [[link]] outside a fenced code block (the one link grammar, CommonMark 0.31.2 §4.5), its target as `linkTarget`
+ * reads it without `.md`, and whether its line says why (R2: a letter or digit is left once its links, a leading list
+ * marker and the words "see also", "related", "source(s)", "link(s)" and "and" are taken out).
+ */
+export function authoredLinks(text: string): Array<{ target: string; reason: boolean }> {
+  const out: Array<{ target: string; reason: boolean }> = [];
+  let fence: Fence | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const previous = fence;
+    fence = fenceAfter(line, fence);
+    if (previous || fence) continue;
+    const links = [...line.matchAll(WIKI_LINK)];
+    const rest = line.replace(WIKI_LINK, ' ').replace(/^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
+    const reason = /[\p{L}\p{N}]/u.test(rest);
+    for (const m of links) {
+      const target = linkTarget(m[1] ?? '').replace(/\.md$/, '');
+      if (target) out.push({ target, reason });
+    }
+  }
+  return out;
+}
+
+/**
+ * C06 R4: what a link target (as `authoredLinks` gives it) names among the folder's file paths: one note, by its whole
+ * path without `.md` or by its title; a file that is not a note, by its path or name; a title two notes share; or nothing.
+ */
+export function linkIdentity(target: string, paths: Iterable<string>): { note: string } | 'not a note' | 'two notes share' | null {
+  const all = [...paths];
+  const notes = all.filter((path) => path.endsWith('.md')
+    && (target.includes('/') ? path.slice(0, -3).toLowerCase() : displayName(nameOf(path)).toLowerCase()) === target);
+  if (notes.length > 1) return 'two notes share';
+  if (notes[0] !== undefined) return { note: notes[0] };
+  return all.some((path) => (target.includes('/') ? path : nameOf(path)).toLowerCase() === target) ? 'not a note' : null;
+}
 
 /** A B run that failed, or a plan refused before admission: the honest-phase rule guarantees no effect applied. */
 export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
@@ -2335,23 +2376,24 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const path = ix.pathOf(file.id);
     return !file.folder && path?.endsWith('.md') && generatedPlace(parentOf(path)) ? [{ file, path }] : [];
   });
-  const groundedAuthoredLinks = async (to: string, note: AuthoredNote, source: { file: DriveFile; name: string }): Promise<string[]> => {
-    // Resolve evidence against actual note identities; a name shared by notes is not grounding.
+  const paths = listing.flatMap((file) => {
+    const path = file.folder ? undefined : ix.pathOf(file.id);
+    return path === undefined ? [] : [path];
+  });
+  // Any thing this reply files, the note's own source and its siblings alike, is named by its link (C06 R3).
+  const filedAs = new Set(filing.flatMap(({ thing, to, name }) => [thing.file.name, name, ix.pathOf(thing.file.id), join(to, name)])
+    .flatMap((name) => (name === undefined ? [] : [linkTarget(name).replace(/\.md$/, '')])));
+  const groundedAuthoredLinks = async (to: string, note: AuthoredNote): Promise<string[]> => {
+    // The reply check's own identity rule (C06 R4), kept here only as an invariant: a reply it accepts never fails here.
     const authored = new Map<string, typeof linkable[number]>();
-    // All authored strings share this admission check, including every section in the body and the summary.
-    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})].join('\n');
-    for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-      const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
-      const candidates = linkable.filter(({ path }) => target.includes('/')
-        ? path.slice(0, -3).toLowerCase() === target
-        : displayName(nameOf(path)).toLowerCase() === target);
-      const local = candidates.filter(({ path }) => parentOf(path) === to);
-      const resolved = local.length ? local : candidates;
-      const bound = [source.file.name, source.name, ix.pathOf(source.file.id), join(to, source.name)]
-        .some((name) => name !== undefined && linkTarget(name).replace(/\.md$/, '') === target);
-      if (bound && resolved.every(({ file }) => file.id === source.file.id)) continue;
-      if (resolved.length !== 1 || !resolved[0]) return refused('a template note with an ungrounded authored link');
-      authored.set(resolved[0].file.id, resolved[0]);
+    // All authored strings share this admission check, each scanned on its own so an unclosed fence hides nothing (C06 gap 8).
+    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})];
+    for (const { target } of words.flatMap(authoredLinks)) {
+      if (filedAs.has(target)) continue;
+      const named = linkIdentity(target, paths);
+      const resolved = typeof named === 'object' && named ? linkable.find(({ path }) => path === named.note) : undefined;
+      if (!resolved) return refused('a template note with an ungrounded authored link');
+      authored.set(resolved.file.id, resolved);
     }
     if (!note.template) return [];
     // Sources subfolders use their nearest destination hub. Never choose an unrelated fallback note.
@@ -2389,7 +2431,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (template === 'profile' || typeRow?.template === 'profile') return refused('the profile template outside profile admission');
     if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
-    const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
+    const related = await groundedAuthoredLinks(to, { ...authored, template });
     const properties = template ? [
       { key: 'type', label: 'Type', value: typeRow?.id ?? template },
       { key: 'created', label: 'Created', value: noteDate },
@@ -2424,8 +2466,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
     if (!target) {
       const template = row.profile?.template;
-      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template },
-        { file: first.thing.file, name: first.name });
+      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template });
       if (!profileTextOk(body)) return refused('a profile beyond its 400 word bound');
       const name = freeName(planned, to, 'Profile.md');
       const scaffold = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
@@ -3130,6 +3171,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled, lookedUpNothing,
+    // A request the reply carried a decision for (a column, views or a map, an empty one too) acted, with nothing to change maybe (qa7).
+    decidedRequests: new Set([...columnRequests, ...viewRequests, ...mapRequests]),
     yesMaps: maps.filter((m) => m.answer !== undefined && mapRequests.has(m.requestId)),
   };
 }
@@ -3144,7 +3187,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled, lookedUpNothing } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled, lookedUpNothing, decidedRequests } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3473,17 +3516,28 @@ export async function build(decided: Decided): Promise<Ended> {
   const asked = journal.filter((l) => l.rec.kind === 'request');
   // A request the run did nothing for is never done (qa6 F1): a lookup that looked nothing up, or one with only its
   // "didn't" rows and no line, edit, note or line already there. Its requests row says why: its first row's why.
+  // One with no row, no decision and no named answer says it changed nothing (qa7), unless an earlier run's row for it
+  // is there: that row stands word for word, listed done only if it says something was done (qa7 rulings 5, 7).
+  const storedRows = new Map(requestsDone.map((r) => [r.id, r]));
+  const kept = new Map<string, Request>();
   const idle = new Map(asked.flatMap((l): Array<[string, string]> => {
     const id = l.rec.id;
     if (lookedUpNothing.has(id)) return [[id, answers.get(id) ?? NOTHING_LOOKED_UP]];
     const why = settlement.rowsOf(id)[0]?.why;
     const acted = need(id).edits.length || need(id).derived.length || satisfied.some((p) => p.consent.requestId === id) || compared.has(id) || resultNotes.has(id);
-    return why && !acted ? [[id, why]] : [];
+    if (why && !acted) return [[id, why]];
+    if (acted || decidedRequests.has(id) || answers.get(id) !== REQUEST_DONE) return [];
+    const stored = storedRows.get(id);
+    if (!stored) return [[id, NOTHING_DONE]];
+    kept.set(id, stored);
+    // Every line for a request not done says "Bower didn't …" / "Bower did not …", or that you said no.
+    return stored.done && (stored.done === REQUEST_DECLINED || /Bower (didn't|did not) /.test(stored.done)) ? [[id, stored.done]] : [];
   }));
   let requestsOp: string | null = null;
   const resultOps = new Map<string, string>();
   if (asked.length) {
-    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: idle.get(l.rec.id) ?? answers.get(l.rec.id) ?? REQUEST_DONE }));
+    const done: Request[] = [...asked].reverse().map((l) => kept.get(l.rec.id)
+      ?? { id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: idle.get(l.rec.id) ?? answers.get(l.rec.id) ?? REQUEST_DONE });
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
     const notes: string[] = [];
     // A map's result note (R32) is keyed by its request and waits for everything the request changes; the requests row waits for it.
@@ -3638,7 +3692,8 @@ export async function build(decided: Decided): Promise<Ended> {
     const left = withArchive.length ? { leftAsWritten: withArchive } : {};
     if (paired.has(line.rec.id)) {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
-    } else if (line.rec.undoes) {
+    } else if (line.rec.undoes && line.rec.kind !== 'request') {
+      // Undo takes back no request: a stored request with an unmatched `undoes` settles as any request (qa7 ruling 4).
       // Every later inverse has its existing wording in an ordinary row, after its effects and archive.
       const requires = [...moves, ...archiveChain, ...derived];
       reportPlan.push({ requires, when: 'applied', value: {
@@ -3651,9 +3706,10 @@ export async function build(decided: Decided): Promise<Ended> {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what], ...left } });
     } else {
       // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
+      // A request, done or not, is never one of your changes read (qa7 F6).
       // An answer whose subject was gone says so in its answered row, never as a thing set aside.
       const gone = answeredRows.get(line.rec.id);
-      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' || line.rec.kind === 'request' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
     }
   }
   // `.bower/hashes.json` only on a full run, as the legacy runner wrote it.
@@ -3933,6 +3989,8 @@ async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha
 
 /** The line a request done by a tidy-up carries in requests.json. */
 export const REQUEST_DONE = 'Done. See what changed in your folders.';
+/** The line a request the run did nothing for carries, with no row of its own (qa7): never done. */
+export const NOTHING_DONE = "Bower didn't change anything for this request.";
 /** What a lookup with the web on that looked nothing up says (qa6): never done. */
 export const NOTHING_LOOKED_UP = 'Bower did not look anything up.';
 

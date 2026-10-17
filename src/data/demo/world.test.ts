@@ -233,7 +233,8 @@ describe('what the testers found', () => {
     expect((await vault.requests())[0]?.done).toBeUndefined();
     await runs.start('instructions');
     await vi.runAllTimersAsync();
-    expect((await vault.requests())[0]?.done).toMatch(/^Done/);
+    // qa7-refused-words: the demo acts on no request, so it says it changed nothing, not done.
+    expect((await vault.requests())[0]?.done).toBe("Bower didn't change anything for this request.");
   });
 
   // The demo writes no comparison and looks nothing up, so it never claims to (TL-P2-40: never contradict the fake).
@@ -247,7 +248,8 @@ describe('what the testers found', () => {
     await runs.start('instructions', { allowWeb });
     await vi.runAllTimersAsync();
     const done = new Map((await vault.requests()).map((r) => [r.text, r.done]));
-    expect(done.get('Compare the flats on the shortlist')).toBe('Done. See what changed in your folders.');
+    // qa7-refused-words: a comparison it did not write is not done.
+    expect(done.get('Compare the flats on the shortlist')).toBe("Bower didn't change anything for this request.");
     expect(done.get('Look up the council tax band for Flat 3')).toBe(allowWeb ? 'Bower did not look anything up.' : 'Bower did not look anything up. Web lookups are off in Settings.');
     expect(done.get('Which flat is closest to Ferrowick?')).toContain('[[Flat 7, Cobble Row]] has the shortest commute');
     expect(findNode(await vault.tree(), 'Projects/Flat hunt/Flats on the shortlist, compared.md')).toBeNull();
