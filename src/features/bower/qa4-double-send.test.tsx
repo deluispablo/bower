@@ -11,7 +11,10 @@ import { BowerError } from '@/data/types';
 import { loadingSources } from '@/testing/loading-sources';
 import { BowerScreen } from './BowerScreen';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+});
 
 /** Bower's screen over a vault whose saves wait until `release` is called. */
 function screenWithHeldSaves() {

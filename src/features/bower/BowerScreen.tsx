@@ -19,6 +19,7 @@ import { isRunning } from '@/features/tidy/run-words';
 import { Inline, Markdown } from '@/features/note/markdown';
 import { useNoteLink } from '@/features/note/note-link';
 import { useIsDesktop } from '@/ui/media';
+import { useSessionDraft } from '@/ui/session-draft';
 import { FailedChanges } from './FailedChanges';
 import s from './bower.module.css';
 
@@ -34,7 +35,7 @@ export function BowerScreen() {
   const { rules, prose } = rulesState;
   const runState = useRun();
   const { data: run } = runState;
-  const [text, setText] = useState('');
+  const [text, setText] = useSessionDraft('bower:tell-draft');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<'request' | 'rule'>('request');
   const link = useNoteLink();
@@ -45,8 +46,9 @@ export function BowerScreen() {
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
-  /** One id per intended request: the same words sent again after a wait are that request, never a second one. */
-  const intent = useRef<{ text: string; id: string } | null>(null);
+  /** One id per intended request: the same words sent again after a wait, or a reload, are that request, never a second one. */
+  const [intentJson, setIntent] = useSessionDraft('bower:tell-intent');
+  const intent = intentJson ? (JSON.parse(intentJson) as { text: string; id: string }) : null;
   // The phone has no side panel: what failed shows here, where Bower's panel content lives on a phone.
   const desktop = useIsDesktop();
   const pose: Pose = listening ? 'wait' : typing ? 'wait' : isRunning(run) ? 'write' : 'idle';
@@ -61,10 +63,11 @@ export function BowerScreen() {
         await vault.addRule(t);
         toast('Saved as you wrote it. Bower words it clearly in the next tidy-up.');
       } else {
-        if (intent.current?.text !== t) intent.current = { text: t, id: crypto.randomUUID() };
-        await vault.addRequest(t, intent.current.id);
+        const id = intent?.text === t ? intent.id : crypto.randomUUID();
+        setIntent(JSON.stringify({ text: t, id }));
+        await vault.addRequest(t, id);
       }
-      intent.current = null;
+      setIntent('');
       setText('');
       composerRef.current?.focus();
     } catch (e) {
