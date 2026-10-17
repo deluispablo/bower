@@ -42,7 +42,7 @@ interface Call {
   method: string;
   url: string;
   headers: Record<string, string>;
-  payload?: { run_id: string; attempt: number; ticket: string; scope: string; allow_web: boolean };
+  payload?: { run_id: string; attempt: number; ticket: string; scope: string; allow_web: boolean; api_url: string };
 }
 
 /**
@@ -69,7 +69,7 @@ function github(opts: { runs?: { id: number; display_title: string }[]; jobs?: R
     }
     return Promise.resolve(new Response(null, { status: 404 }));
   };
-  const access: GitHubAccess = { repo: env.GITHUB_REPO, token: 'token' in opts ? opts.token : 'test-github-token', fetchImpl };
+  const access: GitHubAccess = { repo: env.GITHUB_REPO, token: 'token' in opts ? opts.token : 'test-github-token', apiOrigin: env.API_ORIGIN, fetchImpl };
   return { sent, access };
 }
 
@@ -171,7 +171,7 @@ describe('stale run recovery', () => {
     expect(sent).toHaveLength(1);
     const payload = sent[0]?.payload;
     expect(sent[0]?.url).toBe(`${GITHUB}/dispatches`);
-    expect(payload).toMatchObject({ run_id: runId, attempt: 2, scope: 'instructions', allow_web: true });
+    expect(payload).toMatchObject({ run_id: runId, attempt: 2, scope: 'instructions', allow_web: true, api_url: env.API_ORIGIN });
     const second = payload?.ticket ?? '';
     expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(second).not.toBe(ticket);
@@ -236,7 +236,7 @@ describe('stale run recovery', () => {
     // Redispatched once, as attempt 2 with a new ticket; the run a person sees is unchanged.
     const sent = dispatches(gh.sent);
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.payload).toMatchObject({ run_id: runId, attempt: 2, scope: 'instructions', allow_web: true });
+    expect(sent[0]?.payload).toMatchObject({ run_id: runId, attempt: 2, scope: 'instructions', allow_web: true, api_url: env.API_ORIGIN });
     const second = sent[0]?.payload?.ticket ?? '';
     expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(second).not.toBe(ticket);
@@ -293,7 +293,7 @@ describe('stale run recovery', () => {
     // The job finished with no report: redispatched as attempt 2, which owns the run from now.
     const sent = dispatches(gh.sent);
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.payload).toMatchObject({ run_id: runId, attempt: 2 });
+    expect(sent[0]?.payload).toMatchObject({ run_id: runId, attempt: 2, api_url: env.API_ORIGIN });
     const second = sent[0]?.payload?.ticket ?? '';
     expect(await alarmOf(sub)).toBe(at + QUEUED_STALE_MS);
     const late = await report(runId, ticket, { attempt: 1, ended: true });

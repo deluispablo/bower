@@ -351,6 +351,16 @@ export interface Dispatch {
   ticket: string;
   scope: 'all' | 'instructions';
   allowWeb: boolean;
+  /** The Worker that sent it (`api_url`); absent from an older Worker's dispatch. */
+  apiUrl?: string;
+}
+
+const ORIGIN = /^https?:\/\/[^/]+$/;
+
+/** `BOWER_API_URL` as a list of origins: comma-separated, trimmed, empty entries dropped; null when none or one is not an origin. */
+function originsOf(variable: string | undefined): string[] | null {
+  const list = (variable ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+  return list.length > 0 && list.every((entry) => ORIGIN.test(entry)) ? list : null;
 }
 
 /** The dispatch's `client_payload`, from the event file Actions writes; null when it is not one. */
@@ -362,7 +372,9 @@ export function dispatchOf(event: unknown): Dispatch | null {
   if (typeof attempt !== 'number' || !Number.isSafeInteger(attempt) || attempt < 1) return null;
   if (typeof ticket !== 'string' || !ticket) return null;
   if (scope !== 'all' && scope !== 'instructions') return null;
-  return { runId, attempt, ticket, scope, allowWeb: allowWeb === true };
+  const apiUrl = p.api_url;
+  if (apiUrl !== undefined && (typeof apiUrl !== 'string' || !ORIGIN.test(apiUrl))) return null;
+  return { runId, attempt, ticket, scope, allowWeb: allowWeb === true, ...(apiUrl === undefined ? {} : { apiUrl }) };
 }
 
 export interface MainOptions {
@@ -391,8 +403,8 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
     console.error(e instanceof Error ? e.message : e);
     return 1;
   }
-  const api = env.BOWER_API_URL?.trim();
-  if (!api || !/^https?:\/\/[^/]+$/.test(api)) {
+  const origins = originsOf(env.BOWER_API_URL);
+  if (!origins) {
     console.error('BOWER_API_URL must be the Worker\'s origin, for example https://api.example.com (a repository variable).');
     return 1;
   }
@@ -407,6 +419,12 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
     return 1;
   }
   if (env.GITHUB_ACTIONS === 'true') process.stdout.write(`::add-mask::${dispatch.ticket}\n`);
+  // The ticket goes only to an origin this repository lists; a Worker that names none is trusted only when one is listed.
+  const api = dispatch.apiUrl === undefined ? (origins.length === 1 ? origins[0] : undefined) : origins.find((o) => o === dispatch.apiUrl);
+  if (!api) {
+    console.error('This run\'s Worker is not one this repository serves; add its origin to BOWER_API_URL.');
+    return 1;
+  }
   const { runId, attempt, ticket, allowWeb } = dispatch;
   console.log(`Tidy-up ${runId}, attempt ${attempt}, with the ${name} provider.`);
   // The job's start up to here: Node's uptime, as the original's queue and set-up row.
