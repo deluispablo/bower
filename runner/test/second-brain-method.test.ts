@@ -69,8 +69,8 @@ describe('the second-brain method (TL-P4-08)', () => {
     expect(text).toMatch(/at most 5 of the notes below/);
     expect(text).toMatch(/a status, a date, a deadline or an amount/);
     expect(text).toMatch(/outcome first/);
-    // Bounded: the instructions stay short.
-    expect(text.length).toBeLessThan(9_000);
+    // Bounded: the instructions stay short (raised from 9,000 for the C06 and C07 lines: specs/c07-disagreement/spec.md R8).
+    expect(text.length).toBeLessThan(10_000);
   });
 
   it('an ambiguous thing stays in the inbox with a question and the run goes on', async () => {
