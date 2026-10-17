@@ -134,7 +134,7 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
  * text (Unicode FAQ, "UTF-8, UTF-16, UTF-32 & BOM"), so what reads the first line reads it after the mark, as a v2
  * note's reading does (`parseOwnership`); a mark anywhere else is text.
  */
-const markLength = (text: string): number => (text.charCodeAt(0) === 0xfeff ? 1 : 0);
+export const markLength = (text: string): number => (text.charCodeAt(0) === 0xfeff ? 1 : 0);
 
 /** A plain note's layout: only its last `## Timeline` heading, to the end of the note; nothing else is framed. */
 function plainLayout(raw: string): Layout {

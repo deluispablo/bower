@@ -21,6 +21,18 @@ describe('bom-front-matter-readers: frontValues after a byte-order mark', () => 
     }
   });
 
+  it('a marked note gives the values and the duplicate keys the unmarked one gives', () => {
+    const doubled = (eol: string): string => ['---', 'status: active', 'type: project', 'status: done', '---', 'Alex.', ''].join(eol);
+    for (const eol of ['\n', '\r\n']) {
+      const plain = new Set<string>();
+      const marked = new Set<string>();
+      const expected = frontValues(doubled(eol), plain);
+      expect(plain, `the control, eol=${JSON.stringify(eol)}`).toEqual(new Set(['status']));
+      expect.soft(frontValues(`${BOM}${doubled(eol)}`, marked), `eol=${JSON.stringify(eol)}`).toEqual(expected);
+      expect.soft(marked, `eol=${JSON.stringify(eol)}`).toEqual(plain);
+    }
+  });
+
   it('a marked note whose front matter is not all there is null, as the unmarked one is', () => {
     const cut = '---\nsummary: Alex\'s garden plot.\nby: bower\n';
     expect(frontValues(cut), 'the control').toBeNull();
