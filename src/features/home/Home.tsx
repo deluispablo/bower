@@ -200,7 +200,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
           <span />
           <span />
         </div>
-      ) : (
+      ) : piles.length > 0 ? (
         <ul className={s.piles}>
           {piles.map((p) => (
             <li key={p.id}>
@@ -230,7 +230,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
       <div className={s.row2}>
         {ready && waiting > 0 && !running && !error.error && (
           <Button block onClick={() => setTidy(true)}>

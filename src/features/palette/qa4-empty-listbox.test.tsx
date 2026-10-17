@@ -1,6 +1,6 @@
 /**
  * qa4-empty-listbox (qa-4 Codex F4, accessibility): with nothing found, Search and the command palette say so in a
- * live status outside the list of suggestions, so the listbox holds options or nothing (WAI-ARIA APG combobox:
+ * live status outside the list of suggestions; qa7 hides the listbox when empty (WAI-ARIA APG combobox:
  * a listbox owns only options and groups; ARIA 1.2 "listbox" required owned elements).
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -51,20 +51,19 @@ async function typed(query: string, search?: Search): Promise<void> {
   await type(query);
 }
 
-/** The message sits in the status, outside the listbox, and the listbox holds no text. */
+/** The message stays in the status while the empty listbox is hidden. */
 function saidOutside(text: string): void {
   const status = screen.getByRole('status');
   expect(status).toHaveTextContent(text);
-  const list = screen.getByRole('listbox');
-  expect(list).not.toContainElement(status);
-  expect(within(list).queryByText(text)).toBeNull();
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(status.closest('[role="listbox"]')).toBeNull();
 }
 
 describe('qa4-empty-listbox: nothing found is said outside the listbox', () => {
-  it('AC1 empty-message-in-status: the message is a live status, and the listbox holds no text and no other role', async () => {
+  it('AC1 empty-message-in-status: the message is a live status, and no empty listbox is exposed', async () => {
     await typed('zzzz-no-such-note');
     saidOutside(NOTHING);
-    expect(within(screen.getByRole('listbox')).queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('AC2 status-quiet-when-found: with something found, the listbox has its options and the status says nothing', async () => {

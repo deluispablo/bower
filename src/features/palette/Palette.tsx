@@ -1,7 +1,7 @@
-import { Command } from 'cmdk';
+import { Command, useCommandState } from 'cmdk';
 import { waitingIn } from '@/data/piles';
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useNavigate } from 'react-router';
 import { usePiles, useRun, useSources, useTree } from '@/data/provider';
 import { isRunning } from '@/features/tidy/run-words';
@@ -23,6 +23,15 @@ const words = (search: string): string[] => search.toLowerCase().split(/\s+/).fi
 const hasWords = (text: string, ws: string[]): boolean => ws.every((w) => text.toLowerCase().includes(w));
 const label = (f: TreeNode): string => (f.type === 'folder' ? f.name : thingName(f.name));
 const valueOf = (f: TreeNode): string => `${label(f)} :: ${f.path}`;
+
+function Suggestions({ input, children }: { input: RefObject<HTMLInputElement | null>; children: ReactNode }) {
+  const count = useCommandState((state) => state.filtered.count);
+  useLayoutEffect(() => {
+    // cmdk 1.1.1 hard-codes aria-expanded after its input props.
+    input.current?.setAttribute('aria-expanded', String(count > 0));
+  });
+  return <Command.List className={s.list} hidden={count === 0}>{children}</Command.List>;
+}
 
 /** ⌘K: every action and every note, by typing. */
 export function Palette() {
@@ -163,7 +172,7 @@ export function Palette() {
                 <ClearSearch onClear={() => (setQ(''), input.current?.focus())} />
               </Command.Empty>
             )}
-            <Command.List className={s.list}>
+            <Suggestions input={input}>
               <Command.Group heading="Actions" className={s.group}>
                 {actions.map((a) => (
                   <Command.Item key={a.id} value={`action ${a.label}`} onSelect={run(a.fn, !a.stays)} className={s.item}>
@@ -195,7 +204,7 @@ export function Palette() {
                   ))}
                 </Command.Group>
               )}
-            </Command.List>
+            </Suggestions>
           </Command>
         </Dialog.Content>
       </Dialog.Portal>
