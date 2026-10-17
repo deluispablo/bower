@@ -129,7 +129,8 @@ const NOT_SHOWN = 'a link to a note you were not shown: leave it out';
 const SHARED = 'a bare name two notes share: give its path, as shown';
 const PETS = 'Which flat allows pets?';
 const EMPTY = 'an empty link: name a note you were shown, or leave it out';
-const numbers = (n: string) => `a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`;
+// The log names only the fixed reason (sec-hardening L4); the model's retry still gets the quoted figure.
+const numbers = (_n: string) => 'a number that is in none of its sources';
 
 describe('c09-answers', () => {
   it('AC1 c09-answers-done: an answer becomes its request\'s done text exactly; the request is archived and nothing else changes', async () => {

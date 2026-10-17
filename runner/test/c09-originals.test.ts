@@ -139,7 +139,8 @@ const refusals = () => vi.mocked(console.error).mock.calls.flatMap((args) => arg
 // The one link rule of c06-body-links (claude.ts `linkWhy`): answer links report `noteLink` with its reasons (c09-answers ledger item 1).
 const NOT_SHOWN = 'a link to a note you were not shown: leave it out';
 const SHARED = 'a bare name two notes share: give its path, as shown';
-const numbers = (n: string) => `a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`;
+// The log names only the fixed reason (sec-hardening L4); the model's retry still gets the quoted figure.
+const numbers = (_n: string) => 'a number that is in none of its sources';
 const RENT = 'What is the rent on the flat listing?';
 const SIGNING = 'What does Cobble Row ask before signing?';
 const DEPOSIT = 'What deposit does the Larkspur Lane listing ask?';
