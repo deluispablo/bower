@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Proposal, Question, TypeRow } from '../../src/data/contracts/types';
 import { loadCase } from '../src/corpus';
-import { readTypeTable } from '../src/type-table';
+import { readTypeTable } from '../../src/data/contracts/note-format';
 import { phaseAwareClaude } from './b1-planning-support';
 import { AT, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';

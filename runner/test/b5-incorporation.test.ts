@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
-import { readTypeTable } from '../src/type-table';
+import { readTypeTable } from '../../src/data/contracts/note-format';
 import * as providers from '../src/provider';
 import { scriptedDecisions } from '../../src/data/demo/script';
 import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
