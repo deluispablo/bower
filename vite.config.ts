@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
 import { identityPlugin } from './e2e/port.ts';
 import { OPTIMIZED_DEPS, WARMUP_FILES } from './vite.deps.ts';
+import { workerBudget } from './testing/workers.ts';
 
 export default defineConfig({
   plugins: [
@@ -47,7 +48,6 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts', './testing/timer-gate-setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: { modules: { classNameStrategy: 'non-scoped' } },
-    // Half the cores, so a full run leaves the machine usable (https://vitest.dev/config/#maxworkers).
-    maxWorkers: '50%',
+    maxWorkers: workerBudget().vitest,
   },
 });

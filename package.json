@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run --reporter=default --reporter=json --outputFile=test-results/unit.json",
+    "test:affected": "sh -c 'base=${1:-main}; vitest run --changed \"$base\" --passWithNoTests && pnpm -C api exec vitest run --changed \"$base\" --passWithNoTests && pnpm -C runner exec vitest run --changed \"$base\" --passWithNoTests' affected",
+    "e2e:affected": "sh -c 'base=${1:-main}; E2E_SOURCE=fake playwright test --only-changed=\"$base\" --pass-with-no-tests' affected",
     "e2e": "bash scripts/e2e-both.sh gate --max-failures=5",
     "e2e:demo": "bash testing/with-lock.sh playwright test",
     "e2e:full": "HARNESS_TIMEOUT=3000 bash scripts/e2e-both.sh full --max-failures=5",
