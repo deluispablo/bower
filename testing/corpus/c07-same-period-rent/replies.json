@@ -1,0 +1,29 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Later listing.txt",
+        "to": "Projects/Flat hunt",
+        "name": "Later listing.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Flat hunt/Larkspur Lane flat.md",
+        "text": "The earlier listing gives 1,450 a month from 2026-11-01; the later listing gives 1,580 for the same period. Neither is confirmed.",
+        "cites": "$file:Later listing.txt",
+        "marker": "contradiction",
+        "alsoCites": [
+          "Projects/Flat hunt/Earlier listing.txt"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]
