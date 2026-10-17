@@ -313,8 +313,9 @@ export function Explorer({ variant }: Props) {
 
   const renderRow = (node: TreeNode, level: number): ReactNode => {
     const folder = node.type === 'folder';
-    // An empty folder has nothing to show open: it reads closed, with its 0, like every empty folder.
+    // An empty folder has nothing to show open: it reads closed, and an empty one shows no count.
     const isOpen = folder && ui.open.has(node.path) && (!!node.children?.length || pending?.folder === node.path);
+    const count = folder && !isOpen ? folderCount(node) : 0;
     const root = isRoot(node.path) || (level === 0 && folder);
     const selected = ui.selected === node.path;
     const focused = kb && current === node.path;
@@ -412,7 +413,7 @@ export function Explorer({ variant }: Props) {
         )}
         {badge && !renaming && <span className={s.badge}>{badge}</span>}
         {node.isNew && <span className={s.newDot} title="New since you last looked" aria-label="New" />}
-        {folder && !isOpen && <span className={s.count}>{folderCount(node)}</span>}
+        {folder && !isOpen && count > 0 && <span className={s.count}>{count}</span>}
       </div>
     );
   };

@@ -51,4 +51,23 @@ describe('AC4 the palette offers only the theme not in use', () => {
   it('AC4 design8-layout-theme-system-light: following a light system it offers only the dark theme', async () => {
     expect(await themes('system', true)).toEqual(['Use the dark theme']);
   });
+
+  it('AC4 design8-layout-theme-system-flips: the system turns light while the palette is open and the action follows', async () => {
+    let light = false;
+    const listeners = new Set<() => void>();
+    window.matchMedia = (query: string): MediaQueryList =>
+      ({ get matches() { return query.includes('prefers-color-scheme: light') ? light : false; }, media: query, onchange: null,
+        addEventListener: (_: string, cb: () => void) => listeners.add(cb), removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+        addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }) as unknown as MediaQueryList;
+    usePrefs.setState({ theme: 'system' });
+    useUi.setState({ paletteOpen: true });
+    await act(async () => {
+      render(<MemoryRouter><DataProvider sources={loadingSources()}><Palette /></DataProvider></MemoryRouter>);
+    });
+    const shown = (): string[] => screen.queryAllByRole('option').map((o) => o.textContent ?? '').filter((t) => /theme/.test(t));
+    expect(shown()).toEqual(['Use the light theme']);
+    light = true;
+    act(() => listeners.forEach((cb) => cb()));
+    expect(shown()).toEqual(['Use the dark theme']);
+  });
 });
