@@ -134,9 +134,10 @@ export class DriveHttp implements DriveApi {
   /**
    * Every file and folder under `rootId`, one `files.list` per level of up to 40 folders, paged. With `checksums`,
    * each file also carries the `sha256Checksum` and `md5Checksum` Drive keeps (Drive v3, "Return specific fields"), so a reader checks
-   * stored bytes from the listing rather than one `files.get` per file.
+   * stored bytes from the listing rather than one `files.get` per file. `beforePage` runs before each page's fetch; its
+   * throw ends the listing as it is (the Worker's admission budget).
    */
-  async listAll(rootId: string, opts: { checksums?: boolean } = {}): Promise<DriveFile[]> {
+  async listAll(rootId: string, opts: { checksums?: boolean; beforePage?: () => void } = {}): Promise<DriveFile[]> {
     const fields = opts.checksums ? LISTED_FIELDS : FIELDS;
     const out: DriveFile[] = [];
     let level = [rootId];
@@ -145,7 +146,7 @@ export class DriveHttp implements DriveApi {
       for (let i = 0; i < level.length; i += BATCH) {
         const ids = level.slice(i, i + BATCH);
         const q = `(${ids.map((id) => `${quote(id)} in parents`).join(' or ')}) and trashed = false`;
-        for (const f of await this.query(q, Infinity, fields)) {
+        for (const f of await this.query(q, Infinity, fields, opts.beforePage)) {
           // No checksum and no size: a Docs Editors file or a shortcut, whose content Drive keeps no checksum of.
           out.push(opts.checksums && !f.folder && f.sha256 === undefined && f.size === undefined ? { ...f, unchecked: true } : f);
           if (f.folder) next.push(f.id);
@@ -468,16 +469,17 @@ export class DriveHttp implements DriveApi {
   }
 
   /** The files `q` finds, every page up to `maxPages`, as Drive answers them. */
-  async query(q: string, maxPages = Infinity, fields = FIELDS): Promise<DriveFile[]> {
-    return (await this.wires(q, maxPages, fields)).map(toFile);
+  async query(q: string, maxPages = Infinity, fields = FIELDS, beforePage?: () => void): Promise<DriveFile[]> {
+    return (await this.wires(q, maxPages, fields, beforePage)).map(toFile);
   }
 
-  private async wires(q: string, maxPages: number, fields: string): Promise<WireFile[]> {
+  private async wires(q: string, maxPages: number, fields: string, beforePage?: () => void): Promise<WireFile[]> {
     const out: WireFile[] = [];
     let pageToken = '';
     let pages = 0;
     do {
       if (++pages > maxPages) break;
+      beforePage?.();
       const params = new URLSearchParams({ q, fields: `nextPageToken,files(${fields})`, pageSize: String(SEARCH_PAGE_SIZE) });
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await (await this.call(`${API}/files?${params}`)).json()) as { files?: WireFile[]; nextPageToken?: string };

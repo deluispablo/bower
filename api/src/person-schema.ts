@@ -15,19 +15,6 @@ const PHASES_SQL = RUN_PHASES.map((p) => `'${p}'`).join(', ');
 
 export const SCHEMA_VERSION = 15;
 
-/** Every table the schema owns, for tests and checks. */
-export const PERSON_TABLES = [
-  'schema_version',
-  'session_lease',
-  'session_leave',
-  'quota',
-  'control',
-  'run_ticket',
-  'account',
-  'runs',
-  'deadlines',
-] as const;
-
 /**
  * What Delete me (`Person.forget`) does with each table: a `personal` one is emptied; a `kept` one keeps only what
  * outlives the person, nothing personal: the schema version, and the run tickets live at Delete me (hash, attempt and
@@ -43,7 +30,10 @@ export const TABLES_AT_DELETE = {
   account: 'personal',
   runs: 'personal',
   deadlines: 'kept',
-} as const satisfies Record<(typeof PERSON_TABLES)[number], 'personal' | 'kept'>;
+} as const satisfies Record<string, 'personal' | 'kept'>;
+
+/** Every table the schema owns, for tests and checks. */
+export const PERSON_TABLES = Object.keys(TABLES_AT_DELETE) as (keyof typeof TABLES_AT_DELETE)[];
 
 /** Step n brings the schema from version n - 1 to n. One statement per string. */
 const STEPS: readonly (readonly string[])[] = [

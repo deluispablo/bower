@@ -34,8 +34,8 @@ async function alarmOf(sub: string): Promise<number | null> {
 /** Signed in with a folder, and one queued run admitted at `now` and dispatched by the alarm then (its ticket expires an hour later). */
 async function admitted(sub: string, requestId: string, now: number): Promise<string> {
   const p = person(sub);
-  await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-  await p.setFolderId('FOLDER_ID');
+  const { generation } = await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+  await p.pointFolder(generation, null, 'FOLDER_ID');
   const r = await p.admit({ accountEpoch: (await p.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId, now, dailyLimit: 100, manifest: MANIFEST });
   if (!r.admitted) throw new Error('not admitted');
   const gh = pretendGitHub(env);

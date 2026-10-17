@@ -51,7 +51,7 @@ async function holder(): Promise<{ sub: string; cookie: string; fence: Record<st
   const { generation } = await person(sub).signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: enc });
   const folder = await driveFolder();
   await withThingsIn(folder);
-  await person(sub).setFolderId(folder.root);
+  await person(sub).pointFolder(generation, null, folder.root);
   await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
   const epoch = (await person(sub).session('laptop', 'check', 0, Date.now())).epoch;
   const token = await signSession({ sub, gen: generation }, env.SESSION_SECRET);

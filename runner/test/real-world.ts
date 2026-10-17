@@ -81,11 +81,13 @@ export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
     if (method === 'GET' && job) return json(200, { total_count: 1, jobs: [{ status: job.status, started_at: job.startedAt, completed_at: job.completedAt }] });
     return json(404, { message: 'Not Found' });
   };
+  // The Worker lists with Drive's own page size; the runner's reads keep the fake's pages.
+  const workerDrive = wire.fetchPaged(1000);
   const outside: Fetch = async (input, init) => {
     const { origin } = urlOf(input);
     if (origin === 'https://oauth2.googleapis.com') return await google(input, init);
     if (origin === 'https://api.github.com') return await github(input, init);
-    return await wire.fetch(input, init);
+    return await workerDrive(input, init);
   };
 
   // Loaded at run time: the Worker's modules type-check under its own settings (Workers types), not the runner's.

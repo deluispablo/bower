@@ -12,7 +12,7 @@ import type { Pile } from '../types';
 import { PROP } from '../vault/layout';
 import { VaultIndex } from '../vault/vault-index';
 import type { AdmissionScope } from './admission';
-import { NotReadHere } from './budget';
+import { FolderTooBig, NotReadHere } from './budget';
 import type { SpineRead } from './plan';
 
 /**
@@ -64,7 +64,7 @@ export const READ_AHEAD = 8;
 
 /** The Drive admission reads: `DriveHttp`, whose listing can carry each file's checksum. */
 type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText' | 'binnedByItem' | 'get'> &
-  Pick<ResumableDrive, 'getUploaded'> & { listAll(rootId: string, opts: { checksums: boolean }): Promise<DriveFile[]> };
+  Pick<ResumableDrive, 'getUploaded'> & { listAll(rootId: string, opts: { checksums: boolean; beforePage?: () => void }): Promise<DriveFile[]> };
 
 /** A shared metadata listing may defer read-ahead until the provider has selected its scope. */
 export type AdmissionRead = Omit<SpineRead, 'listAll'> & {
@@ -201,7 +201,11 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budg
   };
   return {
     listAll: async (rootId, opts) => {
-      const listing = await drive.listAll(rootId, { checksums: true });
+      // The listing counts against the budget too: no page starts once the reads' share is spent.
+      const beforePage = (): void => {
+        if (budget && budget.used() >= budget.limit - budget.reserve) throw new FolderTooBig();
+      };
+      const listing = await drive.listAll(rootId, budget ? { checksums: true, beforePage } : { checksums: true });
       if (opts?.readAhead !== false) warmListing(rootId, listing);
       return listing;
     },

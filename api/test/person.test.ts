@@ -8,12 +8,34 @@ import * as schema from '../src/person-schema.js';
 import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
 import { hashTicket } from '../src/run-ticket.js';
 import { pretendGitHub } from './github-support.js';
-import { QUEUED_STALE_MS } from '../src/process.js';
+import { QUEUED_STALE_MS, utcDay } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
 import { farAhead, inWindow } from './time.js';
 
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
+
+type PersonStub = ReturnType<typeof personFor>;
+
+/** Points a signed-in person at `FOLDER_ID` through the fenced setter, at their current generation. */
+const pointed = async (p: PersonStub): Promise<boolean> => await p.pointFolder((await p.account())?.generation ?? -1, null, 'FOLDER_ID');
+
+const signedIn = async (p: PersonStub): Promise<void> => {
+  await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+  await pointed(p);
+};
+
+/** One press of Tidy up at `now`: admission is the only thing that counts toward the daily quota. */
+const press = async (p: PersonStub, requestId: string, now: number) =>
+  await p.admit({ accountEpoch: (await p.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId, now, dailyLimit: 100, manifest: MANIFEST });
+
+/** The person's quota rows, read from their own storage. */
+const quotaOf = (p: PersonStub): Promise<Array<{ window: string; counter: number }>> =>
+  runInDurableObject(p, (_i, state) => state.storage.sql.exec<{ window: string; counter: number }>('SELECT window, counter FROM quota ORDER BY window').toArray());
+
+/** Ends the run going, as a finished one: the next press is a new run. */
+const finish = (p: PersonStub): Promise<void> =>
+  runInDurableObject(p, (_i, state) => void state.storage.sql.exec("UPDATE runs SET phase = 'done', finished_at = phase_at WHERE phase = 'queued'"));
 
 /**
  * The going run's deadline after a migration from before v12. The migration arms it at the wall clock and the object's
@@ -104,19 +126,41 @@ function rowCount(sql: SqlStorage, table: string): number {
 }
 
 describe('person object', () => {
-  it("one person's calls run one at a time", async () => {
+  // R7: the quota is counted by admission alone; these never write the counter themselves.
+  it("one person's concurrent presses share one active run and count once", async () => {
     const alex = personFor('sub-alex-concurrency');
-    const calls = 25;
-    const seen = await Promise.all(
-      Array.from({ length: calls }, () => alex.countQuota('2026-10-06')),
-    );
-    // Every call saw the previous call's committed write: no update lost, no count repeated.
-    expect([...seen].sort((a, b) => a - b)).toEqual(
-      Array.from({ length: calls }, (_, i) => i + 1),
-    );
-    expect(await alex.countQuota('2026-10-06')).toBe(calls + 1);
-    // Another window is its own counter.
-    expect(await alex.countQuota('2026-10-07')).toBe(1);
+    const t0 = farAhead();
+    await signedIn(alex);
+    const answers = await Promise.all(Array.from({ length: 25 }, (_, i) => press(alex, `press-${i}`, t0 + i)));
+    const runs = new Set(answers.map((a) => (a.admitted ? a.run.id : null)));
+    expect(runs.size).toBe(1);
+    expect(runs.has(null)).toBe(false);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 1 }]);
+  });
+
+  it('each later completed run counts separately', async () => {
+    const alex = personFor('sub-alex-later-runs');
+    const t0 = farAhead();
+    await signedIn(alex);
+    for (const id of ['press-a', 'press-b', 'press-c']) {
+      expect(await press(alex, id, t0)).toMatchObject({ admitted: true });
+      await finish(alex);
+    }
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 3 }]);
+  });
+
+  it("one person's count never reaches another's", async () => {
+    const alex = personFor('sub-alex-counts');
+    const sam = personFor('sub-sam-counts');
+    const t0 = farAhead();
+    await signedIn(alex);
+    await signedIn(sam);
+    await press(alex, 'press-a', t0);
+    await finish(alex);
+    await press(alex, 'press-b', t0);
+    await press(sam, 'press-a', t0);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 2 }]);
+    expect(await quotaOf(sam)).toEqual([{ window: utcDay(t0), counter: 1 }]);
   });
 
   it("two people never see each other's rows", async () => {
@@ -124,53 +168,25 @@ describe('person object', () => {
     const sam = personFor('sub-sam-rows');
     expect(people.idFromName('sub-alex-rows').equals(people.idFromName('sub-sam-rows'))).toBe(false);
 
-    expect(await alex.countQuota('2026-10-06')).toBe(1);
-    expect(await alex.countQuota('2026-10-06')).toBe(2);
-    await runInDurableObject(alex, (_instance, state) => {
-      const sql = state.storage.sql;
-      sql.exec('INSERT INTO session_lease (id, place, epoch) VALUES (1, ?, ?)', 'place-a', 3);
-      sql.exec('INSERT INTO control (id, status_revision) VALUES (1, ?)', 4);
-      sql.exec(
-        'INSERT INTO run_ticket (hash, run_id, attempt, retired) VALUES (?, ?, ?, 0)',
-        'hash-1',
-        'run-1',
-        2,
-      );
-      sql.exec('INSERT INTO account (id, email, name, enc_refresh_token) VALUES (1, ?, ?, ?)', 'you@example.com', 'Alex', 'v1.a.b');
-    });
+    const t0 = farAhead();
+    const rowsOf = (p: PersonStub): Promise<Record<string, unknown[]>> =>
+      runInDurableObject(p, (_i, state) => Object.fromEntries(PERSON_TABLES.map((t) => [t, state.storage.sql.exec(`SELECT * FROM ${t}`).toArray()])));
+    await signedIn(alex);
+    await alex.session('place-a', 'check', 0, t0);
+    await press(alex, 'press-a', t0);
+    const alexBefore = await rowsOf(alex);
 
-    // Sam's first call sees a fresh counter, and none of Alex's rows.
-    expect(await sam.countQuota('2026-10-06')).toBe(1);
-    const samCounts = await runInDurableObject(sam, (_instance, state) =>
-      Object.fromEntries(PERSON_TABLES.map((t) => [t, rowCount(state.storage.sql, t)])),
-    );
-    expect(samCounts).toEqual({
-      schema_version: 1,
-      session_lease: 0,
-      session_leave: 0,
-      quota: 1,
-      control: 0,
-      run_ticket: 0,
-      account: 0,
-      runs: 0,
-      deadlines: 0,
-    });
-    // Alex's rows are still all there, untouched by Sam.
-    const alexCounts = await runInDurableObject(alex, (_instance, state) =>
-      Object.fromEntries(PERSON_TABLES.map((t) => [t, rowCount(state.storage.sql, t)])),
-    );
-    expect(alexCounts).toEqual({
-      schema_version: 1,
-      session_lease: 1,
-      session_leave: 0,
-      quota: 1,
-      control: 1,
-      run_ticket: 1,
-      account: 1,
-      runs: 0,
-      deadlines: 0,
-    });
-    expect(await alex.countQuota('2026-10-06')).toBe(3);
+    // Sam's first press sees a fresh counter, and none of Alex's rows: no lease, no ticket, no leave.
+    await signedIn(sam);
+    await press(sam, 'press-a', t0);
+    expect(await quotaOf(sam)).toEqual([{ window: utcDay(t0), counter: 1 }]);
+    const samRows = await rowsOf(sam);
+    expect([samRows.session_lease, samRows.session_leave, samRows.run_ticket]).toEqual([[], [], []]);
+    // Alex's rows are all there, untouched by Sam, and another press of Alex's counts on.
+    expect(await rowsOf(alex)).toEqual(alexBefore);
+    await finish(alex);
+    await press(alex, 'press-b', t0);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 2 }]);
   });
 
   it('the schema is created on first use, at the current version, once', async () => {
@@ -187,10 +203,16 @@ describe('person object', () => {
     expect(tables).toEqual([...PERSON_TABLES].sort());
 
     // A restarted object keeps its rows and its single version row.
-    expect(await alex.countQuota('2026-10-06')).toBe(1);
+    const t0 = farAhead();
+    await signedIn(alex);
+    await press(alex, 'press-a', t0);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 1 }]);
     await evictDurableObject(alex);
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
-    expect(await alex.countQuota('2026-10-06')).toBe(2);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 1 }]);
+    await finish(alex);
+    await press(alex, 'press-b', t0);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 2 }]);
     const versionRows = await runInDurableObject(alex, (_instance, state) =>
       rowCount(state.storage.sql, 'schema_version'),
     );
@@ -227,7 +249,10 @@ describe('person object', () => {
 
   it('a person object refuses storage from a newer build', async () => {
     const alex = personFor('sub-alex-newer');
-    expect(await alex.countQuota('2026-10-06')).toBe(1);
+    const t0 = farAhead();
+    await signedIn(alex);
+    await press(alex, 'press-a', t0);
+    expect(await quotaOf(alex)).toEqual([{ window: utcDay(t0), counter: 1 }]);
     const newer = SCHEMA_VERSION + 1;
     await runInDurableObject(alex, (_instance, state) => {
       state.storage.sql.exec('UPDATE schema_version SET version = ? WHERE id = 1', newer);
@@ -236,14 +261,14 @@ describe('person object', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       await expect(alex.schemaVersion()).rejects.toThrow();
-      await expect(alex.countQuota('2026-10-06')).rejects.toThrow();
+      await expect(press(alex, 'press-b', t0)).rejects.toThrow();
     } finally {
       log.mockRestore();
     }
     // Nothing was downgraded: a restart still refuses (a downgrade would let it start), and no call wrote.
     const again = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      await expect(alex.countQuota('2026-10-06')).rejects.toThrow();
+      await expect(press(alex, 'press-c', t0)).rejects.toThrow();
       await expect(runInDurableObject(alex, () => 1)).rejects.toThrow(/newer than this build/);
     } finally {
       again.mockRestore();
@@ -260,7 +285,7 @@ describe('Delete me', () => {
     // A row in every table: account and folder, the lease and a leave, a run (quota, revision, deadlines), a ticket
     // the alarm minted and its report, an answer waiting.
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    await alex.setFolderId('FOLDER_ID');
+    await pointed(alex);
     await alex.session('laptop', 'check', 0, t0);
     await alex.session('laptop', 'leave', 0, t0);
     await alex.session('phone', 'check', 0, t0);
@@ -301,10 +326,12 @@ describe('Delete me', () => {
 describe('person storage migration', () => {
   it('a version 1 person migrates to the current version on start, keeps its rows and gains the account table', async () => {
     const alex = personFor('sub-alex-v1');
-    expect(await alex.countQuota('2026-10-06')).toBe(1);
-    // Put the database back as P3-3 shipped it: no account table, a version row of 1.
+    await alex.schemaVersion();
+    // Put the database back as P3-3 shipped it: no account table, a version row of 1, and a quota row (a fixed seed: an
+    // old shape cannot be reached through admission).
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
+      sql.exec("INSERT INTO quota (window, counter) VALUES ('2026-10-06', 1)");
       undoV6(sql);
       sql.exec('DROP TABLE account');
       sql.exec('UPDATE schema_version SET version = 1 WHERE id = 1');
@@ -312,8 +339,8 @@ describe('person storage migration', () => {
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
-    expect(await alex.countQuota('2026-10-06')).toBe(2);
-    const after = await runInDurableObject(alex, (_instance, state) => ({
+    expect(await quotaOf(alex)).toEqual([{ window: '2026-10-06', counter: 1 }]);
+    const after =await runInDurableObject(alex, (_instance, state) => ({
       counts: Object.fromEntries(PERSON_TABLES.map((t) => [t, rowCount(state.storage.sql, t)])),
       version: state.storage.sql.exec<{ version: number }>('SELECT version FROM schema_version WHERE id = 1').one().version,
     }));
@@ -342,14 +369,14 @@ describe('person storage migration', () => {
     expect(await alex.vaultState()).toEqual({ folderId: null, complete: false, pending: null, templateIds: null });
     expect(await alex.encryptedRefreshToken()).toBe('enc-token');
     expect(await alex.folderId()).toBeNull();
-    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await pointed(alex)).toBe(true);
     expect(await alex.folderId()).toBe('FOLDER_ID');
   });
 
   it('person storage migrates from v5 to v6 keeping every row', async () => {
     const alex = personFor('sub-alex-v5');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await pointed(alex)).toBe(true);
     expect(await alex.claimVault('call-1', 1_000, 61_000)).toBe(true);
     await alex.cacheDriveToken({ accessToken: 'access-1', expiresAt: 9_999_999_999_999 });
     // Put the database back as P3-6 shipped it: the v5 lease table (place, epoch) and a version row of 5.
@@ -389,13 +416,14 @@ describe('person storage migration', () => {
   it('person storage migrates from v6 to v7 keeping every row', async () => {
     const alex = personFor('sub-alex-v6');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await pointed(alex)).toBe(true);
     expect(await alex.session('laptop', 'check', 0, 1_000)).toEqual({ active: true, epoch: 1 });
     expect(await alex.session('phone', 'leave', 2, 1_000)).toEqual({ active: false, epoch: 1 });
-    expect(await alex.countQuota('2026-10-07')).toBe(1);
-    // Put the database back as P3-7 shipped it: no runs table, a version row of 6, and v6 rows in every table.
+    // Put the database back as P3-7 shipped it: no runs table, a version row of 6, and v6 rows in every table (the
+    // quota row a fixed seed: an old shape cannot be reached through admission).
     const before = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
+      sql.exec("INSERT INTO quota (window, counter) VALUES ('2026-10-07', 1)");
       undoV7(sql);
       sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-1', 'req-1');
       sql.exec('INSERT INTO control (id, head, status_revision, claim, epoch) VALUES (1, ?, ?, ?, ?)', 'head-1', 4, 'claim-1', 2);
@@ -536,7 +564,7 @@ describe('person storage migration', () => {
     const alex = personFor('sub-alex-v10');
     const t0 = farAhead();
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await pointed(alex)).toBe(true);
     expect(await alex.session('laptop', 'check', 0, 1_000)).toEqual({ active: true, epoch: 1 });
     const admitted = await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     if (!('run' in admitted)) throw new Error('not admitted');

@@ -41,6 +41,12 @@ export interface AdmissionManifest {
   subject?: string;
 }
 
+/**
+ * The most a press may admit, as UTF-8 JSON: half a Durable Object row's 2 MB
+ * (https://developers.cloudflare.com/durable-objects/platform/limits/), leaving room for the run's other columns.
+ */
+export const ADMISSION_MANIFEST_LIMIT = 1024 * 1024;
+
 /** Why there is nothing to admit, worded as the worker contract's 409 `nothing`. */
 export const NOTHING = {
   waiting: 'Nothing is waiting in the inbox.',

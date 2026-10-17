@@ -27,7 +27,7 @@ async function someone(): Promise<{ sub: string; cookie: string; epoch: number }
   await kv.put(allowKey(EMAIL), '1');
   const enc = await encrypt(REFRESH_TOKEN, await importEncryptionKey(env.TOKEN_ENC_KEY));
   const { generation } = await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: enc });
-  await person(sub).setFolderId('FOLDER_ID');
+  await person(sub).pointFolder(generation, null, 'FOLDER_ID');
   const { epoch } = await person(sub).session('laptop', 'check', 0, Date.now());
   const token = await signSession({ sub, gen: generation }, env.SESSION_SECRET);
   return { sub, cookie: `${SESSION_COOKIE}=${token}`, epoch };

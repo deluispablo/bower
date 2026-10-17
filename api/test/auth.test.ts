@@ -383,7 +383,7 @@ describe('GET /auth/callback', () => {
     const unreadable = await encrypt(REFRESH_TOKEN, oldKey);
     const sub = newSub();
     const cookie = await sessionOf(sub);
-    await person(sub).setFolderId('FOLDER_ID');
+    await person(sub).pointFolder((await person(sub).account())?.generation ?? -1, null, 'FOLDER_ID');
     await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: unreadable });
     const before = (await person(sub).account())?.generation ?? -1;
 

@@ -286,8 +286,8 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
     signIn: async (folderId) => {
       await BOWER_KV.put(allowKey(EMAIL), '1');
       const enc = await encrypt('test-refresh-token', await importEncryptionKey(env.TOKEN_ENC_KEY));
-      alex().signIn({ email: EMAIL, name: 'Alex', encRefreshToken: enc });
-      alex().setFolderId(folderId);
+      const { generation } = alex().signIn({ email: EMAIL, name: 'Alex', encRefreshToken: enc });
+      alex().pointFolder(generation, alex().folderId(), folderId);
       jar.cookie = await session();
     },
     otherDevice: async () => browserWith({ cookie: await session() }),
