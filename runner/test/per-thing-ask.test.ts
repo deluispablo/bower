@@ -4,14 +4,14 @@
  * is filed. Every validation refusal of the model's reply is asked again once with its reason, then ends as C12 does.
  * No live call: `claude` is answered by scripted proposals in the intent shape over the c04-offer-and-flat case.
  */
-import { phaseAwareClaude } from './b1-planning-support';
+import { empty, fileIntent, folder, note, phaseAwareClaude, run as planningRun, seedState, select, setup } from './b1-planning-support';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as noteEdit from '../../src/data/contracts/note-edit';
 import { REFUSALS, type ClaudeCall, type ClaudeSpawn, type RefusalKind } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
-import { lastJson, promptOf, replySequence, runWithClaude } from './corpus-run';
+import { frameOf, lastJson, promptOf, replySequence, runWithClaude } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
@@ -143,7 +143,8 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   type ViewKind = 'viewKeys' | 'viewBinding' | 'viewLimit';
   type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit';
   type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText';
-  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind>, (ctx: Context, id: Id) => string> = {
+  type SelectionKind = 'selectionKeys' | 'selectionItem' | 'selectionKind' | 'selectionPlace' | 'selectionWants' | 'selectionBasis';
+  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind | SelectionKind | 'noteCut'>, (ctx: Context, id: Id) => string> = {
     notJson: () => envelope('Here is my plan: file everything.'),
     noText: () => envelope(null),
     notIntent: edit((i) => ({ ...i, v: 2 })),
@@ -190,6 +191,11 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     keepNote: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/None.md' }] })),
     keepNotAsked: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/Flat hunt/Flat hunt.md' }] })),
     memory: edit((i) => ({ ...i, forget: Array.from({ length: 21 }, (_, n) => ({ factId: `fact-${n + 1}` })) })),
+    // F5 (ruling 6): the execution's selection bounds; the selection is the good reply's.
+    thingPlace: edit((i) => ((offer(i).to = 'Projects/Flat hunt'), i)),
+    thingType: edit((i) => noted(i, { typeRow: 'offer' })),
+    askOptions: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'))] })),
+    lineTarget: edit((i, id) => ({ ...i, lines: [line(id, { note: 'Projects/Flat hunt/Flat hunt.md' })] })),
   };
   // A view needs a type, a request and a Bower map, which the offer-and-flat case has not: these change the skills tally's view.
   const viewBad: Record<ViewKind, (view: unknown) => unknown[]> = {
@@ -210,12 +216,70 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   // An answer's links take the one link rule's own kind (noteLink, C06), so there is no answer link kind.
   const answerKinds: AnswerKind[] = ['answerKeys', 'answerBinding', 'answerText'];
 
+  // F5 (round 1 ruling 5): one bad selection per selection kind, over the sources and folders the selection call lists.
+  type Frame = Context & { sources: Array<{ itemId: string }>; foldersById: Record<string, string> };
+  const folderOf = (f: Frame, path: string): string => Object.entries(f.foldersById).find(([, p]) => p === path)?.[0] ?? `no ${path}`;
+  /** A selection the good reply fits: each thing to the folder it files into (a new Resources/Pay for the payslip), wanting no note. */
+  const fits = (f: Frame, id: Id) => ({ asks: [], items: f.sources.map((s) => {
+    const to = filed(id).things.find((t) => t.fileId === s.itemId)?.to ?? 'Resources';
+    return { itemId: s.itemId, kind: 'unknown', wants: [], destination: f.foldersById[folderOf(f, to)] ? folderOf(f, to) : { parentId: folderOf(f, 'Resources'), name: to.split('/').at(-1) } };
+  }) });
+  const first = (f: Frame, id: Id, change: Record<string, unknown>) => {
+    const s = fits(f, id);
+    return { ...s, items: s.items.map((item, n) => (n ? item : { ...item, ...change })) };
+  };
+  const selectionBad: Record<SelectionKind, (f: Frame, id: Id) => unknown> = {
+    selectionKeys: (f, id) => ({ ...fits(f, id), extra: 1 }),
+    selectionItem: (f, id) => first(f, id, { itemId: 'f-none' }),
+    selectionKind: (f, id) => first(f, id, { kind: 'not-a-kind' }),
+    selectionPlace: (f, id) => first(f, id, { destination: 'f-none' }),
+    selectionWants: (f, id) => first(f, id, { wants: ['f-none'] }),
+    selectionBasis: (f, id) => first(f, id, { basis: { kind: 'source', fileId: f.sources[0]?.itemId, goal: 'words that are in no source at all' } }),
+  };
+  /** Explicit replies for both calls: `selection` and `execution` by attempt, with the frame each call reads. */
+  const explicitly = (selection: (f: Frame, id: Id, attempt: number) => unknown, execution: (f: Frame, id: Id, attempt: number) => unknown,
+    inputs: string[] = []): ClaudeSpawn => phaseAwareClaude(async (call, _step, attempt, phase) => {
+    inputs.push(promptOf(call));
+    const f = frameOf<Frame>(call);
+    const ids = new Map(f.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
+    const id: Id = (name) => ids.get(name) ?? `no ${name}`;
+    return { code: 0, stderr: '', cut: null, stdout: envelope(JSON.stringify((phase === 'selection' ? selection : execution)(f, id, attempt))) };
+  }, undefined, true);
+
   const good = intentReply((_ctx, id) => filed(id));
 
   // The name stays the one earlier checks named; each kind is a test of its own inside it.
   describe('every validation refusal is retried once with its reason', () => {
     it('every refusal kind has a bad reply here', () => {
-      expect(Object.keys({ ...bad, ...viewBad, ...mapBad, ...Object.fromEntries(answerKinds.map((kind) => [kind, true])) }).sort()).toEqual(Object.keys(REFUSALS).sort());
+      expect(Object.keys({ ...bad, ...viewBad, ...mapBad, ...selectionBad, noteCut: true, ...Object.fromEntries(answerKinds.map((kind) => [kind, true])) }).sort()).toEqual(Object.keys(REFUSALS).sort());
+    });
+
+    it.for(Object.keys(selectionBad) as SelectionKind[])('F5: a %s selection refusal is logged with its kind and retried once with its reason', async (kind) => {
+      const c = await offerAndFlat();
+      const inputs: string[] = [];
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const run = await runWithClaude(c, explicitly((f, id, attempt) => (attempt ? fits(f, id) : selectionBad[kind](f, id)), (_f, id) => filed(id), inputs));
+      const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
+      expect({ kind, retried: retried.includes(`(${kind}): ${REFUSALS[kind]};`) }).toEqual({ kind, retried: true });
+      expect({ kind, told: inputs.filter((i) => i.includes(`Your reply was refused: ${REFUSALS[kind]}. Reply again`)).length }).toEqual({ kind, told: 1 });
+      expect({ kind, code: run.code, filed: 'Projects/Flat hunt/Wrenfield Road, kitchen.jpg' in run.after }).toEqual({ kind, code: 0, filed: true });
+    });
+
+    it('F5: a noteCut refusal (a new note while the folder list is cut) is retried once with its reason', async () => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // A folder whose index is cut at its bound, warm, as b1-cut-index-no-new-destination has it.
+      const b = await setup({ folder: { ...folder, ...Object.fromEntries(Array.from({ length: 155 }, (_, n) => [
+        `Resources/Group ${String(n).padStart(3, '0')}/Evidence.md`, note(`Remote offer ${n} ${'x'.repeat(180)}.`)])) } });
+      await seedState(b);
+      // The selection wants no note for the offer and asks about it; the retry asks that, as frozen, instead of a new note.
+      const asks = b.sources.map((s) => ({ fileId: s.itemId, text: 'Is this the remote offer?', yes: 'Yes', no: 'No' }));
+      const r = await planningRun(b, [{ ...select(b), asks }, fileIntent(b), { ...empty, asks }]);
+      expect(r.frames[0]?.prompt, 'the index is cut').toContain('index cut:');
+      const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
+      expect(retried).toContain(`(noteCut): ${REFUSALS.noteCut};`);
+      expect(r.frames.filter((f) => f.prompt.includes(`Your reply was refused: ${REFUSALS.noteCut}. Reply again`))).toHaveLength(1);
+      expect(r.code).toBe(0);
     });
 
     // One test for each kind (vitest's test.for), so each takes its own few milliseconds and names itself when it fails.

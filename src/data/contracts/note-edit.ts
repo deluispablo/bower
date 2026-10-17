@@ -289,7 +289,8 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
   if (personal) {
     const c = change.consent;
     if (!c || c.targetFileId !== fetched?.fileId || change.recordIds.length !== 1 || change.recordIds[0] !== c.requestId
-      || change.entries.length !== 1 || change.entries[0]?.source === null
+      // A line with no source is a request's own words: only under a consent the settlement issued for it (F1, ruling 6).
+      || change.entries.length !== 1 || (change.entries[0]?.source === null && !fetched.consents)
       || (fetched.consents && !fetched.consents.some((x) => x.requestId === c.requestId && x.targetFileId === c.targetFileId && x.sourceFileId === c.sourceFileId))) return { refused: 'not-bower' };
   }
   const eol = eolOf(text);
@@ -1294,8 +1295,10 @@ const digest = (bytes: Uint8Array): Promise<string> => sha256(new Blob([bytes.sl
 /** Rule 1: the file as re-read still hashes to `beforeContent`, recomputes to `text`, and `content` describes it. */
 export async function recheckEdit(effect: EditText, bytes: Uint8Array, fetched?: EditFetched): Promise<'ok' | 'conflict'> {
   if (bytes.byteLength !== effect.beforeContent.size || await digest(bytes) !== effect.beforeContent.sha256) return 'conflict';
+  // The effect's consents are the ones its manifest's guard checked (F1: a sourceless line cites its request's journal file).
+  const consents = fetched?.consents ?? effect.changes.flatMap((c) => (c.kind === 'timeline-append' && c.consent ? [c.consent] : []));
   const result = applyChanges(bytes, effect.changes, { ...fetched, fileId: effect.before.fileId,
-    context: fetched?.context ?? createOwnershipContext(), path: effect.path, name: effect.before.name });
+    context: fetched?.context ?? createOwnershipContext(), path: effect.path, name: effect.before.name, consents });
   if (!result.ok || result.text !== effect.text) return 'conflict';
   const { content } = effect;
   if (content.encoding !== 'utf8' || content.size !== result.bytes.byteLength || content.sha256 !== await digest(result.bytes)) return 'conflict';

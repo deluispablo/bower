@@ -426,7 +426,8 @@ function change(value: unknown): value is Change {
       && (value.consent === undefined || (closed(value.consent, ['requestId', 'targetFileId', 'sourceFileId'])
         && recordId(value.consent.requestId) && driveId(value.consent.targetFileId) && driveId(value.consent.sourceFileId)
         && value.recordIds.length === 1 && value.recordIds[0] === value.consent.requestId
-        && value.entries.length === 1 && (value.entries[0] as EditEntry).source !== null));
+        // A line with no source is its request's own words; the edit guard checks it cites that request's journal file (F1).
+        && value.entries.length === 1));
     case 'rules-wording': return closed(value, ['kind', 'add', 'remove']) && list(value.add, ruleAdd) && list(value.remove, ruleRemove)
       && value.add.length + value.remove.length > 0;
     case 'views-set': return closed(value, ['kind', 'recordIds', 'previous', 'text']) && recordIds(value.recordIds)
@@ -798,8 +799,10 @@ function edits(value: ManifestV2): EditGuardRule | null {
       if (entry.kind === 'timeline-append' && entry.consent) {
         const c = entry.consent;
         if (c.targetFileId !== e.before.fileId || !journal.has(c.requestId)) return 'record';
+        // A line with no source cites one of its own request's journal files, never a thing (F1, ruling 6).
         const source = operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.sourceFileId && captured.has(c.sourceFileId));
-        if (source ? !item.dependsOn.includes(source.operationId) : !places.has(c.sourceFileId)) return 'record';
+        if (entry.entries[0]?.source === null ? !journal.get(c.requestId)?.includes(c.sourceFileId)
+          : source ? !item.dependsOn.includes(source.operationId) : !places.has(c.sourceFileId)) return 'record';
       }
       if (!recordsOf(entry).every((id) => journal.has(id))) return 'record';
     }
