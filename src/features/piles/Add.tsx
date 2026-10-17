@@ -15,8 +15,8 @@ import s from './piles.module.css';
 import { normaliseLink } from './link';
 import { forget, get, keep } from './draft-files';
 import { draftLine } from './add-words';
+import { useSessionDraft } from '@/ui/session-draft';
 
-const DRAFT_KEY = 'bower:add-draft';
 const ITEMS_KEY = 'bower:add-items';
 
 interface Draft {
@@ -43,23 +43,7 @@ export function Add() {
   const { vault } = useSources();
   const nav = useNavigate();
   const saving = useRef(false);
-  const [text, setTextState] = useState(() => {
-    try {
-      return sessionStorage.getItem(DRAFT_KEY) ?? '';
-    } catch {
-      // expected: storage may be blocked (a private window); the default holds.
-      return '';
-    }
-  });
-  const setText = (v: string): void => {
-    setTextState(v);
-    try {
-      if (v) sessionStorage.setItem(DRAFT_KEY, v);
-      else sessionStorage.removeItem(DRAFT_KEY);
-    } catch {
-      // expected: Without storage the draft lasts while the screen is open.
-    }
-  };
+  const [text, setText] = useSessionDraft('bower:add-draft');
   // The things in the draft are kept for the visit too (in the real app, files are already
   // in the upload queue, so only their list needs keeping).
   const [items, setItemsState] = useState<Draft[]>(() => {
