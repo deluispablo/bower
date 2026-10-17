@@ -108,9 +108,15 @@ export function DesktopShell() {
     else set(side === 'left' ? { leftOpen: !leftOpen } : { rightOpen: !rightOpen });
   };
   useEffect(() => follow(route), [route, follow]);
-  // The active tab stays in sight however many are open.
+  // The active tab stays in sight however many are open. Only the strip scrolls: scrollIntoView would move the
+  // sequential focus starting point, so the first Tab would skip "Skip to content".
   useEffect(() => {
-    document.querySelector(`[data-tab="${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const tab = document.querySelector(`[data-tab="${active}"]`);
+    const strip = tab?.parentElement;
+    if (!tab || !strip) return;
+    const t = tab.getBoundingClientRect();
+    const n = strip.getBoundingClientRect();
+    strip.scrollLeft += t.left < n.left ? t.left - n.left : Math.max(0, t.right - n.right);
   }, [active, tabs.length, measured]);
 
   const drag = useRef<{ side: 'left' | 'right'; x: number; w: number } | null>(null);

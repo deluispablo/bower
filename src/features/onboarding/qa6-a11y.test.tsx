@@ -49,10 +49,12 @@ describe('qa6-a11y: the tour moves the keyboard and history step by step', () =>
     start.focus();
     fireEvent.click(start);
     expect(h1('Throw it in'), 'step 1 heading has focus after Show me around').toHaveFocus();
+    expect(h1('Throw it in'), 'the focused heading carries the step progress').toHaveAccessibleDescription('Step 1 of 3');
     const next = screen.getByRole('button', { name: 'Next' });
     next.focus();
     fireEvent.click(next);
     expect(h1('Press Tidy up'), 'step 2 heading has focus after Next').toHaveFocus();
+    expect(h1('Press Tidy up'), 'step 2 progress').toHaveAccessibleDescription('Step 2 of 3');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(h1('Find it later'), 'step 3 heading has focus after Next').toHaveFocus();
   });

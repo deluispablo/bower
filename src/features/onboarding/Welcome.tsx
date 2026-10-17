@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PARA_ROOTS, type ParaRoot } from '@/data/types';
@@ -6,6 +6,7 @@ import { paraColor } from '@/app/paths';
 import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
+import { toHeading } from '@/ui/focus';
 import { report } from '@/ui/report';
 import s from './welcome.module.css';
 
@@ -63,9 +64,18 @@ function WelcomeSteps() {
   // Each step is a history entry, so the phone's back button goes back a step.
   const [params, setParams] = useSearchParams();
   const step = Math.min(STEPS.length - 1, Math.max(-1, Number(params.get('step') ?? -1)));
-  // Steps replace each other, so finishing the tour leaves no way back into it.
-  const setStep = (n: number): void => setParams({ step: String(n) }, { replace: true });
+  // Finishing replaces the entry and marks the tour done, so Back after it does not show it again.
+  const setStep = (n: number): void => setParams({ step: String(n) });
   const started = useRef(false);
+  const progressId = useId();
+  // A step change (not the first render of a deep link) puts the keyboard on the new heading.
+  const title = useRef<HTMLHeadingElement>(null);
+  const shownStep = useRef(step);
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    if (title.current) toHeading(title.current);
+  }, [step]);
 
   useEffect(() => {
     if (started.current) return;
@@ -90,14 +100,14 @@ function WelcomeSteps() {
     const st = STEPS[step];
     return (
       <main className={s.page}>
-        <p className="sr-only">{`Step ${step + 1} of ${STEPS.length}`}</p>
+        <p id={progressId} className="sr-only">{`Step ${step + 1} of ${STEPS.length}`}</p>
         <div className={s.dots} aria-hidden="true">
           {STEPS.map((_, i) => (
             <span key={i} className={i === step ? s.dotOn : ''} />
           ))}
         </div>
         <PoseBower pose={(['carry', 'read', 'proud'] as const)[step] ?? 'idle'} size={150} />
-        <h1 className={s.title}>{st?.title}</h1>
+        <h1 ref={title} aria-describedby={progressId} className={s.title}>{st?.title}</h1>
         <p className={s.text}>{st?.text}</p>
         <div className={s.foot}>
           <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : (markToured(), nav('/add', { replace: true })))}>
@@ -116,7 +126,7 @@ function WelcomeSteps() {
       <div className={s.head}>
         <PoseBower pose={ready ? 'proud' : 'carry'} size={96} />
         <div>
-          <h1 className={s.title}>{back ? 'Welcome back' : ready ? 'Your folder is ready' : 'Making your Bower folder'}</h1>
+          <h1 ref={title} className={s.title}>{back ? 'Welcome back' : ready ? 'Your folder is ready' : 'Making your Bower folder'}</h1>
           <p className="muted">{back ? 'Your Bower folder is still in your Drive, with everything in it.' : ready ? 'It is called Bower, in My Drive.' : 'In your Google Drive. A few seconds.'}</p>
         </div>
       </div>
