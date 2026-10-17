@@ -74,8 +74,7 @@ export function runTitle(r: RunState): string {
     case 'saving':
       return stepLabel(r, r.phase);
     case 'done':
-      if (r.scope === 'instructions') return 'Done. Bower read your changes';
-      return `Done. ${filedWords(r.report)}`;
+      return `Done. ${r.scope === 'instructions' ? 'Bower read your changes' : filedWords(r.report)}.`;
     case 'failed':
       return 'The tidy-up stopped';
   }
@@ -99,8 +98,8 @@ export function filedWords(report: RunReport | undefined): string {
 
 export function runDetail(r: RunState): string {
   if (r.scope === 'instructions' && r.phase !== 'done' && r.phase !== 'failed') {
-    if (r.phase === 'reading') return 'Reading the changes you made, the rules you typed and what you asked.';
-    if (r.phase === 'writing') return 'Wording your rules and doing what you asked. Your inbox waits for a tidy-up.';
+    if (r.phase === 'reading') return 'Reading the changes you made and anything you asked.';
+    if (r.phase === 'writing') return 'Doing what your changes call for. Your inbox waits for a tidy-up.';
     if (r.phase === 'saving') return 'Saving it in your Drive.';
   }
   switch (r.phase) {
@@ -215,7 +214,7 @@ export function landedSummary(r: RunState): string {
 /** The footer's line when nothing is running or waiting to be seen; `waiting` is undefined while the inbox loads. */
 export function statusLine(run: RunState | null | undefined, waiting: number | undefined): string {
   const what = waiting === undefined ? 'Looking at the inbox…' : waiting ? `${plural(waiting, 'thing')} waiting` : 'Nothing waiting';
-  return run?.phase === 'done' ? `Last tidy-up ${clock(run.finishedAt ?? run.phaseAt)}. ${what}` : what;
+  return run?.phase === 'done' && run.scope === 'all' && !run.report?.nothingReady ? `Last tidy-up ${clock(run.finishedAt ?? run.phaseAt)}. ${what}` : what;
 }
 
 export type RunLinkRow = { path: string; what: string };
