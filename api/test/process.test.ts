@@ -533,7 +533,7 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     expect(await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm())).toBe(T0 + 1000);
     // Woken twice (a retried alarm, a second end): one run, dispatched once.
     const sent: string[] = [];
-    const github = { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: async (input: string, init?: RequestInit) => {
+    const github = { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl: async (input: string, init?: RequestInit) => {
       sent.push(`${init?.method ?? 'GET'} ${new URL(input).pathname}`);
       return await folder.fetchImpl(input, init);
     } };
@@ -569,7 +569,7 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     const late = T0 + 10 * 3600_000;
     expect((await person(sub).runStatus(late)).run).toMatchObject({ id: going.id, phase: 'failed' });
     await runInDurableObject(person(sub), async (instance: Person) => {
-      await instance.wake(late, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
+      await instance.wake(late, { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
     });
     // Nothing will start it now: a retry is a press like any other and hears why it cannot start.
     expect(await person(sub).admit({ ...ask('answer-a', late, { manifest: null }), answer: true, subject: 'p-receipt' })).toEqual({ admitted: false, refused: 'needs-manifest' });
@@ -604,7 +604,7 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
           }
           return await folder.fetchImpl(input, init);
         };
-        await instance.wake(T0 + 1000, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl });
+        await instance.wake(T0 + 1000, { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl });
         // No run row, no quota counted, no manifest kept, nothing armed to dispatch.
         expect(state.storage.sql.exec('SELECT id FROM runs').toArray()).toEqual([]);
         expect(state.storage.sql.exec('SELECT counter FROM quota').toArray()).toEqual([]);
@@ -683,7 +683,7 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
           }
           return await folder.fetchImpl(input, init);
         };
-        await instance.wake(T0 + 1000, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl });
+        await instance.wake(T0 + 1000, { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl });
         expect(landed).toBe(true);
         return { runs: state.storage.sql.exec('SELECT id FROM runs').toArray(), quota: state.storage.sql.exec('SELECT counter FROM quota').toArray() };
       });

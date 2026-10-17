@@ -234,7 +234,7 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
   const app = createApp({ fetchImpl: (input, init) => opts.outside(input, init) });
   const executionCtx = { waitUntil: (): void => undefined, passThroughOnException: (): void => undefined, props: {} };
   const urlOf = (input: string | URL | Request): string => (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-  const github = { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: (input: string, init?: RequestInit) => opts.outside(input, init) };
+  const github = { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl: (input: string, init?: RequestInit) => opts.outside(input, init) };
   /**
    * The runtime fires a due alarm at once (https://developers.cloudflare.com/durable-objects/api/alarms/): after each
    * call, every person object's alarm due by the wall clock runs, as admission's dispatch and a run end's wake need.

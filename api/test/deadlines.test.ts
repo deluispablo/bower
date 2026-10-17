@@ -25,7 +25,7 @@ async function rowsOf(sub: string): Promise<Row[]> {
   );
 }
 
-const noGitHub = { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) };
+const noGitHub = { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) };
 
 async function alarmOf(sub: string): Promise<number | null> {
   return await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm());
@@ -84,6 +84,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     await runInDurableObject(p, async (instance: Person) => {
       await instance.wake(expiry, {
         repo: env.GITHUB_REPO,
+        apiOrigin: env.API_ORIGIN,
         token: env.GITHUB_TOKEN,
         fetchImpl: async (input) => {
           asked.push(input);
@@ -123,7 +124,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     // The migration arms it at once and the object's real alarm may already have set its own deadline: both are correct.
     inWindow(rows[1]?.at, before, t0 + QUEUED_STALE_MS);
     await runInDurableObject(p, async (instance: Person) => {
-      await instance.wake(Date.now(), { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
+      await instance.wake(Date.now(), { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
     });
     expect(await alarmOf(sub)).toBe(t0 + QUEUED_STALE_MS);
     // v14 moves the gone ticket into its table, with no run id, and the key-value entry goes.
