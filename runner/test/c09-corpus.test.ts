@@ -55,4 +55,25 @@ describe('c09-corpus', () => {
     expect((c.expected.notes ?? []).filter((n) => n.path === SYSTEM.requests)).toEqual([]);
     expect(((c.expected as { answers?: Array<{ request: string }> }).answers ?? []).map((a) => a.request)).toEqual([words]);
   });
+
+  const C09_IDS = [...CASES.map((c) => c.id), 'c09-closest-flat'];
+
+  it.each(C09_IDS)('guard c09-corpus-strength: %s expects an exact created list, files present and links that resolve (ruling 2)', async (id) => {
+    const { expected } = await loadCase(join(ROOT, id));
+    expect(Array.isArray(expected.report?.created), 'an exact created list').toBe(true);
+    expect(expected.report?.createdAtLeast, 'never an at-least count').toBeUndefined();
+    expect(expected.files?.present?.length ?? 0, 'files present').toBeGreaterThan(0);
+    expect(expected.linksResolve, 'links resolve').toBe(true);
+  });
+
+  it.each(C09_IDS)('AC3 c09-corpus-readme: %s has a scripted C09 row in the README (ruling 4)', async (id) => {
+    const readme = await readFile(join(ROOT, 'README.md'), 'utf8');
+    expect(readme).toMatch(new RegExp(`^\\| ${id} \\| C09 \\| scripted \\|`, 'm'));
+  });
+
+  it('AC3 c09-corpus-readme: the README documents the answers and tables expectation keys, one line each (ruling 4)', async () => {
+    const readme = await readFile(join(ROOT, 'README.md'), 'utf8');
+    expect(readme).toMatch(/^- `answers`: \S.*$/m);
+    expect(readme).toMatch(/^- `tables`: \S.*$/m);
+  });
 });

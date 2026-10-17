@@ -4,6 +4,10 @@
     "Areas/Home/Home insurance.md"
   ],
   "files": {
+    "present": [
+      "Areas/Home/Home insurance policy.pdf",
+      "Areas/Home/Home insurance.md"
+    ],
     "absent": [
       "Inbox/*"
     ]
@@ -21,10 +25,11 @@
       ]
     }
   ],
+  "linksResolve": true,
   "report": {
     "requests": [
       "Does my home insurance cover a burst pipe, and how much would I pay myself?"
     ],
-    "createdAtLeast": 0
+    "created": ["Bower health.md"]
   }
 }
