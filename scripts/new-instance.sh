@@ -12,8 +12,9 @@
 #    app's workflows and agent files (.github/workflows/, agent/), and copies
 #    the built runner to runner/dist/runner.mjs and runner/workflows/tidy.yml
 #    to .github/workflows/tidy.yml. Then pushes.
-# 4. Sets the repository variable BOWER_API_URL to the Worker's origin, only
-#    when it differs.
+# 4. Adds the Worker's origin to the repository variable BOWER_API_URL, a
+#    comma-separated list (one repository may serve staging and production),
+#    keeping every other entry; says so when it is already listed.
 #
 # It never asks for, reads, prints or sets a secret: the runner needs none (the
 # Worker hands each run its own ticket in the dispatch), and the credential a
@@ -152,14 +153,17 @@ sync_files() {
 }
 
 set_api_url() {
-  local current
+  # The variable is a comma-separated list: one repository may serve staging and production.
+  local current entries
   current=$(gh variable get BOWER_API_URL -R "$REPO" </dev/null 2>/dev/null) || current=''
-  if [ "$current" = "$API_ORIGIN_VALUE" ]; then
-    log "BOWER_API_URL in $REPO is already $API_ORIGIN_VALUE."
+  entries=$(printf '%s\n' "$current" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || true)
+  if printf '%s\n' "$entries" | grep -Fxq -- "$API_ORIGIN_VALUE"; then
+    log "BOWER_API_URL in $REPO already lists $API_ORIGIN_VALUE."
     return
   fi
-  gh variable set BOWER_API_URL -R "$REPO" --body "$API_ORIGIN_VALUE" </dev/null >/dev/null
-  log "BOWER_API_URL set to $API_ORIGIN_VALUE in $REPO."
+  entries=$(printf '%s\n%s\n' "$entries" "$API_ORIGIN_VALUE" | grep -v '^$' | paste -sd, -)
+  gh variable set BOWER_API_URL -R "$REPO" --body "$entries" </dev/null >/dev/null
+  log "BOWER_API_URL in $REPO is now $entries."
 }
 
 new_instance_main() {

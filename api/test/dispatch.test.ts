@@ -143,7 +143,8 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
     expect(call?.headers.Authorization).toBe('Bearer test-github-token');
     expect(call?.headers.Accept).toBe('application/vnd.github+json');
     expect(call?.headers['X-GitHub-Api-Version']).toBe('2022-11-28');
-    expect(Object.keys(payload).sort()).toEqual(['allow_web', 'attempt', 'run_id', 'scope', 'ticket']);
+    expect(Object.keys(payload).sort()).toEqual(['allow_web', 'api_url', 'attempt', 'run_id', 'scope', 'ticket']);
+    expect(payload.api_url).toBe(env.API_ORIGIN);
     expect(personIdOf(payload.run_id)).toBe(env.PERSON.idFromName(who.sub).toString());
     // The ticket opens the token route, with the folder.
     const token = await createApp().request(`${API}/runner/runs/${payload.run_id}/token`, { headers: { authorization: `Bearer ${payload.ticket}` } }, env);
@@ -300,7 +301,7 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
 });
 
 describe('dispatch retries', () => {
-  const input = { repo: 'owner/name', token: 'test-github-token', runId: 'run-1', attempt: 1, ticket: 't', scope: 'instructions' as const, allowWeb: true };
+  const input = { repo: 'owner/name', token: 'test-github-token', runId: 'run-1', attempt: 1, ticket: 't', scope: 'instructions' as const, allowWeb: true, apiOrigin: 'https://api.example.com' };
   /** A pretend GitHub that answers each call from `script` (null: the network fails), then 204. */
   function scripted(script: (number | null)[]) {
     const calls: number[] = [];
@@ -358,7 +359,7 @@ describe('dispatch retries', () => {
       await runInDurableObject(person(who.sub), async (instance: Person) => {
         await instance.recover(alarm + 1, gh.access);
       });
-      expect((await dispatchOf(gh, run?.id ?? '', 2)).attempt).toBe(2);
+      expect(await dispatchOf(gh, run?.id ?? '', 2)).toMatchObject({ attempt: 2, api_url: env.API_ORIGIN });
       expect(triesOf(gh, run?.id)).toBe(4);
       expect((await person(who.sub).runStatus(alarm + 1)).run?.id).toBe(run?.id);
     } finally {

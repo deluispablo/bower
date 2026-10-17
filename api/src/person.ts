@@ -771,7 +771,7 @@ export class Person extends DurableObject<Env> {
    * object's own env and the Workers fetch (as `worker-dispatch` reaches GitHub).
    */
   async alarm(): Promise<void> {
-    await this.wake(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
+    await this.wake(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, apiOrigin: this.env.API_ORIGIN, fetchImpl: (i, init) => fetch(i, init) });
   }
 
   /**
@@ -949,7 +949,7 @@ export class Person extends DurableObject<Env> {
       console.error('tidy dispatch is not configured: no GitHub token');
       return true;
     }
-    const sent = await dispatchOutcome({ repo: github.repo, token, runId: seen.id, ticket, ...claimed }, github.fetchImpl);
+    const sent = await dispatchOutcome({ repo: github.repo, token, runId: seen.id, ticket, apiOrigin: github.apiOrigin, ...claimed }, github.fetchImpl);
     if (sent === 'lost') this.ctx.storage.transactionSync(() => this.dispatchLostSync(seen.id, now + RECHECK_MS));
     return true;
   }

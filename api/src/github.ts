@@ -21,12 +21,16 @@ export interface TidyDispatch {
   ticket: string;
   scope: RunScope;
   allowWeb: boolean;
+  /** The Worker's own origin (`API_ORIGIN`): the runner calls back here, so one repository can serve many Workers. */
+  apiOrigin: string;
 }
 
 /** How the person object reaches GitHub: the instance repository, the token (absent: not configured), and fetch. */
 export interface GitHubAccess {
   repo: string;
   token: string | undefined;
+  /** This Worker's `API_ORIGIN`, named in every dispatch. */
+  apiOrigin: string;
   fetchImpl: FetchLike;
 }
 
@@ -78,6 +82,7 @@ export async function dispatchOutcome(input: TidyDispatch, fetchImpl: FetchLike,
         ticket: input.ticket,
         scope: input.scope,
         allow_web: input.allowWeb,
+        api_url: input.apiOrigin,
       },
     }),
   };

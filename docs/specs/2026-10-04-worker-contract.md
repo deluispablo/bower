@@ -95,7 +95,8 @@ A run takes the piles in the inbox when it starts. Piles added during the run wa
 
 This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runner.ts`) to the per-person object and to R3's results.
 
-- **Dispatch.** `repository_dispatch` to the instance repository with `event_type: "bower-tidy"` and `client_payload: { run_id, attempt, ticket, scope, allow_web }`. The folder id is not in the payload; the token route gives it.
+- **Dispatch.** `repository_dispatch` to the instance repository with `event_type: "bower-tidy"` and `client_payload: { run_id, attempt, ticket, scope, allow_web, api_url }`. The folder id is not in the payload; the token route gives it.
+  - `api_url` is the Worker's own `API_ORIGIN`, on every dispatch (retries too). One instance repository may serve staging and production: its repository variable `BOWER_API_URL` lists both origins, comma-separated. The runner uses `api_url` only when it equals a listed origin (exact string after trim), else refuses with one fixed sentence naming no origin and exits non-zero, before any call carrying the ticket. A dispatch without `api_url` (an older Worker) uses the list's origin when it has exactly one, else is refused. A present `api_url` that is not an origin is a malformed dispatch.
   - `run_id` is `<person object id, hex>-<random>`, so the Worker routes a runner call to the right person object without any lookup. It reveals nothing about the person.
   - The workflow's `run-name` is `tidy <run_id> <attempt>`, with a concurrency group per `run_id` and no `cancel-in-progress` (R3).
   - A 204 means "accepted, not yet observed", never "started".

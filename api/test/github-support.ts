@@ -20,6 +20,7 @@ export interface Dispatched {
   ticket: string;
   scope: string;
   allow_web: boolean;
+  api_url: string;
 }
 
 export interface GitHubScript {
@@ -72,7 +73,7 @@ export function pretendGitHub(env: Env, script: GitHubScript = {}): PretendGitHu
     dispatched,
     calls,
     requests,
-    access: { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: answer },
+    access: { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, apiOrigin: env.API_ORIGIN, fetchImpl: answer },
     get script() {
       return gh.script;
     },
