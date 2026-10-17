@@ -1163,7 +1163,7 @@ function framedMoc(text: string): string | null {
   const marker = (kind: 'begin' | 'end', region: string): string => `<!-- bower:ownership/2 ${kind} ${region} -->${eol}`;
   const inserts = new Map<number, string>();
   const add = (at: number, value: string): void => { inserts.set(at, (inserts.get(at) ?? '') + value); };
-  add(own.layout.frontEnd, ['current', 'personal', 'timeline', 'bower-note'].map((owner) => marker('begin', owner) + marker('end', owner)).join(''));
+  add(charAt(bytes, own.layout.frontEnd), ['current', 'personal', 'timeline', 'bower-note'].map((owner) => marker('begin', owner) + marker('end', owner)).join(''));
   for (const region of MOC_REGIONS) {
     const span = own.layout.moc?.[region];
     if (!span) return null;
