@@ -14,6 +14,9 @@
 #   BOWER_PROVIDER is claude, never the job's (https://docs.github.com/en/actions/how-tos/write-workflows/
 #   choose-what-workflows-do/use-secrets). BOWER_MODEL and BOWER_MAX_TURNS are optional variables.
 # - The job's own token can only read this repository, to check out the runner.
+# - The job runs on GitHub's ubuntu-latest unless the BOWER_RUNS_ON variable names another runner label, such as
+#   self-hosted for a machine of the person's own (free of Actions minutes; https://docs.github.com/en/actions/
+#   how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job). Only for a private repository.
 name: tidy
 run-name: tidy ${{ github.event.client_payload.run_id }} ${{ github.event.client_payload.attempt }}
 
@@ -34,7 +37,7 @@ concurrency:
 
 jobs:
   tidy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.BOWER_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
