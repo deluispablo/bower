@@ -24,7 +24,7 @@ describe('choosing where the data comes from', () => {
     expect(readSource()).toBe('fake');
   });
 
-  it('real only with VITE_API_URL and no query', () => {
+  it('real with VITE_API_URL and no query, even on localhost', () => {
     vi.stubEnv('VITE_API_URL', 'https://api.example');
     expect(readSource()).toBe('real');
     history.replaceState(null, '', '/?source=demo');

@@ -4,8 +4,9 @@
  * - `fake`: the real logic (Drive folder, journal, runs) over a fake Drive
  *   and a fake Worker in the browser, seeded with the same folder;
  * - `real`: Google Drive and Bower's Worker at `apiBase()`.
- * `?source=` picks one for the tab; with `VITE_API_URL` set and no query,
- * the app is real.
+ * `?source=` picks one for the tab; with no query and nothing kept for the tab,
+ * the app is real when served from a deployed origin (any host but localhost,
+ * 127.0.0.1, [::1] and *.localhost) or when `VITE_API_URL` is set, else the demo.
  */
 import { DriveHttp } from './drive/drive-http';
 import { driveError, driveFailure } from './drive/drive-api';
@@ -31,6 +32,8 @@ export function apiBase(): string {
   return api ? api : location.origin;
 }
 
+const isLocal = (h: string): boolean => h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.localhost');
+
 export function readSource(): SourceKind {
   const api = import.meta.env.VITE_API_URL as string | undefined;
   try {
@@ -45,7 +48,7 @@ export function readSource(): SourceKind {
   } catch {
     // expected: Storage may be blocked; the address decides.
   }
-  return api ? 'real' : 'demo';
+  return api || !isLocal(location.hostname) ? 'real' : 'demo';
 }
 
 /** Switches the tab to another source and starts again. */
