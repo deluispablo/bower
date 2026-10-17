@@ -65,7 +65,7 @@ describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
     expect(errors.mock.calls.map((a) => a.map(String).join(' ')).some((l) => l.includes('(numbers)') && /asking once more/.test(l))).toBe(true);
     expect({ code: run.code, filed: 'Projects/Flat hunt/Wrenfield Road, kitchen.jpg' in run.after }).toEqual({ code: 0, filed: true });
 
-    // A second ungrounded number ends the run as any second refusal does; nothing is filed.
+    // A second ungrounded number holds the one pile it is in (plan-partial); with no other pile to file, the run ends and nothing is filed.
     const twice = await runWithClaude(c, answering([(id) => reply(id, { summary: 'A 30-day notice.' })]));
     expect('Projects/Job hunt/Offer, Industrial Designer, Ferrowick.pdf' in twice.after).toBe(false);
 
