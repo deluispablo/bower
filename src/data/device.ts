@@ -1,7 +1,7 @@
 /**
  * What this device keeps about the person signed in, and forgetting it at
  * sign-out: what they have seen, dismissed and bookmarked, open folders and
- * an unsent Add draft (names and links). Settings like the theme stay: they
+ * an unsent Add draft (names and links) and unsent Tell Bower words. Settings like the theme stay: they
  * belong to the device, not the person.
  *
  * The journal outbox (`bower:outbox:<folder>`) stays at sign-out: its lines are
@@ -13,7 +13,7 @@ import { forgetAll } from './draft-files';
 import { forgetFailedInMemory } from './vault/journal';
 
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
-const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
+const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:tell-draft', 'bower:tell-intent', 'bower:toured', 'bower:tabs'];
 
 /** The account is gone or the person signed out: the sign-in screen says so once (it reads and clears 'bower:bye'). */
 export function sayGoodbye(reason: 'deleted' | 'signed-out' = 'deleted'): void {
