@@ -30,7 +30,7 @@ for (const width of [375, 1440]) {
     await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
-    await expect(sheet.getByText(/^Done\. \d+ things filed$/).last()).toBeVisible();
+    await expect(sheet.getByText(/^Done\. \d+ things filed\.$/).last()).toBeVisible();
     const done = sheet.getByRole('button', { name: 'Done', exact: true });
     const watch = sheet.getByRole('button', { name: 'Watch what Bower did', exact: true });
     const clock = sheet.getByText(/^Finished /);
@@ -84,7 +84,7 @@ for (const [width, height] of [[375, 812], [1440, 520]]) {
     await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
-    await expect(sheet.getByText(/^Done\. \d+ things filed$/).last()).toBeVisible();
+    await expect(sheet.getByText(/^Done\. \d+ things filed\.$/).last()).toBeVisible();
     const done = sheet.getByRole('button', { name: 'Done', exact: true });
     await expect(done).toBeAttached();
 

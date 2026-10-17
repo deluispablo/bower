@@ -34,7 +34,7 @@ describe('what a run says', () => {
         questions: [{ id: 'q', text: 't', yes: 'y', no: 'n', askedAt: 0 }],
       },
     };
-    expect(runTitle(done)).toBe('Done. 3 things filed');
+    expect(runTitle(done)).toBe('Done. 3 things filed.');
     expect(runDetail(done)).toBe('1 note brought up to date and 1 new question for you.');
     expect(landedSummary(done)).toBe('Flat hunt got 2 and Money got 1.');
   });
@@ -89,9 +89,9 @@ describe('how long a run takes', () => {
   it('a run that only found things already saved never says 0 things filed', () => {
     const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
     const done = { ...base, phase: 'done' as const, report: { ...empty, alreadySaved: [{ name: 'Offer copy.pdf', as: 'Offer letter.pdf' }] } };
-    expect(runTitle(done)).toBe('Done. 1 thing already saved');
+    expect(runTitle(done)).toBe('Done. 1 thing already saved.');
     expect(runShort(done)).toBe('1 thing already saved');
-    expect(runTitle({ ...done, report: empty })).toBe('Done. 0 things filed');
+    expect(runTitle({ ...done, report: empty })).toBe('Done. 0 things filed.');
   });
   // report-kept-your-change: a thing the person changed after Bower's change landed, kept as they left it.
   it('a change the person made after a landed op is reported as kept, by its name as it is now', () => {
@@ -101,7 +101,7 @@ describe('how long a run takes', () => {
     const one = { ...base, phase: 'done' as const, report: { ...empty, filed, kept: [{ name: 'August pay.pdf', why }] } };
     expect(runDetail(one)).toBe('August pay kept as you left it.');
     // The title still says what Bower did.
-    expect(runTitle(one)).toBe('Done. 1 thing filed');
+    expect(runTitle(one)).toBe('Done. 1 thing filed.');
     const two = [{ name: 'August pay.pdf', why }, { name: 'Flat 9.md', why }];
     expect(runDetail({ ...base, phase: 'done', report: { ...empty, setAside: [{ name: 'a.pdf', why: 'x' }], kept: two, yourChanges: 2 } }))
       .toBe('1 thing set aside, 2 things kept as you left them and 2 changes of yours read.');

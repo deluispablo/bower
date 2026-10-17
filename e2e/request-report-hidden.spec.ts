@@ -54,7 +54,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', shape: Shape, pi
 
 for (const source of ['demo', 'fake'] as const) {
   for (const width of [1440, 375]) {
-    test(`request report: first press asks and Last tidy-up reopens (${source}, ${width})`, async ({ page }) => {
+    test(`request report: first press asks and the status bar reopens (${source}, ${width})`, async ({ page }) => {
       await resize(page, { width, height: 900 });
       const pile: Pile = { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: 3000,
         items: [{ id: 'f', name: 'f.pdf', kind: 'pdf', origin: 'From this computer' }] };
@@ -68,9 +68,10 @@ for (const source of ['demo', 'fake'] as const) {
       await expectAxeClean(page, { include: '[role="dialog"]', wcag22: true });
       await ask.getByRole('button', { name: 'Not now', exact: true }).click();
       await resize(page, { width: 1440, height: 900 });
-      await page.getByRole('contentinfo').getByRole('button', { name: /^Last tidy-up/ }).click();
+      // design9-last-tidy: after a read of your changes the status line has no tidy-up time, only what waits.
+      await page.getByRole('contentinfo').getByRole('button', { name: /waiting$/ }).click();
       await resize(page, { width, height: 900 });
-      const report = page.getByRole('dialog', { name: 'Done. Bower read your changes', exact: true });
+      const report = page.getByRole('dialog', { name: 'Done. Bower read your changes.', exact: true });
       await expect(report).toBeVisible();
       await expect(report.getByRole('list', { name: 'Left as you wrote them' }).getByText(WHY, { exact: true })).toBeVisible();
       await expect(report.getByText('Everything has its place.', { exact: true })).toHaveCount(0);
@@ -80,7 +81,7 @@ for (const source of ['demo', 'fake'] as const) {
       test(`request report: ${shape} stays reachable with WCAG 2.2 (${source}, ${width})`, async ({ page }) => {
         await resize(page, { width, height: 900 });
         const run = await openFixture(page, source, shape);
-        const title = run.scope === 'instructions' ? 'Done. Bower read your changes' : shape === 'all' ? 'Done. 1 thing filed' : 'Done. 0 things filed';
+        const title = run.scope === 'instructions' ? 'Done. Bower read your changes.' : shape === 'all' ? 'Done. 1 thing filed.' : 'Done. 0 things filed.';
         const homeTitle = shape === 'all' ? '1 thing filed.' : title;
         const detail = shape === 'left-detail' ? '1 change of yours read.' : 'Everything has its place.';
         const hasLeft = !!run.report?.leftAsWritten?.length;
@@ -116,7 +117,8 @@ for (const source of ['demo', 'fake'] as const) {
         await expectAxeClean(page, { include: 'main', wcag22: true });
         // The existing result action lives in the desktop status bar. Open there, then check the sheet at this width.
         await resize(page, { width: 1440, height: 900 });
-        const status = page.getByRole('contentinfo').getByRole('button', { name: shape === 'all' ? /Watch what Bower did/ : /^Last tidy-up/ });
+        // design9-last-tidy: a read of your changes shows no tidy-up time; every shape ends with what waits.
+        const status = page.getByRole('contentinfo').getByRole('button', { name: shape === 'all' ? /Watch what Bower did/ : /waiting$/ });
         await status.click();
         await resize(page, { width, height: 900 });
         if (shape === 'all') {

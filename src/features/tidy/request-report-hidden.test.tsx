@@ -61,7 +61,7 @@ it('request report: Home shows instructions leftAsWritten with today’s words a
 
 it('request report: status bar reopens unseen instructions leftAsWritten instead of Nothing to tidy', async () => {
   const { run, markSeen } = await open('instructions', { ...left(), yourChanges: 1 });
-  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   assertLeft(sheet);
   expect(within(sheet).getByText(runDetail(run), { exact: true })).toBeVisible();
@@ -69,13 +69,13 @@ it('request report: status bar reopens unseen instructions leftAsWritten instead
   expect(within(sheet).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
   fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
   await waitFor(() => expect(markSeen).toHaveBeenCalledWith(run.id));
-  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   expect(screen.getByRole('dialog', { name: 'Nothing to tidy' })).toBeVisible();
 });
 
 it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omits fallback detail with leftAsWritten', async (scope) => {
   const { run } = await open(scope, left());
-  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   assertLeft(sheet);
   expect(within(sheet).queryByText('Nothing to tidy', { exact: true })).toBeNull();
@@ -85,7 +85,7 @@ it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omi
 
 it.each(['all', 'instructions'] as const)('request report: reopened %s sheet without leftAsWritten keeps fallback detail', async (scope) => {
   const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] });
-  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   expect(within(sheet).queryByRole('list', { name: 'Left as you wrote them' })).toBeNull();
   expect(within(sheet).getByText('Everything has its place.', { exact: true })).toBeVisible();
@@ -129,7 +129,7 @@ it('request report: all with filings retains Home replay and status bar replay',
 
 it.each(['all', 'instructions'] as const)('request report: %s with no rows has no Home card and opens Nothing to tidy', async (scope) => {
   const { run } = await open(scope, empty());
-  const button = screen.getByRole('button', { name: /^Last tidy-up/ });
+  const button = within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ });
   expect(screen.queryByRole('heading', { name: runTitle(run) })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Got it' })).toBeNull();
   fireEvent.click(button);
@@ -144,7 +144,7 @@ it.each([
 ])('request report: instructions report stays reachable for row %j', async (rows) => {
   const { run } = await open('instructions', { ...empty(), ...rows });
   expect(screen.getByRole('heading', { name: runTitle(run), level: 2 })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   expect(screen.getByRole('dialog', { name: runTitle(run) })).toBeVisible();
 });
 
@@ -158,7 +158,7 @@ it('request report: filing with replay keeps Home got 1 detail', async () => {
 
 it('request report: filing without replay uses runTitle and runDetail on Home', async () => {
   const { run } = await open('instructions', { ...empty(), filed: [{ name: 'Garden update.txt', title: 'Garden update', kind: 'other', to: 'Areas/Home' }] });
-  const heading = screen.getByRole('heading', { name: 'Done. Bower read your changes', level: 2 });
+  const heading = screen.getByRole('heading', { name: 'Done. Bower read your changes.', level: 2 });
   const card = heading.closest('section');
   if (!card) throw new Error('Missing report card');
   expect(within(card).getByText(runDetail(run), { exact: true })).toBeVisible();
@@ -189,7 +189,7 @@ it('request report: leftAsWritten keeps a non-fallback detail on Home', async ()
   expect(within(card).getByText('1 change of yours read.', { exact: true })).toBeVisible();
 });
 
-it('request report: first press asks about a new pile; Last tidy-up alone reopens the old report', async () => {
+it('request report: first press asks about a new pile; the status bar alone reopens the old report', async () => {
   const pile: Pile = { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: 3000,
     items: [{ id: 'f', name: 'f.pdf', kind: 'pdf', origin: 'From this computer' }] };
   const { run, markSeen } = await open('instructions', left(), [pile]);
@@ -200,7 +200,7 @@ it('request report: first press asks about a new pile; Last tidy-up alone reopen
   expect(within(ask).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
   fireEvent.click(within(ask).getByRole('button', { name: 'Not now' }));
   expect(markSeen).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: /^Last tidy-up/ }));
+  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   assertLeft(sheet);
 });
