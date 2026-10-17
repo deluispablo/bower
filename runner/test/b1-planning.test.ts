@@ -494,7 +494,7 @@ it('b1-neighbourhood-order-and-30-cap', async () => {
   b.drive.touch(b.id('Projects/Remote search/Match 31.md'));
   const r = await run(b, [select(b, [b.id('Projects/Remote search/Match 31.md')]), fileIntent(b)]); completed(r); twoSteps(r);
   const ids = candidates(r.frames[0], b.sources[0]?.itemId ?? '');
-  expect.soft(ids, 'script exposes at most 30 candidates for this item').toHaveLength(30);
+  expect.soft(ids.filter((id) => (b.ix.pathOf(id) ?? '').endsWith('.md')), 'the neighbourhood offers 12 notes for this item (c12-map)').toHaveLength(12);
   const matches = ids.filter((id) => Object.keys(matching).map(b.id).includes(id));
   expect.soft(matches[0], 'most recent whole-word match is first').toBe(b.id('Projects/Remote search/Match 31.md'));
   expect.soft(matches.slice(1), 'same-recency whole-word matches tie by path').toEqual(

@@ -142,20 +142,33 @@ export class VaultIndex {
   }
 
   /**
-   * Script neighbourhood: whole-word matches, folder maps, then one resolved link hop. `notes` may hold originals (C09
-   * R14, with an empty summary): matched by their name, or reached by a link.
+   * Script neighbourhood: notes ranked by BM25 over name, summary and tags, folder maps, then one resolved link hop, at
+   * most 12. `notes` may hold originals (C09 R14, with an empty summary): matched by their name, or reached by a link.
    */
-  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[] }>>): string[] {
+  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[]; tags?: readonly string[] }>>): string[] {
     const ignored = new Set(['a', 'an', 'the', 'is', 'has', 'for', 'and', 'of', 'to', 'alex', 'txt', 'md', 'pdf']);
-    const tokens = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-    const own = new Set(tokens(words).filter((word) => !ignored.has(word)));
+    const tokens = (text: string): string[] => (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((word) => !ignored.has(word));
+    const textOf = (id: string): string[] => tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''} ${(notes[id]?.tags ?? []).join(' ')}`);
+    const own = new Set(tokens(words));
     const order = (a: string, b: string): number => (this.byId(b)?.modifiedTime ?? '').localeCompare(this.byId(a)?.modifiedTime ?? '')
       || (this.pathOf(a) ?? '').localeCompare(this.pathOf(b) ?? '');
     const ids = Object.keys(notes).filter((id) => this.pathOf(id) !== undefined);
     const maps = new Set(ids.filter((id) => { const path = this.pathOf(id) ?? ''; return notes[id]?.type === 'moc' || VaultIndex.isHub(path, this.byId(id)?.name ?? ''); }));
-    const matches = ids.filter((id) => !maps.has(id) && tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);
+    // BM25 (Robertson & Zaragoza 2009) with Lucene's BM25Similarity idf, k1 = 1.2 and b = 0.75.
+    const docs = new Map(ids.filter((id) => !maps.has(id)).map((id) => [id, textOf(id)]));
+    const average = [...docs.values()].reduce((sum, doc) => sum + doc.length, 0) / (docs.size || 1) || 1;
+    const idf = new Map([...own].map((word) => {
+      const n = [...docs.values()].filter((doc) => doc.includes(word)).length;
+      return [word, Math.log(1 + (docs.size - n + 0.5) / (n + 0.5))];
+    }));
+    const score = new Map([...docs].map(([id, doc]) => [id, [...own].reduce((sum, word) => {
+      const tf = doc.filter((token) => token === word).length;
+      return sum + (idf.get(word) ?? 0) * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * doc.length / average));
+    }, 0)]));
+    const matches = [...docs.keys()].filter((id) => (score.get(id) ?? 0) > 0)
+      .sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0) || order(a, b));
     const hubs = [...maps].filter((id) => matches.some((match) => this.byId(match)?.parents[0] === this.byId(id)?.parents[0])
-      || tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''}`).some((word) => own.has(word))).sort(order);
+      || textOf(id).some((word) => own.has(word))).sort(order);
     // The one link rule over the whole folder (C09 ruling 11): a name two files share anywhere reaches neither.
     const paths = [...this.paths].flatMap(([id, path]) => (this.files.get(id)?.folder === false ? [path] : []));
     const resolve = (link: string): string | undefined => {
@@ -166,7 +179,7 @@ export class VaultIndex {
     const neighbours = [...new Set([...matches, ...hubs].flatMap((id) => (notes[id]?.links ?? []).flatMap((link) => {
       const target = resolve(link); return target ? [target] : [];
     })))].sort(order);
-    return [...new Set([...matches, ...hubs, ...neighbours])].slice(0, 30);
+    return [...new Set([...matches, ...hubs, ...neighbours])].slice(0, 12);
   }
 
   /** Adds a file or takes in its new name and parent. */

@@ -118,6 +118,17 @@ describe('the ranked neighbourhood (c12-map)', () => {
     expect(tie.ix.neighbourhood('beehive', tie.meta)).toEqual(['n1', 'n0']);
   });
 
+  it('AC4b c12-map-idf: a rare word only one note has outranks a word most notes share (BM25 idf)', () => {
+    // Each note matches one distinct query word, so a "more distinct words matched" ranking ties them (newest first).
+    const { ix, meta } = bees([
+      ['Queen', 'Alex marks the queen.'],
+      ['Frames', 'Alex keeps a beehive.'],
+      ['Smoker', 'Alex keeps a beehive.'],
+      ['Feeder', 'Alex keeps a beehive.'],
+    ]);
+    expect(ix.neighbourhood('queen beehive', meta)[0], 'the rare word ranks its note first').toBe('n0');
+  });
+
   it('AC5 c12-map-cap-12: the neighbourhood offers at most 12 notes, and a run shows at most 12 note candidates per source', async () => {
     const { ix, meta } = bees(Array.from({ length: 20 }, (_, i): [string, string] => [`Hive ${i}`, 'Alex keeps a beehive.']));
     expect(ix.neighbourhood('beehive', meta)).toHaveLength(12);
