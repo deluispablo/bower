@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { report } from '@/ui/report';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
@@ -15,6 +15,7 @@ import { PileStack } from './PileStack';
 import { normaliseLink } from './link';
 import { itemLine, pileLine } from './item-words';
 import { FieldError, fieldBox, Input, Textarea } from '@/ui/Field';
+import { useSessionDraft } from '@/ui/session-draft';
 import s from './piles.module.css';
 
 export function PileScreen() {
@@ -395,6 +396,41 @@ function cutAtWord(words: string, max: number): string {
   return `${(at > 0 ? head.slice(0, at) : flat.slice(0, max)).replace(/[\s,;:.]+$/, '')}…`;
 }
 
+/** A pile note's kept draft: its words and the note they started from; anything else reads as none. */
+function readDraft(raw: string): { text: string; base: string } | null {
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    const d = (typeof v === 'object' && v !== null ? v : {}) as { text?: unknown; base?: unknown };
+    if (typeof d.text === 'string' && typeof d.base === 'string') return { text: d.text, base: d.base };
+    throw new Error('Unreadable pile note draft');
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+/** A kept draft for these words over the note listed (`listed`), started from `from`: none when they are the note. */
+const draftOf = (words: string, listed: string, from: string): string => (words.trim() === listed ? '' : JSON.stringify({ text: words, base: from }));
+
+/** The kept draft's raw value when no editor shows the pile (storage blocked reads as none). */
+function storedDraft(key: string): string {
+  try {
+    return sessionStorage.getItem(key) ?? '';
+  } catch {
+    // expected: storage may be blocked (a private window); then the draft lived only on the screen that left.
+    return '';
+  }
+}
+
+/**
+ * The pile note editor on screen now, per pile. A save that ends after its own editor left (the pile was opened
+ * again) tells this one, so newer words typed there are kept over the saved note, not cleared (qa7-drafts-save-race).
+ */
+const onScreen = new Map<string, (saved: string) => void>();
+/** The words a save is sending now, per pile: a listing bringing them is that save, whose end tells the screen. */
+const sending = new Map<string, string>();
+
 /**
  * The pile's note: what you wrote about it. Saved as `Pile note.md` in the
  * pile's folder; Bower reads it with every thing in the pile. Editable until
@@ -402,20 +438,44 @@ function cutAtWord(words: string, max: number): string {
  */
 function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const { vault } = useSources();
-  const [text, setText] = useState(pile.text);
+  // Unsaved words are kept for the tab, one draft per pile, with the base they started from (qa7-drafts R3).
+  const draftKey = `bower:pile-note:${pile.id}`;
+  const [kept, keep] = useSessionDraft(draftKey);
+  const [restored] = useState(() => readDraft(kept));
+  const [text, setText] = useState(restored?.text ?? pile.text);
   // The words the draft started from (its base), and the words last listed. When a listing brings new words,
   // the editor shows them only while nothing is typed; a draft is kept with its base, and the vault saves it
   // only over that base (RFC 9110 §13.1.1), so words changed elsewhere are never replaced unseen.
-  const [base, setBase] = useState(pile.text);
+  const [base, setBase] = useState(restored?.base ?? pile.text);
   const [seen, setSeen] = useState(pile.text);
+  // What a kept draft carries: the base last read or saved, never a refused save's (that one is this page's alone),
+  // and the words on screen now, for a save that ends after newer typing.
+  const [keptBase, setKeptBase] = useState(restored?.base ?? pile.text);
+  const typed = useRef(text);
+  useEffect(() => { typed.current = text; }, [text]);
+  // The person typed on this screen: words equal to the base are then theirs, not merely the note shown.
+  const [typedHere, setTypedHere] = useState(false);
+  const remember = (words: string, listed: string, from = keptBase): void => keep(draftOf(words, listed, from));
+  // A save that ended (here or on a screen that left): the words on screen now stay kept, over the words just saved.
+  useEffect(() => {
+    const advance = (saved: string): void => {
+      setBase(saved);
+      setKeptBase(saved);
+      keep(draftOf(typed.current, saved, saved));
+    };
+    onScreen.set(pile.id, advance);
+    return () => { if (onScreen.get(pile.id) === advance) onScreen.delete(pile.id); };
+  });
   // After a refused save the words now there are shown next to the draft and become its base: the next save is an
   // informed overwrite (the usual edit-conflict pattern: look again, then retry against what is there now).
   const [clash, setClash] = useState(false);
   if (pile.text !== seen) {
     setSeen(pile.text);
-    if (text.trim() === base) {
+    if (text.trim() === base && !(typedHere &&sending.get(pile.id) === pile.text)) {
       setText(pile.text);
       setBase(pile.text);
+      setKeptBase(pile.text);
+      if (kept) keep('');
     } else if (clash) setBase(pile.text);
   } else if (clash && base !== pile.text) {
     // A refused save takes the words now listed as its base, even when they were listed before it was refused (its
@@ -427,11 +487,34 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const held = !!pile.noteLocked;
   const off = locked || held;
   const changed = text.trim() !== pile.text;
+  const showSave = changed && !off;
+  // The words a save is still sending: leaving the box again or pressing Save meanwhile does not send them twice.
+  const pending = useRef<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Save went away holding the keyboard, or it fell to the page's body: back to the box (focus.ts: never to nothing).
+  const hadSave = useRef(showSave);
+  useLayoutEffect(() => {
+    if (hadSave.current === showSave) return;
+    hadSave.current = showSave;
+    const at = document.activeElement;
+    if (!showSave && (!at || at === document.body || !at.isConnected)) box.current?.focus();
+  }, [showSave]);
   const save = async (): Promise<void> => {
+    const words = text.trim();
+    if (pending.current === words) return;
+    pending.current = words;
     setBusy(true);
+    sending.set(pile.id, words);
     try {
       await vault.updatePile(pile.id, text, base);
-      setBase(text.trim());
+      const saved = text.trim();
+      const here = onScreen.get(pile.id);
+      if (here) here(saved);
+      else {
+        // No screen shows the pile: a draft still kept (none after sign-out) now starts from the words saved.
+        const left = readDraft(storedDraft(draftKey));
+        if (left) keep(draftOf(left.text, saved, saved));
+      }
       setClash(false);
       toast('Note saved. Bower reads it in the next tidy-up.');
     } catch (e) {
@@ -441,6 +524,8 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       }
       report(e, 'The note did not save. Try again.');
     } finally {
+      if (sending.get(pile.id) === words) sending.delete(pile.id);
+      if (pending.current === words) pending.current = null;
       setBusy(false);
     }
   };
@@ -451,12 +536,16 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       </label>
       <Textarea
         id="pile-note-text"
+        ref={box}
         rows={3}
         value={text}
         disabled={off}
         placeholder={held ? undefined : 'One line about these things helps Bower most'}
         onChange={(e) => {
-          if (!off) setText(e.target.value);
+          if (off) return;
+          setTypedHere(true);
+          setText(e.target.value);
+          remember(e.target.value, pile.text);
         }}
         onBlur={() => {
           if (changed && !off && (text.trim() || pile.items.length)) void save();
@@ -468,8 +557,8 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         </p>
       )}
       <div className={s.noteFoot}>
-        {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
-        {changed && !off && (
+        {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : changed ? 'Not saved yet.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
+        {showSave && (
           <Button size="sm" disabled={busy} onClick={() => void save()}>
             {busy ? 'Saving…' : 'Save the note'}
           </Button>

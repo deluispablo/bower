@@ -13,7 +13,8 @@ import { SAMPLE_PILES } from '@/data/demo/fixture';
 import { PileScreen } from './PileScreen';
 
 let vault: DriveVault | null = null;
-afterEach(() => { cleanup(); vault?.dispose(); vault = null; vi.restoreAllMocks(); });
+// Pile drafts are kept per pile for the tab (qa7-drafts): each test starts with none, as pretend Drives reuse pile ids.
+afterEach(() => { cleanup(); vault?.dispose(); vault = null; vi.restoreAllMocks(); sessionStorage.clear(); });
 it('the pile retry button sends only failed uploads', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const drive = new FakeDrive();

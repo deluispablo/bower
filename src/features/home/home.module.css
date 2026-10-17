@@ -1,10 +1,11 @@
-.page { max-width: 1100px; margin: 0 auto; padding: 18px 20px 40px; }
+.page { max-width: 1100px; margin: 0 auto; padding: 18px 20px 40px; container-type: inline-size; }
 @media (min-width: 900px) { .page { padding: 34px 40px 60px; } }
 .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .hello { font-size: clamp(28px, 4vw, 40px); }
 .avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--surface-strong); color: var(--heading); font-weight: 600; text-decoration: none; }
 .grid { display: grid; gap: 22px; }
-@media (min-width: 1100px) { .grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 36px; align-items: start; } }
+/* Two columns only when Home itself is wide enough, whatever panels sit beside it. */
+@container (min-width: 760px) { .grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 36px; align-items: start; } }
 .colMain, .colSide { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .card { position: relative; border-radius: 22px; background: var(--bg-alt); padding: 18px; }
 .away { margin-top: 44px; background: var(--surface); }
