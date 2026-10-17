@@ -3130,6 +3130,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled, lookedUpNothing,
+    // A request the reply carried a decision for (a column, views or a map, an empty one too) acted, with nothing to change maybe (qa7).
+    decidedRequests: new Set([...columnRequests, ...viewRequests, ...mapRequests]),
     yesMaps: maps.filter((m) => m.answer !== undefined && mapRequests.has(m.requestId)),
   };
 }
@@ -3144,7 +3146,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled, lookedUpNothing } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled, lookedUpNothing, decidedRequests } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3473,17 +3475,28 @@ export async function build(decided: Decided): Promise<Ended> {
   const asked = journal.filter((l) => l.rec.kind === 'request');
   // A request the run did nothing for is never done (qa6 F1): a lookup that looked nothing up, or one with only its
   // "didn't" rows and no line, edit, note or line already there. Its requests row says why: its first row's why.
+  // One with no row, no decision and no named answer says it changed nothing (qa7), unless an earlier run's row for it
+  // is there: that row stands word for word, listed done only if it says something was done (qa7 rulings 5, 7).
+  const storedRows = new Map(requestsDone.map((r) => [r.id, r]));
+  const kept = new Map<string, Request>();
   const idle = new Map(asked.flatMap((l): Array<[string, string]> => {
     const id = l.rec.id;
     if (lookedUpNothing.has(id)) return [[id, answers.get(id) ?? NOTHING_LOOKED_UP]];
     const why = settlement.rowsOf(id)[0]?.why;
     const acted = need(id).edits.length || need(id).derived.length || satisfied.some((p) => p.consent.requestId === id) || compared.has(id) || resultNotes.has(id);
-    return why && !acted ? [[id, why]] : [];
+    if (why && !acted) return [[id, why]];
+    if (acted || decidedRequests.has(id) || answers.get(id) !== REQUEST_DONE) return [];
+    const stored = storedRows.get(id);
+    if (!stored) return [[id, NOTHING_DONE]];
+    kept.set(id, stored);
+    // Every line for a request not done says "Bower didn't …" / "Bower did not …", or that you said no.
+    return stored.done && (stored.done === REQUEST_DECLINED || /Bower (didn't|did not) /.test(stored.done)) ? [[id, stored.done]] : [];
   }));
   let requestsOp: string | null = null;
   const resultOps = new Map<string, string>();
   if (asked.length) {
-    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: idle.get(l.rec.id) ?? answers.get(l.rec.id) ?? REQUEST_DONE }));
+    const done: Request[] = [...asked].reverse().map((l) => kept.get(l.rec.id)
+      ?? { id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: idle.get(l.rec.id) ?? answers.get(l.rec.id) ?? REQUEST_DONE });
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
     const notes: string[] = [];
     // A map's result note (R32) is keyed by its request and waits for everything the request changes; the requests row waits for it.
@@ -3638,7 +3651,8 @@ export async function build(decided: Decided): Promise<Ended> {
     const left = withArchive.length ? { leftAsWritten: withArchive } : {};
     if (paired.has(line.rec.id)) {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 0 } });
-    } else if (line.rec.undoes) {
+    } else if (line.rec.undoes && line.rec.kind !== 'request') {
+      // Undo takes back no request: a stored request with an unmatched `undoes` settles as any request (qa7 ruling 4).
       // Every later inverse has its existing wording in an ordinary row, after its effects and archive.
       const requires = [...moves, ...archiveChain, ...derived];
       reportPlan.push({ requires, when: 'applied', value: {
@@ -3651,9 +3665,10 @@ export async function build(decided: Decided): Promise<Ended> {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what], ...left } });
     } else {
       // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
+      // A request, done or not, is never one of your changes read (qa7 F6).
       // An answer whose subject was gone says so in its answered row, never as a thing set aside.
       const gone = answeredRows.get(line.rec.id);
-      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' || line.rec.kind === 'request' ? 0 : 1, ...(gone ? { answered: [gone] } : {}), ...left } });
     }
   }
   // `.bower/hashes.json` only on a full run, as the legacy runner wrote it.
@@ -3933,6 +3948,8 @@ async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha
 
 /** The line a request done by a tidy-up carries in requests.json. */
 export const REQUEST_DONE = 'Done. See what changed in your folders.';
+/** The line a request the run did nothing for carries, with no row of its own (qa7): never done. */
+export const NOTHING_DONE = "Bower didn't change anything for this request.";
 /** What a lookup with the web on that looked nothing up says (qa6): never done. */
 export const NOTHING_LOOKED_UP = 'Bower did not look anything up.';
 
