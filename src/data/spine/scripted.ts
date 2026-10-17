@@ -31,7 +31,7 @@ import { linkTarget, renderLink } from '../contracts/links';
 import { fenceAfter, type Fence } from '../contracts/ownership-format';
 import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
-import { VaultIndex } from '../vault/vault-index';
+import { VaultIndex, linkIdentity } from '../vault/vault-index';
 import { grounded, groundedKeys, seen } from './grounded';
 import { RunRecords, RUNS_NAME, canonical, isManifestName } from './records';
 import { NOT_FILED } from './report';
@@ -104,18 +104,8 @@ export function linkReasons(body: string): Array<{ target: string; reason: strin
 /** C09 (review ruling 19): a [[link]] whose target is empty ("[[ ]]"), which `authoredLinks` leaves out: it names nothing. */
 export const hasEmptyLink = (text: string): boolean => [...text.matchAll(WIKI_LINK)].some((m) => !linkTarget(m[1] ?? '').replace(/\.md$/, ''));
 
-/**
- * C06 R4: what a link target (as `authoredLinks` gives it) names among the folder's file paths: one note, by its whole
- * path without `.md` or by its title; a file that is not a note, by its path or name; a title two notes share; or nothing.
- */
-export function linkIdentity(target: string, paths: Iterable<string>): { note: string } | 'not a note' | 'two notes share' | null {
-  const all = [...paths];
-  const notes = all.filter((path) => path.endsWith('.md')
-    && (target.includes('/') ? path.slice(0, -3).toLowerCase() : displayName(nameOf(path)).toLowerCase()) === target);
-  if (notes.length > 1) return 'two notes share';
-  if (notes[0] !== undefined) return { note: notes[0] };
-  return all.some((path) => (target.includes('/') ? path : nameOf(path)).toLowerCase() === target) ? 'not a note' : null;
-}
+// The one link rule's home is vault-index.ts (the neighbourhood's link hop uses it too, C09 ruling 11).
+export { linkIdentity };
 
 /** A B run that failed, or a plan refused before admission: the honest-phase rule guarantees no effect applied. */
 export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
@@ -2427,7 +2417,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     for (const { target } of words.flatMap(authoredLinks)) {
       if (filedAs.has(target)) continue;
       const named = linkIdentity(target, paths);
-      const resolved = typeof named === 'object' && named ? linkable.find(({ path }) => path === named.note) : undefined;
+      const resolved = named && typeof named === 'object' && 'note' in named ? linkable.find(({ path }) => path === named.note) : undefined;
       if (!resolved) return refused('a template note with an ungrounded authored link');
       authored.set(resolved.file.id, resolved);
     }
@@ -3172,8 +3162,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const note = compared.get(l.rec.id);
     if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
     if (!scripted || !scripted.uses.every(there)) return REQUEST_DONE;
-    // C09 R8: an answer's links name one note in the folder each, by the one link rule, whatever made the decision (two-sided
-    // with the reply check, which also wants it shown).
+    // C09 R8: an answer's links name one note or original in the folder each, by the one link rule, whatever made the
+    // decision (two-sided with the reply check, which also wants it shown).
     if (hasEmptyLink(scripted.answer)) refused('an answer with an empty link');
     for (const { target } of authoredLinks(scripted.answer)) {
       const named = linkIdentity(target, paths);
