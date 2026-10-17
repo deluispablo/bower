@@ -43,7 +43,8 @@ done
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 watched=0
-gh run watch "$id" --repo "$REPO" --exit-status >"$log" 2>&1 || watched=$?
+# Every poll reads each job: 30 s keeps two gates at once under the API limit (the default 3 s does not).
+gh run watch "$id" --repo "$REPO" --exit-status --interval "${CI_GATE_WATCH_SECONDS:-30}" >"$log" 2>&1 || watched=$?
 conclusion=$(gh run view "$id" --repo "$REPO" --json conclusion --jq .conclusion 2>/dev/null) || conclusion=
 echo "ci-gate: $branch ${conclusion:-unknown} (run $id)"
 if [ "$watched" = 0 ] && [ "$conclusion" = success ]; then exit 0; fi
