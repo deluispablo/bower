@@ -28,6 +28,7 @@ import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answe
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
+import { fenceAfter, type Fence } from '../contracts/ownership-format';
 import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -48,6 +49,73 @@ import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseO
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
 
 export { SET_ASIDE, listedPiles };
+
+/** A [[link]] in a model's words: its target before any `|` alias or `#` heading (a `^block` stays for `linkTarget`). */
+export const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
+
+/** A leading list marker ("-", "*", "+", "1." or "1)") of a Markdown line, after any indentation. */
+const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u;
+
+/** The lines of `text` outside fenced code blocks (the one link grammar, CommonMark 0.31.2 §4.5). */
+function* unfenced(text: string): Generator<string> {
+  let fence: Fence | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const previous = fence;
+    fence = fenceAfter(line, fence);
+    if (!previous && !fence) yield line;
+  }
+}
+
+/**
+ * C06 (R1-R4), the one link rule of a model's authored words, for the reply check (runner claude.ts) and the planner:
+ * each [[link]] outside a fenced code block, its target as `linkTarget` reads it without `.md`, and whether its line
+ * says why (R2: a letter or digit is left once its links, a leading list marker and the words "see also", "related",
+ * "source(s)", "link(s)" and "and" are taken out).
+ */
+export function authoredLinks(text: string): Array<{ target: string; reason: boolean }> {
+  const out: Array<{ target: string; reason: boolean }> = [];
+  for (const line of unfenced(text)) {
+    const links = [...line.matchAll(WIKI_LINK)];
+    const rest = line.replace(WIKI_LINK, ' ').replace(LIST_MARKER, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
+    const reason = /[\p{L}\p{N}]/u.test(rest);
+    for (const m of links) {
+      const target = linkTarget(m[1] ?? '').replace(/\.md$/, '');
+      if (target) out.push({ target, reason });
+    }
+  }
+  return out;
+}
+
+/**
+ * C06 R17: the reasons a note's body gives its links, from lines `See also [[X]]: <why>` (after any indentation and a
+ * list marker) outside fenced code; the target as `authoredLinks` reads it, the reason to the end of its line. An
+ * empty or blank reason is none.
+ */
+export function linkReasons(body: string): Array<{ target: string; reason: string }> {
+  const out: Array<{ target: string; reason: string }> = [];
+  for (const line of unfenced(body)) {
+    const m = /^\s*see also (\[\[[^\]]*\]\]): (.*)$/iu.exec(line.replace(LIST_MARKER, ' '));
+    const target = m?.[1] ? authoredLinks(m[1])[0]?.target : undefined;
+    if (target && m?.[2]?.trim()) out.push({ target, reason: m[2] });
+  }
+  return out;
+}
+
+/** C09 (review ruling 19): a [[link]] whose target is empty ("[[ ]]"), which `authoredLinks` leaves out: it names nothing. */
+export const hasEmptyLink = (text: string): boolean => [...text.matchAll(WIKI_LINK)].some((m) => !linkTarget(m[1] ?? '').replace(/\.md$/, ''));
+
+/**
+ * C06 R4: what a link target (as `authoredLinks` gives it) names among the folder's file paths: one note, by its whole
+ * path without `.md` or by its title; a file that is not a note, by its path or name; a title two notes share; or nothing.
+ */
+export function linkIdentity(target: string, paths: Iterable<string>): { note: string } | 'not a note' | 'two notes share' | null {
+  const all = [...paths];
+  const notes = all.filter((path) => path.endsWith('.md')
+    && (target.includes('/') ? path.slice(0, -3).toLowerCase() : displayName(nameOf(path)).toLowerCase()) === target);
+  if (notes.length > 1) return 'two notes share';
+  if (notes[0] !== undefined) return { note: notes[0] };
+  return all.some((path) => (target.includes('/') ? path : nameOf(path)).toLowerCase() === target) ? 'not a note' : null;
+}
 
 /** A B run that failed, or a plan refused before admission: the honest-phase rule guarantees no effect applied. */
 export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
@@ -501,6 +569,8 @@ export interface Filing {
   suggestions?: { first: boolean; views: readonly ViewSuggestion[] };
   /** Maps requests answer (B12), checked by the provider, in reply order. */
   maps?: readonly MapRequest[];
+  /** C09: answers to the person's questions about the folder, by request record id: each its request's done line, checked by the provider. */
+  answers?: ReadonlyMap<string, string>;
 }
 
 /** One op of a map on one note (B12): a property `set` or `union` (with the row it was checked against), or a tag (`key: 'tags'`) `add` or `remove`. */
@@ -656,8 +726,8 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
   suggestions?: Filing['suggestions'];
   /** The maps requests answer (B12); a request one answers settles once its notes are written, unavailable or as asked. */
   maps?: Filing['maps'];
-  /** How it answers a request; without it, requests wait. */
-  request?(text: string): RequestPlan | null;
+  /** How it answers a request, by its words and record id (two requests with the same words are two); without it, requests wait. */
+  request?(text: string, id: string): RequestPlan | null;
   /** The Timeline line an answer adds to a stored note (C07). */
   said?: { about(questionId: string): boolean; line(q: Question, yes: boolean): { note: string; line: string } | null };
   disagreements?(words: string): readonly Disagreement[];
@@ -683,6 +753,11 @@ export function modelDecisions(filing: Filing): Decisions {
     views: filing.views ?? [],
     ...(filing.suggestions ? { suggestions: filing.suggestions } : {}),
     ...(filing.maps ? { maps: filing.maps } : {}),
+    // C09 (R1): a reply's answer is its request's plain answer plan, by record id; the provider passes only the requests it acts on (R7).
+    ...(filing.answers?.size ? { request: (_text: string, id: string): RequestPlan | null => {
+      const answer = filing.answers?.get(id);
+      return answer === undefined ? null : { kind: 'answer', uses: [], answer };
+    } } : {}),
   };
 }
 
@@ -1256,9 +1331,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     return { options };
   };
-  // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
+  // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for. One answered
+  // (C09 R6) leaves it, as a map or view does: its answer is its result.
   const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)
-    && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)), listing, ix, appends, since);
+    && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)
+    && d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind !== 'answer'), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;
@@ -1880,7 +1957,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // the web off nothing is looked up or written, and its answer says so.
   const lookups = new Map<string, WantedLine>();
   for (const l of opts.allowWeb && date ? journal.filter((x) => x.rec.kind === 'request') : []) {
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     if (scripted?.kind !== 'lookup') continue;
     const [path] = scripted.uses;
     const f = ix.file(path);
@@ -2335,23 +2412,24 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const path = ix.pathOf(file.id);
     return !file.folder && path?.endsWith('.md') && generatedPlace(parentOf(path)) ? [{ file, path }] : [];
   });
-  const groundedAuthoredLinks = async (to: string, note: AuthoredNote, source: { file: DriveFile; name: string }): Promise<string[]> => {
-    // Resolve evidence against actual note identities; a name shared by notes is not grounding.
+  const paths = listing.flatMap((file) => {
+    const path = file.folder ? undefined : ix.pathOf(file.id);
+    return path === undefined ? [] : [path];
+  });
+  // Any thing this reply files, the note's own source and its siblings alike, is named by its link (C06 R3).
+  const filedAs = new Set(filing.flatMap(({ thing, to, name }) => [thing.file.name, name, ix.pathOf(thing.file.id), join(to, name)])
+    .flatMap((name) => (name === undefined ? [] : [linkTarget(name).replace(/\.md$/, '')])));
+  const groundedAuthoredLinks = async (to: string, note: AuthoredNote): Promise<string[]> => {
+    // The reply check's own identity rule (C06 R4), kept here only as an invariant: a reply it accepts never fails here.
     const authored = new Map<string, typeof linkable[number]>();
-    // All authored strings share this admission check, including every section in the body and the summary.
-    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})].join('\n');
-    for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-      const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
-      const candidates = linkable.filter(({ path }) => target.includes('/')
-        ? path.slice(0, -3).toLowerCase() === target
-        : displayName(nameOf(path)).toLowerCase() === target);
-      const local = candidates.filter(({ path }) => parentOf(path) === to);
-      const resolved = local.length ? local : candidates;
-      const bound = [source.file.name, source.name, ix.pathOf(source.file.id), join(to, source.name)]
-        .some((name) => name !== undefined && linkTarget(name).replace(/\.md$/, '') === target);
-      if (bound && resolved.every(({ file }) => file.id === source.file.id)) continue;
-      if (resolved.length !== 1 || !resolved[0]) return refused('a template note with an ungrounded authored link');
-      authored.set(resolved[0].file.id, resolved[0]);
+    // All authored strings share this admission check, each scanned on its own so an unclosed fence hides nothing (C06 gap 8).
+    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})];
+    for (const { target } of words.flatMap(authoredLinks)) {
+      if (filedAs.has(target)) continue;
+      const named = linkIdentity(target, paths);
+      const resolved = typeof named === 'object' && named ? linkable.find(({ path }) => path === named.note) : undefined;
+      if (!resolved) return refused('a template note with an ungrounded authored link');
+      authored.set(resolved.file.id, resolved);
     }
     if (!note.template) return [];
     // Sources subfolders use their nearest destination hub. Never choose an unrelated fallback note.
@@ -2389,7 +2467,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (template === 'profile' || typeRow?.template === 'profile') return refused('the profile template outside profile admission');
     if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
-    const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
+    const related = await groundedAuthoredLinks(to, { ...authored, template });
     const properties = template ? [
       { key: 'type', label: 'Type', value: typeRow?.id ?? template },
       { key: 'created', label: 'Created', value: noteDate },
@@ -2424,8 +2502,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
     if (!target) {
       const template = row.profile?.template;
-      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template },
-        { file: first.thing.file, name: first.name });
+      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template });
       if (!profileTextOk(body)) return refused('a profile beyond its 400 word bound');
       const name = freeName(planned, to, 'Profile.md');
       const scaffold = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
@@ -2779,7 +2856,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // the notes it compares, read now, and the list of those sources. Only when every one is there and can be read.
   const compared = new Map<string, { to: string; name: string; text: string; what: string }>();
   for (const l of journal.filter((x) => x.rec.kind === 'request')) {
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     if (scripted?.kind !== 'compare' || !generatedPlace(scripted.note.to)) continue;
     const read: ParsedNote[] = [];
     for (const path of scripted.uses) {
@@ -3087,19 +3164,27 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    */
   const answerOf = (l: JournalLine): string => {
     if (declinedRequests.has(l.rec.id)) return REQUEST_DECLINED;
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
     // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
     if (scripted?.kind === 'lookup') return !opts.allowWeb ? scripted.offline : lookups.has(l.rec.id) ? scripted.answer : NOTHING_LOOKED_UP;
     // A comparison names the note it wrote (C08).
     const note = compared.get(l.rec.id);
     if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
-    return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
+    if (!scripted || !scripted.uses.every(there)) return REQUEST_DONE;
+    // C09 R8: an answer's links name one note in the folder each, by the one link rule, whatever made the decision (two-sided
+    // with the reply check, which also wants it shown).
+    if (hasEmptyLink(scripted.answer)) refused('an answer with an empty link');
+    for (const { target } of authoredLinks(scripted.answer)) {
+      const named = linkIdentity(target, paths);
+      if (!named || typeof named !== 'object') refused('an answer with a link to nothing or to a name two notes share');
+    }
+    return scripted.answer;
   };
   const answers = new Map(journal.filter((l) => l.rec.kind === 'request').map((l) => [l.rec.id, answerOf(l)]));
   // A lookup that looked nothing up (web off, or its note gone) is never done (qa6).
   const lookedUpNothing = new Set(journal.filter((l) => l.rec.kind === 'request' && !lookups.has(l.rec.id)
-    && d.request?.(l.rec.text ?? l.rec.what)?.kind === 'lookup').map((l) => l.rec.id));
+    && d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind === 'lookup').map((l) => l.rec.id));
   // Bower's own files the run writes, as read now, so the writes pass what they read.
   const requestsRead = requests && answers.size ? { file: requests, content: await ownVerified(requests) } : null;
   const questionsRead = questionsText !== null && questionsFile ? { file: questionsFile, content: await ownVerified(questionsFile) } : null;

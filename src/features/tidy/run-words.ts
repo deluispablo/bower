@@ -142,6 +142,8 @@ export function runDetail(r: RunState): string {
       // Joined part by part: a name may hold a comma of its own.
       const said = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}` : (parts[0] ?? '');
       if (said) return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`;
+      // A read of your changes that did nothing never claims a tidy inbox (design8-run-words).
+      if (r.scope === 'instructions' && !rep.leftAsWritten?.length && !rep.created.length && !rep.filed.length) return "Bower didn't change anything this time.";
       return rep.leftAsWritten?.length ? '' : 'Everything has its place.';
     }
     case 'failed':
@@ -177,14 +179,28 @@ export function stepState(r: RunState, step: (typeof RUN_STEPS)[number]): 'done'
   return i < at ? 'done' : i === at ? 'now' : 'later';
 }
 
+const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' });
+
+/** A folder in a sentence: a month or year folder reads with its parent, "September 2026 receipts", "2026 receipts". */
+function folderWords(parts: string[]): string {
+  const last = parts.at(-1) ?? '';
+  const parent = parts.at(-2);
+  const m = /^(\d{4})(?:-(\d{2}))?$/.exec(last);
+  if (!m || !parent) return last;
+  const month = m[2] ? Number(m[2]) : 0;
+  // Not a real month: named as on Drive, with its parent.
+  if (m[2] && (month < 1 || month > 12)) return `${parent} ${last}`;
+  const when = month ? `${MONTH.format(Date.UTC(2000, month - 1))} ${m[1]}` : m[1];
+  // An acronym ("NHS") keeps its case: only a parent whose second letter is lower case reads in lower case.
+  const said = /^.\p{Ll}/u.test(parent) ? `${parent.charAt(0).toLowerCase()}${parent.slice(1)}` : parent;
+  return `${when} ${said}`;
+}
+
 /** Where things went, per folder: "Flat hunt got 3, Money got 2". */
 export function landedSummary(r: RunState): string {
   const per = new Map<string, number>();
   for (const f of r.report?.filed ?? []) {
-    const parts = f.to.split('/');
-    const last = parts[parts.length - 1] ?? f.to;
-    // A month folder reads better with its parent: "Receipts, 2026-10".
-    const name = /^\d{4}(-\d{2})?$/.test(last) && parts.length > 1 ? `${parts[parts.length - 2]} ${last}` : last;
+    const name = folderWords(f.to.split('/'));
     per.set(name, (per.get(name) ?? 0) + 1);
   }
   const all = [...per.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));

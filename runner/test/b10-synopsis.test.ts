@@ -80,12 +80,12 @@ const caseReply = (frame: Frame, value: unknown): unknown => {
 };
 const TAIL_REPLY = { kind: 'tidy-intent', v: 1, things: [{ fileId: `$file:${GUIDE}`, to: 'Resources/Gardening', name: GUIDE,
   note: { name: 'Seed order guide.md', summary: 'The seed order guide requires a reply by 20 October 2026.',
-    body: 'The guide compares paper labels and reusable trays. Reply by 20 October 2026. Collection is at Wren Hall in Saltmere.\n\n[[Resources/Gardening/Gardening]]' } }] };
+    body: 'The guide compares paper labels and reusable trays. Reply by 20 October 2026. Collection is at Wren Hall in Saltmere.\n\nSee also [[Resources/Gardening/Gardening]]: the garden it belongs to.' } }] };
 /** A note that states only what the opening says: true whatever the planner was shown. */
 const plain = (frame: Frame): unknown => ({ kind: 'tidy-intent', v: 1, things: (frame.piles ?? []).flatMap((p) => p.things).map((t) => ({
   fileId: t.fileId, to: 'Resources/Gardening', name: t.name,
   ...(t.name.endsWith('.md') ? {} : { note: { name: t.name.replace(/\.[^.]+$/, ' introduction.md'), summary: 'The opening compares paper labels and reusable trays.',
-    body: 'The opening compares paper labels and reusable trays.\n\n[[Resources/Gardening/Gardening]]' } }) })) });
+    body: 'The opening compares paper labels and reusable trays.\n\nSee also [[Resources/Gardening/Gardening]]: the garden it belongs to.' } }) })) });
 const last = (s: SynopsisInput): number => s.parts.at(-1)?.n ?? 1;
 const partWith = (s: SynopsisInput, phrase: string): number => s.parts.find((p) => p.text.includes(phrase))?.n ?? 0;
 const VALID = (s: SynopsisInput) => ({ statements: [{ text: 'The guide compares paper labels and reusable trays.', parts: [1] },
@@ -431,7 +431,7 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
     const r = await press(await loaded(TAIL, TWO), { synopsis: () => ({ statements: [{ text: 'Alex sows seed rows near the shed.', parts: [1] }] }),
       execution: (frame, attempt) => {
         const value = plain(frame) as { things: Array<{ name: string; note?: { body: string } }> };
-        if (!attempt) for (const t of value.things) if (t.name === 'Long A.txt' && t.note) t.note.body = `${claim(TWO['Long A.txt'])}\n\n[[Resources/Gardening/Gardening]]`;
+        if (!attempt) for (const t of value.things) if (t.name === 'Long A.txt' && t.note) t.note.body = `${claim(TWO['Long A.txt'])}\n\nSee also [[Resources/Gardening/Gardening]]: the garden it belongs to.`;
         return value;
       } });
     expect(errors()).toMatch(refused);
@@ -443,7 +443,7 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
     const r = await press(await loaded(TAIL, { 'Long A.txt': doc }), { synopsis: () => ({ statements: [{ text: 'Alex sows seed rows near the shed.', parts: [1] }] }),
       execution: (frame, attempt) => {
         const value = plain(frame) as { things: Array<{ note?: { body: string } }> };
-        if (!attempt) for (const t of value.things) if (t.note) t.note.body = 'Order at https://example.com/seed-order-form.\n\n[[Resources/Gardening/Gardening]]';
+        if (!attempt) for (const t of value.things) if (t.note) t.note.body = 'Order at https://example.com/seed-order-form.\n\nSee also [[Resources/Gardening/Gardening]]: the garden it belongs to.';
         return value;
       } });
     expect(errors()).toContain('(noteWeb)');

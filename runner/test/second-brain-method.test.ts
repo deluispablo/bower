@@ -63,7 +63,7 @@ describe('the second-brain method (TL-P4-08)', () => {
     expect(text).toMatch(/only confirms[^.]*makes no new note/);
     expect(text).toMatch(/Timeline only grows/);
     expect(text).toMatch(/both/);
-    expect(text).toMatch(/links its hub[^.]*1 to 5 related notes/);
+    expect(text).toMatch(/links its hub[^.]*0 to 5 related notes/);
     expect(text).toMatch(/Kinds of document/);
     expect(text).toMatch(/closest kind/);
     expect(text).toMatch(/at most 5 of the notes below/);

@@ -202,6 +202,13 @@ describe('model input fingerprint', () => {
     expect(normalizeModelInput('Note reads "id":"x" here')).not.toBe(normalizeModelInput('Note reads "id":"y" here'));
   });
 
+  // C09 (review ledger rulings 5, 12): a request's journal file id is a physical id; its words are not.
+  it('a request-bearing input has one fingerprint whatever its request ids, and its words stay significant', () => {
+    const input = (requestId: string, text: string): string => `Prompt line\n${JSON.stringify({ runId: 'r', admission: 'a', requests: [{ requestId, text }], piles: [] })}`;
+    expect(normalizeModelInput(input('file-1', 'Which flat is cheaper?'))).toBe(normalizeModelInput(input('file-2', 'Which flat is cheaper?')));
+    expect(normalizeModelInput(input('file-1', 'Which flat is cheaper?'))).not.toBe(normalizeModelInput(input('file-1', 'Which flat is closer?')));
+  });
+
   it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
     const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
     if (!c) throw new Error('the C04 garden newsletter case is missing');

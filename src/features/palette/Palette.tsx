@@ -16,7 +16,7 @@ import { Icon, type IconName } from '@/ui/Icon';
 import s from './palette.module.css';
 import { useBackCloses } from '@/ui/back';
 import { focusMain, returnFocusTo } from '@/ui/focus';
-import { useIsDesktop } from '@/ui/media';
+import { useIsDesktop, useMedia } from '@/ui/media';
 
 // The palette's one matching rule: every word of the search, in any order, whatever the case.
 const words = (search: string): string[] => search.toLowerCase().split(/\s+/).filter(Boolean);
@@ -38,6 +38,8 @@ export function Palette() {
   const { paletteOpen, setPalette, setTidy, collapseAll, setRightTab } = useUi();
   const prefs = usePrefs();
   const desktop = useIsDesktop();
+  // The theme the system shows when none was chosen (the query tokens.css uses; dark by default).
+  const shownTheme = useMedia('(prefers-color-scheme: light)') ? 'light' : 'dark';
   const { data: tree } = useTree();
   const { data: piles } = usePiles();
   const { data: current } = useRun();
@@ -118,7 +120,7 @@ export function Palette() {
     ...(desktop ? [{ id: 'collapse', label: 'Collapse all folders', icon: 'collapse' as IconName, fn: () => collapseAll(), stays: true as const }] : []),
     ...(desktop ? [{ id: 'outline', label: 'Show the outline', icon: 'outline' as IconName, fn: () => (prefs.set({ rightOpen: true }), setRightTab('outline')), stays: true as const }] : []),
     ...(['dark', 'light', 'system'] as const)
-      .filter((t) => t !== prefs.theme)
+      .filter((t) => t !== prefs.theme && !(prefs.theme === 'system' && t === shownTheme))
       .map((t) => ({ id: `theme-${t}`, label: t === 'system' ? 'Follow the system theme' : `Use the ${t} theme`, icon: 'sun' as IconName, fn: () => prefs.set({ theme: t }), stays: true as const })),
     { id: 'moves', label: prefs.birdMoves ? 'Keep Bower still' : 'Let Bower move', icon: 'sparkle', fn: () => prefs.set({ birdMoves: !prefs.birdMoves }), stays: true },
     { id: 'settings', label: 'Open settings', icon: 'gear', fn: () => nav('/settings') },

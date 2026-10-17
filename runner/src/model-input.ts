@@ -1,6 +1,6 @@
 /**
  * Model input normalization for fingerprinting (TL-P4-07 addendum 2, TL-P4-14 stage 3 row): run-dependent values
- * (run IDs, admission IDs, pile and file IDs, item IDs, timestamps) are set to fixed values at any depth, so the same
+ * (run IDs, admission IDs, pile, file, item and request IDs, timestamps) are set to fixed values at any depth, so the same
  * case run twice with other ids gives the same fingerprint. JSON lines are parsed and their keys set, never
  * regex-edited, so a text value that looks like an id is kept. Each JSON line is written in canonical form: object
  * keys sorted by UTF-16 code units, no insignificant whitespace (RFC 8785, JSON Canonicalization Scheme; JSON.stringify
@@ -15,6 +15,8 @@ const FIXED: Readonly<Record<string, string | number>> = {
   pileId: 'PILE_ID',
   fileId: 'FILE_ID',
   itemId: 'ITEM_ID',
+  // A request's journal file id (C09 `requests`); its words stay as written.
+  requestId: 'REQUEST_ID',
   folderId: 'FOLDER_ID',
   parentId: 'FOLDER_ID',
   version: 'VERSION',
