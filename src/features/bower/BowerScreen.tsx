@@ -35,7 +35,7 @@ export function BowerScreen() {
   const { rules, prose } = rulesState;
   const runState = useRun();
   const { data: run } = runState;
-  const [text, setText] = useSessionDraft('bower:tell-draft');
+  const [text, setText, clearTextIf] = useSessionDraft('bower:tell-draft');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   // The kind is kept with the words, so a rule being typed comes back as a rule (empty: a request).
   const [kindDraft, setKindDraft] = useSessionDraft('bower:tell-kind');
@@ -49,7 +49,7 @@ export function BowerScreen() {
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
   /** One id per intended request: the same words sent again after a wait, or a reload, are that request, never a second one. */
-  const [intentJson, setIntent] = useSessionDraft('bower:tell-intent');
+  const [intentJson, setIntent, clearIntentIf] = useSessionDraft('bower:tell-intent');
   const intent = intentJson ? (JSON.parse(intentJson) as { text: string; id: string }) : null;
   // A change of kind is a new intent: a request sent after it is a new request, never one sent before it.
   const setKind = (k: 'request' | 'rule'): void => {
@@ -62,7 +62,9 @@ export function BowerScreen() {
   const pose: Pose = listening ? 'wait' : typing ? 'wait' : isRunning(run) ? 'write' : 'idle';
 
   const send = async (): Promise<void> => {
-    const t = text.trim();
+    // The box as it is now: only these exact words are cleared when the save ends, never words typed meanwhile.
+    const sent = text;
+    const t = sent.trim();
     if (!t || saving.current) return;
     saving.current = true;
     setBusy(true);
@@ -72,11 +74,12 @@ export function BowerScreen() {
         toast('Saved as you wrote it. Bower words it clearly in the next tidy-up.');
       } else {
         const id = intent?.text === t ? intent.id : crypto.randomUUID();
-        setIntent(JSON.stringify({ text: t, id }));
+        const sentIntent = JSON.stringify({ text: t, id });
+        setIntent(sentIntent);
         await vault.addRequest(t, id);
+        clearIntentIf(sentIntent);
       }
-      setIntent('');
-      setText('');
+      clearTextIf(sent);
       composerRef.current?.focus();
     } catch (e) {
       report(e, 'That did not send. Try again.');
@@ -180,7 +183,7 @@ export function BowerScreen() {
             <span />
           )}
           <Button size="sm" type="submit" disabled={busy || !text.trim()}>
-            <Icon name="send" size={16} /> {kind === 'rule' ? 'Keep this rule' : 'Send'}
+            <Icon name="send" size={16} /> {busy ? 'Sending…' : kind === 'rule' ? 'Keep this rule' : 'Send'}
           </Button>
         </div>
       </form>
