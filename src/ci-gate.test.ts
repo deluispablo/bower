@@ -246,7 +246,7 @@ case "$*" in
     n=$(cat "$WORK/lists" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$WORK/lists"
     [ "$n" -le "\${LIST_AFTER:-0}" ] && exit 0
     case "$*" in *--json*databaseId*headSha*) ;; *) exit 0 ;; esac
-    for want in "--repo deluispablo/bower-app" "--workflow gate.yml" "--commit $SHA"; do
+    for want in "--repo deluispablo/bower" "--workflow gate.yml" "--commit $SHA"; do
       case "$*" in *"$want"*) ;; *) exit 0 ;; esac
     done
     case "$*" in
@@ -322,7 +322,7 @@ exit 0
     const firstGh = r.calls.findIndex((c) => c.startsWith('gh '));
     expect(r.calls.findIndex((c) => c.startsWith('git push')), 'the push comes first').toBeLessThan(firstGh);
     const list = r.calls.find((c) => c.startsWith('gh run list')) ?? '';
-    for (const flag of ['--repo deluispablo/bower-app', '--workflow gate.yml', `--branch ${B1}`, `--commit ${SHA}`]) expect(list).toContain(flag);
+    for (const flag of ['--repo deluispablo/bower', '--workflow gate.yml', `--branch ${B1}`, `--commit ${SHA}`]) expect(list).toContain(flag);
     expect(list).toMatch(/--json databaseId,headSha\b/);
     expect(r.calls.some((c) => /^gh run watch 4242\b.*--exit-status/.test(c)), 'waits on the run it found').toBe(true);
     expect(r.calls.some((c) => /^gh run view 4242\b/.test(c)), 'reads the conclusion of that run').toBe(true);
@@ -414,7 +414,7 @@ describe('ci-gate docs', () => {
     expect(gates).toMatch(/scripts\/ci-gate\.sh sdd\/batch-N/);
     expect(gates).toMatch(/pnpm check/);
     expect(gates).toMatch(/e2e:fake/);
-    const rule = claude.split('\n').find((l) => l.includes('deluispablo/bower-app')) ?? '';
+    const rule = claude.split('\n').find((l) => l.includes('deluispablo/bower`')) ?? '';
     expect(rule).toMatch(/sdd\/batch-\*/);
     expect(rule).toMatch(/never force|no force/i);
     expect(rule).toMatch(/delet/i);

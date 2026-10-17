@@ -10,7 +10,7 @@
 # CI_GATE_POLL_TRIES (default 12) bound the wait for the run to appear. docs/runbook.md ("The CI gate") is the procedure.
 set -euo pipefail
 
-REPO=deluispablo/bower-app
+REPO=deluispablo/bower
 usage() { echo "usage: ci-gate.sh sdd/batch-N | ci-gate.sh --cleanup sdd/batch-N" >&2; exit 2; }
 
 cleanup=0
