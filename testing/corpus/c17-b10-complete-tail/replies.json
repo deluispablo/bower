@@ -1,5 +1,19 @@
 [
   {
+    "kind": "synopsis",
+    "name": "Seed order guide.txt",
+    "statements": [
+      {
+        "text": "The seed order guide compares paper labels and reusable trays.",
+        "parts": ["$part:Seed order guide for Alex"]
+      },
+      {
+        "text": "The final terms ask for a reply by 20 October 2026.",
+        "parts": ["$part:Final terms: reply by 20 October 2026."]
+      }
+    ]
+  },
+  {
     "kind": "tidy-intent",
     "v": 1,
     "things": [
