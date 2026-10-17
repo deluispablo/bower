@@ -53,6 +53,20 @@ const idOf = async (path: string): Promise<string> => {
   return f.id;
 };
 
+/** The listing as Drive gives it for files with no checksum: `unchecked` (a Docs file), or just not carried yet. */
+function listedWithout(ids: readonly string[], unchecked: boolean): void {
+  const real = drive.listAll.bind(drive);
+  vi.spyOn(drive, 'listAll').mockImplementation(async (r, o) =>
+    (await real(r, o)).map((f) => {
+      if (!ids.includes(f.id)) return f;
+      const { sha256: _h, size: _s, ...rest } = f;
+      return unchecked ? { ...rest, unchecked: true as const } : rest;
+    }));
+}
+
+/** Every pdf listed with no checksum yet, so a digest has to ask Drive (the offline tests exercise that path). */
+const pdfsUnlisted = async (): Promise<void> => listedWithout((await drive.listAll(root)).filter((f) => f.name.endsWith('.pdf')).map((f) => f.id), false);
+
 describe('DriveVault files', () => {
   it.each(['note', 'folder'] as const)('creation refuses a leading dot without writing (%s)', async (type) => {
     const before = await drive.snapshot();
@@ -354,7 +368,7 @@ describe('DriveVault inbox and Bower', () => {
 
       await expect(vault.removeRule('missing-rule-id')).rejects.toMatchObject({ code: 'not-found' });
       expect(listAll).toHaveBeenCalledTimes(1);
-      expect(listAll).toHaveBeenLastCalledWith(root);
+      expect(listAll).toHaveBeenLastCalledWith(root, { checksums: true });
 
       // Cache the absence before another page adds the next rule.
       const late = await other.addRule('Keep outlines together');
@@ -2007,6 +2021,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     await uploader.settled();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await pdfsUnlisted();
     const digest = vi.spyOn(drive, 'storedDigest').mockRejectedValue(driveError('offline'));
     expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-checked');
     expect(await runnerSays(pile.id)).toBe(SAID['not-checked']);
@@ -2024,6 +2039,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     await uploader.settled();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await pdfsUnlisted();
     const digest = vi.spyOn(drive, 'storedDigest').mockRejectedValue(driveError('offline'));
     const other = declaring();
     expect((await pileOn(other, pile.id))?.setAside).toBe('not-checked');
@@ -2406,6 +2422,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     const offline = driveError('offline');
     vi.spyOn(drive, 'readText').mockRejectedValue(offline);
     vi.spyOn(drive, 'readBytes').mockRejectedValue(offline);
+    await pdfsUnlisted();
     vi.spyOn(drive, 'storedDigest').mockRejectedValue(offline);
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const reader = declaring();
@@ -3082,7 +3099,6 @@ describe('one Home load on a folder like the live one (TL-P4-11 addendum)', () =
         '.bower/piles/declaration-<id>.json': 1,
         '.bower/questions.json': 1,
         '.bower/suggestions.json': 1,
-        'Inbox/<pile>/<thing>.pdf': 4,
         'Inbox/<pile>/Pile note.md': 1,
         'Rules.md': 1,
       },
@@ -3101,6 +3117,99 @@ describe('the inbox from the listing alone (home-inbox-first)', () => {
     expect(bytes).not.toHaveBeenCalled();
     const read = (await vault.piles()).map((p) => p.id).sort();
     expect(listed.map((p) => p.id).sort()).toEqual(read);
+  });
+});
+
+describe('the Inbox count reads the listing, not every file (inbox-read-slow)', () => {
+  const declaring = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const pdf = (name: string): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+  const pileOn = async (v: DriveVault, id: string) => (await v.piles()).find((p) => p.id === id);
+  const fileIn = async (pileId: string, name: string): Promise<DriveFile> => {
+    const folder = (await drive.listAll(root)).find((f) => f.folder && f.appProperties?.pile === pileId);
+    const f = folder && (await drive.listAll(folder.id)).find((x) => x.name === name && x.parents[0] === folder.id);
+    if (!f) throw new Error(`no ${name}`);
+    return f;
+  };
+  /** One declared pile of `n` things. */
+  async function pileOf(n: number): Promise<string> {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: Array.from({ length: n }, (_, i) => pdf(`p${i}.pdf`)) });
+    await uploader.settled();
+    return pile.id;
+  }
+
+  it('(a) a listing with checksums carries sha256 and size per content file; a plain one leaves them out', async () => {
+    const pile = await pileOf(1);
+    const f = await fileIn(pile, 'p0.pdf');
+    const plain = (await drive.listAll(root)).find((x) => x.id === f.id);
+    const checked = await drive.listAll(root, { checksums: true });
+    expect(plain?.sha256).toBeUndefined();
+    expect(checked.find((x) => x.id === f.id)?.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(checked.find((x) => x.id === f.id)?.size).toBe(new TextEncoder().encode('%PDF p0.pdf').byteLength);
+    expect(checked.filter((x) => x.folder).every((x) => x.sha256 === undefined)).toBe(true);
+  });
+
+  it('(b) a file Drive keeps no checksum of holds its pile, with no download and no waiting', async () => {
+    const folder = await drive.createFolder(await idOf('Inbox'), 'Loose papers');
+    const doc = await drive.createText(folder.id, 'Budget.pdf', 'a Google Doc, as far as Drive keeps a checksum');
+    listedWithout([doc.id], true);
+    const digest = vi.spyOn(drive, 'storedDigest');
+    const bytes = vi.spyOn(drive, 'readBytes');
+    expect((await vault.piles()).find((p) => p.id === folder.id)?.setAside).toBe('not-tidied');
+    expect(digest).not.toHaveBeenCalled();
+    expect(bytes.mock.calls.filter(([id]) => id === doc.id)).toEqual([]);
+  });
+
+  it('(c) a file not listed with a checksum yet asks Drive for its digest once', async () => {
+    const pile = await pileOf(2);
+    const fresh = await fileIn(pile, 'p1.pdf');
+    listedWithout([fresh.id], false);
+    const digest = vi.spyOn(drive, 'storedDigest');
+    expect((await pileOn(declaring(), pile))?.setAside).toBeUndefined();
+    expect(digest.mock.calls.filter(([id]) => id === fresh.id)).toHaveLength(1);
+    expect(digest.mock.calls.filter(([id]) => id !== fresh.id)).toEqual([]);
+  });
+
+  it('(d) an edited file gets the digest of its new listing, not the one kept', async () => {
+    const pile = await pileOf(2);
+    const v = declaring();
+    expect((await pileOn(v, pile))?.setAside).toBeUndefined();
+    const b = await fileIn(pile, 'p1.pdf');
+    await drive.writeText(b.id, 'Edited somewhere else', b.modifiedTime);
+    await v.refresh();
+    expect((await pileOn(v, pile))?.setAside).toBe('changed');
+  });
+
+  it('Home asks Drive the same number of times for 4 things as for 40, and downloads none of them', async () => {
+    const calls = async (n: number): Promise<{ total: number; downloads: number }> => {
+      drive = new FakeDrive();
+      root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+      const inbox = await idOf('Inbox');
+      const names = new Set<string>();
+      for (const pile of ['Pile one', 'Pile two']) {
+        const folder = await drive.createFolder(inbox, pile);
+        for (let i = 0; i < n / 2; i++) names.add((await drive.createText(folder.id, `t${i}.pdf`, `%PDF ${pile} ${i}`)).id);
+      }
+      let total = 0;
+      let downloads = 0;
+      const counted = new Proxy(drive, {
+        get(target, key, receiver) {
+          const value: unknown = Reflect.get(target, key, receiver);
+          if (typeof value !== 'function') return value;
+          return (...args: unknown[]): unknown => {
+            total++;
+            if (['readBytes', 'readText', 'readPrefix', 'storedDigest'].includes(String(key)) && names.has(String(args[0]))) downloads++;
+            return Reflect.apply(value, target, args);
+          };
+        },
+      });
+      await new DriveVault({ drive: counted, rootId: async () => root, runningPiles: () => new Set() }).piles();
+      return { total, downloads };
+    };
+    const few = await calls(4);
+    const many = await calls(40);
+    expect(few.downloads + many.downloads).toBe(0);
+    expect(many.total).toBe(few.total);
   });
 });
 
