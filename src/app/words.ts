@@ -3,8 +3,8 @@ import { shortDay } from '@/data/dates';
 
 export { shortDay };
 
-/** What both searches (panel and palette) say when a finished search found nothing. */
-export const NOTHING_FOUND = 'Nothing by that name or in your notes.';
+/** What both searches (panel and palette) say when a finished search found nothing (design spec d-v2-21). */
+export const nothingFound = (q: string): string => `Nothing called "${q.trim()}" in your notes or their names. Try fewer letters.`;
 
 const MIN = 60_000;
 export function ago(ts: number, now = Date.now()): string {

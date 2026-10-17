@@ -9,10 +9,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
 import { useUi } from '@/app/ui-store';
+import { nothingFound } from '@/app/words';
 import { loadingSources } from '@/testing/loading-sources';
 import { Palette } from './Palette';
 
-const NOTHING = 'Nothing by that name or in your notes.';
+const NOTHING = nothingFound('zzzz-no-such-note');
 
 afterEach(() => {
   vi.useRealTimers();

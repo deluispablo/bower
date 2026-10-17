@@ -10,7 +10,8 @@ import type { SearchHit, TreeNode } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
 import { crumbs, routeFor } from '@/app/paths';
-import { NOTHING_FOUND, plural } from '@/app/words';
+import { nothingFound, plural } from '@/app/words';
+import { ClearSearch } from '@/ui/ClearSearch';
 import { Icon, type IconName } from '@/ui/Icon';
 import s from './palette.module.css';
 import { useBackCloses } from '@/ui/back';
@@ -73,6 +74,9 @@ export function Palette() {
   }, [files, q]);
   const named = new Set(listed.map((f) => f.path));
   const textHits = inside.q === q.trim() ? inside.hits.filter((h) => !named.has(h.path) || !hasWords(displayName(nameOf(h.path)), words(inside.q))) : [];
+  // When nothing is listed: still searching, or the search failed; otherwise (null) nothing was found.
+  const said = q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : inside.failed ? 'Search did not answer. Names still work; try the words again in a moment.' : null;
+  const input = useRef<HTMLInputElement>(null);
 
   // What had the keyboard when the palette opened (WAI-ARIA APG: on close, focus returns to the opener).
   const opener = useRef<HTMLElement | null>(null);
@@ -140,7 +144,7 @@ export function Palette() {
           >
             <div className={s.inputRow}>
               <Icon name="search" size={18} />
-              <Command.Input autoFocus value={q} onValueChange={setQ} placeholder={desktop ? 'Type a command or a note' : 'Search notes, folders and actions'} className={s.input} />
+              <Command.Input ref={input} autoFocus value={q} onValueChange={setQ} placeholder={desktop ? 'Type a command or a note' : 'Search notes, folders and actions'} className={s.input} />
               {desktop ? (
                 <kbd className={s.kbd}>Esc</kbd>
               ) : (
@@ -151,8 +155,14 @@ export function Palette() {
             </div>
             {/* A listbox owns only options (ARIA 1.2), so the message lives in an always-present live status (APG combobox, WCAG 4.1.3). */}
             <div role="status">
-              <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : inside.failed ? 'Search did not answer. Names still work; try the words again in a moment.' : NOTHING_FOUND}</Command.Empty>
+              <Command.Empty className={s.empty} style={{ overflowWrap: 'anywhere' }}>{said ?? nothingFound(q)}</Command.Empty>
             </div>
+            {/* Outside the status and the listbox, so the sentence is announced alone. */}
+            {said === null && (
+              <Command.Empty className={s.empty} style={{ paddingTop: 0 }}>
+                <ClearSearch onClear={() => (setQ(''), input.current?.focus())} />
+              </Command.Empty>
+            )}
             <Command.List className={s.list}>
               <Command.Group heading="Actions" className={s.group}>
                 {actions.map((a) => (
