@@ -3,11 +3,11 @@
     "present": [
       "Projects/Garden visit/Saltmere garden visit.md",
       "Projects/Garden visit/Visit booking.txt",
-      "Projects/Garden visit/Garden notice.txt",
-      "Projects/Garden visit/Garden notice.md"
+      "Projects/Garden visit/Garden notice.txt"
     ],
     "absent": [
-      "Inbox/*"
+      "Inbox/*",
+      "Projects/Garden visit/Garden notice.md"
     ]
   },
   "unchanged": [
@@ -20,30 +20,81 @@
         "## Current state\n- The visit on 2026-10-18 is confirmed.",
         "Alex wants to bring a sketchbook."
       ],
+      "excludes": [
+        "Contradiction:",
+        "cancelled."
+      ],
       "timeline": [
-        "2026-10-02 \u00b7 The booking confirms the visit on 2026-10-18. \u00b7 [[Visit booking.txt]]",
-        "The booking confirms the visit; the notice says the garden may close if heavy rain is forecast. Closure is undecided, not a confirmed cancellation.",
-        "[[Garden notice.txt]]"
+        "2026-10-02 · The booking confirms the visit on 2026-10-18. · [[Visit booking.txt]]",
+        "Uncertain: The garden may close on 2026-10-18 if heavy rain is forecast; no decision has been made and the notice does not cancel the booking. (also from [[Visit booking.txt]]) · [[Garden notice.txt]]"
       ],
       "timelineCount": 2
-    },
-    {
-      "path": "Projects/Garden visit/Garden notice.md",
-      "contains": [
-        "The garden may close on 2026-10-18 if heavy rain is forecast; no decision has been made. The notice does not cancel the booking.\n\nSources: [[Visit booking.txt]] and [[Garden notice.txt]].\nRelated: [[Saltmere garden visit]]."
-      ]
     }
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
-    "created": [
-      "Projects/Garden visit/Garden notice.md"
-    ],
-    "updated": [
-      "Projects/Garden visit/Saltmere garden visit.md"
-    ],
-    "setAside": 0,
-    "questionsAtMost": 1
-  }
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "notes": [
+        {
+          "path": "Projects/Garden visit/Saltmere garden visit.md",
+          "contains": [
+            "## Current state\n- The visit on 2026-10-18 is confirmed.",
+            "Alex wants to bring a sketchbook."
+          ],
+          "excludes": [
+            "Contradiction:",
+            "cancelled."
+          ],
+          "timeline": [
+            "2026-10-02 · The booking confirms the visit on 2026-10-18. · [[Visit booking.txt]]",
+            "Uncertain: The garden may close on 2026-10-18 if heavy rain is forecast; no decision has been made and the notice does not cancel the booking. (also from [[Visit booking.txt]]) · [[Garden notice.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Garden visit/Saltmere garden visit.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Garden visit/Saltmere garden visit.md",
+          "contains": [
+            "## Current state\n- The visit on 2026-10-18 is confirmed.",
+            "Alex wants to bring a sketchbook."
+          ],
+          "excludes": [
+            "Contradiction:",
+            "cancelled."
+          ],
+          "timeline": [
+            "2026-10-02 · The booking confirms the visit on 2026-10-18. · [[Visit booking.txt]]",
+            "Uncertain: The garden may close on 2026-10-18 if heavy rain is forecast; no decision has been made and the notice does not cancel the booking. (also from [[Visit booking.txt]]) · [[Garden notice.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }

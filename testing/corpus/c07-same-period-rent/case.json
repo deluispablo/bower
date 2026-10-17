@@ -2,8 +2,8 @@
   "id": "c07-same-period-rent",
   "capability": "C07",
   "title": "Two sources give different rents for the same period",
-  "covers": "model",
-  "source": "new (C07 preparation; scripted intent proof pending lead review)",
+  "covers": "scripted",
+  "source": "new (C07: one sourced line through the existing marker and planner, scripted intent replies)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -18,5 +18,8 @@
   "questions": [],
   "bowerOwned": [
     "Projects/Flat hunt/Larkspur Lane flat.md"
+  ],
+  "presses": [
+    {}
   ]
 }
