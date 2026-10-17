@@ -16,11 +16,13 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-function screenWith(): void {
+/** `sent`: each request's intent, as Send passes it; the send never ends (a reload cuts it short). */
+function screenWith(sent: Array<string | undefined> = []): void {
   const sources = loadingSources();
   const vault = new Proxy({}, {
     get: (_t, k) => {
       if (k === 'driveLinks') return false;
+      if (k === 'addRequest') return (_text: string, intent?: string) => { sent.push(intent); return new Promise(() => undefined); };
       if (k === 'subscribe') return () => () => undefined;
       if (k === 'rules' || k === 'requests' || k === 'questions' || k === 'failedChanges') return async () => [];
       return () => new Promise(() => undefined);
@@ -65,5 +67,34 @@ describe('qa7-drafts: a draft keeps its kind', () => {
     screenWith();
     expect(screen.getByRole('radio', { name: 'A request' })).toBeChecked();
     expect(screen.getByRole('textbox', { name: 'Your request' })).toHaveValue('');
+  });
+
+  it('AC1 qa7-drafts-token-kind: the same words after a reload keep their token; a change of kind makes a new one (review-gaps 14)', () => {
+    const sent: Array<string | undefined> = [];
+    screenWith(sent);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your request' }), { target: { value: 'Put the lease papers together' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    cleanup();
+    // Positive control: after a reload the same words go with the same token.
+    screenWith(sent);
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    cleanup();
+    // The kind changed and changed back: a new intent, so a new request.
+    screenWith(sent);
+    fireEvent.click(screen.getByRole('radio', { name: 'A rule' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'A request' }));
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    cleanup();
+    // Changed words: a new token too.
+    screenWith(sent);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your request' }), { target: { value: 'Put the lease papers together now' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    const [first, again, otherKind, otherWords] = sent;
+    expect(first).toBeTruthy();
+    expect(again).toBe(first);
+    expect(otherKind).toBeTruthy();
+    expect(otherKind).not.toBe(first);
+    expect(otherWords).toBeTruthy();
+    expect(otherWords).not.toBe(otherKind);
   });
 });
