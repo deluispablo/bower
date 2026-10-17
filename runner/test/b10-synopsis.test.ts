@@ -5,6 +5,7 @@ import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
+import { VaultIndex } from '../../src/data/vault/vault-index';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply, report } from './b1-planning-support';
 import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
@@ -33,6 +34,8 @@ type Script = {
   selection?: (frame: Frame, call: ClaudeCall) => void;
   /** Notes (by path) the selection reply asks for, among each source's candidates. */
   wants?: string[];
+  /** Fields merged into every selection item (a kind, a destination, notes by id). */
+  pick?: Record<string, unknown>;
 };
 
 /** `n` whitespace-separated words, a line break every 12, no blank line. */
@@ -108,7 +111,7 @@ async function press(c: LoadedCase, script: Script, o: { around?: (f: typeof glo
     if (phase === 'selection') {
       script.selection?.(frame, call);
       return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: gardening,
-        wants: (s.candidates ?? []).filter((n) => script.wants?.includes(n.path ?? '')).map((n) => n.id) })), asks: [] });
+        wants: (s.candidates ?? []).filter((n) => script.wants?.includes(n.path ?? '')).map((n) => n.id), ...script.pick })), asks: [] });
     }
     return reply(caseReply(frame, script.execution ? script.execution(frame, attempt) : plain(frame)));
   }, () => ({ drive, root, admission }), true);
@@ -381,6 +384,35 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
     expect(report(r).filed).toHaveLength(1);
     expect(errors()).not.toContain('a number that is in none of its sources');
     expect(phases(r)).toEqual(['synopsis', 'selection', 'execution']);
+  });
+
+  it('AC6 b10-synopsis-profile-original-only: a long CV\'s offered and stored profile sentences come only from its original sentences, never from the synopsis', async () => {
+    const PROFILE = 'Areas/Career/Career profile.md';
+    const SPAN = 'Achievement: shipped an offline map editor.';
+    const SYNOPSIS = 'Alex delivered a map editor that works without a connection.';
+    const c = await loaded('c17-b56-cv-profile', { 'Alex CV.txt': `${SPAN}\nExperience: built map tools at Ferrowick in 2026.\n${words(3100, 'Alex labels paper trays for the plot today.')}` });
+    const drive = fixedDrive();
+    const root = await seedCase(drive, c);
+    const ix = VaultIndex.build(root, await drive.listAll(root));
+    const id = (path: string): string => ix.idOf(path) ?? '';
+    await drive.update(id(PROFILE), { appProperties: { profile: 'cv' } });
+    await drive.createText(id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [{ id: 'cv', match: ['cv'], template: 'source', properties: {}, table: [], profile: { template: 'profile' } }] }));
+    const note = { name: 'Alex CV.md', summary: SPAN, body: `${SPAN} [[Areas/Career/Career profile]] [[Areas/Career/Career]]`, typeRow: 'cv' };
+    const r = await press(c, {
+      synopsis: () => ({ statements: [{ text: SYNOPSIS, parts: [1] }] }),
+      pick: { kind: 'cv', destination: { parentId: id('Areas/Career'), name: 'Originals' }, wants: [id(PROFILE), id('Areas/Career/Career.md')] },
+      execution: (frame) => caseReply(frame, { kind: 'tidy-intent', v: 1, things: [{ fileId: '$file:Alex CV.txt', to: 'Areas/Career/Originals', name: 'Alex CV.txt', basis: 'Areas/Career/Career.md', note,
+        profile: [{ source: '$file:Alex CV.txt', sentence: 1 }] }] }),
+    }, { drive, root });
+    const original = c.inboxFiles['Alex CV.txt'] ?? '';
+    expect(synopses(r), 'the CV got a synopsis that differs from it').toHaveLength(1);
+    expect(shownText(r, 'Alex CV.txt', 'execution')).toContain(SYNOPSIS);
+    const offered = ((r.calls.find((x) => x.phase === 'execution')?.frame.piles ?? []).flatMap((p) => p.things).find((t) => t.name === 'Alex CV.txt') as { sentences?: Array<{ text: string }> } | undefined)?.sentences ?? [];
+    expect(offered[0]?.text, 'sentence 1 is the original\'s first sentence').toBe(SPAN);
+    for (const { text } of offered) { expect(original, 'an offered sentence is the original\'s').toContain(text); expect(text).not.toContain(SYNOPSIS); }
+    expect(errors()).not.toContain('profile');
+    expect(r.after[PROFILE], 'the stored profile holds the original sentence').toContain(`${SPAN} [[Alex CV]]`);
+    expect(r.after[PROFILE]).not.toContain(SYNOPSIS);
   });
 
   it('AC6 b10-synopsis-fabricated (guard): a figure in neither the original nor anything shown is refused as today', async () => {
