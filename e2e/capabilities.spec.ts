@@ -9,7 +9,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
 const NOTE_WORDS = 'Ask the landlord about the heating';
-const HUB_LINE = 'A fourth flat added; the shortlist compared by commute.';
+const HUB_LINE = 'A new listing added to the shortlist.';
 const MERGE_LINE = 'The Wrenfield Road listing is the same building; kept here, as you asked.';
 const MERGED_INTO = 'Flat 3, 12 Larkspur Lane';
 

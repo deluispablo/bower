@@ -222,7 +222,7 @@ describe('the fake runner', () => {
     const out = await tidyUp(drive, root);
     if (out.phase !== 'done') throw new Error('failed');
     const dump = drive.dump(root);
-    expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A fourth flat added; the shortlist compared by commute\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
+    expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A new listing added to the shortlist\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
     const job = dump.get('Projects/Job hunt/Job hunt.md') ?? '';
     expect(job).toMatch(/ · New offer from Ferrowick: fully remote, 42,000 a year, start 2 November\. · \[\[Industrial Designer, Ferrowick\]\]\n/);
     expect(job).toMatch(/ · A flat from the same pile went to the flat hunt\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
@@ -237,7 +237,7 @@ describe('the fake runner', () => {
     const out = await tidyUp(drive, root);
     if (out.phase !== 'done') throw new Error('failed');
     const dump = drive.dump(root);
-    expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A fourth flat added; the shortlist compared by commute\.\n/);
+    expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A new listing added to the shortlist\.\n/);
     expect(dump.get('Projects/Job hunt/Job hunt.md')).not.toContain('A flat from the same pile');
   });
 
@@ -248,7 +248,7 @@ describe('the fake runner', () => {
     const second = await tidyUp(drive, root);
     if (second.phase !== 'done') throw new Error('failed');
     expect(second.report.updated).toEqual([]);
-    const lines = (drive.dump(root).get('Projects/Flat hunt/Flat hunt.md') ?? '').split('\n').filter((l) => l.includes('A fourth flat added'));
+    const lines = (drive.dump(root).get('Projects/Flat hunt/Flat hunt.md') ?? '').split('\n').filter((l) => l.includes('A new listing added'));
     expect(lines).toHaveLength(1);
   });
 

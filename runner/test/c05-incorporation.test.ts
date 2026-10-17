@@ -36,7 +36,7 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
     kind: 'tidy-intent', v: 1,
     things: [offerThing(id), { fileId: id(LISTING), to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }],
     lines: [
-      { note: FLAT, text: 'A fourth flat added; the shortlist compared by commute.', cites: id(LISTING) },
+      { note: FLAT, text: 'A new listing added to the shortlist.', cites: id(LISTING) },
       { note: JOB, text: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.', cites: id(OFFER) },
       { note: JOB, text: 'A flat from the same pile went to the flat hunt.', cites: id(LISTING) },
     ],
@@ -52,7 +52,7 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
     kind: 'tidy-intent', v: 1,
     things: [offerThing(id)],
     lines: [
-      { note: FLAT, text: 'A fourth flat added; the shortlist compared by commute.' },
+      { note: FLAT, text: 'A new listing added to the shortlist.' },
       { note: JOB, text: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.', cites: id(OFFER) },
     ],
   })),

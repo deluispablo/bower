@@ -66,7 +66,7 @@ test('C06: a project note cites what it is about', async ({ page, isMobile }) =>
 
   // The project note's new Timeline line cites the flat this tidy-up filed for it; the link opens it.
   await goNote(page, 'Projects/Flat hunt/Flat hunt.md');
-  const flatLine = lineOf(page, 'A fourth flat added; the shortlist compared by commute.');
+  const flatLine = lineOf(page, 'A new listing added to the shortlist.');
   await expect(flatLine.getByRole('link', { name: 'Flat 9, Wrenfield Road' })).toBeVisible();
   await flatLine.getByRole('link', { name: 'Flat 9, Wrenfield Road' }).click();
   await expect(page).toHaveURL(new RegExp(`${noteUrl('Projects/Flat hunt/Flat 9, Wrenfield Road.md').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
