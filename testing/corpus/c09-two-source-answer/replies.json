@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "answers": [
+      {
+        "requestId": "$request:change-1",
+        "text": "Rent is 1,450 a month, as [[Projects/Flat hunt/Listing.txt]] says; the deposit is 1,600, as [[Projects/Flat hunt/Deposit terms.txt]] says."
+      }
+    ]
+  }
+]

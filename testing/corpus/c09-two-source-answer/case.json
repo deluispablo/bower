@@ -2,7 +2,7 @@
   "id": "c09-two-source-answer",
   "capability": "C09",
   "title": "Answer both parts from distinct stored sources",
-  "covers": "model",
+  "covers": "scripted",
   "source": "new (TL-P4-31 ruling 1; C09 preparation for lead review)",
   "scope": "instructions",
   "allowWeb": false,

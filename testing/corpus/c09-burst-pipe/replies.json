@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "answers": [
+      {
+        "requestId": "$request:change-1",
+        "text": "Yes: burst pipes are covered up to 5,000, and you pay the first 250, as [[Home insurance policy.pdf]] says. See [[Home insurance]]."
+      }
+    ]
+  }
+]

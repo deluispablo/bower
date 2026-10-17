@@ -1,0 +1,13 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "answers": [
+      {
+        "requestId": "$request:change-1",
+        "text": "Alex must reply by 21 October 2026, as [[Projects/Flat hunt/Larkspur Lane offer.txt]] says; [[Larkspur Lane offer]] still says 14 October 2026."
+      }
+    ]
+  }
+]
