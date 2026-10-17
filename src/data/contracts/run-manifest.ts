@@ -11,7 +11,7 @@ import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearn
 import { applyChanges, changesOrdered, viewsInstalled, mocSnapshot, type MocSnapshot, satisfiedAppendUnchanged, EDIT_FILE_LIMIT, profileTextOk, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 import { TEMPLATE_REGIONS, type TemplateRegion } from './note-templates';
-import { displayName } from './tree';
+import { displayName, MAX_NAME } from './tree';
 
 export type Scope = { rootId: string };
 export type FileKind = 'note' | 'pdf' | 'image' | 'link' | 'doc' | 'sheet' | 'audio' | 'other';
@@ -157,6 +157,8 @@ export type Manifest = {
    * read only from their own records (`RunRecords.walk`), never carried in a manifest.
    */
   satisfiedAppends?: SatisfiedAppend[];
+  /** The sources a model reply's refusal left for the next tidy-up (plan-partial), one row each; absent when none waited. */
+  waiting?: Array<{ name: string; why: typeof WAITING_WHY }>;
   /** Fields of an unaccepted C05 draft: never written, and a manifest carrying either is refused (`manifestOf`). */
   completedAppends?: unknown;
   appendEvidence?: unknown;
@@ -526,10 +528,19 @@ function contribution(value: unknown): value is ReportContribution {
     && unique(value.requires) && oneOf(value.when, ['applied', 'rejected']) && runReport(value.value);
 }
 
-export const isAppendCompletion = (row: unknown): row is AppendCompletion => closed(row, ['requestId', 'targetFileId'])
+/** The one reason a waiting row gives: the report's approved copy `SET_ASIDE.notTidied` (spine/plan.ts, which imports this file). */
+export const WAITING_WHY = "Bower couldn't tidy this up yet. Try again.";
+/**
+ * A waiting row (plan-partial): a name of 1 to MAX_NAME characters and the fixed reason. The count is not tied to the
+ * capture alone, since a waiting source is not captured: at most its piles plus journal records plus the run's 200 things.
+ */
+const waitingOk = (rows: unknown, captured: number): boolean => list(rows, (row) => closed(row, ['name', 'why'])
+  && text(row.name) && row.name.length >= 1 && row.name.length <= MAX_NAME && row.why === WAITING_WHY)
+  && rows.length >= 1 && rows.length <= captured + 200;
+export const isAppendCompletion =(row: unknown): row is AppendCompletion => closed(row, ['requestId', 'targetFileId'])
   && recordId(row.requestId) && driveId(row.targetFileId);
 function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean): boolean {
-  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['satisfiedAppends'])
+  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['satisfiedAppends', 'waiting'])
     && value.v === v && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
@@ -539,7 +550,8 @@ function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean)
       && closed(r.consent, ['requestId', 'targetFileId', 'sourceFileId']) && recordId(r.consent.requestId)
       && driveId(r.consent.targetFileId) && driveId(r.consent.sourceFileId) && editEntry(r.entry)
       && seenFile(r.before) && path(r.path) && text(r.text) && verifiedContent(r.content) && hash(r.operationId)))
-    && capture(value.capture) && list(value.operations, item) && list(value.reportPlan, contribution);
+    && capture(value.capture) && list(value.operations, item) && list(value.reportPlan, contribution)
+    && (value.waiting === undefined || waitingOk(value.waiting, value.capture.piles.length + value.capture.journal.length));
 }
 function manifest(value: unknown): value is Manifest {
   return manifestOf(value, 1, operation);

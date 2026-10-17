@@ -254,12 +254,15 @@ describe('the Claude provider', () => {
     const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: project }),
       () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
     const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
-    expect(code).toBe(1);
+    // Refused twice (selection plus two attempts), the refused pile waits (plan-partial) and the rest is filed.
     expect(calls).toHaveLength(3);
-    expect(wire.statuses.at(-1)?.phase).toBe('failed');
-    await expectFailedReply(wire);
+    expect(code).toBe(0);
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+    expect(errors.mock.calls.flat().map(String).some((l) => /drops a pile \(newFolder\)/.test(l))).toBe(true);
+    const paths = (await wire.drive.listAll(wire.folderId)).map((f) => wire.drive.pathOf(f.id, wire.folderId));
+    expect(paths).not.toContain('Projects/Garden');
   });
 
   it('a cut Rules.md is marked as cut in the model input', async () => {
@@ -297,11 +300,12 @@ describe('the Claude provider', () => {
   });
 
   it('a rule basis is a whole rules line, never part of one or the cut marker', async () => {
-    const { wire, root } = await wired();
     const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(200)}`;
-    await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A refused basis now holds its pile and the run goes on, so each ask gets a fresh folder.
     const asks = async (basis: string): Promise<number> => {
+      const { wire, root } = await wired();
+      await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
       const reply = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Projects/Community garden', basis }); });
       const claude = recordedClaude({ stdout: reply }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
       await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
@@ -355,16 +359,15 @@ describe('the Claude provider', () => {
     expect(calls[2]?.input).toMatch(/no note/);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
-    // Selection plus two execution attempts: repeated invalid replies fail with untouched sources.
+    // Selection plus two execution attempts: the refused pile waits (plan-partial) with its sources untouched, the rest is filed.
     const again = await wired(false, true);
     const stuck: ClaudeCall[] = [];
     const respondStuck = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: plain }),
       () => ({ drive: again.wire.drive, root: again.wire.folderId, admission: again.wire.manifest }));
     const never = async (call: ClaudeCall): Promise<ClaudeExit> => { stuck.push(call); return respondStuck(call); };
-    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(1);
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(0);
     expect(stuck).toHaveLength(3);
-    expect(again.wire.statuses.at(-1)?.phase).toBe('failed');
-    await expectFailedReply(again.wire);
+    expect(again.wire.statuses.at(-1)?.phase).toBe('done');
   });
 
   it('a thing cited by a Timeline line on an existing note needs no note', async () => {
@@ -401,7 +404,8 @@ describe('the Claude provider', () => {
 
   it('a second refusal ends the run honestly', async () => {
     const { wire } = await wired();
-    const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Projects/Community garden'; });
+    // A place outside the main folders refuses the whole reply (plan-partial: a row-level refusal would only hold its pile).
+    const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Elsewhere/x'; });
     const calls: ClaudeCall[] = [];
     const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: newArea }),
       () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
@@ -463,10 +467,20 @@ describe('the Claude provider', () => {
         for (const t of (m.things as Array<{ name: string }>).slice(0, 1)) t.name = 'Payslip.jpg';
       }) }],
     ];
+    // A bad name refuses one row (item-level): after the retry that pile waits and the rest is filed (plan-partial).
+    const rowLevel = ["a name past the app's longest", 'a name with a bidi control', 'a name that turns a PDF into a picture'];
     for (const [what, reply] of replies) {
       const { wire } = await wired();
       const before = await wire.drive.listAll(wire.folderId);
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      if (rowLevel.includes(what)) {
+        expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude(reply, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }), what).toBe(0);
+        expect(wire.statuses.at(-1)?.phase, what).toBe('done');
+        expect(errors.mock.calls.flat().map(String).some((l) => /drops a pile \(nameChangesKind\)/.test(l)), what).toBe(true);
+        errors.mockRestore();
+        continue;
+      }
 
       expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude(reply, { drive: wire.drive, root: wire.folderId, admission: wire.manifest }).spawn }), what).toBe(1);
 

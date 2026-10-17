@@ -103,6 +103,8 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
       : (c.value.answered ?? []).map((row) => ({ ...row, why: stateNotWritten(row.note === undefined ? null : displayName(nameOf(row.note)), refusal.code === 'auth' || refusal.code === 'not-found') }));
     if (answered.length) report.answered = [...(report.answered ?? []), ...answered];
   }
+  // A source a model reply's refusal left for the next tidy-up (plan-partial): told once, after the contributions.
+  report.setAside.push(...(manifest.waiting ?? []));
   for (const op of manifest.operations) {
     if (op.effect.kind !== 'maintain') continue;
     const outcome = byId.get(op.operationId);
