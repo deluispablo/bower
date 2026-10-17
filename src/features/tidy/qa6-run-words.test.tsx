@@ -62,6 +62,19 @@ describe('AC1 a request that did nothing is not called done', () => {
     expect(runDetail(done('instructions', out.report))).not.toMatch(/\bdone\b/);
   });
 
+  it('AC1 qa6-run-words-lookup-missing: a lookup with the web on whose note is gone looks nothing up and is counted as read', async () => {
+    // Removed in Drive, outside Bower: not one of the person's changes in Bower.
+    const flat3 = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md');
+    await drive.trash(flat3?.id ?? '');
+    await vault().addRequest(LOOKUP);
+    const out = await tidyUp(drive, root, 'instructions', { allowWeb: true });
+    if (out.phase !== 'done') throw new Error('the run failed');
+    expect((await vault().requests())[0]?.done).toBe('Bower did not look anything up.');
+    expect(out.report.requests ?? []).not.toContain(LOOKUP);
+    expect(out.report.yourChanges).toBe(1);
+    expect(runDetail(done('instructions', out.report))).toBe('1 change of yours read.');
+  });
+
   it('AC1 qa6-run-words-lookup-demo: the demo, which looks nothing up, does not call a lookup done on the sheet', async () => {
     vi.useFakeTimers();
     const w = new DemoWorld({ scenario: 'default', scale: 'demo', latency: 0 });
@@ -88,6 +101,15 @@ describe('AC3 no file name or web address inside a sentence', () => {
     const said = [...out.report.created, ...out.report.updated].map((r) => r.what);
     expect(said.length).toBeGreaterThan(0);
     expect(said.filter((w) => FILE_OR_ADDRESS.test(w))).toEqual([]);
+  });
+
+  it('AC3 qa6-run-words-own-note-fake: a document\'s own note is named by its plain name; the note keeps its contents', async () => {
+    const NOTE = 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md';
+    await vault().trash(NOTE);
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('the run failed');
+    expect(out.report.created.filter((r) => r.path === NOTE).map((r) => r.what)).toEqual(['A note for Offer, Industrial Designer, Ferrowick.']);
+    expect(drive.dump(root).get(NOTE)).toContain('Offer, Industrial Designer, Ferrowick.pdf');
   });
 
   it('AC3 qa6-run-words-rows-demo: the rows of a demo tidy-up name no file and no address', async () => {

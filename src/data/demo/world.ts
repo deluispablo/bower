@@ -47,7 +47,6 @@ import {
   HUB_UPDATES,
   MERGES,
   NOT_LOOKED_UP,
-  NOTHING_LOOKED_UP,
   saltmereQuestion,
   scriptedRequest,
   guessFolder,
@@ -61,6 +60,7 @@ import {
   seedSuggestions,
   seedTime,
 } from './fixture';
+import { NOTHING_LOOKED_UP, REQUEST_DONE } from '../spine/scripted';
 import { keepSignedIn, keptSignedIn, PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
@@ -500,7 +500,8 @@ export class DemoWorld {
         const yourChanges = this.journal.length;
         r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: [] };
         r.report.yourChanges = yourChanges;
-        const asked = this.requests.filter((q) => !q.done).map((q) => q.text);
+        // A request whose done line says it did nothing is not called done; it counts among the changes read (qa6).
+        const asked = this.requests.filter((q) => !q.done && !this.answerOf(q.text).startsWith(NOTHING_LOOKED_UP)).map((q) => q.text);
         const worded = this.rules.filter((x) => x.pending).length;
         if (asked.length) r.report.requests = asked;
         if (worded) r.report.rulesWorded = worded;
@@ -524,8 +525,8 @@ export class DemoWorld {
     // The demo never looks anything up, so it says so, web on or off (C10).
     if (scripted?.kind === 'lookup') return this.allowWeb ? NOTHING_LOOKED_UP : NOT_LOOKED_UP;
     // Nor does it write a comparison (C08): it never names a note it did not write.
-    if (scripted?.kind !== 'answer') return 'Done. See what changed in your folders.';
-    return scripted.uses.every(there) ? scripted.answer : 'Done. See what changed in your folders.';
+    if (scripted?.kind !== 'answer') return REQUEST_DONE;
+    return scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
   }
 
   /** Files every inbox thing as the run would, and returns the report. */
@@ -598,13 +599,13 @@ export class DemoWorld {
         this.entries.set(path, { path, type: 'file', kind: kindOf(name), modified: at, created: at, isNew: true, byBower: kindOf(name) === 'note' });
         if (item.kind === 'link') this.links.set(path, `https://${item.name}`);
         // A saved link filed as a note is a note this run wrote, as over Drive.
-        if (item.kind === 'link' && kindOf(name) === 'note') created.push({ path, what: `Saved from ${item.name}.` });
+        if (item.kind === 'link' && kindOf(name) === 'note') created.push({ path, what: 'A link you saved.' });
         const f: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: folder };
         cited.set(item.name, plan.note ? { source: displayName(nameOf(plan.note)), path: plan.note } : { source: kindOf(name) === 'note' ? displayName(name) : name, path });
         if (plan.note) {
           this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
           f.note = plan.note;
-          created.push({ path: plan.note, what: `A note for ${displayName(name)}.` });
+          created.push({ path: plan.note, what: `A note for ${thingName(name)}.` });
         }
         filed.push(f);
       }
