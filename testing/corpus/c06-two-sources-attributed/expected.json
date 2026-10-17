@@ -22,8 +22,8 @@
         "Bramblehaven"
       ],
       "timeline": [
-        "2026-10-02 \u00b7 Delivery date recorded.",
-        "The letter confirms Workshop delivery on 12 October 2026. \u00b7 [[Workshop delivery.txt]]"
+        "2026-10-02 · Delivery date recorded.",
+        "The letter confirms Workshop delivery on 12 October 2026. · [[Workshop delivery.txt]]"
       ],
       "timelineCount": 2
     },
@@ -38,21 +38,69 @@
         "Saltmere"
       ],
       "timeline": [
-        "2026-10-02 \u00b7 Collection date recorded.",
-        "The letter confirms Moving day collection on 16 October 2026. \u00b7 [[Moving collection.txt]]"
+        "2026-10-02 · Collection date recorded.",
+        "The letter confirms Moving day collection on 16 October 2026. · [[Moving collection.txt]]"
       ],
       "timelineCount": 2
     }
   ],
   "linksResolve": true,
   "report": {
-    "filed": 2,
+    "filed": 0,
     "created": [],
-    "updated": [
-      "Projects/Workshop/Workshop.md",
-      "Projects/Moving day/Moving day.md"
-    ],
-    "questionsExactly": 0,
-    "setAside": 0
-  }
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "notes": [
+        {
+          "path": "Projects/Workshop/Workshop.md",
+          "timeline": [
+            "2026-10-02 · Delivery date recorded.",
+            "The letter confirms Workshop delivery on 12 October 2026. · [[Workshop delivery.txt]]"
+          ],
+          "timelineCount": 2
+        },
+        {
+          "path": "Projects/Moving day/Moving day.md",
+          "timeline": [
+            "2026-10-02 · Collection date recorded.",
+            "The letter confirms Moving day collection on 16 October 2026. · [[Moving collection.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 2,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Workshop/Workshop.md",
+          "Projects/Moving day/Moving day.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Workshop/Workshop.md",
+          "timelineCount": 2
+        },
+        {
+          "path": "Projects/Moving day/Moving day.md",
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }

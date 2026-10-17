@@ -1,31 +1,71 @@
 {
   "files": {
     "present": [
-      "Projects/Job hunt/*Data analyst*.md"
+      "Projects/Job hunt/Data analyst at Saltwick Co.md"
     ],
     "absent": [
       "Inbox/*"
     ]
   },
+  "unchanged": [
+    "Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md"
+  ],
   "notes": [
     {
-      "path": "Projects/Job hunt/*Data analyst*.md",
-      "contains": [
-        "36,000",
-        "40,000",
-        "17 October",
-        "Ferrowick",
-        "[[Job hunt]]"
-      ]
-    },
-    {
       "path": "Projects/Job hunt/Job hunt.md",
-      "timelineMin": 2
+      "contains": [
+        "One application open."
+      ],
+      "timeline": [
+        "2026-09-28 · Started the job hunt.",
+        "A data analyst role at Saltwick Co pays 36,000 to 40,000 a year; apply by 17 October 2026. · [[Data analyst at Saltwick Co]]"
+      ],
+      "timelineCount": 2
     }
   ],
   "linksResolve": true,
   "report": {
-    "createdAtLeast": 1,
-    "updatedAtLeast": 1
-  }
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "unchanged": [
+        "Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md"
+      ],
+      "notes": [
+        {
+          "path": "Projects/Job hunt/Job hunt.md",
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Job hunt/Job hunt.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Job hunt/Job hunt.md",
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }

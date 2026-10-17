@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Data analyst at Saltwick Co.md",
+        "to": "Projects/Job hunt",
+        "name": "Data analyst at Saltwick Co.md"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Job hunt/Job hunt.md",
+        "text": "A data analyst role at Saltwick Co pays 36,000 to 40,000 a year; apply by 17 October 2026.",
+        "cites": "$file:Data analyst at Saltwick Co.md"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]
