@@ -58,9 +58,9 @@ const stepsOf = (job: string): string[] => job.split(/^ {6}- /m).slice(1);
 /** A job's keys before its steps: `if`, `needs`, `env`, `strategy`. */
 const headOf = (job: string): string => job.split(/^ {4}steps:/m)[0] ?? '';
 const SUITES = [
-  { job: 'e2e-fake-phone', project: 'phone', fake: true, min: 4, max: 6 },
-  { job: 'e2e-fake-desktop', project: 'desktop', fake: true, min: 4, max: 6 },
-  { job: 'e2e-demo-desktop', project: 'desktop', fake: false, min: 2, max: 3 },
+  { job: 'e2e-fake-phone', project: 'phone', fake: true, min: 8, max: 8 },
+  { job: 'e2e-fake-desktop', project: 'desktop', fake: true, min: 8, max: 8 },
+  { job: 'e2e-demo-desktop', project: 'desktop', fake: false, min: 6, max: 6 },
   // Only with `workflow_dispatch` and `full: true`: pnpm e2e:full also runs the demo on phone.
   { job: 'e2e-demo-phone', project: 'phone', fake: false, min: 2, max: 3 },
 ] as const;
@@ -92,11 +92,13 @@ describe('ci-gate workflow', () => {
       ?.split('&&')
       .map((s) => s.trim());
     expect(steps?.length).toBeGreaterThan(0);
-    const lines = runLines(text);
+    // The unit steps are sharded (`pnpm test --shard=i/n`); the step is still check:run's.
+    const unshard = (l: string): string => l.replace(/ --shard=.*$/, '');
+    const lines = new Set([...runLines(text)].map(unshard));
     expect((steps ?? []).filter((s) => !lines.has(s))).toEqual([]);
     // Each check step sits in exactly one step block, with no condition that could skip it.
     const all = [...jobs(text)].flatMap(([name, job]) => stepsOf(job).map((block, i) => ({ name, i, block })));
-    const where = (steps ?? []).map((cmd) => all.filter((s) => runLines(s.block).has(cmd)));
+    const where = (steps ?? []).map((cmd) => all.filter((s) => [...runLines(s.block)].map(unshard).includes(cmd)));
     where.forEach((hits, k) => expect(hits.length, `${steps?.[k]} runs once`).toBe(1));
     for (const hit of where.flat()) expect(hit.block, `${hit.name}: a check step has no if or continue-on-error`).not.toMatch(/^\s+(if|continue-on-error):/m);
     // Within a job the check steps keep check:run's order (`pnpm build` before check-bundle).
@@ -107,6 +109,17 @@ describe('ci-gate workflow', () => {
     expect(text).not.toMatch(/continue-on-error|\|\|\s*true|set \+e/);
     // The check jobs are parallel: no job waits for another except the failure report.
     for (const [name, job] of jobs(text)) if (name !== 'e2e-report') expect(job, `${name} waits for nothing`).not.toMatch(/^ {4}needs:/m);
+  });
+
+  it('AC2c ci-gate-unit-shards: unit-app runs in 3 vitest shards and unit-runner in 2, every shard once', () => {
+    const all = jobs(yml());
+    for (const [job, cmd, total] of [['unit-app', 'pnpm test', 3], ['unit-runner', 'pnpm -C runner test', 2]] as const) {
+      const body = all.get(job) ?? '';
+      expect([...runLines(body)].filter((l) => l.startsWith(cmd)), `${job} runs its tests once`).toEqual([`${cmd} --shard=\${{ matrix.shard }}/${total}`]);
+      const listed = (/shard:\s*\[([^\]]*)\]/.exec(headOf(body))?.[1] ?? '').split(',').map((n) => Number(n.trim()));
+      expect(listed, `${job} runs every shard 1..${total}`).toEqual(Array.from({ length: total }, (_, i) => i + 1));
+      expect(headOf(body)).toMatch(/fail-fast:\s*false/);
+    }
   });
 
   it('AC2b ci-gate-setup: every job checks out, sets up pnpm 12.8.1 then Node 26 with a pnpm cache, installs frozen', () => {
@@ -320,7 +333,8 @@ exit 0
     const late = run([B1], { LIST_AFTER: '2' });
     expect(late.status, late.out).toBe(0);
     expect(late.lists).toBe(3);
-    for (const env of [{ LIST_AFTER: '999', CI_GATE_POLL_TRIES: '3' }, { LIST_FAIL: '1', CI_GATE_POLL_TRIES: '3' }]) {
+    const failing: Record<string, string>[] = [{ LIST_AFTER: '999', CI_GATE_POLL_TRIES: '3' }, { LIST_FAIL: '1', CI_GATE_POLL_TRIES: '3' }];
+    for (const env of failing) {
       const r = run([B1], env);
       expect(r.status, JSON.stringify(env)).not.toBe(0);
       expect(r.out).toMatch(/no run/i);
