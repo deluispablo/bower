@@ -1,6 +1,7 @@
 import { LoadError } from '@/ui/LoadError';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
+import { usePiles, useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
+import { waitingIn } from '@/data/piles';
 import { noteRoute } from '@/app/paths';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
@@ -28,7 +29,12 @@ export function BowerPanel() {
   const putAway = (id: string): void => void runs.markSeen(id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'));
   const nav = useNavigate();
   // Home shows the questions and their error itself (d-v2-14).
-  const onHome = useLocation().pathname === '/';
+  const { pathname } = useLocation();
+  const onHome = pathname === '/';
+  const onBower = pathname === '/bower';
+  // Only an inbox that last read fine and holds nothing; a failed refresh keeps the usual line.
+  const pilesState = usePiles();
+  const inboxEmpty = !pilesState.error && pilesState.data !== undefined && waitingIn(pilesState.data) === 0;
   return (
     <div className={s.panel}>
       <section>
@@ -51,7 +57,7 @@ export function BowerPanel() {
         ) : run === undefined && runLoading ? (
           <p className="muted">Looking…</p>
         ) : (
-          <p className="muted">Resting. Tidy up when the inbox has what you want filed.</p>
+          <p className="muted">{inboxEmpty ? 'Resting. Nothing waiting in the inbox.' : 'Resting. Tidy up when the inbox has what you want filed.'}</p>
         )}
         <FailedChanges />
       </section>
@@ -95,9 +101,11 @@ export function BowerPanel() {
           </ul>
         </section>
       )}
-      <Button variant="ghost" size="sm" block onClick={() => nav('/bower')}>
-        Tell Bower something
-      </Button>
+      {!onBower && (
+        <Button variant="ghost" size="sm" block onClick={() => nav('/bower')}>
+          Tell Bower something
+        </Button>
+      )}
     </div>
   );
 }

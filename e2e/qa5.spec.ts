@@ -216,7 +216,8 @@ test.describe('the side panel', () => {
     await page.getByRole('radio', { name: 'A request' }).click();
     await page.getByRole('textbox', { name: 'Your request' }).fill('Put my id papers together');
     await page.getByRole('button', { name: 'Send' }).click();
-    const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
+    // design8-run-words: on /bower the panel no longer offers "Tell Bower something", so it is found by its name.
+    const panel = page.getByRole('complementary', { name: 'Right panel', exact: true });
     await expect(panel.getByText('anything from the dentist goes in health')).toBeVisible();
     await expect(panel.getByText(/waits for the next tidy-up/i).first()).toBeVisible();
     await expect(panel.getByText('Put my id papers together')).toBeVisible();
