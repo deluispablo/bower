@@ -491,6 +491,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   // The words a save is still sending: leaving the box again or pressing Save meanwhile does not send them twice.
   const pending = useRef<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
   // Save went away holding the keyboard, or it fell to the page's body: back to the box (focus.ts: never to nothing).
   const hadSave = useRef(showSave);
   useLayoutEffect(() => {
@@ -547,7 +548,9 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
           setText(e.target.value);
           remember(e.target.value, pile.text);
         }}
-        onBlur={() => {
+        onBlur={(e) => {
+          // Leaving the box for its own Save: Save does it, so Tab lands on it enabled and Enter saves once.
+          if (e.relatedTarget && e.relatedTarget === saveButton.current) return;
           if (changed && !off && (text.trim() || pile.items.length)) void save();
         }}
       />
@@ -559,7 +562,8 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       <div className={s.noteFoot}>
         {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : changed ? 'Not saved yet.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
         {showSave && (
-          <Button size="sm" disabled={busy} onClick={() => void save()}>
+          // aria-disabled, not disabled, while busy: the keyboard on Save never drops to the page (WAI-ARIA APG).
+          <Button ref={saveButton} size="sm" aria-disabled={busy} onClick={() => { if (!busy) void save(); }}>
             {busy ? 'Saving…' : 'Save the note'}
           </Button>
         )}

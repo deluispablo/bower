@@ -165,9 +165,11 @@ describe('AC2 review gaps: a slow save, one write, the keyboard moved only when 
     const { update, release } = hold();
     await user.click(box);
     await user.type(box, ' ZZ4');
-    await user.tab();
+    // Leaving the box means another control: Tab onto Save waits for Enter (design8-pile-tab).
+    const back = screen.getByRole('button', { name: 'Back' });
+    act(() => back.focus());
     await user.click(box);
-    await user.tab();
+    act(() => back.focus());
     act(() => release());
     await vi.waitFor(async () => expect(await savedText()).toBe('Lease papers for Alex ZZ4'));
     await saveGone();
@@ -236,7 +238,7 @@ describe('AC2 review gaps 7: the duplicate-save guard ends with its save', () =>
     await user.click(box);
     await user.type(box, ' ZZ7');
     if (how === 'Save') await user.click(screen.getByRole('button', { name: 'Save the note' }));
-    else await user.tab();
+    else act(() => screen.getByRole('button', { name: 'Back' }).focus());
     await vi.waitFor(async () => expect(await savedText()).toBe(B));
     expect(update).toHaveBeenCalledOnce();
   });
