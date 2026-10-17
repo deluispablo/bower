@@ -1,0 +1,20 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Plot fees confirmed.txt",
+        "to": "Areas/Home",
+        "name": "Plot fees confirmed.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Areas/Home/Garden plot.md",
+        "text": "Plot fees remain 25 a year, due by 31 January.",
+        "cites": "$file:Plot fees confirmed.txt"
+      }
+    ]
+  }
+]

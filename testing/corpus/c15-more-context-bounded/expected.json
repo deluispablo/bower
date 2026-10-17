@@ -2,11 +2,46 @@
   "files": {
     "absent": [
       "Inbox/*"
+    ],
+    "present": [
+      "Resources/Move/Contract.pdf",
+      "Resources/Move/Contract.md",
+      "Resources/Move/Letter.pdf",
+      "Resources/Move/Letter.md"
     ]
   },
   "linksResolve": true,
   "report": {
     "filed": 2,
-    "questionsAtMost": 2
-  }
+    "created": [
+      "Resources/Move/Contract.md",
+      "Resources/Move/Letter.md",
+      "Bower health.md"
+    ],
+    "questionsExactly": 0
+  },
+  "notes": [
+    {
+      "path": "Resources/Move/Contract.md",
+      "contains": [
+        "made-up contract, first page of six",
+        "read whole"
+      ],
+      "excludes": [
+        "remaining pages were not read",
+        "only part was read"
+      ]
+    },
+    {
+      "path": "Resources/Move/Letter.md",
+      "contains": [
+        "made-up letter, first lines only",
+        "read whole"
+      ],
+      "excludes": [
+        "remaining pages were not read",
+        "only part was read"
+      ]
+    }
+  ]
 }

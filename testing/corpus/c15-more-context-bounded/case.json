@@ -1,9 +1,9 @@
 {
   "id": "c15-more-context-bounded",
   "capability": "C15",
-  "title": "A request for more context is bounded",
+  "title": "Two short PDFs are read whole within the context bounds",
   "covers": "model",
-  "source": "new",
+  "source": "new (runner extraction of admitted source bytes)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

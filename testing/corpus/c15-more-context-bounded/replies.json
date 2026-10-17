@@ -1,0 +1,28 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Contract.pdf",
+        "to": "Resources/Move",
+        "name": "Contract.pdf",
+        "note": {
+          "name": "Contract.md",
+          "summary": "A contract for the move.",
+          "body": "The supplied PDF reads: \"made-up contract, first page of six\". The supplied page was read whole."
+        }
+      },
+      {
+        "fileId": "$file:Letter.pdf",
+        "to": "Resources/Move",
+        "name": "Letter.pdf",
+        "note": {
+          "name": "Letter.md",
+          "summary": "A letter for the move.",
+          "body": "The supplied PDF reads: \"made-up letter, first lines only\". The supplied page was read whole."
+        }
+      }
+    ]
+  }
+]

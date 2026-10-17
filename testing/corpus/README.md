@@ -71,9 +71,9 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c15-more-context-bounded | C15 | model | new |
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf) |
-| c15-ready-package-reused | C15 | model | new (C15 preparation; scripted input and context proof pending) |
-| c15-stale-package-rebuilt | C15 | model | new (C15 preparation; scripted input and context proof pending) |
-| c15-context-budget-exhausted | C15 | model | new (C15 preparation; scripted input and context proof pending) |
+| c15-ready-package-reused | C15 | model | new (runner extraction of admitted source bytes) |
+| c15-stale-package-rebuilt | C15 | model | new (runner extraction of admitted source bytes) |
+| c15-context-budget-exhausted | C15 | model | new (runner extraction of admitted source bytes) |
 | b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture; scripted proof pending |
 | b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
 | b1-moc-over-40 | C17 / B1 | model | TL-P4-38 addenda 1–2; 41-item parent folds to existing child maps |
@@ -295,3 +295,13 @@ entry gets an empty, refused synopsis. The execution turns skip these entries.
 | c17-b10-complete-tail | C17 / B10 | model | TL-P4-39 F12/F7; complete tail deadline cited by the one synopsis and grounded in the original; one synopsis call |
 | c17-b10-shared-budget | C17 / B10 | model | TL-P4-39 F8; five long sources over their shares, partial introductions, no synopsis call |
 | c17-b10-personal-original | C17 / B10 | model | TL-P4-32/-42 addendum 3; long personal Markdown moves with exact original bytes, no metadata rewrite; one read-only synopsis call |
+
+## C15 admitted-input cases
+
+The five `c15-*` cases have scripted `replies.json` and score through production `main` in
+`runner/test/c15-corpus.test.ts`, with selection and execution only and no synopsis. The app supplies
+the admission manifest; the runner extracts the current source bytes. The historical package case
+ids remain, but their letters prove current-source outcomes. The packing guide stays partial at
+the text limit; both supplied PDFs in `c15-more-context-bounded` are read whole and each gets a source
+note. The unread scan stays in the inbox with one question. Created-file expectations include the
+first run's health note. These cases do not assert repeated context exchanges or OCR.

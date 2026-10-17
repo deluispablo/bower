@@ -1,0 +1,15 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "asks": [
+      {
+        "pileId": "p-1",
+        "text": "Is this scan for a project?",
+        "yes": "Yes, a project",
+        "no": "No, something else"
+      }
+    ]
+  }
+]

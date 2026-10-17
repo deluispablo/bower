@@ -32,7 +32,9 @@
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "created": [],
+    "created": [
+      "Bower health.md"
+    ],
     "updated": [
       "Areas/Home/Garden plot.md"
     ],
