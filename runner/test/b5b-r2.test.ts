@@ -6,7 +6,7 @@ import type { TypeRow } from '../../src/data/contracts/types';
 import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
 import { loadCase } from '../src/corpus';
 import * as providers from '../src/provider';
-import { readTypeTable } from '../src/type-table';
+import { readTypeTable } from '../../src/data/contracts/note-format';
 import { AT, runOnDrive, seedCase } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 

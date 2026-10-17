@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { DRIVE_MS, countsOf, drivecalls, modelled } from './modelled';
 import { finishedBefore, runFolders } from './earlier-runs';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
-import { readTypeTable } from '../src/type-table';
+import { readTypeTable } from '../../src/data/contracts/note-format';
 
 // TL-P4-47 addendum 8: first creation of the type table: listing, fence, create.
 const TYPE_TABLE_FIRST_CREATE_CALLS = 3;

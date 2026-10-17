@@ -11,7 +11,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { PILE_NOTE } from '../../src/data/piles';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { indexedFront, parseNote } from '../../src/data/contracts/note-format';
-import { mocEdit, mocMembership, mocSnapshot } from '../src/moc';
+import { mocEdit, mocMembership, mocSnapshot } from '../../src/data/contracts/note-edit';
 import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';

@@ -2,7 +2,7 @@
 // B8 measured delta: +5 apply calls (log folder fence/create, month listing/fence/create).
 import { describe, expect, it } from 'vitest';
 import { countsOf, modelled } from './modelled';
-import { readTypeTable } from '../src/type-table';
+import { readTypeTable } from '../../src/data/contracts/note-format';
 
 describe('timing counts', () => {
   it('the timing line counts calls and bytes per phase and names the region', async () => {

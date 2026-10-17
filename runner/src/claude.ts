@@ -66,13 +66,12 @@ import { sha256Sync } from '../../src/data/contracts/hashes';
 import { outsideAdmitted } from './spine/admitted';
 import { LedgerExhausted, RunTiming, type CallKind, type ModelStats } from './timing';
 import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
-import { indexedFront, noteRefusal, parseNote } from '../../src/data/contracts/note-format';
+import { indexedFront, noteRefusal, ownershipError, parseNote, readTypeTable } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
-import { readTypeTable } from './type-table';
 import { ABOUT_SECTIONS, type aboutContext, consolidationDue, consolidationInput, consolidationOk, learnedContext, lineFaults, normalizedText, parseObservations, sectionWords } from '../../src/data/contracts/observations';
 import { ABOUT_REGIONS, createOwnershipContext } from '../../src/data/contracts/ownership-format';
 import { propertyValuesOk } from '../../src/data/contracts/note-format';
-import { mocMembership, mocSnapshot } from './moc';
+import { mocMembership, mocSnapshot } from '../../src/data/contracts/note-edit';
 import { readTagList } from '../../src/data/contracts/tag-format';
 import { modelRules } from '../../src/data/contracts/rules-format';
 
@@ -456,12 +455,15 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     const text = await read.readText(aboutFile.id);
     const bytes = new TextEncoder().encode(text);
     const ownership = (run.context ?? createOwnershipContext()).read(aboutFile.id, bytes);
-    if (ownership.status === 'invalid') throw new BowerError('conflict', 'Bower could not read its learned facts.');
-    const decode = (span: { start: number; end: number }): string => new TextDecoder().decode(bytes.subarray(span.start, span.end));
-    const personal = bounded(decode(ownership.personal), CONTEXT_BOUNDS.perNote).text ?? '';
-    const ledgerFile = ix.file('.bower/observations.jsonl');
-    const ledger = parseObservations(new TextEncoder().encode(ledgerFile ? await read.readText(ledgerFile.id) : ''));
-    ({ about: aboutMe, facts: learnedFacts } = learnedContext(ledger, personal));
+    // A damaged About me is skipped like any damaged note: logged, and the model is shown no learned context.
+    if (ownership.status === 'invalid') console.error(ownershipError(ownership.reason));
+    else {
+      const decode = (span: { start: number; end: number }): string => new TextDecoder().decode(bytes.subarray(span.start, span.end));
+      const personal = bounded(decode(ownership.personal), CONTEXT_BOUNDS.perNote).text ?? '';
+      const ledgerFile = ix.file('.bower/observations.jsonl');
+      const ledger = parseObservations(new TextEncoder().encode(ledgerFile ? await read.readText(ledgerFile.id) : ''));
+      ({ about: aboutMe, facts: learnedFacts } = learnedContext(ledger, personal));
+    }
   }
   const indexFile = ix.file(SYSTEM.index);
   const index = run.index ?? (indexFile ? bounded(await read.readText(indexFile.id), 32_000).text ?? undefined : undefined);
