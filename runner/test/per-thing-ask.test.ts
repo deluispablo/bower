@@ -144,7 +144,8 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit';
   type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText';
   type SelectionKind = 'selectionKeys' | 'selectionItem' | 'selectionKind' | 'selectionPlace' | 'selectionWants' | 'selectionBasis';
-  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind | SelectionKind | 'noteCut'>, (ctx: Context, id: Id) => string> = {
+  type DocumentKind = 'documentKeys' | 'documentBinding' | 'documentPlace' | 'documentText';
+  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind | SelectionKind | DocumentKind | 'noteCut'>, (ctx: Context, id: Id) => string> = {
     notJson: () => envelope('Here is my plan: file everything.'),
     noText: () => envelope(null),
     notIntent: edit((i) => ({ ...i, v: 2 })),
@@ -215,6 +216,9 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   // C09 (c09-answers AC2): answers are refused through a request, which the offer-and-flat case has not; their bad replies are c09-answers.test.ts's table.
   // An answer's links take the one link rule's own kind (noteLink, C06), so there is no answer link kind.
   const answerKinds: AnswerKind[] = ['answerKeys', 'answerBinding', 'answerText'];
+  // C08 (c08-documents AC2): documents answer a request; their bad replies are c08-documents.test.ts's table.
+  // A document's links take noteLink and its figures numbers, as an answer's (round 1 ruling 9).
+  const documentKinds: DocumentKind[] = ['documentKeys', 'documentBinding', 'documentPlace', 'documentText'];
 
   // F5 (round 1 ruling 5): one bad selection per selection kind, over the sources and folders the selection call lists.
   type Frame = Context & { sources: Array<{ itemId: string }>; foldersById: Record<string, string> };
@@ -251,7 +255,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   // The name stays the one earlier checks named; each kind is a test of its own inside it.
   describe('every validation refusal is retried once with its reason', () => {
     it('every refusal kind has a bad reply here', () => {
-      expect(Object.keys({ ...bad, ...viewBad, ...mapBad, ...selectionBad, noteCut: true, ...Object.fromEntries(answerKinds.map((kind) => [kind, true])) }).sort()).toEqual(Object.keys(REFUSALS).sort());
+      expect(Object.keys({ ...bad, ...viewBad, ...mapBad, ...selectionBad, noteCut: true, ...Object.fromEntries([...answerKinds, ...documentKinds].map((kind) => [kind, true])) }).sort()).toEqual(Object.keys(REFUSALS).sort());
     });
 
     it.for(Object.keys(selectionBad) as SelectionKind[])('F5: a %s selection refusal is logged with its kind and retried once with its reason', async (kind) => {
