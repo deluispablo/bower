@@ -99,8 +99,8 @@ test('C09: a question about your notes is answered', async ({ page }) => {
   await expect(answer).toContainText('has the shortest commute, 18 minutes');
   await expect(answer).not.toContainText('Done. See what changed in your folders.');
   await expect(answer.getByRole('link', { name: 'Industrial Designer, Ferrowick' })).toBeVisible();
-  // A request with nothing specific to name keeps the generic line.
-  await expect(answerTo(page, chore)).toContainText('Done. See what changed in your folders.');
+  // qa7-refused-words: a request the run did nothing for says so, not the generic done line.
+  await expect(answerTo(page, chore)).toContainText("Bower didn't change anything for this request.");
   await answer.getByRole('link', { name: 'Flat 7, Cobble Row' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 7, Cobble Row' })).toBeVisible();
 

@@ -60,7 +60,7 @@ import {
   seedSuggestions,
   seedTime,
 } from './fixture';
-import { NOTHING_LOOKED_UP, REQUEST_DONE } from '../spine/scripted';
+import { NOTHING_DONE, NOTHING_LOOKED_UP } from '../spine/scripted';
 import { keepSignedIn, keptSignedIn, PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
@@ -500,13 +500,13 @@ export class DemoWorld {
         const yourChanges = this.journal.length;
         r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: [] };
         r.report.yourChanges = yourChanges;
-        // A request whose done line says it did nothing is not called done; it counts among the changes read (qa6).
-        const asked = this.requests.filter((q) => !q.done && !this.answerOf(q.text).startsWith(NOTHING_LOOKED_UP)).map((q) => q.text);
+        // A request whose done line says it did nothing is not called done (qa6, qa7).
+        const asked = this.requests.filter((q) => !q.done && ![NOTHING_DONE, NOTHING_LOOKED_UP].some((w) => this.answerOf(q.text).startsWith(w))).map((q) => q.text);
         const worded = this.rules.filter((x) => x.pending).length;
         if (asked.length) r.report.requests = asked;
         if (worded) r.report.rulesWorded = worded;
-        // Each change counts once: the requests and rules the report names are not among the rest.
-        r.report.yourChanges = yourChanges - asked.length - worded;
+        // Each change counts once: the rules the report names are not among the rest, and a request never counts (qa7).
+        r.report.yourChanges = yourChanges - this.journal.filter((c) => c.kind === 'request').length - worded;
         this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
         this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: this.answerOf(q.text) }));
         this.journal = [];
@@ -524,9 +524,9 @@ export class DemoWorld {
     const there = (path: string): boolean => this.entries.get(path)?.type === 'file';
     // The demo never looks anything up, so it says so, web on or off (C10).
     if (scripted?.kind === 'lookup') return this.allowWeb ? NOTHING_LOOKED_UP : NOT_LOOKED_UP;
-    // Nor does it write a comparison (C08): it never names a note it did not write.
-    if (scripted?.kind !== 'answer') return REQUEST_DONE;
-    return scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
+    // Nor does it write a comparison (C08): it never names a note it did not write. It acts on no request (qa7).
+    if (scripted?.kind !== 'answer') return NOTHING_DONE;
+    return scripted.uses.every(there) ? scripted.answer : NOTHING_DONE;
   }
 
   /** Files every inbox thing as the run would, and returns the report. */

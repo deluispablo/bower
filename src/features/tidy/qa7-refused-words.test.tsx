@@ -136,4 +136,17 @@ describe('AC2 a request the run did nothing for is not called done', () => {
     expect((await vault().requests()).filter((r) => r.id === asked.id).map((r) => r.done)).toEqual([earlier.done]);
     expect(out.report.requests).toEqual([CHORE]);
   });
+
+  it('AC2 qa7-refused-words-replay-not-done: a stored row that says nothing was done stands verbatim and is never relisted as done', async () => {
+    const asked = await vault().addRequest(CHORE);
+    // An earlier run did nothing for it (round 3, ruling 7), and its line was not archived then.
+    const earlier = { id: asked.id, text: CHORE, at: asked.at, done: NOTHING_DONE };
+    const requests = await fileAt(SYSTEM.requests);
+    await drive.writeText(requests.id, `${JSON.stringify({ v: 1, done: [earlier] }, null, 2)}\n`, requests.modifiedTime);
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('the run failed');
+    expect((await vault().requests()).filter((r) => r.id === asked.id).map((r) => r.done)).toEqual([NOTHING_DONE]);
+    expect(out.report.requests ?? []).toEqual([]);
+    expect(out.report.yourChanges ?? 0).toBe(0);
+  });
 });
