@@ -53,16 +53,18 @@ export function SearchPanel({ focus = true }: { focus?: boolean }) {
           <ClearSearch onClear={() => (setQ(''), input.current?.focus())} />
         </div>
       )}
-      <ul className={s.results}>
-        {(shown ?? []).map((h) => (
-          <li key={h.path}>
-            <button type="button" onClick={() => act.open({ path: h.path, type: 'file' })}>
-              <span className={s.resTitle}>{h.title}</span>
-              <span className={s.resPath}>{h.snippet}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {!!shown?.length && (
+        <ul className={s.results}>
+          {shown.map((h) => (
+            <li key={h.path}>
+              <button type="button" onClick={() => act.open({ path: h.path, type: 'file' })}>
+                <span className={s.resTitle}>{h.title}</span>
+                <span className={s.resPath}>{h.snippet}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

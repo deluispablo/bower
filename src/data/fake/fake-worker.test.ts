@@ -3943,7 +3943,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
     const JOB = 'Projects/Job hunt/Job hunt.md';
-    const FLAT_WHAT = 'A fourth flat added; the shortlist compared by commute.';
+    const FLAT_WHAT = 'A new listing added to the shortlist.';
     const JOB_WHAT = 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.';
     type Where = { drive: FakeDrive; rootId: string };
     type Edit = OperationV2 & { effect: EditText };

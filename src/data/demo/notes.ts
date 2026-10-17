@@ -199,11 +199,11 @@ Compare with [[Flat 7, Cobble Row]] and [[Flat 2, 40 Tanners Walk]].`,
     links: [`${P}/Job hunt/CV insights.md`],
   },
   [`${P}/Job hunt/Applications/Industrial Designer, Ferrowick.md`]: {
-    summary: 'Industrial designer offer from Ferrowick, £54,000, fully remote; new, not yet answered.',
+    summary: 'Industrial designer offer from Ferrowick, £42,000, fully remote; new, not yet answered.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Job offer' },
       { key: 'company', label: 'Company', value: 'Ferrowick' },
-      { key: 'salary', label: 'Salary', value: '£66,000' },
+      { key: 'salary', label: 'Salary', value: '£42,000' },
       { key: 'fit', label: 'Fit', value: '7 out of 10' },
       { key: 'where', label: 'Where', value: 'Remote' },
     ],
