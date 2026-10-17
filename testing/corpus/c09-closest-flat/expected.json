@@ -12,6 +12,13 @@
     "Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md",
     "Projects/Job hunt/Job hunt.md"
   ],
+  "answers": [
+    {
+      "request": "Which flat is closest to Ferrowick?",
+      "contains": ["18 minutes"],
+      "links": ["Projects/Flat hunt/Flat 7, Cobble Row.md", "Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md"]
+    }
+  ],
   "linksResolve": true,
   "report": {
     "filed": 0,

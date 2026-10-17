@@ -12,11 +12,11 @@
     "Projects/Flat hunt/Larkspur Lane flat.md",
     "Projects/Flat hunt/Larkspur Lane listing.txt"
   ],
-  "notes": [
+  "answers": [
     {
-      "path": ".bower/requests.json",
-      "contains": [
-        "[[Projects/Flat hunt/Larkspur Lane listing.txt]]"
+      "request": "Does the Larkspur Lane flat allow pets?",
+      "links": [
+        "Projects/Flat hunt/Larkspur Lane listing.txt"
       ]
     }
   ],

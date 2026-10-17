@@ -8,13 +8,16 @@
       "Inbox/*"
     ]
   },
-  "notes": [
+  "answers": [
     {
-      "path": ".bower/requests.json",
+      "request": "Does my home insurance cover a burst pipe, and how much would I pay myself?",
       "contains": [
         "5,000",
-        "250",
-        "[[Home insurance"
+        "250"
+      ],
+      "links": [
+        "Areas/Home/Home insurance policy.pdf",
+        "Areas/Home/Home insurance.md"
       ]
     }
   ],
