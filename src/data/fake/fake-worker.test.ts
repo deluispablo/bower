@@ -3572,7 +3572,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const report = viewOf(w)?.run.report;
       expect(report?.created).toEqual(expect.arrayContaining([
         { path: `Resources/Ideas/${WORDS} (2).md`, what: 'Written from a note you added.' },
-        { path: COMPANION, what: 'A note for Offer, Industrial Designer, Ferrowick.pdf.' },
+        { path: COMPANION, what: 'A note for Offer, Industrial Designer, Ferrowick.' },
       ]));
       expect(report?.filed).toContainEqual({ name: 'Your note', title: `${WORDS} (2)`, kind: 'note', to: 'Resources/Ideas', note: `Resources/Ideas/${WORDS} (2).md` });
       expect(report?.filed.find((f) => f.name === OFFER)).toMatchObject({ to: 'Projects/Job hunt/Applications' });
@@ -4519,7 +4519,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(filed[0]?.value.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE }]);
       expect(filed[0]?.requires).toEqual(expect.arrayContaining([create.operationId, move.operationId]));
       // TL-P2-40: the note it wrote is listed with the notes the run made.
-      expect(filed[0]?.value.created).toEqual([{ path: NOTE, what: expect.stringContaining('curry.example/weeknight') }]);
+      expect(filed[0]?.value.created).toEqual([{ path: NOTE, what: 'A link you saved.' }]);
       expect(manifest.reportPlan).toContainEqual({ requires: [move.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: CURRY.name, why: AGAIN }], questions: [] } });
       expect(grounded(manifest)).toBe(true);
       expect(await groundedKeys(manifest)).toBe(true);

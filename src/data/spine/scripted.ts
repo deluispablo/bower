@@ -2304,7 +2304,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       plannedFile(join(to, noteName));
       const name = freeName(planned, to, thing.file.name);
       plannedFile(join(to, name));
-      filing.push({ thing, to, name, note: { name: noteName, key, text, what: `Saved from ${address}.` } });
+      filing.push({ thing, to, name, note: { name: noteName, key, text, what: 'A link you saved.' } });
       continue;
     }
     const to = place.to;
@@ -2324,8 +2324,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (freeName(planned, parentOf(own), nameOf(own)) !== nameOf(own)) continue;
     destination(parentOf(own));
     plannedFile(own);
-    const what = `A note for ${displayName(name)}.`;
-    const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
+    // The row names the thing in plain words (qa6); the note's own summary keeps its file's name.
+    const what = `A note for ${thingName(name)}.`;
+    const text = serializeNote({ summary: `A note for ${displayName(name)}.`, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: [thing.file.id], pileId: null, aside: thing.file.name });
   }
   /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
@@ -3089,13 +3090,16 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const scripted = d.request?.(l.rec.text ?? l.rec.what);
     const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
     // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
-    if (scripted?.kind === 'lookup') return !opts.allowWeb ? scripted.offline : lookups.has(l.rec.id) ? scripted.answer : REQUEST_DONE;
+    if (scripted?.kind === 'lookup') return !opts.allowWeb ? scripted.offline : lookups.has(l.rec.id) ? scripted.answer : NOTHING_LOOKED_UP;
     // A comparison names the note it wrote (C08).
     const note = compared.get(l.rec.id);
     if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
     return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
   };
   const answers = new Map(journal.filter((l) => l.rec.kind === 'request').map((l) => [l.rec.id, answerOf(l)]));
+  // A lookup that looked nothing up (web off, or its note gone) is never done (qa6).
+  const lookedUpNothing = new Set(journal.filter((l) => l.rec.kind === 'request' && !lookups.has(l.rec.id)
+    && d.request?.(l.rec.text ?? l.rec.what)?.kind === 'lookup').map((l) => l.rec.id));
   // Bower's own files the run writes, as read now, so the writes pass what they read.
   const requestsRead = requests && answers.size ? { file: requests, content: await ownVerified(requests) } : null;
   const questionsRead = questionsText !== null && questionsFile ? { file: questionsFile, content: await ownVerified(questionsFile) } : null;
@@ -3125,7 +3129,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled,
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled, lookedUpNothing,
     yesMaps: maps.filter((m) => m.answer !== undefined && mapRequests.has(m.requestId)),
   };
 }
@@ -3140,7 +3144,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
-    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled } = decided;
+    tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled, lookedUpNothing } = decided;
 
   // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
   // your changes, the hashes.
@@ -3467,10 +3471,19 @@ export async function build(decided: Decided): Promise<Ended> {
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
   const asked = journal.filter((l) => l.rec.kind === 'request');
+  // A request the run did nothing for is never done (qa6 F1): a lookup that looked nothing up, or one with only its
+  // "didn't" rows and no line, edit, note or line already there. Its requests row says why: its first row's why.
+  const idle = new Map(asked.flatMap((l): Array<[string, string]> => {
+    const id = l.rec.id;
+    if (lookedUpNothing.has(id)) return [[id, answers.get(id) ?? NOTHING_LOOKED_UP]];
+    const why = settlement.rowsOf(id)[0]?.why;
+    const acted = need(id).edits.length || need(id).derived.length || satisfied.some((p) => p.consent.requestId === id) || compared.has(id) || resultNotes.has(id);
+    return why && !acted ? [[id, why]] : [];
+  }));
   let requestsOp: string | null = null;
   const resultOps = new Map<string, string>();
   if (asked.length) {
-    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answers.get(l.rec.id) ?? REQUEST_DONE }));
+    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: idle.get(l.rec.id) ?? answers.get(l.rec.id) ?? REQUEST_DONE }));
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
     const notes: string[] = [];
     // A map's result note (R32) is keyed by its request and waits for everything the request changes; the requests row waits for it.
@@ -3634,7 +3647,7 @@ export async function build(decided: Decided): Promise<Ended> {
     } else if (rulesOp && rules.worded.has(line.rec.id)) {
       // A rule this run words: counted once it and its line's archive applied.
       reportPlan.push({ requires: [rulesOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), rulesWorded: 1 } });
-    } else if (line.rec.kind === 'request' && requestsOp) {
+    } else if (line.rec.kind === 'request' && requestsOp && !idle.has(line.rec.id)) {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what], ...left } });
     } else {
       // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
@@ -3920,6 +3933,8 @@ async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha
 
 /** The line a request done by a tidy-up carries in requests.json. */
 export const REQUEST_DONE = 'Done. See what changed in your folders.';
+/** What a lookup with the web on that looked nothing up says (qa6): never done. */
+export const NOTHING_LOOKED_UP = 'Bower did not look anything up.';
 
 /** Logged when a pile holds text no run record can carry: it waits in the inbox. */
 const NOT_WRITABLE = 'Bower could not write down one of your piles; it stays in your inbox.';

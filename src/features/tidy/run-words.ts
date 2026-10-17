@@ -118,7 +118,8 @@ export function runDetail(r: RunState): string {
       if (rep.nothingReady) return 'Nothing in the inbox was ready yet, so it stays as it is.';
       const parts: string[] = [];
       if (rep.updated.length) parts.push(`${plural(notesUpdated(rep), 'note')} brought up to date`);
-      if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'question')} for you`);
+      // Only this run's questions: "new", beside the total of open ones elsewhere (qa6).
+      if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'new question')} for you`);
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
       // Never counted as set aside: possibly changed, then gone before Bower read it back.
       if (rep.unconfirmed?.length) parts.push(`Bower couldn't confirm ${plural(rep.unconfirmed.length, 'thing')}`);
@@ -165,6 +166,9 @@ export function runShort(r: RunState): string {
   if (r.phase === 'failed') return 'The tidy-up stopped';
   return `${stepLabel(r, r.phase)}…`;
 }
+
+/** The line that offers a finished tidy-up's replay: the whole action, never "Watch" alone (qa6). */
+export const watchLine = (r: RunState): string => `${runShort(r)}. Watch what Bower did`;
 
 export function stepState(r: RunState, step: (typeof RUN_STEPS)[number]): 'done' | 'now' | 'later' {
   const order = [...RUN_STEPS, 'done'] as RunPhase[];
