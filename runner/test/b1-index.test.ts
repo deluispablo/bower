@@ -12,7 +12,7 @@ import { canonical } from '../../src/data/spine/records';
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { RUNNER_WRITES, SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { loadCase, type LoadedCase } from '../src/corpus';
-import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { API, TICKET, driveV3, fixedDrive, paging, RUN_ID } from './drive-v3';
 import { RunnerDrive } from '../src/drive';
 import { RunnerToken } from '../src/token';
@@ -748,7 +748,7 @@ it.each(['bootstrap', 'missing-index'] as const)(
         return fetch(input, init);
       }),
       claude: async (call) => {
-        const context: unknown = JSON.parse(call.input.split('\n').at(-1) ?? '{}');
+        const context: unknown = frameOf(call);
         if ('selection' in (context as Record<string, unknown>)) return answer(call);
         shown.push(snapshotStrings(context));
         writesAtPlan.push(mutations);

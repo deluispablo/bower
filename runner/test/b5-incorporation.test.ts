@@ -12,7 +12,7 @@ import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scri
 import type { LastRunFile } from '../../src/data/vault/layout';
 import type { Proposal, Question, TypeRow, TypeTable } from '../../src/data/contracts/types';
 import type { QuestionAnswer } from '../../src/data/contracts/questions';
-import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { promptOf, frameOf, AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { phaseAwareClaude } from './b1-planning-support';
 
@@ -76,7 +76,7 @@ function filed(result: CaseRun, names: string[]): void {
 it('b5-first-row-controls-context: control ordinary generic material files through main', async () => {
   const base = await setup();
   const result = await runOnDrive(base.c, base.drive, base.root, { claude: phaseAwareClaude(async (call) => {
-    const shown = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
+    const shown = frameOf(call) as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
     const intent = { kind: 'tidy-intent', v: 1, things: shown.piles.flatMap((pile) => pile.things.map((item) => ({
       fileId: item.fileId, to: 'Resources/Garden', name: item.name, basis: HUB, note: { name: `${item.name.slice(0, -4)} source.md`, summary: 'Alex records garden facts.', body: 'Alex records garden facts. [[Garden]]' },
     }))) };
@@ -90,8 +90,8 @@ it('b5-first-row-controls-context: offer and CV precede generic rows at prompt p
   const base = await setup(['Offer.txt', 'CV.txt'], JSON.stringify(table));
   const prompts: string[] = [];
   const result = await runOnDrive(base.c, base.drive, base.root, { claude: phaseAwareClaude(async (call) => {
-    prompts.push(call.input);
-    const shown = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
+    prompts.push(promptOf(call));
+    const shown = frameOf(call) as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> };
     const intent = { kind: 'tidy-intent', v: 1, things: shown.piles.flatMap((pile) => pile.things.map((item) => ({
       fileId: item.fileId, to: 'Resources/Garden', name: item.name, basis: HUB, note: { name: `${item.name.slice(0, -4)} source.md`, summary: 'Alex records garden facts.', body: 'Alex records garden facts. [[Garden]]' },
     }))) };
@@ -365,7 +365,7 @@ it('b5-proposal-yes-no-ignore-replay: text closes the question without consent a
   const inputs: Array<{ answers?: Array<{ question: string; answer: string }> }> = [];
   const result = await runOnDrive(base.c, base.drive, base.root, { answerStart: scheduled,
     claude: phaseAwareClaude(async (call) => {
-      inputs.push(JSON.parse(call.input.split('\n').at(-1) ?? '{}') as typeof inputs[number]);
+      inputs.push(frameOf(call) as typeof inputs[number]);
       return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false,
         result: JSON.stringify({ kind: 'tidy-intent', v: 1, things: [] }) }) };
     }, () => ({ drive: base.drive, root: base.root })),

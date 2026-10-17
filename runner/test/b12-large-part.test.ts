@@ -19,7 +19,7 @@ import type { ClaudeSpawn } from '../src/claude';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
 import { RunnerStatus } from '../src/status';
-import { caseReplies, redispatchCase, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, caseReplies, redispatchCase, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
@@ -98,7 +98,7 @@ async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, 
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
     calls.push(phase);
     frames.push(call.input);
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string; candidates?: Array<{ id: string }> }> };
+    const frame = frameOf(call) as { sources?: Array<{ itemId: string; candidates?: Array<{ id: string }> }> };
     // Each item wants only the notes it was offered (the selection's own bound).
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: hunt,
       wants: wants.filter((id) => s.candidates?.some((c) => c.id === id)) })), asks: [] });

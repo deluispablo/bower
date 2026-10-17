@@ -93,8 +93,8 @@ describe('model usage in the timing output (c12-measure)', () => {
   });
 });
 
-/** Characters of every model call's input, in call order. */
-const sizes = (r: Awaited<ReturnType<typeof run>>): number[] => r.frames.map((f) => f.call.input.length);
+/** Characters of all every model call reads, its prompt file and its stdin (c12-prefix), in call order. */
+const sizes = (r: Awaited<ReturnType<typeof run>>): number[] => r.frames.map((f) => f.prompt.length);
 
 /**
  * Today's figures, measured on this fixture (main 316fbcce): the ceilings are those plus 5%, rounded up to a thousand;
@@ -122,6 +122,9 @@ describe('the made-up large-folder benchmark (c12-measure)', () => {
       intent.things = intent.things.filter((t) => selected.items.some((i) => i.itemId === t.fileId));
     } });
     const [selection = 0, execution = 0] = sizes(r);
+    // c12-prefix spec review round 1 ruling 2: the measure counts the prompt file too, not stdin alone.
+    expect(r.frames.every((f) => f.call.args.includes('--system-prompt-file')), 'each call names its prompt file').toBe(true);
+    expect(selection, 'the prompt file is counted').toBeGreaterThan((r.frames[0]?.call.input.length ?? 0) + 1);
     // The figures, for the next tasks and staging to compare (console is mocked here).
     process.stdout.write(`c12-measure: things=${things} calls=${r.frames.length} chars=${selection}/${execution} filed=${report(r).filed.length}\n`);
     expect(r.code).toBe(0);

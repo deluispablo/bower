@@ -25,7 +25,7 @@ import * as maintenance from '../src/index';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -148,7 +148,7 @@ async function execute(f: Fixture, make: unknown | ((frame: Frame) => unknown), 
   if (admission.kind !== 'manifest') throw new Error(`Fixture not admitted: ${admission.cause}`);
   const frames: Frame[] = []; const refusals: string[] = [];
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown',
       destination: hubFolder, wants: [] })), asks: [] });
     frames.push(frame);
@@ -663,7 +663,7 @@ it('b4b maintenance finalizer: an accepted observation passes end to end', async
   const create = vi.spyOn(f.drive, 'createText');
   const resourceFolder = await f.id('Resources');
   const run = await runOnDrive(f.c, f.drive, f.root, { claude: phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     return reply(phase === 'selection' ? { items: (frame.sources ?? []).map((source) => ({
       itemId: source.itemId, kind: 'unknown', destination: resourceFolder, wants: [],
     })), asks: [] } : EMPTY);

@@ -6,7 +6,7 @@
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loadCase, type LoadedCase } from '../src/corpus';
-import { replySequence, runWithClaude } from './corpus-run';
+import { promptOf, frameOf, replySequence, runWithClaude } from './corpus-run';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 
 beforeEach(() => {
@@ -23,14 +23,14 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const load = (id: string): Promise<LoadedCase> => loadCase(join(ROOT, id));
-const isExecution = (call: ClaudeCall): boolean => (JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { selection?: unknown }).selection !== undefined;
+const isExecution = (call: ClaudeCall): boolean => (frameOf(call) as { selection?: unknown }).selection !== undefined;
 /** Every call's phase, in order, and the inputs seen. */
 function counted(spawn: ClaudeSpawn) {
   const calls: Array<'selection' | 'execution'> = [];
   const inputs: string[] = [];
   return { calls, inputs, spawn: async (call: ClaudeCall) => {
     calls.push(isExecution(call) ? 'execution' : 'selection');
-    inputs.push(call.input);
+    inputs.push(promptOf(call));
     return spawn(call);
   } };
 }

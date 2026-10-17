@@ -385,7 +385,7 @@ describe('B7 through production main', () => {
   it('b7-r20-provider declares growth field caps and installed-tag reuse', async () => {
     const b = await fixture(); const r = await control(b);
     expect(r.frames[1]?.value.tags).toEqual(KNOWN);
-    const input = r.frames[1]?.call.input ?? '';
+    const input = r.frames[1]?.prompt ?? '';
     // Inspect the field declaration and tag context without binding the provider to one prose sentence.
     expect.soft(input, 'R20 execution reply schema declares the newTags array').toMatch(/"newTags"\s*:\s*\[/);
     const context = input.split('\n').filter((line) => /tag|topic/i.test(line)).join('\n');

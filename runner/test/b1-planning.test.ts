@@ -13,7 +13,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { checkCreationName, MAX_NAME } from '../../src/data/tree';
 import { countsOf } from './modelled';
-import { AT, redispatchCase, replySequence, runOnDrive } from './corpus-run';
+import { frameOf, promptOf, AT, redispatchCase, replySequence, runOnDrive } from './corpus-run';
 import { paging } from './drive-v3';
 import { writes } from './b23-hot-observe';
 import { candidates, completed, empty, fileIntent, folder, HUB, manifest, media, note, PERSONAL,
@@ -49,7 +49,7 @@ it('b1-scripted-two-step-reply-freezes-every-execution-target', async () => {
   ] };
   const calls: Frame[] = [];
   const spawn = phaseAwareClaude(async (call) => {
-    calls.push({ call, value: JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Record<string, unknown>, events: [] });
+    calls.push({ call, value: frameOf(call), prompt: promptOf(call), events: [] });
     return reply(intent);
   }, () => ({ drive: b.drive, root: b.root, admission: b.admission }));
   const result = await runOnDrive(b.c, b.drive, b.root, { claude: spawn,
@@ -419,7 +419,7 @@ it('b1-refresh-cache-hot-order', async () => {
   await b.drive.writeText(f.id, note('Alex records changed remote developer applications.', 'CHANGED_PERSONAL_L3\n'), f.modifiedTime);
   const r = await run(b, [select(b, [f.id]), fileIntent(b)]); completed(r); twoSteps(r);
   for (const frame of r.frames) {
-    const input = frame.call.input.replace(/\\n/g, '\n');
+    const input = frame.prompt.replace(/\\n/g, '\n');
     const atHot = input.indexOf('# Hot');
     for (const prefix of ['Kinds of document', 'RULES_PREFIX', 'ABOUT_PREFIX', 'changed remote developer applications']) {
       expect.soft(input.indexOf(prefix), `${prefix} is present`).toBeGreaterThanOrEqual(0);

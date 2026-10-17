@@ -14,7 +14,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -108,7 +108,7 @@ async function execute(f: Fixture, make: unknown | ((frame: Frame) => unknown), 
   if (admission.kind !== 'manifest') throw new Error(`Fixture not admitted: ${admission.cause}`);
   const frames: Frame[] = []; const refusals: string[] = [];
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Frame;
+    const frame = frameOf(call) as Frame;
     if (phase === 'selection') {
       return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown',
       destination: hubFolder, wants: [] })), asks: [] });
