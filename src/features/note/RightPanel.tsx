@@ -11,6 +11,8 @@ import { LocalGraph } from './LocalGraph';
 import { BowerPanel } from '@/features/bower/BowerPanel';
 import s from './panel.module.css';
 import { Tabs, tabPanel } from '@/ui/Tabs';
+import { linkReasons } from '@/data/spine/scripted';
+import { resolverFor } from './resolve';
 
 /** The changes that failed which the panel has already turned to, once each, on this page. */
 const turnedTo = new Set<string>();
@@ -119,14 +121,28 @@ function NotePanel({ path, tab }: { path: string; tab: 'links' | 'outline' }) {
   );
 }
 
+/** Each "Links to" row's reason, the first one per row; a link names its row as the reader resolves it (`resolverFor`). */
+function rowReasons(note: Note): Map<string, string> {
+  // Fed in reverse code-point order, so a title two rows share names the first of their paths.
+  const rows = [...note.links].sort().reverse().map((path) => ({ path, name: nameOf(path), type: 'file' as const, modified: 0, created: 0 }));
+  const resolve = resolverFor(rows, []);
+  const out = new Map<string, string>();
+  for (const { target, reason } of linkReasons(note.body)) {
+    const p = resolve(target);
+    if (p && !out.has(p)) out.set(p, reason);
+  }
+  return out;
+}
+
 export function LinkedList({ note }: { note: Note }) {
   const both = new Set(note.links.filter((p) => note.backlinks.includes(p)));
   const from = note.backlinks.filter((p) => !both.has(p));
-  const row = (p: string) => (
+  const reasons = rowReasons(note);
+  const row = (p: string, why?: string) => (
     <li key={p}>
       <Link to={noteRoute(p)} className={s.link}>
         <span className={s.linkTitle}>{thingName(nameOf(p))}</span>
-        <span className={s.linkPath}>{crumbs(parentOf(p))}</span>
+        {why ? <span className={`${s.linkPath} muted`}>{why}</span> : <span className={s.linkPath}>{crumbs(parentOf(p))}</span>}
         {both.has(p) && <span className={s.linkPath}>Links both ways</span>}
       </Link>
     </li>
@@ -134,10 +150,10 @@ export function LinkedList({ note }: { note: Note }) {
   return (
     <>
       <h3 className={s.h}>Links to</h3>
-      {note.links.length ? <ul className={s.list}>{note.links.map(row)}</ul> : <p className={s.hint}>No links yet.</p>}
+      {note.links.length ? <ul className={s.list}>{note.links.map((p) => row(p, reasons.get(p)))}</ul> : <p className={s.hint}>No links yet.</p>}
       <h3 className={s.h}>Linked from</h3>
       {from.length ? (
-        <ul className={s.list}>{from.map(row)}</ul>
+        <ul className={s.list}>{from.map((p) => row(p))}</ul>
       ) : (
         <p className={s.hint}>{note.backlinks.length ? 'No other notes link here.' : 'Nothing links here yet.'}</p>
       )}
