@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Workshop delivery.txt",
+        "to": "Projects/Workshop",
+        "name": "Workshop delivery.txt"
+      },
+      {
+        "fileId": "$file:Moving collection.txt",
+        "to": "Projects/Moving day",
+        "name": "Moving collection.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Workshop/Workshop.md",
+        "text": "The letter confirms Workshop delivery on 12 October 2026.",
+        "cites": "$file:Workshop delivery.txt"
+      },
+      {
+        "note": "Projects/Moving day/Moving day.md",
+        "text": "The letter confirms Moving day collection on 16 October 2026.",
+        "cites": "$file:Moving collection.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

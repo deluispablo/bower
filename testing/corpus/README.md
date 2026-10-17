@@ -28,11 +28,11 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c05-person-edited-between-runs | C05 | scripted | new (scripted intent replies through the planner) |
 | c05-merge-question-first | C05 | scripted | new (scripted intent replies through the planner) |
 | c05-merge-answer-no | C05 | scripted | new (scripted intent replies through the planner) |
-| c06-clipping-compared | C06 | model | bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping) |
+| c06-clipping-compared | C06 | scripted | bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping) |
 | c06-offer-and-listing-linked | C06 | scripted | p2-journey:C06 |
-| c06-stored-project-connection | C06 | model | new (C06 preparation; scripted intent proof pending) |
-| c06-shared-name-unrelated | C06 | model | new (C06 preparation; scripted intent proof pending) |
-| c06-two-sources-attributed | C06 | model | new (C06 preparation; scripted intent proof pending) |
+| c06-stored-project-connection | C06 | scripted | new (C06; the source note links both hubs with a reason) |
+| c06-shared-name-unrelated | C06 | scripted | new (C06; one sourced line on the right Cedar note) |
+| c06-two-sources-attributed | C06 | scripted | new (C06; one sourced line per project) |
 | c07-answer-yes | C07 | scripted | p2-journey:C07 (the answer run) |
 | c07-rent-disagrees | C07 | scripted | p2-journey:C07 (a words-only pile) |
 | c07-same-period-rent | C07 | scripted | new (C07; B9 contradiction and uncertain markers) |

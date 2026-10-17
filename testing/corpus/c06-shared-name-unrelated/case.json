@@ -2,8 +2,8 @@
   "id": "c06-shared-name-unrelated",
   "capability": "C06",
   "title": "A shared name does not connect unrelated project notes",
-  "covers": "model",
-  "source": "new (C06 preparation; scripted intent proof pending)",
+  "covers": "scripted",
+  "source": "new (C06; one sourced line on the right Cedar note, scripted intent replies)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -21,5 +21,8 @@
     "Projects/Garden shelter/Cedar.md",
     "Projects/Walking trip/Walking trip.md",
     "Projects/Walking trip/Cedar.md"
+  ],
+  "presses": [
+    {}
   ]
 }
