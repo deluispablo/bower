@@ -14,8 +14,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'deploy-staging.sh');
 const ORIGIN = 'https://bower-staging.example.test';
-const PRODUCTION_KV = 'dedd167004be415cbd90c4b154b1f4e2';
-const STAGING_KV = '6969d46bffdb4b1e90d068f84235fbec';
+/** A real id read where it lives, never spelled in a test (sec-hardening L1). */
+const idIn = (file: string, pattern: RegExp): string => {
+  const id = pattern.exec(readFileSync(join(ROOT, file), 'utf8'))?.[1];
+  if (!id) throw new Error(`no KV namespace id in ${file}`);
+  return id;
+};
+const PRODUCTION_KV = idIn('scripts/deploy-staging.sh', /^PRODUCTION_KV='([0-9a-f]{32})'$/m);
+const STAGING_KV = idIn('api/wrangler.jsonc', /"binding":\s*"BOWER_KV",\s*"id":\s*"([0-9a-f]{32})"/);
 const REAL_GIT = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
 
 const GIT = `#!/bin/sh
@@ -372,7 +378,7 @@ describe('deploy-staging.sh', { timeout: 30_000 }, () => {
 
   it('deploy-staging passes when only the URL holds bower-api', () => {
     const at = checkout();
-    const withApiInUrl = 'Total Upload: 1.00 KiB\nYour Worker has access to the following bindings:\n- Vars:\n  - APP_ORIGIN: "https://bower-api.workers.dev"\nUploaded bower-staging (2.10 sec)\nDeployed bower-staging triggers (0.80 sec)';
+    const withApiInUrl = 'Total Upload: 1.00 KiB\nYour Worker has access to the following bindings:\n- Vars:\n  - APP_ORIGIN: "https://bower-api.example.test"\nUploaded bower-staging (2.10 sec)\nDeployed bower-staging triggers (0.80 sec)';
     const result = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: withApiInUrl });
     expect(result.status).toBe(0);
     expect(result.calls.filter((c) => c.startsWith('curl '))).not.toEqual([]);

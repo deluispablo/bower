@@ -614,11 +614,13 @@ describe('B4c-c through production main', () => {
     expect(shownPrefs(second), 'the accepted lines, then the facts of the refused lines in the person\'s words')
       .toEqual([...REPLY.slice(2).map((l) => l.text), PREFS[0], PREFS[1], PREFS[2]]);
     expect(archives(second)).toHaveLength(1);
-    expect(vi.mocked(console.error).mock.calls.slice(errors).flat().map(String).some((m) => m.includes(reason)), 'the judge\'s reason is logged').toBe(true);
+    const logged = vi.mocked(console.error).mock.calls.slice(errors).flat().map(String);
+    expect(logged.some((m) => m.endsWith('drops line 2, which the judge rejects.')), 'only the line number and the fault code are logged').toBe(true);
+    expect(logged.some((m) => m.includes(reason)), 'the judge\'s reason is not logged').toBe(false);
   });
 
   it.each<[string, { consolidate?: Answer; judge?: Verdicts }, Kind[], string | null]>([
-    ['a judge reason', { judge: verdicts((n) => n !== 2, `Made-up reason quoting ${TOKEN} by mistake.`) }, CONSOLIDATING, 'Made-up reason quoting [hidden] by mistake.'],
+    ['a judge reason', { judge: verdicts((n) => n !== 2, `Made-up reason quoting ${TOKEN} by mistake.`) }, CONSOLIDATING, 'drops line 2, which the judge rejects.'],
     ['a line the checks refuse', { consolidate: answer(REPLY.map((l, i) => (i ? l : { ...l, text: `I prefer remote roles near Briarhaven, ${TOKEN}.` }))) }, CONSOLIDATING, null],
     ['a consolidation reply with another key', { consolidate: lined(formed, { [TOKEN]: true }) }, ['selection', 'execution', 'consolidation'], null],
     ['a consolidation reply that is not JSON', { consolidate: () => exit({ type: 'result', subtype: 'success', is_error: false, result: `not json ${TOKEN}` }) },
@@ -633,7 +635,8 @@ describe('B4c-c through production main', () => {
     expect(second.calls).toEqual(calls);
     const logged = printed(errors);
     expect(logged.length, 'the refusal is logged').toBeGreaterThan(0);
-    if (words) expect(logged, 'the model\'s words are logged with the credential hidden, as refusal reasons are').toContain(words);
+    if (words) expect(logged, 'only the line number and the fault code are logged').toContain(words);
+    expect(logged, 'the model\'s words are never logged').not.toContain('Made-up');
     expect(logged, 'the run\'s credential is never printed').not.toContain(TOKEN);
   });
 

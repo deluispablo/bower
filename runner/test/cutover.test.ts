@@ -14,7 +14,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const ORIGIN = 'https://bower.example.test';
 const CONFIG = 'api/wrangler.production.jsonc';
-const STAGING_KV = '6969d46bffdb4b1e90d068f84235fbec';
+/** The staging KV id, read from the config it lives in, never spelled in a test (sec-hardening L1). */
+const STAGING_KV = /"binding":\s*"BOWER_KV",\s*"id":\s*"([0-9a-f]{32})"/.exec(readFileSync(join(ROOT, 'api', 'wrangler.jsonc'), 'utf8'))?.[1] ?? '';
+if (!STAGING_KV) throw new Error('no staging KV namespace id in api/wrangler.jsonc');
 const MADE_UP_KV = '0123456789abcdef0123456789abcdef';
 const LIVE = '11111111-2222-4333-8444-555555555555';
 const OTHER = '99999999-8888-4777-8666-555555555555';
