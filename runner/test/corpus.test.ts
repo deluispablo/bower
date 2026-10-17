@@ -38,7 +38,7 @@ describe('the capability corpus', () => {
     const scripted = (await loadCorpus(ROOT)).filter((c) => c.covers === 'scripted');
     expect(scripted.length).toBeGreaterThanOrEqual(10);
     await assertScriptedCases(scripted);
-  });
+  }, 60_000); // shortcut: every scripted case runs through main in this one test, over 5 s on CI's 2-core runners; split per case if it nears a minute
 
   it.each<[string, Expected]>([
     ['runs', { runs: [{ report: { questionsExactly: 1 } }] }],
