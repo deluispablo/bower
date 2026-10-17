@@ -1,4 +1,5 @@
 import { RUNNER_WRITES } from '../vault/layout';
+import { createOwnershipContext } from './ownership-format';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -1170,4 +1171,21 @@ it('b4a-read-version-fence', async () => {
   expect(notAsSeen(expected, now)).toBeNull();
   expect(notAsSeen(expected, { ...now, modifiedTime: '2026-10-11T09:00:01.000Z' })).not.toBeNull();
   expect(await recheckEdit({ ...effect, text: after + 'Unfrozen extra words.' }, enc(before))).toBe('conflict');
+});
+
+describe('a request\'s own line on a person\'s note (qa-live-claude F1, ruling 6)', () => {
+  const diary = '---\nsummary: Alex\'s allotment diary.\n---\n\nAlex writes what happens on the plot.\n\n## Timeline\n- 2026-10-01 · Alex dug the first bed.\n';
+  const consent = { requestId: 'change-4', targetFileId: 'diary-id', sourceFileId: 'change-4-file' };
+  const append = (source: string | null) => ({ kind: 'timeline-append' as const, recordIds: [consent.requestId],
+    entries: [{ date: '2026-10-17', text: 'Alex sowed broad beans in bed 3.', source }], consent });
+  const fetched = (consents?: Array<typeof consent>) => ({ fileId: consent.targetFileId, context: createOwnershipContext(), ...(consents ? { consents } : {}) });
+
+  it('takes a sourceless line only under the exact consent the settlement issued', () => {
+    const ok = applyChanges(enc(diary), [append(null)], fetched([consent]));
+    expect(ok).toMatchObject({ ok: true });
+    expect(ok.ok && ok.text).toContain('- 2026-10-17 · Alex sowed broad beans in bed 3.\n');
+    expect(applyChanges(enc(diary), [append(null)], fetched())).toEqual({ ok: false, reason: 'not-bower' });
+    expect(applyChanges(enc(diary), [append(null)], fetched([{ ...consent, sourceFileId: 'other-file' }]))).toEqual({ ok: false, reason: 'not-bower' });
+    expect(applyChanges(enc(diary), [append(null)], fetched([{ ...consent, requestId: 'change-1' }]))).toEqual({ ok: false, reason: 'not-bower' });
+  });
 });

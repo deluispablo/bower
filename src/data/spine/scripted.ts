@@ -256,8 +256,10 @@ export async function personalAppendHistory(read: ScriptedRead, rootId: string, 
       for (const c of op.effect.changes) {
         if (c.kind !== 'timeline-append' || !c.consent || !c.entries[0] || !requestIds.has(c.consent.requestId)) continue;
         const filed = found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === c.consent?.sourceFileId);
+        // A line in its request's own words cites that request's journal file, there as long as the request (F1).
         const sourceLanded = filed ? outcomes.some((o) => o.operationId === filed.operationId && o.state === 'applied')
-          : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId);
+          : found.manifest.capture.places.some((p) => p.file.fileId === c.consent?.sourceFileId)
+            || found.manifest.capture.journal.some((j) => j.recordId === c.consent?.requestId && j.fileIds.includes(c.consent.sourceFileId));
         // The engine records this unknown rejection only after read-back says not-landed. Keep its binding
         // when the published pointer selects this run; changed/gone or unreadable effects are not retried.
         const retryable = outcome?.state === 'rejected' && (outcome.failure.code === 'conflict'
@@ -315,6 +317,8 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
   // A line refused at the fence waits with its binding, still the person's consent; the next run appends it (6).
   const retries = new Map<string, { consent: TimelineConsent; entry: EditEntry }>();
   let refusesSources = false;
+  // F1 (ruling 3): a request's own journal files, by file id: a line citing one is in that request's own words.
+  const words = new Map(requests.flatMap((l) => l.files.map((f) => [f.id, l.rec.id] as const)));
   for (const l of requests) {
     const id = l.rec.id;
     // A binding or a completion in the kept records fixes the request's notes by id (TL-P4-32 addendum 5 (2)).
@@ -392,18 +396,25 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
     bound: bound as ReadonlyMap<string, { requestId: string; path: string; file: DriveFile }>,
     /** Every binding this run gives, for the author's independent comparison. */
     consents,
-    /** The binding for a model's line on a note, citing a thing this run files: one line per note, never a retry's. */
+    /**
+     * The binding for a model's line on a note, citing a thing this run files, or the bound request's own words (its
+     * journal file, F1 ruling 3): one line per note, never a retry's.
+     */
     consent(targetFileId: string, sourceFileId: string | null, filedNow: boolean): TimelineConsent | undefined {
       const b = bound.get(targetFileId);
-      if (!b || !sourceFileId || !filedNow || blocked.has(targetFileId) || retries.has(targetFileId) || given.has(targetFileId)) return undefined;
+      if (!b || !sourceFileId || !(filedNow || words.get(sourceFileId) === b.requestId) || blocked.has(targetFileId) || retries.has(targetFileId) || given.has(targetFileId)) return undefined;
       return give({ requestId: b.requestId, targetFileId, sourceFileId });
     },
-    /** The waiting retries, their line cited by the source's id as it is named now (`nameOf` of the listing). */
+    /**
+     * The waiting retries, their line cited by the source's id as it is named now (`nameOf` of the listing); one in its
+     * request's own words keeps no source, never its journal file's name.
+     */
     retries(nameOfSource: (fileId: string) => string | null): Array<{ consent: TimelineConsent; entry: EditEntry; file: DriveFile; path: string }> {
       return [...retries.values()].flatMap((r) => {
         const b = bound.get(r.consent.targetFileId);
-        const source = nameOfSource(r.consent.sourceFileId);
-        if (!b || source === null || blocked.has(r.consent.targetFileId)) return [];
+        const own = words.get(r.consent.sourceFileId) === r.consent.requestId;
+        const source = own ? null : nameOfSource(r.consent.sourceFileId);
+        if (!b || (!own && source === null) || blocked.has(r.consent.targetFileId)) return [];
         return [{ consent: give(r.consent), entry: { ...r.entry, source }, file: b.file, path: b.path }];
       });
     },
@@ -1802,7 +1813,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   /** A captured thing as a decision about it reads it (its link text is read only where it is filed). */
   const seenOf = (t: (typeof things)[number], linkText: string | null = null): ThingSeen => ({ fileId: t.file.id, name: t.item.name, fileName: t.file.name, kind: t.item.kind, words: t.words, linkText });
   const pileIds = new Set(piles.map((p) => p.id));
-  for (const l of all && date ? d.lines : []) {
+  // A line citing one of your changes is in a request's own words: planned in either scope, only under that request's
+  // binding, with no source (F1, ruling 3).
+  const journalFiles = new Set(lines.flatMap((l) => l.files.map((f) => f.id)));
+  for (const l of date ? d.lines.filter((x) => all || (x.cites !== null && journalFiles.has(x.cites))) : []) {
     const f = ix.file(l.path);
     if (!f || f.folder) continue;
     if (settlement.blocked.has(f.id) || refusedSource(l.cites)) continue;
@@ -1812,11 +1826,13 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (l.cites !== null && !thing && !words && pileIds.has(l.cites)) continue;
     const asked = thing ? (d.note(thing.file.id)?.name ?? d.thing(seenOf(thing))?.name) : undefined;
     const consent = settlement.consent(f.id, l.cites, !!thing && asked !== undefined);
+    const requested = l.cites !== null && journalFiles.has(l.cites);
+    if (requested && !consent) continue;
     // A marked line is written as the note shows it (TL-P4-50 B9): its one extra source by the file's identity, named now.
     const also = l.alsoCites === undefined ? undefined : ix.byId(l.alsoCites);
     if (l.alsoCites !== undefined && (!also || also.folder)) continue;
     const text = l.marker ? markerText(l.marker, l.text, also?.name ?? null) : l.text;
-    const line: WantedLine = { entry: { date: date ?? '', text, source: asked === undefined ? null : citeName(asked) }, record: consent?.requestId ?? null, what: citedAsWords(text), after: asked === undefined ? null : (thing?.file.id ?? null), ...(consent ? { consent } : {}) };
+    const line: WantedLine = { entry: { date: date ?? '', text, source: asked === undefined ? null : citeName(asked) }, record: consent?.requestId ?? null, what: citedAsWords(text), after: asked === undefined ? null : (thing?.file.id ?? null), ...(consent ? { consent } : {}), ...(requested ? { asked: true } : {}) };
     want(f, l.path).lines.push(line);
     if (also) citing.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
@@ -1907,7 +1923,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return source ? citeName(source.name) : null;
   }) : []) {
     const source = listing.find((x) => x.id === r.consent.sourceFileId);
-    if (source) places.set(source.id, source);
+    // A line in its request's own words has no source to capture (F1).
+    if (source && r.entry.source !== null) places.set(source.id, source);
     const text = d.lines.find((l) => l.path === r.path && l.cites === r.consent.sourceFileId)?.text ?? r.entry.text;
     want(r.file, r.path).lines.push({ entry: { ...r.entry, date: date ?? r.entry.date, text }, record: r.consent.requestId, what: text, after: null, consent: r.consent });
   }
@@ -2231,7 +2248,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (c.rules) rulesState = 'planned';
     // One report row per Timeline line it writes (report-misses-hub-line); a Current state alone says it was updated.
     // Each row names its line by its ordinal among the lines the edit appends, in order (TL-P4-19 addendum 4).
-    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.consent ? LINE_ADDED : l.what, line: i }]));
+    const written = c.lines.flatMap((l, i) => (l.what === null ? [] : [{ what: l.consent || l.asked ? LINE_ADDED : l.what, line: i }]));
     const rows = written.length ? written : c.state ? [{ what: c.state.granted?.mark === null ? 'Current state updated, as you chose.' : STATE_UPDATED }] : [];
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
@@ -4093,7 +4110,8 @@ export function generatedName(title: string): string {
  * A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), its note's updated row
  * wording, and the captured file whose move it waits for (the thing it cites).
  */
-type WantedLine = { consent?: TimelineConsent; entry: EditEntry; record: string | null; what: string | null; after: string | null };
+/** `asked`: the line is in a request's own words; its row is C05's even on Bower's note, where its consent is dropped (F1 ruling 7). */
+type WantedLine = { consent?: TimelineConsent; entry: EditEntry; record: string | null; what: string | null; after: string | null; asked?: true };
 /** What one of your changes needs: to wait whole, the Timeline lines it adds, the edits naming it and what derives from it. */
 type Need = { held: boolean; lines: WantedLine[]; edits: string[]; derived: string[] };
 /** What a run wants to change in one note, before applyChanges decides what it may. */

@@ -3,7 +3,7 @@ Reply with one JSON object and nothing else, of exactly this shape:
 {"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing's fileId>","to":"<folder path>","name":"<new name>",
   "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],
  "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
- "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId, or a pileId of words only>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],
+ "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],
  "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing's fileId>"}],
  "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],
   (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})
@@ -12,6 +12,8 @@ Reply with one JSON object and nothing else, of exactly this shape:
   "proposal":{"id":"<slug>","payload":{"kind":"type-row","row":{"id":"<slug>","match":["<kind>"],"template":"source","properties":{},"table":[]}}}}]}
 Every key but "things" is optional. A folder path starts with one of Projects, Areas, Resources, Archive. A thing keeps its extension
 (a saved link may become a ".md" note). "rules" below are the person's rules and win; a list that ends "[cut here: ..." goes on.
+A "to" is its selected destination's path; a line or state goes only on a note selected for what it cites; ask only as selected,
+with its options. When selecting, a request's destination is the folder of a note it wants.
 
 Where each thing goes, in this order:
 1. Fit: reuse a project, area or topic below. Check for a near-duplicate first: never duplicate a folder or note.
@@ -41,7 +43,8 @@ What to write:
   each on a line that says why, as "See also [[X]]: <why>.": never a bare link, never a note not shown. Name a note by its
   title, or by its path when two notes share it. A hub gets a Timeline line only when the thing is news for it.
 - "lines" (optional): at most 20 Timeline lines, each at most 200 characters with no link, only on the notes
-  below; "cites" names a thing you file, and Bower links it as the source, or a pile of words only. A note's Timeline only grows. Look in each
+  below; "cites" names a thing you file, and Bower links it as the source, a pile of words only, or a request asking for this line
+  on this note. A request's words are never filed as a thing. A note's Timeline only grows. Look in each
   thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.
   A disagreement is two claims about the same thing, detail and period that cannot both hold: never change the note
   silently and never pick one by its date. Give one line with marker "contradiction" stating both claims, citing the
