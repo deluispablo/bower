@@ -28,6 +28,7 @@ import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answe
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
 import { linkTarget, renderLink } from '../contracts/links';
+import { fenceAfter, type Fence } from '../contracts/ownership-format';
 import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -48,6 +49,46 @@ import { hasVerbatimQuote, learnedContext, normalizedText, observationOf, parseO
 import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contracts/tag-format';
 
 export { SET_ASIDE, listedPiles };
+
+/** A [[link]] in a model's words: its target before any `|` alias or `#` heading (a `^block` stays for `linkTarget`). */
+export const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
+
+/**
+ * C06 (R1-R4), the one link rule of a model's authored words, for the reply check (runner claude.ts) and the planner:
+ * each [[link]] outside a fenced code block (the one link grammar, CommonMark 0.31.2 §4.5), its target as `linkTarget`
+ * reads it without `.md`, and whether its line says why (R2: a letter or digit is left once its links, a leading list
+ * marker and the words "see also", "related", "source(s)", "link(s)" and "and" are taken out).
+ */
+export function authoredLinks(text: string): Array<{ target: string; reason: boolean }> {
+  const out: Array<{ target: string; reason: boolean }> = [];
+  let fence: Fence | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const previous = fence;
+    fence = fenceAfter(line, fence);
+    if (previous || fence) continue;
+    const links = [...line.matchAll(WIKI_LINK)];
+    const rest = line.replace(WIKI_LINK, ' ').replace(/^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
+    const reason = /[\p{L}\p{N}]/u.test(rest);
+    for (const m of links) {
+      const target = linkTarget(m[1] ?? '').replace(/\.md$/, '');
+      if (target) out.push({ target, reason });
+    }
+  }
+  return out;
+}
+
+/**
+ * C06 R4: what a link target (as `authoredLinks` gives it) names among the folder's file paths: one note, by its whole
+ * path without `.md` or by its title; a file that is not a note, by its path or name; a title two notes share; or nothing.
+ */
+export function linkIdentity(target: string, paths: Iterable<string>): { note: string } | 'not a note' | 'two notes share' | null {
+  const all = [...paths];
+  const notes = all.filter((path) => path.endsWith('.md')
+    && (target.includes('/') ? path.slice(0, -3).toLowerCase() : displayName(nameOf(path)).toLowerCase()) === target);
+  if (notes.length > 1) return 'two notes share';
+  if (notes[0] !== undefined) return { note: notes[0] };
+  return all.some((path) => (target.includes('/') ? path : nameOf(path)).toLowerCase() === target) ? 'not a note' : null;
+}
 
 /** A B run that failed, or a plan refused before admission: the honest-phase rule guarantees no effect applied. */
 export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
@@ -2335,23 +2376,24 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const path = ix.pathOf(file.id);
     return !file.folder && path?.endsWith('.md') && generatedPlace(parentOf(path)) ? [{ file, path }] : [];
   });
-  const groundedAuthoredLinks = async (to: string, note: AuthoredNote, source: { file: DriveFile; name: string }): Promise<string[]> => {
-    // Resolve evidence against actual note identities; a name shared by notes is not grounding.
+  const paths = listing.flatMap((file) => {
+    const path = file.folder ? undefined : ix.pathOf(file.id);
+    return path === undefined ? [] : [path];
+  });
+  // Any thing this reply files, the note's own source and its siblings alike, is named by its link (C06 R3).
+  const filedAs = new Set(filing.flatMap(({ thing, to, name }) => [thing.file.name, name, ix.pathOf(thing.file.id), join(to, name)])
+    .flatMap((name) => (name === undefined ? [] : [linkTarget(name).replace(/\.md$/, '')])));
+  const groundedAuthoredLinks = async (to: string, note: AuthoredNote): Promise<string[]> => {
+    // The reply check's own identity rule (C06 R4), kept here only as an invariant: a reply it accepts never fails here.
     const authored = new Map<string, typeof linkable[number]>();
-    // All authored strings share this admission check, including every section in the body and the summary.
-    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})].join('\n');
-    for (const match of words.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-      const target = linkTarget(match[1] ?? '').replace(/\.md$/, '');
-      const candidates = linkable.filter(({ path }) => target.includes('/')
-        ? path.slice(0, -3).toLowerCase() === target
-        : displayName(nameOf(path)).toLowerCase() === target);
-      const local = candidates.filter(({ path }) => parentOf(path) === to);
-      const resolved = local.length ? local : candidates;
-      const bound = [source.file.name, source.name, ix.pathOf(source.file.id), join(to, source.name)]
-        .some((name) => name !== undefined && linkTarget(name).replace(/\.md$/, '') === target);
-      if (bound && resolved.every(({ file }) => file.id === source.file.id)) continue;
-      if (resolved.length !== 1 || !resolved[0]) return refused('a template note with an ungrounded authored link');
-      authored.set(resolved[0].file.id, resolved[0]);
+    // All authored strings share this admission check, each scanned on its own so an unclosed fence hides nothing (C06 gap 8).
+    const words = [...Object.values(note).filter((value): value is string => typeof value === 'string'), JSON.stringify(note.properties ?? {})];
+    for (const { target } of words.flatMap(authoredLinks)) {
+      if (filedAs.has(target)) continue;
+      const named = linkIdentity(target, paths);
+      const resolved = typeof named === 'object' && named ? linkable.find(({ path }) => path === named.note) : undefined;
+      if (!resolved) return refused('a template note with an ungrounded authored link');
+      authored.set(resolved.file.id, resolved);
     }
     if (!note.template) return [];
     // Sources subfolders use their nearest destination hub. Never choose an unrelated fallback note.
@@ -2389,7 +2431,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (template === 'profile' || typeRow?.template === 'profile') return refused('the profile template outside profile admission');
     if (typeRow && typeRow.template !== template) return refused('a note template outside its declared type');
     // Only declared, relevant links in the authored evidence; never pad with the folder's other notes.
-    const related = await groundedAuthoredLinks(to, { ...authored, template }, { file: thing.file, name });
+    const related = await groundedAuthoredLinks(to, { ...authored, template });
     const properties = template ? [
       { key: 'type', label: 'Type', value: typeRow?.id ?? template },
       { key: 'created', label: 'Created', value: noteDate },
@@ -2424,8 +2466,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
     if (!target) {
       const template = row.profile?.template;
-      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template },
-        { file: first.thing.file, name: first.name });
+      const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template });
       if (!profileTextOk(body)) return refused('a profile beyond its 400 word bound');
       const name = freeName(planned, to, 'Profile.md');
       const scaffold = serializeNote({ template, typeRow: { ...row, template: 'profile' }, summary: 'Profile from documents.',
