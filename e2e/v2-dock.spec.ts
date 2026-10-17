@@ -60,8 +60,8 @@ test('a message is at most 520 wide and centred in main on desktop', async ({ pa
 
 test('the last result row ends above the run chip at full scroll', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the run chip is the phone one');
-  await open(page, '/?scenario=back');
-  const chip = page.getByRole('button', { name: /Watch/ }).last();
+  await open(page, '/bower?scenario=back');
+  const chip = page.getByRole('button', { name: /Watch what Bower did/ });
   await expect(chip).toBeVisible();
   await page.waitForTimeout(400);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
