@@ -19,7 +19,8 @@ describe('the files of an Add draft', () => {
 
 
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
-const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:tell-draft', 'bower:tell-intent', 'bower:toured', 'bower:tabs'];
+// The last is one pile's note draft: keyed per pile, forgotten by its prefix after the listed keys (qa7-drafts R3, R5).
+const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:tell-draft', 'bower:tell-intent', 'bower:toured', 'bower:tabs', 'bower:tell-kind', 'bower:pile-note:PILE_A'];
 const OUTBOX = '[{"v":1,"id":"CHANGE_A","device":"DEVICE_A","at":1,"kind":"create","what":"Synthetic note","fileId":"FILE_A"}]';
 const PREFS = '{"theme":"dark"}';
 const KEYS = ['DRAFT_A', 'ORPHAN_A', 'NEXT_A'];

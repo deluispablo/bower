@@ -120,14 +120,16 @@ export const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
  * outbox port): kept with the line until its create is confirmed, so a line whose answer was lost is sent again with the
  * same id and found by it, after a reload too, never written twice. With the id it keeps where and as what the line was
  * first sent (`sent`, TL-P4-24 addendum 16). An outbox from before keeps bare lines, or ids with no intent; each gets
- * what it lacks when it is next sent.
+ * what it lacks when it is next sent. `intended`: the line's id is the caller's intent (`record`), so a copy that landed
+ * before a reload is in the changes folder under that id, and the line is looked for there before it is sent.
  */
-interface Waiting extends Holder { line: JournalRecord; notFound?: true }
+interface Waiting extends Holder { line: JournalRecord; notFound?: true; intended?: true }
 
 /** The line as the outbox keeps it: its holder's id and intent as they are now (either let go, it keeps none). */
 const heldLine = (r: Waiting, h: Holder): Waiting => ({
   line: r.line,
   ...(r.notFound ? { notFound: true as const } : {}),
+  ...(r.intended ? { intended: true as const } : {}),
   ...(h.reserved !== undefined ? { reserved: h.reserved } : {}),
   ...(h.sent !== undefined ? { sent: h.sent } : {}),
 });
@@ -265,13 +267,15 @@ export class Journal {
       // expected: send() rethrows this captured error into its catch, which logs it and classifies the line's outcome.
       ? this.place.folder().then((id) => ({ id }), (error: unknown) => ({ error })) : undefined;
     return this.serial(() => this.acrossTabs(key, async () => {
-      // Assign time in admission order, after owner resolution and under the outbox lock.
-      const kept = intent === undefined ? undefined : this.intended.holder(intent);
-      const rec = kept?.line ?? this.newLine(kind, what, extra);
-      const line: Waiting = kept ?? { line: rec };
       let readable = true;
       let previous = this.volatile.get(key) ?? [];
       try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
+      // An intended line is the one its intent names: held on this page, else waiting in the outbox (its id is the
+      // intent, so it outlives a reload); a copy already sent is found in the changes folder by `send`.
+      const kept = intent === undefined ? undefined : this.intended.holder(intent) ?? previous.find((r) => r.line.id === intent);
+      // Assign time in admission order, after owner resolution and under the outbox lock.
+      const rec = kept?.line ?? this.newLine(kind, what, extra, intent);
+      const line: Waiting = kept ?? { line: rec, ...(intent !== undefined ? { intended: true as const } : {}) };
       if (!this.current()) {
         if (extra.fileId && madeInDrive(kind)) {
           if (readable) this.keep(key, [...previous, line]);
@@ -316,9 +320,12 @@ export class Journal {
     }, false));
   }
 
-  private newLine(kind: ChangeKind, what: string, extra: JournalExtra): JournalRecord {
+  /** A new line; an intended one takes its intent as its id (an idempotency key, as Stripe's), so every copy names it. */
+  // shortcut: a resend after a tidy-up archived the token's line reuses the token as its id (one merged history entry, no
+  // file lost or doubled; needs a reload mid-send plus that archive first), upgrade to an archive lookup if it is ever seen.
+  private newLine(kind: ChangeKind, what: string, extra: JournalExtra, intent?: string): JournalRecord {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
-    const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
+    const id = intent ?? `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     return { v: 1, id, at, kind, what, device: this.device, ...extra };
   }
 
@@ -439,6 +446,11 @@ export class Journal {
       const prepared = await folder;
       if (prepared && 'error' in prepared) throw prepared.error;
       const destination = prepared?.id ?? await this.place.folder();
+      const there = w.intended ? await this.inFolder(destination, rec.id) : undefined;
+      if (there) {
+        if (this.current()) this.place.wrote?.(there);
+        return 'sent';
+      }
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
       const f = await makeOnce(w, this.drive, sentAs(destination, `${rec.id}.json`, text), (id, sent) => {
@@ -467,6 +479,16 @@ export class Journal {
       if (kind === 'permanent' && w.notFound && e instanceof BowerError && e.code === 'not-found') return 'refused';
       return kind === 'wait' && e instanceof BowerError ? { waits: e.message } : 'later';
     }
+  }
+
+  /**
+   * Whether the changes folder already holds the line with this id (an intended line sent before a reload, then made
+   * again by the same intent). A fresh listing under the outbox lock, never the cached index, so a copy another tab sent
+   * since this page listed is found. Only names are compared, so an unreadable line beside it refuses nothing. A listing
+   * that fails is not absence: it throws into `send`, whose table keeps the line waiting for the next flush to look again.
+   */
+  private async inFolder(folder: string, id: string): Promise<DriveFile | undefined> {
+    return (await this.drive.listAll(folder)).find((f) => !f.folder && f.parents[0] === folder && f.name === `${id}.json`);
   }
 
   /** Keeps `w`'s id and intent on its outbox line before sending; false means storage did not keep them. */

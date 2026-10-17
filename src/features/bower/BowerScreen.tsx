@@ -37,7 +37,9 @@ export function BowerScreen() {
   const { data: run } = runState;
   const [text, setText] = useSessionDraft('bower:tell-draft');
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const [kind, setKind] = useState<'request' | 'rule'>('request');
+  // The kind is kept with the words, so a rule being typed comes back as a rule (empty: a request).
+  const [kindDraft, setKindDraft] = useSessionDraft('bower:tell-kind');
+  const kind = kindDraft === 'rule' ? 'rule' : 'request';
   const link = useNoteLink();
   const requestsState = useRequests();
   const { data: requests } = requestsState;
@@ -49,6 +51,12 @@ export function BowerScreen() {
   /** One id per intended request: the same words sent again after a wait, or a reload, are that request, never a second one. */
   const [intentJson, setIntent] = useSessionDraft('bower:tell-intent');
   const intent = intentJson ? (JSON.parse(intentJson) as { text: string; id: string }) : null;
+  // A change of kind is a new intent: a request sent after it is a new request, never one sent before it.
+  const setKind = (k: 'request' | 'rule'): void => {
+    if (k === kind) return;
+    setKindDraft(k === 'rule' ? 'rule' : '');
+    setIntent('');
+  };
   // The phone has no side panel: what failed shows here, where Bower's panel content lives on a phone.
   const desktop = useIsDesktop();
   const pose: Pose = listening ? 'wait' : typing ? 'wait' : isRunning(run) ? 'write' : 'idle';

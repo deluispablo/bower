@@ -15,6 +15,7 @@ import { PileStack } from './PileStack';
 import { normaliseLink } from './link';
 import { itemLine, pileLine } from './item-words';
 import { FieldError, fieldBox, Input, Textarea } from '@/ui/Field';
+import { useSessionDraft } from '@/ui/session-draft';
 import s from './piles.module.css';
 
 export function PileScreen() {
@@ -395,6 +396,20 @@ function cutAtWord(words: string, max: number): string {
   return `${(at > 0 ? head.slice(0, at) : flat.slice(0, max)).replace(/[\s,;:.]+$/, '')}…`;
 }
 
+/** A pile note's kept draft: its words and the note they started from; anything else reads as none. */
+function readDraft(raw: string): { text: string; base: string } | null {
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    const d = (typeof v === 'object' && v !== null ? v : {}) as { text?: unknown; base?: unknown };
+    if (typeof d.text === 'string' && typeof d.base === 'string') return { text: d.text, base: d.base };
+    throw new Error('Unreadable pile note draft');
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
 /**
  * The pile's note: what you wrote about it. Saved as `Pile note.md` in the
  * pile's folder; Bower reads it with every thing in the pile. Editable until
@@ -402,12 +417,21 @@ function cutAtWord(words: string, max: number): string {
  */
 function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const { vault } = useSources();
-  const [text, setText] = useState(pile.text);
+  // Unsaved words are kept for the tab, one draft per pile, with the base they started from (qa7-drafts R3).
+  const [kept, keep] = useSessionDraft(`bower:pile-note:${pile.id}`);
+  const [restored] = useState(() => readDraft(kept));
+  const [text, setText] = useState(restored?.text ?? pile.text);
   // The words the draft started from (its base), and the words last listed. When a listing brings new words,
   // the editor shows them only while nothing is typed; a draft is kept with its base, and the vault saves it
   // only over that base (RFC 9110 §13.1.1), so words changed elsewhere are never replaced unseen.
-  const [base, setBase] = useState(pile.text);
+  const [base, setBase] = useState(restored?.base ?? pile.text);
   const [seen, setSeen] = useState(pile.text);
+  // What a kept draft carries: the base last read or saved, never a refused save's (that one is this page's alone),
+  // and the words on screen now, for a save that ends after newer typing.
+  const [keptBase, setKeptBase] = useState(restored?.base ?? pile.text);
+  const typed = useRef(text);
+  useEffect(() => { typed.current = text; }, [text]);
+  const remember = (words: string, listed: string, from = keptBase): void => keep(words.trim() === listed ? '' : JSON.stringify({ text: words, base: from }));
   // After a refused save the words now there are shown next to the draft and become its base: the next save is an
   // informed overwrite (the usual edit-conflict pattern: look again, then retry against what is there now).
   const [clash, setClash] = useState(false);
@@ -416,6 +440,8 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
     if (text.trim() === base) {
       setText(pile.text);
       setBase(pile.text);
+      setKeptBase(pile.text);
+      if (kept) keep('');
     } else if (clash) setBase(pile.text);
   } else if (clash && base !== pile.text) {
     // A refused save takes the words now listed as its base, even when they were listed before it was refused (its
@@ -431,7 +457,11 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
     setBusy(true);
     try {
       await vault.updatePile(pile.id, text, base);
-      setBase(text.trim());
+      const saved = text.trim();
+      setBase(saved);
+      setKeptBase(saved);
+      // Words typed while it saved stay kept, now over the words just saved.
+      remember(typed.current, saved, saved);
       setClash(false);
       toast('Note saved. Bower reads it in the next tidy-up.');
     } catch (e) {
@@ -456,7 +486,9 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         disabled={off}
         placeholder={held ? undefined : 'One line about these things helps Bower most'}
         onChange={(e) => {
-          if (!off) setText(e.target.value);
+          if (off) return;
+          setText(e.target.value);
+          remember(e.target.value, pile.text);
         }}
         onBlur={() => {
           if (changed && !off && (text.trim() || pile.items.length)) void save();
