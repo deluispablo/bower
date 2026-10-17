@@ -188,7 +188,7 @@ describe('runner wire', () => {
     // The alarm does its work at the expiry and prunes: no access in between. Its handler is run at that moment
     // (a time 3.2 s on), since waiting out the real clock only tests the runtime's alarm clock, not Bower.
     await runInDurableObject(p, async (instance: Person) => {
-      await instance.wake(Date.now() + 3200, { repo: 'owner/repo', token: undefined, fetchImpl: () => Promise.reject(new Error('no network in this test')) });
+      await instance.wake(Date.now() + 3200, { repo: 'owner/repo', apiOrigin: 'https://api.example.com', token: undefined, fetchImpl: () => Promise.reject(new Error('no network in this test')) });
     });
     expect(await kept()).toBeUndefined();
     expect((await runner.token()).status).toBe(401);

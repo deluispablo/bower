@@ -382,7 +382,7 @@ describe('dispatch retries', () => {
       if (!reported.accepted) throw new Error('report refused');
       const down = vi.fn((): Promise<Response> => Promise.resolve(new Response(null, { status: 502 })));
       await runInDurableObject(p, async (instance: Person) => {
-        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
+        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: 'test-github-token', fetchImpl: down });
       });
       expect((await p.runStatus(alarm + 1)).run?.phase).toBe('reading');
       expect(down).not.toHaveBeenCalled();
@@ -402,7 +402,7 @@ describe('dispatch retries', () => {
       const p = person(who.sub);
       const down = (): Promise<Response> => Promise.resolve(new Response(null, { status: 502 }));
       await runInDurableObject(p, async (instance: Person) => {
-        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
+        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: 'test-github-token', fetchImpl: down });
       });
       expect((await p.runStatus(alarm + 1)).run?.phase).toBe('queued');
       expect(await alarmOf(who.sub)).toBe(alarm + 1 + 60_000);
