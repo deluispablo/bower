@@ -41,7 +41,7 @@ const forwardKeys = (base: { root: string }, m: ManifestV2) => m.operations.filt
 const SEEDED = '# Log\r\nAlex wrote this aside.\r\n2026-10-01 | create | Resources/Gardening/Old.md | Alex kept an old note. · op:0123456789ab';
 const filing = (extra: Record<string, unknown> = {}) => ({ ...empty, ...extra, things: [{ fileId: '$file:Mulch notice.txt',
   to: 'Resources/Gardening', name: 'Mulch notice.txt', note: { name: 'Mulch notice.md', summary: 'Mulch collection opens at the amber gate.',
-    body: 'Alex can collect mulch from the amber gate at the Saltmere garden.\n\nRelated: [[Gardening]].',
+    body: 'Alex can collect mulch from the amber gate at the Saltmere garden.\n\nSee also [[Gardening]]: the mulch is for the same garden.',
     ...(extra.newTags ? { tags: extra.newTags } : {}) } }] });
 async function setup(name = 'settled-recovery', extra: Record<string, string> = {}) {
   const c = await fixture(name);
