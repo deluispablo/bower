@@ -116,7 +116,8 @@ describe('design-note-page: links to and linked from', () => {
     show(note(['Projects/Flat hunt/Flat 7.md'], ['Projects/Flat hunt/Flat 7.md']));
     expect(under('Links to')).toEqual([['Flat 7', true]]);
     expect(screen.queryByText('Nothing links here yet.')).toBeNull();
-    expect(screen.getByText('No other notes link here.')).toBeInTheDocument();
+    // design8-links-both-ways: the sentence names the notes marked both ways.
+    expect(screen.getByText('Only the notes marked both ways link here.')).toBeInTheDocument();
   });
 
   it('R5 note-links-by-path: two notes with the same title in different places both stay', () => {

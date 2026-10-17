@@ -155,7 +155,7 @@ export function LinkedList({ note }: { note: Note }) {
       {from.length ? (
         <ul className={s.list}>{from.map((p) => row(p))}</ul>
       ) : (
-        <p className={s.hint}>{note.backlinks.length ? 'No other notes link here.' : 'Nothing links here yet.'}</p>
+        <p className={s.hint}>{note.backlinks.length ? 'Only the notes marked both ways link here.' : 'Nothing links here yet.'}</p>
       )}
     </>
   );
