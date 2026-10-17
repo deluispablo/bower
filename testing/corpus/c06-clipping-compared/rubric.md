@@ -1,2 +1,3 @@
-The summary has the clipping's facts: 36,000 to 40,000 a year, Saltwick (hybrid, two days in the office), apply by 17 October 2026, interviews the week of 27 October.
-The comparison names the existing Ferrowick offer (42,000 a year, fully remote) with a link and is honest that the figures are not like for like. The job hunt hub gets a Timeline line citing the new note.
+File the clipping with the job hunt. The job hunt hub gets one Timeline line with the clipping's news, 36,000 to 40,000 a year and apply by 17 October 2026, citing the clipping in the same line. The existing Ferrowick offer (42,000 a year, fully remote) stays unchanged, and nothing claims the figures are like for like. The clipping's own summary note with the comparison is C08's. The replay press adds nothing.
+
+Structural scoring checks the hub line's words and its citation in one string and the Ferrowick note's bytes, not semantic equivalence.

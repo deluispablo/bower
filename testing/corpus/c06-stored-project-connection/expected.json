@@ -12,12 +12,12 @@
     {
       "path": "Projects/Job hunt/Saltmere offer.md",
       "contains": [
-        "[[Projects/Job hunt/Job hunt]]",
-        "[[Projects/Flat hunt/Flat hunt]]",
+        "See also [[Job hunt]]: the role search this offer belongs to.",
+        "See also [[Flat hunt]]: the shortlist is near the same station.",
         "Saltmere station"
       ],
       "timeline": [
-        "Filed by Bower. \u00b7 [[Saltmere offer.txt]]"
+        "Filed by Bower. · [[Saltmere offer.txt]]"
       ],
       "timelineCount": 1
     },
@@ -27,8 +27,8 @@
         "Alex wants a role in Saltmere."
       ],
       "timeline": [
-        "2026-10-02 \u00b7 Started the job hunt.",
-        "The new map designer offer has an office beside Saltmere station. \u00b7 [[Saltmere offer]]"
+        "2026-10-02 · Started the job hunt.",
+        "The new map designer offer has an office beside Saltmere station. · [[Saltmere offer]]"
       ],
       "timelineCount": 2
     },
@@ -38,23 +38,80 @@
         "Alex is considering flats near Saltmere station."
       ],
       "timeline": [
-        "2026-10-02 \u00b7 Started the flat shortlist.",
-        "The new offer places the office beside the station used for the flat shortlist. \u00b7 [[Saltmere offer]]"
+        "2026-10-02 · Started the flat shortlist.",
+        "The new offer places the office beside the station used for the flat shortlist. · [[Saltmere offer]]"
       ],
       "timelineCount": 2
     }
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
-    "created": [
-      "Projects/Job hunt/Saltmere offer.md"
-    ],
-    "updated": [
-      "Projects/Job hunt/Job hunt.md",
-      "Projects/Flat hunt/Flat hunt.md"
-    ],
-    "questionsExactly": 0,
-    "setAside": 0
-  }
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "notes": [
+        {
+          "path": "Projects/Job hunt/Saltmere offer.md",
+          "contains": [
+            "See also [[Job hunt]]: the role search this offer belongs to.",
+            "See also [[Flat hunt]]: the shortlist is near the same station."
+          ],
+          "timelineCount": 1
+        },
+        {
+          "path": "Projects/Job hunt/Job hunt.md",
+          "timeline": [
+            "The new map designer offer has an office beside Saltmere station. · [[Saltmere offer]]"
+          ],
+          "timelineCount": 2
+        },
+        {
+          "path": "Projects/Flat hunt/Flat hunt.md",
+          "timeline": [
+            "The new offer places the office beside the station used for the flat shortlist. · [[Saltmere offer]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Projects/Job hunt/Saltmere offer.md",
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Job hunt/Job hunt.md",
+          "Projects/Flat hunt/Flat hunt.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Job hunt/Saltmere offer.md",
+          "timelineCount": 1
+        },
+        {
+          "path": "Projects/Job hunt/Job hunt.md",
+          "timelineCount": 2
+        },
+        {
+          "path": "Projects/Flat hunt/Flat hunt.md",
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }

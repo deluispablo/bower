@@ -14,10 +14,10 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-hub-lines | changed | It pinned the hubs' Current state untouched; point 3 has Bower rewrite it where the pile changes it. |
 | c05-keep-one-note | agrees | Facts move into the kept note's Current state or Timeline; the second note goes to the Bin. |
 | c05-line-not-repeated | agrees | A line saying the same thing is not added twice: the Timeline only grows with new facts (points 2, 3). |
-| c06-clipping-compared | agrees | The new note links the job hunt hub and the Ferrowick offer (point 4); the hub gets a line (point 7). |
+| c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping's summary note with the comparison moves to C08. |
 | c06-offer-and-listing-linked | agrees | Links only where the connection is real (point 4). |
 | c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
-| c06-stored-project-connection | agrees | The source note links its hub and the relevant stored project; both hubs receive sourced news, with no invented commute or acceptance (points 1, 3, 4, 7). |
+| c06-stored-project-connection | agrees | The source note links both hubs by title, each on a line that says why; both hubs receive sourced news, since the offer is news for each, with no invented commute or acceptance (points 1, 3, 4, 7). |
 | c06-two-sources-attributed | agrees | Known facts receive separate confirmation lines citing their own letters, without redundant notes or an invented connection (points 1, 2, 3, 4, 7). |
 | c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
 | c07-dated-rent-change | changed | Points 1, 3, 7: the dated terms fit the flat note as one ordinary sourced line, with no marker and no question; Current state rewrites stay with C05's ownership rules. |

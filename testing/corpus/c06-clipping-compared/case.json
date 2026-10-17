@@ -2,7 +2,7 @@
   "id": "c06-clipping-compared",
   "capability": "C06",
   "title": "A job clipping compared with the offers already there",
-  "covers": "model",
+  "covers": "scripted",
   "source": "bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping)",
   "scope": "all",
   "allowWeb": false,
@@ -16,5 +16,8 @@
   ],
   "journal": [],
   "questions": [],
-  "bowerOwned": []
+  "bowerOwned": [],
+  "presses": [
+    {}
+  ]
 }

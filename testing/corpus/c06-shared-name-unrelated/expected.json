@@ -25,20 +25,61 @@
         "Bramblehaven"
       ],
       "timeline": [
-        "2026-10-02 \u00b7 Recorded the timber option.",
-        "The Cedar timber option is available untreated. \u00b7 [[Cedar timber update.txt]]"
+        "2026-10-02 · Recorded the timber option.",
+        "The Cedar timber option is available untreated. · [[Cedar timber update.txt]]"
       ],
       "timelineCount": 2
     }
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
+    "filed": 0,
     "created": [],
-    "updated": [
-      "Projects/Garden shelter/Cedar.md"
-    ],
-    "questionsExactly": 0,
-    "setAside": 0
-  }
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "unchanged": [
+        "Projects/Garden shelter/Garden shelter.md",
+        "Projects/Walking trip/Walking trip.md",
+        "Projects/Walking trip/Cedar.md"
+      ],
+      "notes": [
+        {
+          "path": "Projects/Garden shelter/Cedar.md",
+          "timeline": [
+            "2026-10-02 · Recorded the timber option.",
+            "The Cedar timber option is available untreated. · [[Cedar timber update.txt]]"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Garden shelter/Cedar.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "notes": [
+        {
+          "path": "Projects/Garden shelter/Cedar.md",
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 0,
+        "created": [],
+        "updated": [],
+        "questionsExactly": 0
+      }
+    }
+  ]
 }

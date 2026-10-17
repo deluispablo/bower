@@ -2,8 +2,8 @@
   "id": "c06-two-sources-attributed",
   "capability": "C06",
   "title": "Two separate piles retain the right source for each project claim",
-  "covers": "model",
-  "source": "new (C06 preparation; scripted intent proof pending)",
+  "covers": "scripted",
+  "source": "new (C06; one sourced line per project, scripted intent replies)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -25,5 +25,8 @@
   "bowerOwned": [
     "Projects/Workshop/Workshop.md",
     "Projects/Moving day/Moving day.md"
+  ],
+  "presses": [
+    {}
   ]
 }

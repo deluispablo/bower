@@ -36,12 +36,16 @@ const CASES = [
 
 const load = (id: string): Promise<LoadedCase> => loadCase(join(ROOT, id));
 const isExecution = (call: ClaudeCall): boolean => (JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { selection?: unknown }).selection !== undefined;
+/** Every call's phase, grouped by press (each press runs main in its own working directory). */
 function phases(spawn: ClaudeSpawn) {
-  const calls: Array<'selection' | 'execution'> = [];
-  return { calls, spawn: async (call: ClaudeCall) => (calls.push(isExecution(call) ? 'execution' : 'selection'), spawn(call)) };
+  const presses = new Map<string, Array<'selection' | 'execution'>>();
+  const record = (call: ClaudeCall) => presses.set(call.cwd, [...presses.get(call.cwd) ?? [], isExecution(call) ? 'execution' : 'selection']);
+  return { presses, spawn: async (call: ClaudeCall) => (record(call), spawn(call)) };
 }
 const pressOne = (run: CaseRun): CaseRun => run.runs?.[0] ?? run;
-const expectations = (c: LoadedCase): string[] => (c.expected.notes ?? []).flatMap((n) => [...(n.contains ?? []), ...(n.timeline ?? [])]);
+/** Every note expectation's strings, top level and per press (ruling 4). */
+const expectations = (c: LoadedCase): string[] => [c.expected, ...c.expected.runs ?? []]
+  .flatMap((e) => (e.notes ?? []).flatMap((n) => [...(n.contains ?? []), ...(n.timeline ?? [])]));
 
 it.each(CASES)('AC23 c06-fixtures-landed: $id has scripted replies, a replay press and no pending wording (R20)', async ({ id }) => {
   const c = await load(id);
@@ -76,11 +80,19 @@ it('AC23 c06-fixtures-landed: the stored-project note links each hub by title wi
 it.each(CASES)('AC24 c06-case: $id scores clean through main, selection then execution, and the replay press adds nothing (R20)', async ({ id, changed, same }) => {
   expect(existsSync(join(ROOT, id, 'replies.json')), 'scripted replies').toBe(true);
   const c = await load(id);
-  const { calls, spawn } = phases(caseReplies(id));
+  const { presses, spawn } = phases(caseReplies(id));
   const final = await runWithClaude(c, spawn);
   const first = pressOne(final);
+  // The ruling checks come before the score, so each fails on its own assertion.
+  // Ruling 1: the replay press is a fresh tidy-up with its own request, not a redispatch of press 1.
+  expect(final.requestAction?.kind, 'press 2 writes a new request').toBe('tidy');
+  expect(first.requests?.map((r) => r.id) ?? [], 'press 2\'s request is new').not.toContain(final.requestAction?.id);
+  expect(final.dispatch?.runId, 'press 2 is its own run').not.toBe(first.dispatch?.runId);
+  // Ruling 3: both presses exit 0, even when a failed press leaves the notes as they were.
+  expect([first.code, final.code], 'both presses exit 0').toEqual([0, 0]);
+  // Ruling 2: each press's whole call list; a retry fails it (press 2's empty reply answers its execution).
+  expect([...presses.values()], 'each press selection then execution, no retry').toEqual([['selection', 'execution'], ['selection', 'execution']]);
   expect(final.score).toEqual({ pass: true, unmet: [] });
-  expect(calls.slice(0, 2), 'selection then execution, no retry').toEqual(['selection', 'execution']);
   for (const path of changed) {
     expect(first.after[path], `${path} is changed by press 1`).not.toBe(c.folder[path]);
     expect(final.after[path], `${path}: the replay press adds nothing`).toBe(first.after[path]);

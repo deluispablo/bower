@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Saltmere offer.txt",
+        "to": "Projects/Job hunt",
+        "name": "Saltmere offer.txt",
+        "note": {
+          "name": "Saltmere offer.md",
+          "summary": "A map designer offer from Mosswing Studio, with an office beside Saltmere station.",
+          "body": "Mosswing Studio offers Alex a map designer role, dated 2026-10-06. The office is beside Saltmere station.\n\nSee also [[Job hunt]]: the role search this offer belongs to.\nSee also [[Flat hunt]]: the shortlist is near the same station."
+        }
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Job hunt/Job hunt.md",
+        "text": "The new map designer offer has an office beside Saltmere station.",
+        "cites": "$file:Saltmere offer.txt"
+      },
+      {
+        "note": "Projects/Flat hunt/Flat hunt.md",
+        "text": "The new offer places the office beside the station used for the flat shortlist.",
+        "cites": "$file:Saltmere offer.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

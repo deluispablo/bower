@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Cedar timber update.txt",
+        "to": "Projects/Garden shelter",
+        "name": "Cedar timber update.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Garden shelter/Cedar.md",
+        "text": "The Cedar timber option is available untreated.",
+        "cites": "$file:Cedar timber update.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

@@ -2,8 +2,8 @@
   "id": "c06-stored-project-connection",
   "capability": "C06",
   "title": "A new source connects two existing projects without a shared pile",
-  "covers": "model",
-  "source": "new (C06 preparation; scripted intent proof pending)",
+  "covers": "scripted",
+  "source": "new (C06; the source note links both hubs with a reason, scripted intent replies)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -19,5 +19,8 @@
   "bowerOwned": [
     "Projects/Job hunt/Job hunt.md",
     "Projects/Flat hunt/Flat hunt.md"
+  ],
+  "presses": [
+    {}
   ]
 }
