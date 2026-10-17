@@ -519,7 +519,7 @@ async function setup(): Promise<Real> {
   return r;
 }
 
-// Keep the original budgets and explicit seed; pin the two split batches for replay.
+// The unseeded batches are 8 of 25 runs (not 4 of 50), so a slow 2-core runner stays inside the 5 s test limit. Keep the explicit seed; pin the two split batches for replay.
 const splitBatches = [
   { label: 'random batch 1', seed: 427286, numRuns: 50 },
   { label: 'random batch 2', seed: 427287, numRuns: 50 },
@@ -527,7 +527,7 @@ const splitBatches = [
 const batches = [
   { label: 'seeded', seed: 427285, numRuns: 30 },
   ...splitBatches,
-  ...Array.from({ length: 4 }, (_, index) => ({ label: `random batch ${index + 3}`, numRuns: 50 })),
+  ...Array.from({ length: 8 }, (_, index) => ({ label: `random batch ${index + 3}`, numRuns: 25 })),
 ];
 
 async function checkUndo(commands: Iterable<fc.AsyncCommand<Model, Real>>, undoAll: boolean): Promise<void> {

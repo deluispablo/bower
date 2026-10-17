@@ -11,11 +11,11 @@ for (const width of [375, 1440]) {
       test.skip(isFake, 'scenario=slow keeps the boot up past 3 s only on the demo source');
       // Keep the slow demo's two session reads pending past 3.5 s.
       await page.addInitScript(() => { Math.random = () => 0.99; });
+      // Install and pause before the page loads (playwright.dev/docs/clock): the clock then stands still from the first
+      // script, so no machine speed can put it past a time read later. The two session reads still need more than 3.5 s.
       await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+      await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
       await page.goto('/?scenario=slow&time=instant');
-      await expect.poll(() => page.locator('#root').evaluate((root) => root.childElementCount)).toBeGreaterThan(0);
-      // Let React mount before pausing; the two sequential session reads still need more than 3.5 s.
-      await page.clock.pauseAt(await page.evaluate(() => new Date(Date.now())));
       const boot = page.locator('#boot');
       await expect(boot.locator('[data-boot-line]')).toHaveText('');
       await page.clock.runFor(3500);
