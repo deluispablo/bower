@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { report } from '@/ui/report';
+import { focusMain } from '@/ui/focus';
 import { useNavigate } from 'react-router';
 import { useSources } from '@/data/provider';
 import type { FileKind } from '@/data/types';
@@ -74,6 +75,21 @@ export function Add() {
   const camera = useRef<HTMLInputElement>(null);
   const zone = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
+  const list = useRef<HTMLUListElement>(null);
+
+  const remove = (key: string): void => {
+    if (saving.current) return;
+    const index = items.findIndex((it) => it.key === key);
+    forget(key);
+    setItems((x) => x.filter((it) => it.key !== key));
+    setTimeout(() => {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      const rows = list.current?.querySelectorAll<HTMLButtonElement>(':scope > li > button');
+      const next = rows?.[index] ?? rows?.[index - 1];
+      if (next) next.focus();
+      else focusMain();
+    }, 0);
+  };
 
   const add = (all: Array<Omit<Draft, 'key'> & { file?: Blob }>): void => {
     if (saving.current) return;
@@ -237,7 +253,7 @@ export function Add() {
       </div>
 
       {items.length > 0 && (
-        <ul className={s.items} aria-label="In this pile">
+        <ul ref={list} className={s.items} aria-label="In this pile">
           {items.map((it) => (
             <li key={it.key} data-pile-item>
               <span className={s.tile}>
@@ -252,11 +268,7 @@ export function Add() {
                       size="sm"
                       variant="ghost"
                       disabled={busy}
-                      onClick={() => {
-                        if (saving.current) return;
-                        forget(it.key);
-                        setItems((x) => x.filter((y) => y.key !== it.key));
-                      }}
+                      onClick={() => remove(it.key)}
                     >
                       Leave it out
                     </Button>
@@ -271,11 +283,7 @@ export function Add() {
                 className={s.remove}
                 aria-label={`Take ${it.name} out`}
                 disabled={busy}
-                onClick={() => {
-                  if (saving.current) return;
-                  forget(it.key);
-                  setItems((x) => x.filter((y) => y.key !== it.key));
-                }}
+                onClick={() => remove(it.key)}
               >
                 <Icon name="x" size={16} />
               </button>
