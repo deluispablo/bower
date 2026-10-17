@@ -58,8 +58,13 @@ describe('what the repository promises', () => {
     expect(config).not.toMatch(/"name":\s*"bower-api"/);
     expect(config).toMatch(/"name":\s*"bower-staging"/);
     expect(config).toMatch(/"not_found_handling":\s*"single-page-application"/);
-    expect(config).not.toContain('dedd167004be415cbd90c4b154b1f4e2');
-    expect(config).toMatch(/"binding":\s*"BOWER_KV",\s*"id":\s*"6969d46bffdb4b1e90d068f84235fbec"/);
+    // The real ids are read from the deploy scripts they live in, never spelled here (sec-hardening L1).
+    const production = /^PRODUCTION_KV='([0-9a-f]{32})'$/m.exec(read('scripts/deploy-staging.sh'))?.[1];
+    const staging = /^STAGING_KV='([0-9a-f]{32})'$/m.exec(read('scripts/deploy-lib.sh'))?.[1];
+    expect(production).toMatch(/^[0-9a-f]{32}$/);
+    expect(staging).toMatch(/^[0-9a-f]{32}$/);
+    expect(config).not.toContain(production);
+    expect(config).toMatch(new RegExp(`"binding":\\s*"BOWER_KV",\\s*"id":\\s*"${staging}"`));
   });
 
   it('the staging Worker keeps its logs and names its build', () => {

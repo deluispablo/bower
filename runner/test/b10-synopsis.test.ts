@@ -420,14 +420,16 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
   it('AC6 b10-synopsis-fabricated (guard): a figure in neither the original nor anything shown is refused as today', async () => {
     const made = JSON.parse(JSON.stringify(TAIL_REPLY).replace(/20 October/g, '23 October')) as unknown;
     const r = await press(await loaded(), { execution: () => made });
-    expect(errors()).toContain('a number that is in none of its sources: "23"');
+    // The log names only the fixed reason, never the figure (sec-hardening L4).
+    expect(errors()).toContain('(numbers): a number that is in none of its sources;');
+    expect(errors()).not.toContain('"23"');
     expect(report(r).filed).toHaveLength(0);
   });
 
   const TWO = { 'Long A.txt': `${words(3100)}\nFinal terms for A: reply by 14 March 2027.\n`, 'Long B.txt': `${words(3150, 'Alex labels paper trays for the plot today.')}\nFinal terms for B: reply by 23 May 2027.\n` };
   const CLAIMS: Array<[string, RegExp, (doc: string) => string]> = [
-    ['a figure only in the other document', /a number that is in none of its sources: "23"/, () => 'Reply by 23 May.'],
-    ['a figure only in the synopsis label', /a number that is in none of its sources: "3,?\d{3}"/, (doc) => `The guide runs to ${doc.trim().split(/\s+/).length.toLocaleString('en-US')} words.`],
+    ['a figure only in the other document', /\(numbers\): a number that is in none of its sources;/, () => 'Reply by 23 May.'],
+    ['a figure only in the synopsis label', /\(numbers\): a number that is in none of its sources;/, (doc) => `The guide runs to ${doc.trim().split(/\s+/).length.toLocaleString('en-US')} words.`],
   ];
   it.each(CLAIMS)('AC6 b10-synopsis-own-original (guard): with two long documents, %s is refused; each note is grounded in its own original only', async (_name, refused, claim) => {
     const r = await press(await loaded(TAIL, TWO), { synopsis: () => ({ statements: [{ text: 'Alex sows seed rows near the shed.', parts: [1] }] }),

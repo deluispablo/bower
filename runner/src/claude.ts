@@ -1082,9 +1082,17 @@ export const REFUSALS = {
   answerText: 'an answer that is not one plain line of at most 1,000 characters, with [[links]] only',
 } as const;
 export type RefusalKind = keyof typeof REFUSALS;
-type Refused = { ok: false; kind: RefusalKind; why: string };
+/** `quoted`: the reason quotes the reply or a note, so it is told to the model and never logged (sec-hardening L4). */
+type Refused = { ok: false; kind: RefusalKind; why: string; quoted?: true };
 /** A refusal of this kind, with its reason worded more closely when `why` is given. */
-const no = (kind: RefusalKind, why: string = REFUSALS[kind]): Refused => ({ ok: false, kind, why });
+const no = (kind: RefusalKind, why: string = REFUSALS[kind], quoted = false): Refused => ({ ok: false, kind, why, ...(quoted ? { quoted: true } : {}) });
+/** A reason that quotes the reply or a note: the model is told it, a log gives the kind's own sentence. */
+type Quoted = { quoted: string };
+const quoting = (why: string): Quoted => ({ quoted: why });
+/** What a log may print of a refusal: its reason, or its kind's own sentence when the reason quotes the reply or a note. */
+const logged = (r: Refused): string => (r.quoted ? REFUSALS[r.kind] : r.why);
+/** What a log may print of an error from a model call: a Bower sentence or the error's class, never its own words. */
+const faultOf = (error: unknown): string => (error instanceof BowerError ? error.message : error instanceof Error ? error.name : typeof error);
 
 type Intent = { ok: true; filing: Filing; held: Set<string> } | Refused;
 
@@ -1253,7 +1261,7 @@ const sourceBasisOk = (basis: unknown, owner: string, text: string | undefined):
  * folder, or a new direct subfolder of" the PARA folders, `vault-template/CLAUDE.md:232`; Areas hold an ongoing
  * responsibility, `:34-37`) and never checked it, so this check is new here. `basis` is a note path or a rule line it was shown.
  */
-function newPlace(to: string, basis: unknown, responsibility: unknown, seen: Seen, areas: Map<string, string>, owner: string): string | null {
+function newPlace(to: string, basis: unknown, responsibility: unknown, seen: Seen, areas: Map<string, string>, owner: string): Quoted | null {
   const [root = ''] = to.split('/');
   if (!seen.folders || !['Areas', 'Projects'].includes(root) || to === root || seen.folders.has(to)) return null;
   if (typeof basis === 'string' && (seen.notes.has(basis) || ruleLine(basis, seen.rules))) return null;
@@ -1271,7 +1279,7 @@ function newPlace(to: string, basis: unknown, responsibility: unknown, seen: See
     if (area.split('/').length === 2 && !areas.has(area)) areas.set(area, responsibility.trim());
     return null;
   }
-  return `a new folder "${to}" under ${root} with no rule line or note cited in "basis"${root === 'Areas' ? ' and no "responsibility" (one short phrase naming the ongoing responsibility)' : ''}; file it in an existing folder or in Resources`;
+  return quoting(`a new folder "${to}" under ${root} with no rule line or note cited in "basis"${root === 'Areas' ? ' and no "responsibility" (one short phrase naming the ongoing responsibility)' : ''}; file it in an existing folder or in Resources`);
 }
 
 /** The longest responsibility phrase a model may give for a new Area. */
@@ -1292,15 +1300,15 @@ const named = (kind: RefusalKind, keys: RefusalKind = kind): { error: (issue: { 
 /** One rule of a part: null while it holds, else its refusal. */
 type Rule<T> = (value: T) => Refused | null;
 /** A rule refused as `kind`: `ok` gives true, false (the kind's own reason) or a reason worded for this reply. */
-const rule = <T>(kind: RefusalKind, ok: (value: T) => boolean | string): Rule<T> => (value) => {
+const rule = <T>(kind: RefusalKind, ok: (value: T) => boolean | string | Quoted): Rule<T> => (value) => {
   const held = ok(value);
-  return held === true ? null : no(kind, held === false ? REFUSALS[kind] : held);
+  return held === true ? null : typeof held === 'object' ? no(kind, held.quoted, true) : no(kind, held === false ? REFUSALS[kind] : held);
 };
 /** A part's rules in order: the first broken one is its issue; when all hold, `then` keeps what passed. */
 const inOrder = <T>(rules: ReadonlyArray<Rule<T>>, then: (value: T) => void = () => {}) => (value: T, ctx: z.RefinementCtx): void => {
   for (const check of rules) {
     const broken = check(value);
-    if (broken) return ctx.addIssue({ code: 'custom', message: broken.kind, params: { why: broken.why }, input: value });
+    if (broken) return ctx.addIssue({ code: 'custom', message: broken.kind, params: { why: broken.why, quoted: broken.quoted }, input: value });
   }
   then(value);
 };
@@ -1456,12 +1464,12 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   // The numbers a thing's note or a line citing it may hold: its text, the admitted things' names, the piles' words, the notes shown.
   const names = [...admitted.values()].map((a) => a.name).join('\n');
   const common = seen.words === undefined ? null : groundsOf(`${names}\n${seen.words}\n${seen.shownNotes ?? ''}\n${seen.rules ?? ''}`);
-  const grounded = (fileId: string | undefined, texts: readonly string[], where: string): true | string => {
+  const grounded = (fileId: string | undefined, texts: readonly string[], where: string): true | Quoted => {
     if (!common) return true;
     const own = fileId === undefined ? null : groundsOf(seen.originals?.get(fileId) ?? seen.texts?.get(fileId) ?? '');
     for (const text of texts) {
       const n = ungrounded(text, own ? new Set([...common, ...own]) : common);
-      if (n) return `a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from the thing's text, the pile's words or the notes shown, or leave the figure out`;
+      if (n) return quoting(`a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from the thing's text, the pile's words or the notes shown, or leave the figure out`);
     }
     return true;
   };
@@ -1508,7 +1516,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }),
     rule('numbers', (v) => {
       const n = ungrounded(String(v.definition.title ?? ''), groundsOf(seen.requests?.get(v.requestId)?.text ?? ''));
-      return !n || `a number that is in none of its sources: "${n}" in the view title; write only figures from the person's request`;
+      return !n || quoting(`a number that is in none of its sources: "${n}" in the view title; write only figures from the person's request`);
     }),
     rule('viewBinding', (v) => seen.requests?.has(v.requestId) === true),
     rule('viewBinding', (v) => v.home.kind !== 'moc' || seen.maps?.has(v.home.fileId) === true),
@@ -1664,7 +1672,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const was = extensionOf(admitted.get(t.fileId)?.name ?? '');
       return nameOk(t.name) && (extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'));
     }),
-    rule('rawName', (t) => !RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) || `a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`),
+    rule('rawName', (t) => !RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) || quoting(`a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`)),
     rule('newFolder', (t) => newPlace(t.to, t.basis, t.responsibility, seen, areas, t.fileId) ?? true),
     // A saved link filed as a note is that note: it takes no second one.
     rule('noteForNote', (t) => t.note === undefined || extensionOf(t.name) !== '.md'),
@@ -1885,7 +1893,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     },
     rule('numbers', (a) => {
       const n = answerFigure(a);
-      return !n || `a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`;
+      return !n || quoting(`a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
   ], (a) => answered.set(seen.requests?.get(a.requestId)?.id ?? '', a.text.trim())));
   const whole: Array<Rule<unknown>> = [
@@ -1905,7 +1913,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
       for (const [id, place] of placed) {
         if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || seen.mocFolders?.has(place.to) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
-        return `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`;
+        return quoting(`a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`);
       }
       return true;
     }),
@@ -1984,8 +1992,9 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     return no('notIntent');
   }
   const kind = first.message as RefusalKind;
-  const why = first.code === 'custom' && typeof first.params?.why === 'string' ? first.params.why : REFUSALS[kind];
-  return no(kind, why);
+  const params = first.code === 'custom' ? first.params : undefined;
+  const why = typeof params?.why === 'string' ? params.why : undefined;
+  return no(kind, why ?? REFUSALS[kind], why !== undefined && params?.quoted === true);
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */
@@ -2215,8 +2224,9 @@ function linesOfReply(value: unknown, facts: readonly InputFact[]): Pick<Consoli
 
 export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: ScriptedRead): RunProvider {
   const token = setup.env.CLAUDE_CODE_OAUTH_TOKEN?.trim() || undefined;
-  const refuse = (why: string, stderr = '', invalidReply = false): never => {
-    const tail = stderr.trim() ? `; claude said: ${stderr.trim().slice(-2000)}` : '';
+  // `why` is a fixed reason: claude's stderr may quote the model or a note, so only its exit code and length are logged.
+  const refuse = (why: string, exit?: ClaudeExit, invalidReply = false): never => {
+    const tail = exit ? `; claude exited ${exit.code} with ${exit.stderr.trim().length} characters on stderr` : '';
     console.error(hidden(`The Claude provider's plan for run ${run.runId} is refused: ${why}${tail}`, token));
     throw invalidReply ? new InvalidModelReply() : new BowerError('unknown', PLAN_REFUSED);
   };
@@ -2264,7 +2274,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const got = intentOf(value, took, { notes: new Set(), types, tagList: readTagList(tagFile ? await read.readText(tagFile.id) : null), folderCandidates: new Set(folders.map((f) => f.id)),
           requests, sets: reader.sets, noteTypes: reader.noteTypes, stored: new Set([fileId]) });
         const m = got.ok ? got.filing.maps?.[0] : undefined;
-        if (!got.ok || !m) { console.error(hidden(`The stored part of ${a.question.id} was refused (${got.ok ? 'no map' : `${got.kind}: ${got.why}`}); its yes settles with no change.`, token)); continue; }
+        if (!got.ok || !m) { console.error(hidden(`The stored part of ${a.question.id} was refused (${got.ok ? 'no map' : `${got.kind}: ${logged(got)}`}); its yes settles with no change.`, token)); continue; }
         if (m.pending) { out.push({ ...m, answer: a.id }); continue; }
         const inPart = new Set(part.members);
         const now = new Set(m.members);
@@ -2495,21 +2505,23 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         timing.addModel(exit ? statsOf(exit.stdout) : null, kind);
       }
       const reply = replyOf(exit, maxTurns);
-      if (!reply.ok && reply.kind === null) return refuse(reply.why, exit.stderr, reply.invalidReply);
+      if (!reply.ok && reply.kind === null) return refuse(reply.why, exit, reply.invalidReply);
       return reply;
     };
     const twice = async <T extends { ok: true }>(input: string, kind: CallKind, check: (value: unknown) => T | Refused | null | Promise<T | Refused | null>): Promise<T> => {
       let why = 'The reply is outside the frozen selection or its bounds.';
+      let said = why;
       for (let attempt = 0; attempt < 2; attempt++) {
         const reply = await call(attempt ? withRetryNote(input, why) : input, kind, model, systemFile);
         const value = reply.ok ? await check(reply.value) : reply;
         if (value?.ok) return value;
         if (value && value.kind !== null) {
           why = value.why;
-          if (!attempt) console.error(hidden(`The Claude provider's plan for run ${run.runId} was refused (${value.kind}): ${why}; asking once more.`, token));
+          said = logged(value);
+          if (!attempt) console.error(hidden(`The Claude provider's plan for run ${run.runId} was refused (${value.kind}): ${said}; asking once more.`, token));
         }
       }
-      return refuse(why, '', true);
+      return refuse(said, undefined, true);
     };
     /** One memory call: its JSON, or why none; a failed, cut, exhausted or throwing call never stops the run (R25). */
     const ask = async (input: string, on: string, kind: CallKind): Promise<{ ok: true; value: unknown } | { ok: false; why: string }> => {
@@ -2517,8 +2529,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const reply = await call(input, kind, on);
         return reply.ok ? reply : { ok: false, why: reply.why };
       } catch (error) {
-        return { ok: false, why: error instanceof LedgerExhausted ? "the run's model time is used up"
-          : error instanceof Error ? error.message : String(error) };
+        return { ok: false, why: error instanceof LedgerExhausted ? "the run's model time is used up" : faultOf(error) };
       }
     };
     /** A skip loses nothing (R25): no retry, no event, no archive; the next learning run asks again. */
@@ -2546,7 +2557,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const faults = lineFaults(ledger, reply);
       const checked = reply.lines.flatMap((line, i) => {
         if (faults[i] === null) return [{ n: i + 1, line }];
-        console.error(hidden(`The consolidation of run ${run.runId} refuses line ${i + 1} (${faults[i]}): ${line.text}`, token));
+        console.error(hidden(`The consolidation of run ${run.runId} refuses line ${i + 1} (${faults[i]}).`, token));
         return [];
       });
       if (!checked.length) return skipped('no line passed the checks');
@@ -2561,7 +2572,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
       const accepted = checked.filter(({ n }) => {
         const verdict = verdicts.data.verdicts.find((v) => v.n === n);
-        if (!verdict?.supported) console.error(hidden(`The consolidation of run ${run.runId} drops line ${n}, which the judge rejects: ${verdict?.reason ?? ''}`, token));
+        if (!verdict?.supported) console.error(hidden(`The consolidation of run ${run.runId} drops line ${n}, which the judge rejects.`, token));
         return verdict?.supported === true;
       });
       if (!accepted.length) return skipped('the judge supported no line');
@@ -2584,10 +2595,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           reply = await call(`${SYNOPSIS_PROMPT}\n${JSON.stringify({ synopsis: { name: thing.name, words: long.words, parts: parts.map((text, i) => ({ n: i + 1, text })) } })}`, undefined, SUMMARY_MODEL);
         } catch (error) {
           if (error instanceof LedgerExhausted) throw error;
-          limit(`The synopsis of a long text was not made: ${error instanceof Error ? error.message : String(error)}`);
+          limit(`The synopsis of a long text was not made: ${faultOf(error)}`);
           continue;
         }
-        if (!reply.ok) { limit(`The synopsis of a long text was not made: ${reply.why}`); continue; }
+        if (!reply.ok) { limit(`The synopsis of a long text was not made: ${reply.kind ?? 'no reply'}`); continue; }
         const statements = synopsisOf(reply.value, parts);
         if (typeof statements === 'string') { limit(`The synopsis of a long text was refused (${statements}): ${SYNOPSIS_REFUSALS[statements]}; the planner sees the part that fits.`); continue; }
         thing.text = `Bower's synopsis of the whole text (${long.words.toLocaleString('en-US')} words, read whole):\n${statements.map((s) => `- ${s}`).join('\n')}`;
@@ -2704,7 +2715,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const named = isRecord(row.note) && typeof row.note.name === 'string' ? row.note.name : undefined;
           const same = named === undefined ? undefined : [...ix.filesIn(path ?? ''), ...shown.notes.flatMap((n) => ix.file(n.path) ?? [])]
             .find((f) => indexed[f.id]?.owner === 'bower' && nearName(f.name) === nearName(named))?.name;
-          if (same !== undefined) return no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`);
+          if (same !== undefined) return no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`, true);
         }
         const canEdit = (row: Record<string, unknown>, line?: AuthoredLine): boolean => {
           const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
