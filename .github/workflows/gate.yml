@@ -1,0 +1,279 @@
+# The merge gate (docs/runbook.md, "The CI gate"): every step of the local check and the end-to-end suites, on a
+# pushed sdd/batch-* branch. scripts/ci-gate.sh pushes the branch and waits for this run.
+name: gate
+
+on:
+  push:
+    branches: ['sdd/batch-*']
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Also run the demo on phone (before a backup or deployment)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Each branch has its own group; a new push cancels only that branch's older run.
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+# Tells the worker budget (testing/workers.ts) this machine is all ours: no other heavy run shares it.
+env:
+  HARNESS_LOCK: ci
+  HARNESS_LOCK_HELD: ci
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm -C api lint
+      - run: pnpm -C runner lint
+
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm -C api typecheck
+      - run: pnpm -C runner typecheck
+
+  unit-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  unit-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C api test
+
+  unit-runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C runner test
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C runner build
+      - run: pnpm build
+      - run: node scripts/check-bundle.mjs
+
+  repo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-duplication-gate.mjs
+      - run: node scripts/check-unused-gate.mjs
+      - run: node scripts/check-dependencies.mjs
+      - run: node scripts/fix-landing.mjs --check
+
+  e2e-fake-phone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_SOURCE: fake
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright test --project=phone --shard=${{ matrix.shard }}/5 --max-failures=5 --reporter=list,blob --trace=retain-on-failure
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-fake-phone-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  e2e-fake-desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_SOURCE: fake
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright test --project=desktop --shard=${{ matrix.shard }}/5 --max-failures=5 --reporter=list,blob --trace=retain-on-failure
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-fake-desktop-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  e2e-demo-desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright test --project=desktop --shard=${{ matrix.shard }}/3 --max-failures=5 --reporter=list,blob --trace=retain-on-failure
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-demo-desktop-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  e2e-demo-phone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ inputs.full }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright test --project=phone --shard=${{ matrix.shard }}/3 --max-failures=5 --reporter=list,blob --trace=retain-on-failure
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-demo-phone-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  e2e-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [e2e-fake-phone, e2e-fake-desktop, e2e-demo-desktop, e2e-demo-phone]
+    if: ${{ failure() }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: all-blob-reports
+      # Every shard's zip has the same file name; give each its artifact's name so none overwrites another.
+      - run: |
+          find all-blob-reports -mindepth 2 -name '*.zip' -exec sh -c 'mv "$1" "all-blob-reports/$(basename "$(dirname "$1")")-$(basename "$1")"' _ {} \;
+      - run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

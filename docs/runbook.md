@@ -76,6 +76,16 @@ Tidy-ups run as GitHub Actions in a private repository of the owner's, for examp
 
 Run `scripts/new-instance.sh` again whenever `runner/` changed.
 
+## The CI gate
+
+GitHub Actions runs the merge gate: `.github/workflows/gate.yml` runs every step of `pnpm check` as parallel jobs and the `pnpm e2e` suites (fake on phone and desktop, demo on desktop) in shards, on Linux runners only. Only the coordinator runs the two commands; workers never push.
+
+1. **Run it:** `scripts/ci-gate.sh sdd/batch-N`. It accepts only a branch named `sdd/batch-<name>`, pushes it to `backup` (the private `deluispablo/bower-app`) without force, finds the run of that commit, waits for it, and prints one line, `ci-gate: sdd/batch-N <conclusion> (run <id>)`. It exits 0 only when the conclusion is `success`. On any other conclusion it also prints the last 150 lines of the failing log and exits 1. If no run appears within about two minutes it says so and exits 1. Two batches can be in flight: each branch has its own run.
+2. **After `sdd integrate`:** `scripts/ci-gate.sh --cleanup sdd/batch-N` deletes the remote branch (`git push backup --delete`). Only accepted `main` stays on `backup`.
+3. **A batch push is not a backup.** The rule "`pnpm e2e:full` before a backup or deployment" is for backing up `main`. For that, run the workflow by hand with `full` on (Actions, gate, Run workflow, `full`), which also runs the demo on phone, or run `pnpm e2e:full` locally.
+4. **Read a failure.** The terminal shows the failing log tail. For the whole run open it on GitHub (`gh run view <id> --web`). A failed e2e shard uploads its blob report, and the `e2e-report` job merges them into one artifact, `playwright-report`, kept 7 days: download it (`gh run download <id> -n playwright-report`), then `pnpm exec playwright show-report playwright-report` shows each failure with its trace. Passing runs upload nothing.
+5. **Until the first green run, the local gate stays in force** (`pnpm check` plus `pnpm e2e`). A failure only seen on Linux (a script or test that assumes macOS) is fixed at its cause in a follow-up task, never worked around in the workflow. Watch the run's billable minutes (Settings, Billing) and tune the shard counts in the workflow if the longest job is far from about 10 minutes.
+
 ## Deploys
 
 Only the technical lead deploys, from a clean checkout of the new local `main`.

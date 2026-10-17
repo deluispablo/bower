@@ -22,7 +22,7 @@ pnpm e2e:full       # all four (fake and demo, phone and desktop), before a back
 pnpm e2e:pwa        # the built app: manifest, service worker, offline start
 ```
 
-Every change runs `pnpm check` plus the touched screens' e2e (`pnpm e2e:fake <specs>`); `pnpm e2e` before merging to `main`; `pnpm e2e:full` before a backup or deployment. After a failure, rerun the failing suite with `--last-failed` before the whole gate. Heavy runs share one lock (`testing/with-lock.sh`). Test fixtures, the synthetic corpus and the gate baselines live in `testing/`.
+Every change runs `pnpm check` plus the touched screens' e2e (`pnpm e2e:fake <specs>`); before merging to `main`, `scripts/ci-gate.sh sdd/batch-N` pushes the batch branch to the private backup (never with force) and waits for the GitHub Actions run, which replaces the local `pnpm check` plus `pnpm e2e` once it has run green once (`scripts/ci-gate.sh --cleanup sdd/batch-N` deletes the branch after integration); `pnpm e2e:full` before a backup of `main` or a deployment. After a failure, rerun the failing suite with `--last-failed` before the whole gate. Heavy runs share one lock (`testing/with-lock.sh`). Test fixtures, the synthetic corpus and the gate baselines live in `testing/`.
 
 ## Where the data comes from
 
