@@ -27,7 +27,7 @@ Gates: `pnpm check` plus the touched screens' e2e (`pnpm e2e:fake <specs>`) for 
 ## Hard rules
 
 - No personal data: names, places, companies, emails and vault content are made up (`Alex`, `you@example.com`, `FOLDER_ID`). The one exception: the owner's GitHub links (`github.com/deluispablo`, its `bower` repo), which the landing needs as a portfolio.
-- Development stays local. Only accepted local `main` is backed up to the private `deluispablo/bower-app`; no other branch or tag, no force push, no deployment without the owner. No secrets in the repo.
+- The coordinator has the owner's standing authorization (2026-10-17): push accepted `main`, `sdd/batch-*` branches (CI only, deleted after integration) and tags to the private `deluispablo/bower-app`, back up, and deploy to staging and production with the runbook's scripts. Never force push; workers never push. No secrets in the repo.
 - English everywhere. UI copy: sentence case, plain words, never "vault", no file names or jargon in sentences. Bower is a bowerbird, never "the bird" in copy.
 - TypeScript strict, no `any`. Errors are never swallowed: a `BowerError` with one short sentence for the person, details to `console.error`.
 - The app never hard-deletes (Drive Bin only), never writes the runner's files in `.bower/` (including `index.md`, `hot.md` and `log.md` there), nor Bower's sections of a note. Every content write passes the modifiedTime it read; a move or rename checks the name and place it read (`stillAsSeen`), since a text change elsewhere does not clash with it.

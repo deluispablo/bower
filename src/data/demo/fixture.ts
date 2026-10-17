@@ -164,7 +164,7 @@ export type HubUpdate = { path: string; what: string; cites?: string; onlyCited?
 
 /** The hub notes a full tidy-up brings up to date, as both the demo and the pretend runner do. */
 export const HUB_UPDATES: readonly HubUpdate[] = [
-  { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example' },
+  { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A new listing added to the shortlist.', cites: 'listing-88213.example' },
   { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.', cites: 'Offer_letter_final(2).pdf' },
   // Across projects: the flat came in the same pile as the offer.
   { path: 'Projects/Job hunt/Job hunt.md', what: 'A flat from the same pile went to the flat hunt.', cites: 'listing-88213.example', onlyCited: true },

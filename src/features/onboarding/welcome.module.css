@@ -13,5 +13,5 @@
 .check { color: var(--success); }
 .foot { margin-top: auto; padding-top: 24px; display: flex; flex-direction: column; gap: 10px; }
 .dots { display: flex; gap: 6px; margin-bottom: 24px; }
-.dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-strong); }
+.dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--control-line); }
 .dots .dotOn { background: var(--brand); width: 22px; border-radius: 4px; }

@@ -603,9 +603,12 @@ export class DemoWorld {
         const f: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: folder };
         cited.set(item.name, plan.note ? { source: displayName(nameOf(plan.note)), path: plan.note } : { source: kindOf(name) === 'note' ? displayName(name) : name, path });
         if (plan.note) {
-          this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
+          // A note already in the folder is joined, not written: it stays as it was, and is not new.
+          if (!this.entries.has(plan.note)) {
+            this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
+            created.push({ path: plan.note, what: `A note for ${thingName(name)}.` });
+          }
           f.note = plan.note;
-          created.push({ path: plan.note, what: `A note for ${thingName(name)}.` });
         }
         filed.push(f);
       }
