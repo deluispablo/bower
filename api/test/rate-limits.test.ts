@@ -167,7 +167,7 @@ it('requests refused by session, origin, lease or folder checks are not counted'
   expect(s.vault.limit).not.toHaveBeenCalled();
 });
 
-it('OAuth checks precede counting and callback refusal stays a 429', async () => {
+it('OAuth checks precede counting and a callback refusal lands on the sign-in', async () => {
   const s = setup();
   expect((await s.app.request(`${ORIGIN}/auth/callback?code=test&state=test`, {}, s.env)).status).toBe(302);
   expect((await s.app.request(`${ORIGIN}/auth/callback?error=access_denied`, {}, s.env)).status).toBe(302);
@@ -179,8 +179,9 @@ it('OAuth checks precede counting and callback refusal stays a 429', async () =>
   const refused = await s.app.request(`${ORIGIN}/auth/callback?code=test&state=test`, {
     headers: { ...headers, cookie: `${OAUTH_COOKIE}=${oauth}` },
   }, s.env);
-  expect(refused.status).toBe(429);
-  expect(refused.headers.get('Retry-After')).toBe('60');
+  expect(refused.status).toBe(302);
+  expect(refused.headers.get('location')).toBe(`${base.APP_ORIGIN}/sign-in?signin=failed`);
+  expect(refused.headers.getSetCookie().some((c) => c.startsWith(`${OAUTH_COOKIE}=;`) && c.includes('Max-Age=0'))).toBe(true);
   expect(s.fetchImpl).not.toHaveBeenCalled();
   const alex = await someone();
   const generation = (await alex.person.account())?.generation;

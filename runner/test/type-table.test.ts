@@ -4,10 +4,8 @@ import { isHidden } from '../../src/data/vault/layout';
 
 // Optional exports turn an unimplemented contract into an assertion, never a load error.
 // Keep the import variable: Vite must not resolve a not-yet-created module at collection.
-const moduleUrl = new URL('../src/type-table.ts', import.meta.url);
+const contractUrl = new URL('../../src/data/contracts/note-format.ts', import.meta.url);
 async function contract<T>(name: string): Promise<T> {
-  const contractUrl = ['typeTableOk', 'propertyValuesOk', 'insertTypeRow', 'requestTableColumn'].includes(name)
-    ? new URL('../../src/data/contracts/note-format.ts', import.meta.url) : moduleUrl;
   const path = contractUrl.href;
   const module: Record<string, unknown> = existsSync(contractUrl) ? await import(/* @vite-ignore */ path) : {};
   const value = module[name];

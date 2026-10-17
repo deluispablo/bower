@@ -291,7 +291,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   else await status.post('reading', totalOf(seen.total));
   await status.post('writing', totalOf(seen.total));
   const context = createOwnershipContext();
-  const plan = admittedPlan(token, drive, opts.provider(drive, rootId, context));
+  const plan = admittedPlan(grant.manifest, drive,opts.provider(drive, rootId, context));
   const end = await timing.time('apply', () => runOperations({
     rootId,
     runId: opts.runId,
@@ -314,7 +314,8 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   if (end.state === 'failed') {
     console.error(end.why);
     await seen.retain?.(clock());
-    await status.post('failed', { failure: UNREADABLE });
+    // A plan refused after its chain was read changed nothing: the ordinary failure; records never read claim nothing (I1).
+    await status.post('failed', { failure: seen.chain === null ? UNREADABLE : B_FAILURE });
     return { phase: 'failed', why: end.why };
   }
 

@@ -48,7 +48,7 @@ import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
-import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
+import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, openFolder, readForFence, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
 import { askingKey, publicQuestion, answeredAskings, checkedAnswer, pileQuestion, subjectPile, type PublicQuestion, type QuestionAnswer, type QuestionRound, openQuestions } from '../contracts/questions';
 
 export interface DriveVaultOptions {
@@ -331,7 +331,11 @@ export class DriveVault implements VaultSource {
     const out = moveEntry(ix.entries(), path, toFolder, Date.now());
     if (out === path) return path;
     const to = ix.idOf(toFolder);
-    if (!to) throw new BowerError('not-found', 'That folder is no longer there.');
+    // The folder read right before the send (`openFolder`, as the runner's fence): binned elsewhere, the note would follow it.
+    if (!to || !openFolder(await readForFence(byId(this.drive, to), isNoAnswer))) {
+      console.error(`Refused a move into ${toFolder}: the folder is gone or in the Bin`);
+      throw new BowerError('not-found', 'That folder is no longer there.');
+    }
     const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
     const name = nameOf(out);
     const patch = { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) };

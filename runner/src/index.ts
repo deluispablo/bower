@@ -1,6 +1,6 @@
 /** Derived maintenance uses the manifest, its settled outcomes and the ordinary fenced effects. */
 import { sha256Hex } from '../../src/data/contracts/hashes';
-import { frontValues, indexedFront, lintFacts, noteRefusal, propertyValue, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
+import { frontValues, indexedFront, lintFacts, noteRefusal, ownershipError, propertyValue, readTypeTable, timelineBullets } from '../../src/data/contracts/note-format';
 import type { TypeRow, TypeTable } from '../../src/data/contracts/types';
 import { computedBy, VIEW_LIMITS } from '../../src/data/contracts/view-format';
 import { evaluateAggregate, evaluateFormulas, EVALUATOR_VERSION, inSetFolder, setMembers, storedFormulas, storedViews, viewBlock, type SetNote } from './views';
@@ -23,8 +23,7 @@ import { BowerError } from '../../src/data/types';
 import { isFormulaRecord, isRunnerPath, SYSTEM, isHidden, isRunnerFile, type FormulaOutput, type RetrievalFile, type ViewRecord } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { RunnerDrive } from './drive';
-import { applyChanges, isBowerMoc, timelineDate } from '../../src/data/contracts/note-edit';
-import { leafCount, mocEdit, mocMembership, mocSnapshot, noteLinks, type Notes } from './moc';
+import { applyChanges, isBowerMoc, leafCount, mocEdit, mocMembership, mocSnapshot, noteLinks, timelineDate, type Notes } from '../../src/data/contracts/note-edit';
 
 import type { Outcome } from '../../src/data/contracts/run-checkpoint';
 import { isJournalRecord, pairsOf, type JournalRecord } from '../../src/data/contracts/journal-record';
@@ -204,17 +203,6 @@ export const hotTarget: DeclaredTarget = {
       const day = timelineDate(line.at);
       return day && !undone.has(line.id) ? [{ id: line.id, at: new Date(line.at).toISOString(), text: line.what }] : [];
     });
-    // Inverses keep their own wording. Only a primary whole-run request supplies Undo's label.
-    if (journal.some((line) => line.undoes !== undefined && !undone.has(line.id))) {
-      for (const source of sources.values()) {
-        if (!source.path.startsWith(SYSTEM.changes + '/') || source.path.startsWith(SYSTEM.archive + '/')) continue;
-        const request = parsed(source.text);
-        if (isJournalRecord(request) && request.kind === 'request' && request.text === 'Undo the last tidy-up'
-          && !journal.some((line) => line.id === request.id)) {
-          changes.push({ id: request.id, at: new Date(request.at).toISOString(), text: request.what });
-        }
-      }
-    }
     // The settled run's report is its journal of Bower changes; proposed rows never enter hot.
     const operations = manifest.operations.filter((op) => op.effect.kind !== 'maintain');
     for (const contribution of manifest.reportPlan) {
@@ -630,7 +618,7 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
         const hashes = new Map(await Promise.all(formulas.map(async (f) => [f.id, (await canonical(f)).hash] as const)));
         const listed = typed.filter(([, n]) => n.owner === 'bower' && n.type === row.id);
         // Counted from the listing before any read (R15): over the bound no formula computes and every record stays.
-        if (formulas.some((f) => evaluateFormulas(f, row, listed.map(([id]) => ({ id, properties: {} })), asOf) === 'over')) {
+        if (formulas.length && listed.length > VIEW_LIMITS.notes) {
           for (const [id] of listed) keep(id);
           continue;
         }
@@ -876,8 +864,12 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   const aboutDeclaration = ledgerFile || hasLedgerEffect ? await aboutTarget.declare?.(drive, manifest, ix, snapshot) : undefined;
   const ledgerText = aboutDeclaration?.sources.find((s) => s.path === '.bower/observations.jsonl')?.text ?? '';
   const aboutBefore = aboutDeclaration?.sources.find((s) => s.path === 'About me.md')?.text;
-  const aboutRendered = ledgerText ? aboutTarget.render(aboutDeclaration, { v: 1, folderId: rootId, account: state?.account ?? rootId, cursor, files: snapshot }, [], manifest) : undefined;
-  const needsAbout = hasLedgerEffect || !!ledgerText && (typeof aboutRendered === 'object' && aboutRendered.text !== aboutBefore);
+  // A damaged About me is skipped like any damaged note: logged, left as it is, and the rest of the run goes on.
+  const aboutOwnership = aboutBefore === undefined ? undefined : parseOwnership(new TextEncoder().encode(aboutBefore));
+  const aboutDamaged = aboutOwnership?.status === 'invalid';
+  if (aboutOwnership?.status === 'invalid') console.error(ownershipError(aboutOwnership.reason));
+  const aboutRendered = ledgerText && !aboutDamaged ? aboutTarget.render(aboutDeclaration, { v: 1, folderId: rootId, account: state?.account ?? rootId, cursor, files: snapshot }, [], manifest) : undefined;
+  const needsAbout = !aboutDamaged && (hasLedgerEffect || !!ledgerText && (typeof aboutRendered === 'object' && aboutRendered.text !== aboutBefore));
   if (!needsAbout && !state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   // A folder without a health note keeps the cursor-only press (R21). Once Bower keeps one, a lost note or a note
   // still not checked is a coverage change it owes the person (TL-P4-50 Q7, R22, R26).
@@ -915,7 +907,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       if (lint) note.lint = lint;
     } catch (error) {
       if (!(error instanceof BowerError) || error.code !== 'not-found') note.lint = unreadable(error);
-      else console.error(error);
+      else { console.error(error); drop(id); }
     }
   })));
   // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
@@ -955,8 +947,8 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     const note = snapshot[id];
     if (note?.moc) note.members = members;
   }
-  listing = [...files.values()];
-  const own = ix.file(SYSTEM.dir);
+  listing = [...files.values()].filter((f) => ix.byId(f.id));
+  const own =ix.file(SYSTEM.dir);
   if (!own?.folder) throw unavailable();
   const logDeclaration: MaintenanceDeclaration = { at: new Date(manifest.requestedAt).toISOString(), sources: [] };
   const tags = ix.file(SYSTEM.tags);
@@ -1208,6 +1200,8 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         write.settle(settled.state === 'applied' ? { file: settled.evidence.file, text: result.text } : 'refused');
       }
       let last: Settled | undefined;
+      // A refused map's outcome ends the maintain only when no target applied (ruling R1).
+      let refused: Settled | undefined;
       // Person-facing projections, then retrieval (holding the health id), health and the log (R20).
       const rank = (target: NonNullable<Maintain['inputs']['targets']>[number]): number =>
         target.kind === 'log' || target.kind === 'log-folder' ? 3 : target.kind === 'health' ? 2 : Number(target.path === SYSTEM.retrieval);
@@ -1305,15 +1299,23 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
         // Reconciliation always reads live evidence; only this fresh precheck reuses exact declared bytes.
         if (kind?.cachedCheck && before && beforeContent) cachedCheck = { file: file(before), trashed: false,
           content: { size: beforeContent.size, sha256: beforeContent.sha256 } };
+        let written: Settled;
         try {
-          last = await ordinary.apply(sub, subHead(target.fileId), w, manifest, async () => target.fileId);
+          written = await ordinary.apply(sub, subHead(target.fileId), w, manifest, async () => target.fileId);
         } finally {
           cachedCheck = undefined;
         }
-        if (last.state !== 'applied') {
-          if (kind === aboutTarget) return last;
-          throw unavailable();
+        if (written.state !== 'applied') {
+          if (kind === aboutTarget) return written;
+          if (kind || !owned) throw unavailable();
+          // A map the person saved after Bower read it: their change wins, as in the formulas loop (R10); its figures
+          // claim nothing and the next run reads it whole.
+          figures.forget(target.fileId);
+          console.error(new BowerError(written.failure.code, written.failure.message), { operationId: op.operationId, fileId: target.fileId });
+          refused = written;
+          continue;
         }
+        last = written;
         if (health) reached.health = last;
         if (owned && state.files[target.fileId]) {
           state.files[target.fileId] = { ...state.files[target.fileId] as MaintenanceNote,
@@ -1322,7 +1324,10 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
           state.listing = state.listing?.map((f) => f.id === target.fileId ? file(written) : f);
         }
       }
-      if (!last) throw unavailable();
+      if (!last) {
+        if (refused) return refused;
+        throw unavailable();
+      }
       // Even a fully reconciled partial effect was already named by the opening checkpoint.
       await sending();
       return last;

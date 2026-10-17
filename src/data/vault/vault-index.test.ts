@@ -93,3 +93,37 @@ describe('reading what this device has seen', () => {
     spy.mockRestore();
   });
 });
+
+describe('audit-write-speed', () => {
+  it('AC2 audit-write-speed-linear-reindex: a folder of many things is indexed without copying its list once per thing', () => {
+    const many = 2000;
+    const files = [dir('d', 'Big', 'R'), ...Array.from({ length: many }, (_, i) => f(`n${i}`, `Note ${i}.md`, 'd'))];
+    // A spread of an array calls its iterator: counted (by hand, since a spy itself spreads), a list copied per child
+    // shows as one call per child.
+    // `concat` and `slice` copy a list without its iterator: counted too, so either one per child shows the same.
+    const original = { iterator: Array.prototype[Symbol.iterator], concat: Array.prototype.concat, slice: Array.prototype.slice };
+    let calls = 0;
+    let ix: VaultIndex;
+    Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+      calls++;
+      return original.iterator.call(this);
+    };
+    Array.prototype.concat = function (this: unknown[], ...items: unknown[]) {
+      calls++;
+      return original.concat.apply(this, items);
+    };
+    Array.prototype.slice = function (this: unknown[], start?: number, end?: number) {
+      calls++;
+      return original.slice.call(this, start, end);
+    };
+    try {
+      ix = VaultIndex.build('R', files);
+    } finally {
+      Array.prototype[Symbol.iterator] = original.iterator;
+      Array.prototype.concat = original.concat;
+      Array.prototype.slice = original.slice;
+    }
+    expect(ix.pathOf(`n${many - 1}`)).toBe(`Big/Note ${many - 1}.md`);
+    expect(calls).toBeLessThan(many / 10);
+  });
+});

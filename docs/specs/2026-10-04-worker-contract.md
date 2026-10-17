@@ -99,8 +99,8 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
   - `run_id` is `<person object id, hex>-<random>`, so the Worker routes a runner call to the right person object without any lookup. It reveals nothing about the person.
   - The workflow's `run-name` is `tidy <run_id> <attempt>`, with a concurrency group per `run_id` and no `cancel-in-progress` (R3).
   - A 204 means "accepted, not yet observed", never "started".
-- **Ticket.** 32 random bytes, base64url, minted per attempt. The person object keeps only its SHA-256, the `run_id`, the attempt and an expiry of 60 minutes. A new attempt replaces the ticket, so an older attempt's ticket stops working. A ticket is retired when its run reaches `done` or `failed`. It is never logged.
-- **`GET /runner/runs/:id/token`** with `Authorization: Bearer <ticket>` → `{ accessToken, expiresAt, folderId, attempt }`.
+- **Ticket.** 32 random bytes, base64url, minted per attempt. The person object keeps only its SHA-256, the `run_id`, the attempt and an expiry of 65 minutes (two queued stale windows, the job's 30-minute timeout and a minute for the last report). A new attempt replaces the ticket, so an older attempt's ticket stops working. A ticket is retired when its run reaches `done` or `failed`. It is never logged.
+- **`GET /runner/runs/:id/token`** (`?fresh=1` after Drive said 401) with `Authorization: Bearer <ticket>` → `{ accessToken, expiresAt, folderId, attempt }`.
 - **`POST /runner/runs/:id/status`** with the same header and `{ attempt, seq, phase, total?, failure? }` → `{ run, revision }`.
   - `seq` rises with each report of an attempt. A repeat of the last `seq` returns the current state and changes nothing; a lower one is refused.
   - A phase only moves forward along `queued` → `reading` → `writing` → `saving` → `done` | `failed`. The phase a person sees never moves back, even across attempts.

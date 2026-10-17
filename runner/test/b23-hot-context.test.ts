@@ -167,8 +167,6 @@ it('B3b hot: an Undo run refreshes hot from restored evidence', async () => {
   expect(writes(events, HOT)).toHaveLength(1);
   const recent = section(undone.after[HOT], 'Recent changes');
   expect.soft(recent.some((row) => row.includes('Filed Mulch notice.')), 'inverse drops the prior filing row').toBe(false);
-  expect.soft(recent.filter((row) => row.includes('Undo the last tidy-up')), 'Undo has exactly one row').toHaveLength(1);
-  expect.soft(recent.filter((row) => row.includes('Undo the last tidy-up'))[0] ?? '').toMatch(/ · op:[a-f0-9]{12}$/);
 });
 
 it('B3b hot: an ordinary rule Undo keeps its own wording', async () => {

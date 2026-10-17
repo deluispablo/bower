@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
-import * as moc from '../src/moc';
+import * as moc from '../../src/data/contracts/note-edit';
 import { candidates, fileIntent, folder, HUB, note, report, run, select, setup } from './b1-planning-support';
 import { AT } from './corpus-run';
 import { paging } from './drive-v3';

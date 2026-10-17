@@ -224,16 +224,11 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
     // base64 of 32 zero bytes: a fixture, not a real key.
     TOKEN_ENC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
     GITHUB_TOKEN: 'test-github-token',
-    ADMIN_KEY: 'test-admin-key',
-    VAPID_PUBLIC_KEY: 'test-vapid-public-key',
-    VAPID_PRIVATE_KEY: 'test-vapid-private-key',
     APP_ORIGIN: opts.origin,
     API_ORIGIN: opts.origin,
     APP_VERSION: '0.1.0',
     GITHUB_REPO: 'OWNER/REPO',
-    VAPID_SUBJECT: 'mailto:you@example.com',
     DAILY_RUN_LIMIT: '100',
-    DEFAULT_MAX_TURNS: '60',
     TEMPLATE_FOLDER_NAME: 'Bower',
   } as unknown as Env;
   const app = createApp({ fetchImpl: (input, init) => opts.outside(input, init) });

@@ -83,7 +83,8 @@ export const useToasts = create<Toasts>((set, get) => {
     },
     press: (id) => {
       const t = get().list.find((x) => x.id === id);
-      if (!t?.action) return;
+      // A press while its action runs runs nothing; `replace` clears the holder, so its new action can be pressed.
+      if (!t?.action || held.get(id)?.has('action')) return;
       const ran = t.action.run();
       if (!(ran instanceof Promise)) {
         get().dismiss(id);

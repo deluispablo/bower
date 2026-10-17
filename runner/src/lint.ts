@@ -41,8 +41,16 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
     const place = (placed.get(path) ?? path).replace(/\.md$/i, '');
     return (shared.get(title(path).toLowerCase()) ?? 0) > 1 ? `[[${place}]]` : `[[${place}|${title(path)}]]`;
   };
-  const targets = files.flatMap(keys);
-  const notePaths = sorted.map((note) => ({ path: note.path, keys: keys(note.path) }));
+  // One lookup by last path segment narrows the candidates; `matches` still decides within them (a bucket of notes
+  // sharing a name is scanned whole, which stays small in a folder).
+  const lastOf = (s: string): string => s.slice(s.lastIndexOf('/') + 1);
+  const bySegment = <T,>(items: readonly T[], keysOf: (item: T) => string[]): Map<string, Array<{ item: T; key: string }>> => {
+    const map = new Map<string, Array<{ item: T; key: string }>>();
+    for (const item of items) for (const key of keysOf(item)) map.set(lastOf(key), [...(map.get(lastOf(key)) ?? []), { item, key }]);
+    return map;
+  };
+  const targets = bySegment(files, keys);
+  const notePaths = bySegment(sorted.map((note) => note.path), keys);
   const unchecked = sorted.filter((note) => !note.lint && !note.refused);
   const broken: string[] = [];
   const inbound = new Map<string, number>();
@@ -50,13 +58,13 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
     for (const raw of note.lint?.links ?? []) {
       const target = linkTarget(raw).replace(/^\/+/, '');
       if (!target) continue;
-      if (!targets.some((key) => matches(key, target))) {
+      if (!targets.get(lastOf(target))?.some(({ key }) => matches(key, target))) {
         if (placed.get(note.path)) broken.push(`- Broken link in ${link(note.path)}: no note is called ${raw.split(/[#^]/)[0]?.trim() ?? raw}.`);
         continue;
       }
       // Self-links never count; a title two notes share counts for both, as Obsidian picks one of them.
-      for (const other of notePaths) {
-        if (other.path !== note.path && other.keys.some((key) => matches(key, target))) inbound.set(other.path, (inbound.get(other.path) ?? 0) + 1);
+      for (const { item: other, key } of notePaths.get(lastOf(target)) ?? []) {
+        if (other !== note.path && matches(key, target)) inbound.set(other, (inbound.get(other) ?? 0) + 1);
       }
     }
   }

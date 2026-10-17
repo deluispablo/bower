@@ -77,14 +77,11 @@ export function base64UrlEncodeString(value: string): string {
 }
 
 /**
- * Imports the operator's `TOKEN_ENC_KEY`: standard base64 (with padding)
- * of exactly 32 random bytes. Returns a non-extractable AES-256-GCM key
- * usable only to encrypt and decrypt. Throws `CryptoError('bad_key')`
- * otherwise.
+ * The one check of the operator's `TOKEN_ENC_KEY` (`importEncryptionKey` and
+ * `assertEnv` both use it): standard base64 (with padding) of exactly 32
+ * bytes. Returns the bytes; throws `CryptoError('bad_key')` otherwise.
  */
-export async function importEncryptionKey(
-  base64Key: string,
-): Promise<CryptoKey> {
+export function encryptionKeyBytes(base64Key: string): Uint8Array {
   if (!BASE64_RE.test(base64Key) || base64Key.length % 4 !== 0) {
     throw new CryptoError('bad_key', 'Encryption key is not valid base64');
   }
@@ -95,6 +92,18 @@ export async function importEncryptionKey(
       `Encryption key must be ${KEY_BYTES} bytes`,
     );
   }
+  return raw;
+}
+
+/**
+ * Imports the operator's `TOKEN_ENC_KEY` (`encryptionKeyBytes`). Returns a
+ * non-extractable AES-256-GCM key usable only to encrypt and decrypt.
+ * Throws `CryptoError('bad_key')` otherwise.
+ */
+export async function importEncryptionKey(
+  base64Key: string,
+): Promise<CryptoKey> {
+  const raw = encryptionKeyBytes(base64Key);
   try {
     return await crypto.subtle.importKey(
       'raw',
