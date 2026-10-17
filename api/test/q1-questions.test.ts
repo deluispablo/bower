@@ -33,7 +33,7 @@ async function aRun() {
   expect(admitted.admitted).toBe(true);
   if (!admitted.admitted) throw new Error('Expected an admitted Q1c fixture run');
   const dispatched: Array<{ run_id: string; attempt: number; ticket: string }> = [];
-  const github = { repo: env.GITHUB_REPO, token: 'made-up-token', fetchImpl: async (_url: string, init?: RequestInit) => {
+  const github = { repo: env.GITHUB_REPO, apiOrigin: env.API_ORIGIN, token: 'made-up-token', fetchImpl: async (_url: string, init?: RequestInit) => {
     if (init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as { client_payload: { run_id: string; attempt: number; ticket: string } };
       dispatched.push(body.client_payload);

@@ -196,6 +196,28 @@ describe('tidy.yml', () => {
     expect(steps[path]).not.toContain('cache-hit');
     expect(at(/name: Tidy up with Claude\n/)).toBeGreaterThan(Math.max(install, path));
   });
+  it('BOWER_API_URL stays a list: the origin is appended once, other entries kept, never a substring match', () => {
+    const at = instance();
+    const variable = join(at.vars, 'BOWER_API_URL');
+    const other = 'https://api.example.org';
+    // Unset: the plain origin, no leading comma.
+    expect(run(at).status).toBe(0);
+    expect(readFileSync(variable, 'utf8')).toBe(ORIGIN);
+    // Another Worker's origin: appended at the end, nothing dropped.
+    writeFileSync(variable, ` ${other} , ${ORIGIN}x `);
+    const added = run(at);
+    expect(added.status).toBe(0);
+    expect(readFileSync(variable, 'utf8')).toBe(`${other},${ORIGIN}x,${ORIGIN}`);
+    // Already listed (exact entry): untouched, and the line names the origin.
+    const again = run(at);
+    expect(again.output).toContain(`already lists ${ORIGIN}`);
+    expect(readFileSync(variable, 'utf8')).toBe(`${other},${ORIGIN}x,${ORIGIN}`);
+    expect(readFileSync(at.log, 'utf8').split('variable set').length).toBe(3);
+    // An empty variable is the plain origin.
+    writeFileSync(variable, '');
+    run(at);
+    expect(readFileSync(variable, 'utf8')).toBe(ORIGIN);
+  }, 120_000);
   it('the workflow records the runner region and never fails on it', () => {
     const tidy = readFileSync(join(ROOT, 'runner', 'workflows', 'tidy.yml'), 'utf8');
     const steps = tidy.split(/\n(?= {6}- )/).slice(1);

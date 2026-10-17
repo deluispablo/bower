@@ -37,7 +37,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
-import { formulaInstalled, MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
+import { formulaInstalled, MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName, WAITING_WHY } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, propertyKeyOk, sameJson, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
 import { VIEW_LIMITS, computedBy, setFault, viewFault, type Predicate } from '../../src/data/contracts/view-format';
@@ -1021,7 +1021,8 @@ const nameOk = (name: unknown): name is string => typeof name === 'string' && pa
 /**
  * Every reason Bower refuses a model's reply, by kind (TL-P4-08 addendum 4). Each one asks the model once more with
  * its reason (validate, then ask again with the error: Instructor, retrying,
- * https://python.useinstructor.com/concepts/retrying/); a second refusal ends the run as C12 does.
+ * https://python.useinstructor.com/concepts/retrying/); a second refusal drops the sources it names when its kind is
+ * item-level (`ITEM_LEVEL`), and ends the run otherwise, as C12 does.
  */
 export const REFUSALS = {
   notJson: 'a result that is not JSON',
@@ -1098,8 +1099,22 @@ export const REFUSALS = {
   lineTarget: 'a line or state on a note not selected for the thing, pile or request it cites',
 } as const;
 export type RefusalKind = keyof typeof REFUSALS;
-/** `quoted`: the reason quotes the reply or a note, so it is told to the model and never logged (sec-hardening L4). */
-type Refused = { ok: false; kind: RefusalKind; why: string; quoted?: true };
+/**
+ * The kinds that refuse one row of a reply, so after the retry only the source the row names (a pile or a request) waits for
+ * the next tidy-up and the rest goes on (partial-success batch APIs, the dead-letter pattern). An allow-list: a new kind is
+ * reply-level until it is listed, and so is any kind that cannot be traced to an admitted source.
+ */
+const ITEM_LEVEL: ReadonlySet<RefusalKind> = new Set<RefusalKind>([
+  'nameChangesKind', 'rawName', 'numbers', 'newFolder', 'noteForNote', 'noteName', 'noteSummary', 'noteBody', 'noteSections', 'noteLink',
+  'noteMdLink', 'noteWeb', 'noNote', 'lineNote', 'lineText', 'lineCites', 'lineUncited', 'lineMarker', 'lineAlsoCites', 'stateNote',
+  'stateText', 'stateCites', 'askNotes', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget']);
+/**
+ * `quoted`: the reason quotes the reply or a note, so it is told to the model and never logged (sec-hardening L4).
+ * `source`: the pile (`pileId`) or request (journal file id) the refused row names, when it names one.
+ */
+type Refused = { ok: false; kind: RefusalKind; why: string; quoted?: true; source?: string };
+/** A refusal located on the source its row names. */
+const at = (refused: Refused, source: string | undefined): Refused => (source === undefined ? refused : { ...refused, source });
 /** A refusal of this kind, with its reason worded more closely when `why` is given. */
 const no = (kind: RefusalKind, why: string = REFUSALS[kind], quoted = false): Refused => ({ ok: false, kind, why, ...(quoted ? { quoted: true } : {}) });
 /** A reason that quotes the reply or a note: the model is told it, a log gives the kind's own sentence. */
@@ -1326,7 +1341,7 @@ const rule = <T>(kind: RefusalKind, ok: (value: T) => boolean | string | Quoted)
 const inOrder = <T>(rules: ReadonlyArray<Rule<T>>, then: (value: T) => void = () => {}) => (value: T, ctx: z.RefinementCtx): void => {
   for (const check of rules) {
     const broken = check(value);
-    if (broken) return ctx.addIssue({ code: 'custom', message: broken.kind, params: { why: broken.why, quoted: broken.quoted }, input: value });
+    if (broken) return ctx.addIssue({ code: 'custom', message: broken.kind, params: { why: broken.why, quoted: broken.quoted, source: broken.source }, input: value });
   }
   then(value);
 };
@@ -1930,14 +1945,14 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return markerText(l.marker, l.text, kept.find((k) => k.other === path)?.kept.split('/').at(-1) ?? nameIn(seen, l.alsoCites)).length <= AUTHORED.line;
     }) || `a Timeline line past ${AUTHORED.line} characters with the label and source Bower adds, named as kept: shorten its words`),
     // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
-    rule('noNote', () => {
+    () => {
       const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
       for (const [id, place] of placed) {
         if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || seen.mocFolders?.has(place.to) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
-        return quoting(`a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`);
+        return at(no('noNote', `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`, true), admitted.get(id)?.pileId);
       }
-      return true;
-    }),
+      return null;
+    },
     () => {
       for (const [id, n] of authored) {
         // Each field is scanned on its own: an unclosed fence in one never hides a link in another (C06 gap 8).
@@ -2015,7 +2030,25 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
   const kind = first.message as RefusalKind;
   const params = first.code === 'custom' ? first.params : undefined;
   const why = typeof params?.why === 'string' ? params.why : undefined;
-  return no(kind, why ?? REFUSALS[kind], why !== undefined && params?.quoted === true);
+  const [section, index] = first.path;
+  const row = isRecord(value) && typeof section === 'string' && Array.isArray(value[section]) && typeof index === 'number' ? (value[section] as unknown[])[index] : undefined;
+  // An empty path (a rule over the whole reply) is located only when the rule names its source itself.
+  const source = typeof params?.source === 'string' ? params.source : sourceOf(typeof section === 'string' ? section : '', row, took.taken.piles, seen.requests);
+  return at(no(kind, why ?? REFUSALS[kind], why !== undefined && params?.quoted === true), source);
+}
+
+/**
+ * The source a reply row names, or undefined when it names none the run was admitted to take: the pile of the thing or
+ * pile it files, asks about or cites, or the request (its journal file id) it cites, answers or binds a view or map to.
+ */
+function sourceOf(section: string, row: unknown, piles: Admitted['taken']['piles'], requests: ReadonlyMap<string, unknown> | undefined): string | undefined {
+  if (!isRecord(row)) return undefined;
+  const id = { things: row.fileId, notes: row.pileId, asks: row.fileId ?? row.pileId, askAfter: row.pileId, lines: row.cites, states: row.cites,
+    answers: row.requestId, views: row.requestId, maps: row.requestId }[section as 'things'];
+  if (typeof id !== 'string') return undefined;
+  if (requests?.has(id)) return id;
+  if (['answers', 'views', 'maps'].includes(section)) return undefined;
+  return piles.find((p) => p.pileId === id || thingsOf(p).some((i) => i.fileId === id))?.pileId;
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */
@@ -2311,10 +2344,25 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const count = itemCount + took.taken.journal.length;
     let tagList: ReturnType<typeof readTagList> | undefined;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
+    // The sources (a pile's id, a request's journal file id) a refusal of the reply's second try left for the next tidy-up, by that refusal's kind.
+    const dropped = new Map<string, RefusalKind>();
+    const cut = (name: string): string => {
+      if (name.length <= MAX_NAME) return name;
+      let out = '';
+      for (const ch of name) { if (out.length + ch.length > MAX_NAME - 1) return `${out}…`; out += ch; }
+      return out;
+    };
+    /** One row per dropped source, as the person's own words or file name show it, never the reply's (rulings 6, 14, 15). */
+    const waitingRows = (requestText: (id: string) => string | undefined): NonNullable<RunManifest['waiting']> => [
+      ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => cut(p.anchor?.name ?? thingsOf(p)[0]?.name ?? p.items[0]?.name ?? p.pileId)),
+      ...took.taken.journal.filter((l) => dropped.has(l.fileId)).map((l) => cut(requestText(l.fileId)?.trim() || l.name)),
+    ].map((name) => ({ name, why: WAITING_WHY }));
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, journal = took.taken.journal): Promise<RunManifest> => {
       const t = { ...took.taken, journal };
-      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context, tagList }, undefined, held);
-      const manifest: RunManifest = plan.manifest;      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES, false);
+      const waiting = dropped.size ? new Set([...held ?? [], ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => p.pileId)]) : held;
+      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context, tagList }, undefined, waiting);
+      const manifest: RunManifest = dropped.size ? { ...plan.manifest, waiting: waitingRows((id) => requests.get(id)?.text) } : plan.manifest;
+      const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES, false);
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
       const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
       if (stray) return refuse(stray);
@@ -2526,9 +2574,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       return reply;
     };
     // Every check names its refusal (F5, ruling 6): no silent path, so the retry note and the log always say which.
-    const twice = async <T extends { ok: true }>(input: string, kind: CallKind, check: (value: unknown) => T | Refused | Promise<T | Refused>): Promise<T> => {
+    // `drop` (the execution call only) prunes the source a second, item-level refusal names from the reply; no model call.
+    const twice = async <T extends { ok: true }>(input: string, kind: CallKind, check: (value: unknown) => T | Refused | Promise<T | Refused>,
+      drop?: (value: unknown, refused: Refused) => Promise<unknown>): Promise<T> => {
       let why = '';
       let said = '';
+      let last: { value: unknown; refused: Refused } | undefined;
       for (let attempt = 0; attempt < 2; attempt++) {
         const reply = await call(attempt ? withRetryNote(input, why) : input, kind, model, systemFile);
         const value = reply.ok ? await check(reply.value) : reply;
@@ -2536,7 +2587,17 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (value.kind === null) return refuse(value.why, undefined, value.invalidReply);
         why = value.why;
         said = logged(value);
+        last = reply.ok ? { value: reply.value, refused: value } : undefined;
         if (!attempt) console.error(hidden(`The Claude provider's plan for run ${run.runId} was refused (${value.kind}): ${said}; asking once more.`, token));
+      }
+      // Each pass drops at least one source, so it ends; a refusal no source can take ends the run.
+      while (drop && last && ITEM_LEVEL.has(last.refused.kind) && last.refused.source !== undefined) {
+        const pruned = await drop(last.value, last.refused);
+        if (pruned === null) break;
+        const again = await check(pruned);
+        if (again.ok) return again;
+        said = logged(again);
+        last = { value: pruned, refused: again };
       }
       return refuse(said, undefined, true);
     };
@@ -2692,6 +2753,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const installing = new Set([...filing.views ?? [], ...filing.suggestions?.views ?? [], ...filing.maps ?? []].map((v) => v.requestId));
         return took.taken.journal.filter((line) => {
           const request = requests.get(line.fileId);
+          if (dropped.has(line.fileId)) return false;
           if (asked.answered.has(line.fileId) || installing.has(request?.id ?? '') || filing.answers?.has(request?.id ?? '')) return true;
           return (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)) && (!filing.answers?.size || !request
             || requestTargets(listing, ix, request.text).notes.length > 0 || ix.waitingRun(line.fileId) !== null);
@@ -2710,6 +2772,44 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         return [id, ask.options || places.length < 2 || places.length > 4 ? ask : { ...ask, options: places }] as const;
       }));
       const yesList = await yesMaps();
+      const from = (section: string, row: unknown): string | undefined => sourceOf(section, row, shownTook.taken.piles, requests);
+      // A pile with an answered place choice or a stored reask is planned whatever the reply says (the plan's `hasChoice`,
+      // `reaskOf`), so it cannot wait: a refusal on it ends the run (ruling 19). Read once, when a drop first needs it.
+      let choices: Set<string> | undefined;
+      const choiceOf = async (): Promise<Set<string>> => {
+        if (choices) return choices;
+        const file = ix.file(SYSTEM.questions);
+        const stored = file && !file.folder ? jsonOf(await read.readText(file.id)) : null;
+        const rounds = isRecord(stored) && Array.isArray(stored.rounds) ? stored.rounds.filter(isRecord).filter((r) => r.reask !== undefined) : [];
+        return choices = new Set([...rounds.flatMap((r) => [r.subject, r.pileId]).filter((s): s is string => typeof s === 'string'),
+          // An answer that chose an option is a place choice (the only options a question carries).
+          ...taken.answers.flatMap((a) => (typeof a.value === 'object' && 'option' in a.value ? [subjectKey(a.question) ?? ''] : []))]);
+      };
+      /** The reply without a source and every row naming it or a thing of it; null when no source goes or no row is left to do (ruling 1, PP-R6). */
+      const drop = async (value: unknown, refused: Refused): Promise<unknown> => {
+        const piles = shownTook.taken.piles;
+        const first = refused.source;
+        if (first === undefined || dropped.has(first) || !isRecord(value)) return null;
+        const pile = piles.find((p) => p.pileId === first);
+        if (pile && [...await choiceOf()].some((s) => s === pile.pileId || thingsOf(pile).some((i) => i.fileId === s))) return null;
+        const reply = structuredClone(value);
+        const pending = [first];
+        for (let source = pending.pop(); source !== undefined; source = pending.pop()) {
+          if (dropped.has(source)) continue;
+          dropped.set(source, refused.kind);
+          for (const section of ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'views', 'maps']) {
+            const rows: unknown = reply[section];
+            if (!Array.isArray(rows)) continue;
+            reply[section] = rows.filter((row) => {
+              if (sourceOf(section, row, piles, requests) !== source) return true;
+              // A request left with no line would be settled as "found nothing" (C05): the one a removed line's note names waits too.
+              if (isRecord(row) && typeof row.note === 'string') for (const [id, notes] of seen.requestNotes ?? []) if (notes.has(row.note)) pending.push(id);
+              return false;
+            });
+          }
+        }
+        return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'views', 'maps'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
+      };
       const intent = await twice(input, 'execution', async (value) => {
         await prepareMaps(value);
         const got = intentOf(value, shownTook, seen);
@@ -2722,18 +2822,19 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const chosen = (id: unknown) => selection.value.items.find((item) => item.itemId === id);
         for (const [key, row] of [...rows('things').map((r) => ['things', r] as const), ...rows('notes').map((r) => ['notes', r] as const)]) {
           const item = chosen(row.fileId ?? row.pileId);
-          if (!item) return no('thingPlace');
+          const source = from(key, row);
+          if (!item) return at(no('thingPlace'), source);
           // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder, and a pile-word note has none (TL-P4-47 Q6; B1: a selected visible note backs a new one).
-          if (indexCutAtSource && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return no('noteCut');
+          if (indexCutAtSource && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return at(no('noteCut'), source);
           const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
             : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
-          if (row.to !== path) return no('thingPlace');
-          if (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind) return no('thingType');
+          if (row.to !== path) return at(no('thingPlace'), source);
+          if (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind) return at(no('thingType'), source);
           // A note named like one of Bower's in that folder or shown is the same note: file into it, never beside it.
           const named = isRecord(row.note) && typeof row.note.name === 'string' ? row.note.name : undefined;
           const same = named === undefined ? undefined : [...ix.filesIn(path ?? ''), ...shown.notes.flatMap((n) => ix.file(n.path) ?? [])]
             .find((f) => indexed[f.id]?.owner === 'bower' && nearName(f.name) === nearName(named))?.name;
-          if (same !== undefined) return no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`, true);
+          if (same !== undefined) return at(no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`, true), source);
         }
         const canEdit = (row: Record<string, unknown>, line?: AuthoredLine): boolean => {
           const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
@@ -2751,7 +2852,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         for (const ask of rows('asks')) {
           if (ask.notes !== undefined) continue;
           const frozen = selection.value.asks.find((row) => row.fileId === ask.fileId && row.pileId === ask.pileId);
-          if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return no('askOptions');
+          if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return at(no('askOptions'), from('asks', ask));
         }
         // A MOC lists its notes itself and never takes a Timeline line: refuse the line so the thing is filed bare.
         if (rows('lines').some((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
@@ -2761,7 +2862,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           return [row.kept, row.other].every((path) => typeof path === 'string' && targets.includes(ix.idOf(path) ?? ''));
         }))) return no('keepNote');
         // Every reply line passed its rules, so the authored lines are the reply's, in order.
-        if (rows('lines').some((row, i) => !canEdit(row, got.filing.lines?.[i])) || rows('states').some((row) => !canEdit(row))) return no('lineTarget');
+        const unreachable = [...rows('lines').filter((row, i) => !canEdit(row, got.filing.lines?.[i])).map((row) => ['lines', row] as const),
+          ...rows('states').filter((row) => !canEdit(row)).map((row) => ['states', row] as const)][0];
+        if (unreachable) return at(no('lineTarget'), from(unreachable[0], unreachable[1]));
         got.filing.kinds = new Map(selection.value.items.map((item) => [item.itemId, rowFor(item)?.id ?? item.kind]));
         for (const row of rows('things')) {
           const item = chosen(row.fileId);
@@ -2776,7 +2879,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           }) || [...words.matchAll(/\p{Sc}/gu)].some(([currency]) => !own.includes(currency));
           // Its [[links]] passed the reply's one link rule (C06 R3): own and sibling sources too.
           if (addedCurrency || /\b(?:scores?|should|recommend|advice)\b/iu.test(words)
-            || bodyLinks(String(note.body ?? ''), own)) return no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link');
+            || bodyLinks(String(note.body ?? ''), own)) return at(no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link'), from('things', row));
         }
         // The limit counts what each map keeps once installed, its stored entries included (R22, R44).
         const mapViews = (got.filing.views ?? []).filter((v) => v.kind === 'moc');
@@ -2796,7 +2899,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           }
         }
         return got;
-      });
+      }, drop);
+      // Told once the run goes on without them, never for a run the dropping could not save.
+      for (const [source, why] of dropped) console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
       // A memory plan may also consolidate a section; a consolidation the planner cannot add is skipped, the plan kept.
       if (validatedPlan) {
         const shortened = await consolidation(validatedPlan);
