@@ -19,6 +19,7 @@ import type { FaultAction, FencedCall } from '../drive/fake-drive';
 import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type OperationV2, type ReportContribution } from '../contracts/run-manifest';
 import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
 import { grounded, groundedKeys } from '../spine/grounded';
+import { NOTHING_DONE, REQUEST_DONE } from '../spine/scripted';
 import { canonical } from '../spine/records';
 import { stampOf } from '../spine/write-once';
 import { md5Hex } from '../contracts/hashes';
@@ -1498,7 +1499,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   describe('journal changes take the recoverable path', () => {
     const FOUR = ['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf'];
-    const DONE = 'Done. See what changed in your folders.';
     const plan = async (w: { drive: FakeDrive; rootId: string }, scope: 'all' | 'instructions' = 'all') =>
       planRun(w.drive, w.rootId, { scope, allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
     type Line = { file: DriveFile; rec: JournalRecord };
@@ -1571,20 +1571,21 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(archive?.dependsOn).toContain(write?.operationId);
       expect(archive?.ordinal).toBeGreaterThan(write?.ordinal ?? Number.POSITIVE_INFINITY);
       expect(archive?.effect).toMatchObject({ name: line.file.name, properties: {} });
-      const rows = manifest?.reportPlan.filter((c) => c.value.requests !== undefined) ?? [];
-      expect(rows.map((c) => ({ when: c.when, value: c.value }))).toEqual([{ when: 'applied', value: { filed: [], created: [], updated: [], setAside: [], questions: [], requests: ['Put the lease papers together'] } }]);
-      expect(rows[0]?.requires).toEqual(expect.arrayContaining([write?.operationId, archive?.operationId]));
+      // qa7-refused-words: the pretend planner does nothing for it, so no row lists it; its archive's row counts no change.
+      expect(manifest?.reportPlan.filter((c) => c.value.requests !== undefined)).toEqual([]);
+      const rows = manifest?.reportPlan.filter((c) => c.requires.includes(archive?.operationId ?? '')) ?? [];
+      expect(rows.map((c) => ({ when: c.when, value: c.value }))).toEqual([{ when: 'applied', value: { filed: [], created: [], updated: [], setAside: [], questions: [], yourChanges: 0 } }]);
 
-      // Done in requests.json, the line archived once with its bytes, and the report names the request.
+      // Settled in requests.json as not done, the line archived once with its bytes, and the report does not call it done.
       const requests = JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile;
-      expect(requests.done).toEqual([{ id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: DONE }]);
+      expect(requests.done).toEqual([{ id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: NOTHING_DONE }]);
       expect(w.drive.pathOf(line.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${line.file.name}`);
       expect(movesOf(w, line.file.id)).toBe(1);
       expect(await w.drive.storedDigest(line.file.id)).toEqual(digest);
       expect(await linesOf(w)).toEqual([]);
       const report = viewOf(w)?.run.report;
-      expect(report?.requests).toEqual(['Put the lease papers together']);
-      expect(report?.yourChanges).toBeUndefined();
+      expect(report?.requests).toBeUndefined();
+      expect(report?.yourChanges ?? 0).toBe(0);
       expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
       await expectFiledOnce(w);
     });
@@ -1640,7 +1641,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(manifest?.operations.some((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.hashes)).toBe(false);
       for (const id of w.sources) expect(movesOf(w, id)).toBe(0);
       expect(await inboxPdfs(w.drive, w.rootId)).toEqual(w.sources);
-      expect(viewOf(w)?.run.report).toMatchObject({ filed: [], requests: ['Keep garden notes together'] });
+      // qa7-refused-words: the pretend planner does nothing for the request, so it is not listed done.
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [] });
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
       expect(await linesOf(w)).toEqual([]);
     });
 
@@ -1669,7 +1672,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const requests = JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile;
       expect(requests.done.filter((r) => r.id === asked.rec.id)).toHaveLength(1);
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.outcomes.every((o) => o.state === 'applied')).toBe(true);
-      expect(viewOf(w)?.run.report).toMatchObject({ requests: ['Put the lease papers together'], yourChanges: 1 });
+      // qa7-refused-words: the request the pretend planner did nothing for is not listed done; the folder counts once.
+      expect(requests.done.find((r) => r.id === asked.rec.id)?.done).toBe(NOTHING_DONE);
+      expect(viewOf(w)?.run.report).toMatchObject({ yourChanges: 1 });
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
       await expectFiledOnce(w);
     });
 
@@ -1732,8 +1738,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const after = await Promise.all(kept.map(async (f) => ({ id: f.id, text: await w.drive.readText(f.id), file: (await w.drive.evidence(f.id))?.file })));
       expect(after).toEqual(before);
       expect(w.drive.pathOf(asked.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${asked.file.name}`);
-      expect(viewOf(w)?.run.report).toMatchObject({ requests: ['Put the lease papers together'] });
-      expect(viewOf(w)?.run.report?.yourChanges).toBeUndefined();
+      // qa7-refused-words: the request the pretend planner did nothing for is not listed done, nor counted.
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
+      expect(viewOf(w)?.run.report?.yourChanges ?? 0).toBe(0);
       expect(bowerErrors(w).filter((e) => e.message === 'Bower could not read some of your changes; they stay for the next tidy-up.')).toHaveLength(1);
     });
 
@@ -1778,15 +1785,19 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(manifest?.capture.journal.map((j) => j.recordId)).toEqual(lines.slice(0, 20).map((l) => l.rec.id));
-      expect(viewOf(w)?.run.report?.requests).toEqual(texts.slice(0, 20));
+      // qa7-refused-words: the pretend planner does nothing for them: settled, each saying so, none listed done.
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
       const done = (JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile).done;
       expect(done.map((r) => r.text)).toEqual(texts.slice(0, 20).reverse());
+      expect(done.every((r) => r.done === NOTHING_DONE)).toBe(true);
       expect((await linesOf(w)).map((l) => l.rec.text)).toEqual([texts[20]]);
 
       const next = (await w.worker.process('instructions')).run;
       await w.runs.settled();
       expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
-      expect(viewOf(w)?.run.report?.requests).toEqual([texts[20]]);
+      // qa7-refused-words: the 21st is taken this time, and settled as not done.
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
+      expect((JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile).done[0]).toMatchObject({ text: texts[20], done: NOTHING_DONE });
       expect(await linesOf(w)).toEqual([]);
     });
 
@@ -1828,8 +1839,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (!line) throw new Error('missing journal line');
       // An earlier run completed it, but its line was not archived then.
       const requests = await fileAt(w, SYSTEM.requests);
-      const earlier = { id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: DONE };
-      const older = { id: 'REQUEST_OLDER', text: 'An older request', at: 0, done: DONE };
+      const earlier = { id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: REQUEST_DONE };
+      const older = { id: 'REQUEST_OLDER', text: 'An older request', at: 0, done: REQUEST_DONE };
       await w.drive.writeText(requests.id, `${JSON.stringify({ v: 1, done: [earlier, older] }, null, 2)}\n`, requests.modifiedTime);
       const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
@@ -1969,7 +1980,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(hashes.v).toBe(1);
       expect(Object.keys(hashes.hashes).every((h) => /^[0-9a-f]{64}$/.test(h))).toBe(true);
       for (const id of w.sources) expect(Object.values(hashes.hashes)).toContain(w.drive.pathOf(id, w.rootId));
-      expect(viewOf(w)?.run.report).toMatchObject({ requests: [LEASE], yourChanges: 1 });
+      // qa7-refused-words: the request the pretend planner did nothing for is not listed done.
+      expect(viewOf(w)?.run.report).toMatchObject({ yourChanges: 1 });
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
       expect(saying(w, 'Bower replaced its list of done requests, which it could not read.')).toHaveLength(1);
       expect(saying(w, 'Bower replaced its list of your files, which it could not read.')).toHaveLength(1);
       expect(saying(w, 'Bower replaced its list of questions, which it could not read.')).toHaveLength(1);
@@ -2087,7 +2100,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const dump = w.drive.dump(w.rootId);
       expect((JSON.parse(dump.get(SYSTEM.requests) ?? '') as RequestsFile).done.map((r) => r.text)).toEqual([LEASE]);
       expect(Object.values((JSON.parse(dump.get(SYSTEM.hashes) ?? '') as { hashes: Record<string, string> }).hashes)).toHaveLength(4);
-      expect(viewOf(w)?.run.report?.requests).toEqual([LEASE]);
+      // qa7-refused-words: the request the pretend planner did nothing for is settled, not listed done.
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
       // One file each, made once.
       for (const name of ['requests.json', 'hashes.json']) expect(w.calls.filter((c) => c.op === 'create-text' && c.name === name)).toHaveLength(1);
       await expectFiledOnce(w);

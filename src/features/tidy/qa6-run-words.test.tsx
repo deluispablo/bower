@@ -62,7 +62,7 @@ describe('AC1 a request that did nothing is not called done', () => {
     expect(runDetail(done('instructions', out.report))).not.toMatch(/\bdone\b/);
   });
 
-  it('AC1 qa6-run-words-lookup-missing: a lookup with the web on whose note is gone looks nothing up and is counted as read', async () => {
+  it('AC1 qa6-run-words-lookup-missing: a lookup with the web on whose note is gone looks nothing up and is not called done', async () => {
     // Removed in Drive, outside Bower: not one of the person's changes in Bower.
     const flat3 = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md');
     await drive.trash(flat3?.id ?? '');
@@ -71,8 +71,9 @@ describe('AC1 a request that did nothing is not called done', () => {
     if (out.phase !== 'done') throw new Error('the run failed');
     expect((await vault().requests())[0]?.done).toBe('Bower did not look anything up.');
     expect(out.report.requests ?? []).not.toContain(LOOKUP);
-    expect(out.report.yourChanges).toBe(1);
-    expect(runDetail(done('instructions', out.report))).toBe('1 change of yours read.');
+    // qa7-refused-words: a request is never one of your changes read.
+    expect(out.report.yourChanges ?? 0).toBe(0);
+    expect(runDetail(done('instructions', out.report))).not.toMatch(/changes? of yours/);
   });
 
   it('AC1 qa6-run-words-lookup-demo: the demo, which looks nothing up, does not call a lookup done on the sheet', async () => {

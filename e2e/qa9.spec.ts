@@ -87,10 +87,11 @@ test('on screen: an unresolved Add draft stays until its missing file is chosen 
 test('on screen: the result of a tidy-up names the request it did', async ({ page }) => {
   await open(page, '/bower');
   await page.getByRole('radio', { name: 'A request' }).click();
-  await page.getByLabel('Your request').fill('Put my visa papers together');
+  // qa7-refused-words: a request the run did nothing for is not done; a question it answers is.
+  await page.getByLabel('Your request').fill('Which flat is closest to Ferrowick?');
   await page.getByRole('button', { name: 'Send' }).click();
   await page.getByRole('button', { name: /Let Bower do it now/ }).first().click();
-  await expect(page.getByRole('dialog')).toContainText('"Put my visa papers together" done', { timeout: 10_000 });
+  await expect(page.getByRole('dialog')).toContainText('"Which flat is closest to Ferrowick?" done', { timeout: 10_000 });
 });
 
 test('a link follows a rename through a tidy-up', async ({ page, isMobile }) => {
