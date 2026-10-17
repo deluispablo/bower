@@ -1,3 +1,3 @@
 The committee letter confirms a known fee. File it beside Garden plot, add one sourced confirmation to Timeline, and make no redundant note or question. Preserve Alex's My plans and the earlier dated history. All links open.
 
-C15 transport proof is additional to this folder snapshot: supply a valid, scoped app-prepared extraction for these exact bytes through the production input boundary. Assert it is reused without extracting the source again, while source revalidation and write fences still hold. Compare with the no-package run for the same grounded result. case.json cannot supply that package today; this is a model fixture pending scripted input proof, not evidence that reuse already works.
+The app admits the source and its version; the runner extracts the current bytes within its existing text bounds. There is no app package. Selection and execution use that evidence without a synopsis.

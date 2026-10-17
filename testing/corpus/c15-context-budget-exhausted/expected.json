@@ -51,7 +51,8 @@
   "report": {
     "filed": 1,
     "created": [
-      "Projects/Move/Packing introduction.md"
+      "Projects/Move/Packing introduction.md",
+      "Bower health.md"
     ],
     "updated": [
       "Projects/Move/Move.md"

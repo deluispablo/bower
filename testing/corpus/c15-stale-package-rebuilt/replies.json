@@ -1,0 +1,20 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Visit update.txt",
+        "to": "Projects/Garden visit",
+        "name": "Visit update.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Garden visit/Garden visit.md",
+        "text": "The garden visit will meet at Wren Hall in Saltmere.",
+        "cites": "$file:Visit update.txt"
+      }
+    ]
+  }
+]

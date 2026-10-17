@@ -55,7 +55,7 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |
 | c13-manifest-partial-edited-note | agrees | Later personal text is protected and independent effects recover; point 8 requires the partial result, and point 1 permits an inbox return by undo without a question. |
 | c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
-| c15-more-context-bounded | agrees | The words ("papers for the move") make the place clear; the run says what it could not read. |
+| c15-more-context-bounded | agrees | The words ("papers for the move") establish fit; both supplied one-page PDFs are read whole and each gets a grounded source note. |
 | c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
 
 | c05-person-edited-between-runs | agrees | Point 3 permits compiled state changes only with ownership or permission; a later personal edit requires an ask and sourced history. |
@@ -81,8 +81,8 @@ method test selects c04–c15 ids and does not enforce C17. Registration stays H
 
 | c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
 
-| c15-ready-package-reused | agrees | Points 1, 2, 3, 7: a known fee fits the existing plot note and receives one sourced confirmation; preparation reuse changes no meaning or ownership. |
-| c15-stale-package-rebuilt | agrees | Points 1, 2, 3, 7: current source evidence supplies the venue and sourced history; stale preparation cannot invent facts or authorize a write. |
+| c15-ready-package-reused | agrees | Points 1, 2, 3, 7: a known fee fits the existing plot note and receives one sourced confirmation; the runner reads the admitted current source without changing ownership. |
+| c15-stale-package-rebuilt | agrees | Points 1, 2, 3, 7: current source evidence supplies the venue and sourced history; the runner reads the current letter and never invents the old venue. |
 | c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
 
 ## Changes
@@ -104,7 +104,7 @@ record the method re-check, not an executed model result.
 2. **c15-scanned-letter, `expected.json` and `rubric.md`.** Was: filed under `Resources/*scan0001.pdf`, the inbox
    empty, at most one question. Now: `Inbox/scan0001.pdf` stays, nothing filed, one question `q-ask-p-1`. Reason:
    point 1 ("a run never waits and never guesses"): with no words and no readable text, nothing says where it goes.
-   When the C15 slice reads scans, the case is checked again.
+   The C15 corpus keeps this outcome; OCR is outside its scope.
 
 ## Addendum 5 changes (`c04-prompt-fixes`)
 
@@ -274,3 +274,11 @@ B2's scalar path remains its accepted home.
 | c17-b10-complete-tail | agrees | Points 1–8: complete source fits Gardening, useful new material gets one linked source note and sourced deadline history, old personal prose/history survives, synopsis is bounded preparation and B2 scalar shares the create; cached derived words never become original authority (F12/F7). |
 | c17-b10-shared-budget | agrees | Points 1–8: five clear-fit originals remain intact with useful linked partial notes, no guessed tail facts, unnecessary asks, redundant copies or metadata repairs; all reading, summary calls and retries share the budget, and limits are visible honestly (F8). |
 | c17-b10-personal-original | agrees | Points 1–8 plus TL-P4-32/-42: the existing topic receives the unchanged personal Markdown, its metadata/prose/list/line endings are never re-serialized, no redundant summary note or false update appears, and quoted document instructions do not teach policy; read-only synopsis grants no edit. |
+
+## C15 corpus scope (R17)
+
+The five C15 cases now score through `main` with scripted replies. Their stable ids refer to
+admitted sources, whose current bytes the runner extracts. The packing guide stays partial at
+the text limit, while both short PDFs are read whole and require their own source notes.
+The rubrics no longer promise extraction reuse, stale artifacts, unread PDF pages or two context
+requests. The scan stays untouched with one question. First-run created lists include the health note.

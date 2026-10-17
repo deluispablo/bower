@@ -35,7 +35,9 @@
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "created": [],
+    "created": [
+      "Bower health.md"
+    ],
     "updated": [
       "Projects/Garden visit/Garden visit.md"
     ],
