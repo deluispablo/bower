@@ -68,7 +68,7 @@ async function setup(): Promise<{ drive: FakeDrive; noteId: string; page: DriveV
     })) as Promise<Pile>);
     fireEvent.change(field(), { target: { value: 'Words A' } });
     fireEvent.click(saveButton());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving…' })).toHaveAttribute('aria-disabled', 'true'));
     return async () => {
       release();
       await done;
