@@ -5,14 +5,17 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { nothingFound } from '@/app/words';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
 import type { SearchHit } from '@/data/types';
 import { loadingSources } from '@/testing/loading-sources';
 import { SearchPanel } from './SearchPanel';
 
-// The palette's sentence (src/features/palette/Palette.tsx; e2e/qa4-empty-listbox.spec.ts).
-const NOTHING = 'Nothing by that name or in your notes.';
+// The palette's sentence for the query these tests type (src/app/words.ts; e2e/qa4-empty-listbox.spec.ts).
+const NOTHING = nothingFound('zzzz');
+// Its start, whatever was typed.
+const NOTHING_SAID = 'Nothing called';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -76,7 +79,7 @@ describe('qa5-search-wording: panel states keep their words (R4)', () => {
     const p = pending();
     await p.type(value);
     expect(p.status()).toHaveTextContent(HINT);
-    expect(p.status()).not.toHaveTextContent(NOTHING);
+    expect(p.status()).not.toHaveTextContent(NOTHING_SAID);
     expect(p.calls).toHaveLength(0);
   });
 
@@ -84,7 +87,7 @@ describe('qa5-search-wording: panel states keep their words (R4)', () => {
     const p = pending();
     await p.type('zzzz');
     expect(p.status()).toHaveTextContent('Searching…');
-    expect(p.status()).not.toHaveTextContent(NOTHING);
+    expect(p.status()).not.toHaveTextContent(NOTHING_SAID);
   });
 
   it('R4 cleared input after a no-result search goes back to the hint', async () => {
@@ -94,7 +97,7 @@ describe('qa5-search-wording: panel states keep their words (R4)', () => {
     expect(p.status()).toHaveTextContent(NOTHING);
     await p.type('');
     expect(p.status()).toHaveTextContent(HINT);
-    expect(p.status()).not.toHaveTextContent(NOTHING);
+    expect(p.status()).not.toHaveTextContent(NOTHING_SAID);
   });
 
   it('R4 a failed search keeps its own sentence', async () => {
@@ -103,7 +106,7 @@ describe('qa5-search-wording: panel states keep their words (R4)', () => {
     await p.type('zzzz');
     await act(async () => p.answer(0).reject(new Error('down')));
     expect(p.status()).toHaveTextContent('Search did not work. Try again.');
-    expect(p.status()).not.toHaveTextContent(NOTHING);
+    expect(p.status()).not.toHaveTextContent(NOTHING_SAID);
     err.mockRestore();
   });
 
@@ -114,10 +117,10 @@ describe('qa5-search-wording: panel states keep their words (R4)', () => {
     expect(p.calls.map((c) => c.q)).toEqual(['zz', 'zzz']);
     await act(async () => p.answer(0).resolve([]));
     expect(p.status()).toHaveTextContent('Searching…');
-    expect(p.status()).not.toHaveTextContent(NOTHING);
+    expect(p.status()).not.toHaveTextContent(NOTHING_SAID);
     await act(async () => p.answer(1).resolve([hit(1)]));
     expect(p.status()).toHaveTextContent('1 match');
-    expect(p.status()).not.toHaveTextContent(NOTHING);
+    expect(p.status()).not.toHaveTextContent(NOTHING_SAID);
   });
 });
 

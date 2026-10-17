@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { NOTHING_FOUND } from '@/app/words';
+import { useEffect, useRef, useState } from 'react';
+import { nothingFound } from '@/app/words';
+import { ClearSearch } from '@/ui/ClearSearch';
 import { useSources } from '@/data/provider';
 import type { SearchHit } from '@/data/types';
 import { fieldBox, Input } from '@/ui/Field';
@@ -34,15 +35,24 @@ export function SearchPanel({ focus = true }: { focus?: boolean }) {
   // Results only for the query on screen: older answers never show for a newer query.
   const shown = q.trim() && result?.q === q ? result.hits : null;
   const searching = !!q.trim() && result?.q !== q;
+  const failed = result?.q === q && result.failed;
+  const nothing = !failed && shown?.length === 0;
+  const input = useRef<HTMLInputElement>(null);
   return (
     <div className={s.panel}>
       <label className={fieldBox({ pill: true })}>
         <Icon name="search" size={18} />
-        <Input inBox type="search" autoFocus={focus} placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input ref={input} inBox type="search" autoFocus={focus} placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
-      <p className={s.hint} role="status">
-        {searching ? 'Searching…' : result?.q === q && result.failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : shown.length === 0 ? NOTHING_FOUND : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
+      <p className={s.hint} role="status" style={{ overflowWrap: 'anywhere' }}>
+        {searching ? 'Searching…' : failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : nothing ? nothingFound(q) : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
       </p>
+      {/* Outside the status, so the sentence is announced alone. */}
+      {nothing && (
+        <div className={s.hint}>
+          <ClearSearch onClear={() => (setQ(''), input.current?.focus())} />
+        </div>
+      )}
       <ul className={s.results}>
         {(shown ?? []).map((h) => (
           <li key={h.path}>
