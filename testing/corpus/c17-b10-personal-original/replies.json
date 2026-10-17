@@ -1,0 +1,23 @@
+[
+  {
+    "kind": "synopsis",
+    "name": "Field diary.md",
+    "statements": [
+      {
+        "text": "Alex keeps a garden diary about labels, tape and trays.",
+        "parts": ["$part:Alex keeps  two spaces"]
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Field diary.md",
+        "to": "Resources/Gardening",
+        "name": "Field diary.md"
+      }
+    ]
+  }
+]

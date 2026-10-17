@@ -24,6 +24,12 @@ import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-
 
 export const AT = Date.UTC(2026, 9, 7, 9);
 
+/** The planner's two phases are told apart for `claude`; a synopsis call (B10) goes to it as it is, in no phase. */
+function withPhases(claude: ClaudeSpawn, fixture: () => PlanningFixture): ClaudeSpawn {
+  const phased = phaseAwareClaude(claude, fixture);
+  return (call) => 'synopsis' in (JSON.parse(call.input.split('\n').at(-1) ?? '{}') as object) ? claude(call) : phased(call);
+}
+
 async function ensureFolder(drive: FakeDrive, root: string, cache: Map<string, string>, path: string): Promise<string> {
   let parent = root;
   let at = '';
@@ -280,7 +286,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const model = claude ? phaseAwareClaude(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
+  const model = claude ? withPhases(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : {}), ...(pacing ? { pacing } : {}) });
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
@@ -300,7 +306,7 @@ export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: 
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: dispatch.runId, attempt, ticket: TICKET, scope: dispatch.scope, allow_web: c.allowWeb } }));
   const claude = options.claude;
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const model = claude ? phaseAwareClaude(claude, () => ({ drive: previous.drive, root: previous.root, admission: dispatch.admission })) : undefined;
+  const model = claude ? withPhases(claude, () => ({ drive: previous.drive, root: previous.root, admission: dispatch.admission })) : undefined;
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, {
     fetch: options.around ? options.around(wire.fetch) : wire.fetch,
     ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
@@ -331,7 +337,22 @@ async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record
 }
 
 /** Bind only exact admitted names to ids; the intent still passes the existing Claude provider's validation. */
-export function replySequence(replies: unknown[]): ClaudeSpawn {
+export function replySequence(all: unknown[]): ClaudeSpawn {
+  // B10 (R15): `{"kind": "synopsis", "name"}` entries answer a long text's synopsis call by name; the execution turns skip them.
+  type Statement = { text: string; parts: unknown[] };
+  const isSynopsis = (r: unknown): r is { name: string; statements: Statement[] } => (r as { kind?: string } | null)?.kind === 'synopsis';
+  const replies = all.filter((r) => !isSynopsis(r));
+  const exit = (value: unknown) => ({ code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(value), usage: { input_tokens: 10, output_tokens: 10 } }) });
+  /** `$part:<phrase>` is the first part holding the phrase; no part holding it is a failure, never another part. A text with no entry is refused empty. */
+  const synopsis = (ask: { name: string; parts: Array<{ n: number; text: string }> }) => exit({
+    statements: all.find((r): r is { name: string; statements: Statement[] } => isSynopsis(r) && r.name === ask.name)?.statements.map((st) => ({ text: st.text,
+      parts: st.parts.map((part) => {
+        if (typeof part !== 'string' || !part.startsWith('$part:')) return part;
+        const n = ask.parts.find((x) => x.text.includes(part.slice(6)))?.n;
+        if (!n) throw new Error(`Scripted synopsis names a phrase no part holds: ${part}`);
+        return n;
+      }) })) ?? [],
+  });
   const execution = async (call: ClaudeCall, turn: number) => {
     const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
     const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
@@ -362,7 +383,7 @@ export function replySequence(replies: unknown[]): ClaudeSpawn {
       return value;
     };
     const intent = bind(replies[Math.min(turn, replies.length - 1)]);
-    return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } }) };
+    return exit(intent);
   };
   const phased = phaseAwareClaude(execution, (call) => {
     const fixture = (call as ClaudeCall & { fixture?: PlanningFixture }).fixture;
@@ -370,8 +391,9 @@ export function replySequence(replies: unknown[]): ClaudeSpawn {
     return fixture;
   });
   const started = new Set<string>();
-  return (call) => {
-    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { admission?: string; selection?: unknown };
+  return async (call) => {
+    const context = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { admission?: string; selection?: unknown; synopsis?: Parameters<typeof synopsis>[0] };
+    if (context.synopsis) return synopsis(context.synopsis);
     const key = `${call.cwd}/${context.admission ?? ''}`;
     // A redispatch test can supply selection itself; an execution-only sequence then begins at execution.
     if (context.selection !== undefined && !started.has(key)) return execution(call, 0);

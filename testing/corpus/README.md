@@ -283,14 +283,18 @@ created rows. Their hand `oracle.json` and `inventory.json` are gone: the oracle
 reply, on its second press: the first reads the 201 notes in, cold-discovery-progress), then a `create` between step adds the late arrival and a yes (the `request` question
 subject) writes the first part with no model call; a fourth press asks for the rest as a new request (its own reply, no question): it writes the two notes left, skips the 200 recent results and leaves the first result note as it was; every press is scored.
 
-## B10 preparation cases — 2026-10-10
+## B10 long-text cases — 2026-10-10
+
+Each has scripted `replies.json` and scores through `main` (`runner/test/b10-corpus.test.ts`). A `{"kind": "synopsis", "name"}`
+entry answers that long text's synopsis call (`$part:<phrase>` cites the first part holding the phrase); a text with no
+entry gets an empty, refused synopsis. The execution turns skip these entries.
 
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
-| c17-b10-partial-pdf | C17 / B10 + C15 | model | TL-P4-39 F12; real three-page extraction cut below visible word threshold; pending coverage trace |
-| c17-b10-complete-tail | C17 / B10 + C15 | model | TL-P4-39 F12/F7; complete tail deadline, original provenance and compatible cached synopsis; pending proof |
-| c17-b10-shared-budget | C17 / B10 + C15 | model | TL-P4-39 F8; five long sources, partial introductions and paid retry in one aggregate budget |
-| c17-b10-personal-original | C17 / B10 + C15 | model | TL-P4-32/-42 addendum 3; long personal Markdown moves with exact original bytes, no metadata rewrite |
+| c17-b10-partial-pdf | C17 / B10 | model | TL-P4-39 F12; real three-page extraction cut below visible word threshold; no synopsis call |
+| c17-b10-complete-tail | C17 / B10 | model | TL-P4-39 F12/F7; complete tail deadline cited by the one synopsis and grounded in the original; one synopsis call |
+| c17-b10-shared-budget | C17 / B10 | model | TL-P4-39 F8; five long sources over their shares, partial introductions, no synopsis call |
+| c17-b10-personal-original | C17 / B10 | model | TL-P4-32/-42 addendum 3; long personal Markdown moves with exact original bytes, no metadata rewrite; one read-only synopsis call |
 
 All four remain pending preparation fixtures. Top-two replies.json arrays use the
 existing terminal tidy-intent boundary; case 2 requires actual complete C15 evidence

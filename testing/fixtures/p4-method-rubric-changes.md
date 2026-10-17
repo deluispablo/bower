@@ -264,10 +264,9 @@ C17; passing it does not prove maps, request answers, budgets or whole-request r
 
 ## B10 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-50)
 
-Each new rubric agrees with TL-P4-08 points 1–8; these are method verdicts for lead
-review, not executed C17 acceptance. No earlier rubric or bound is changed. The current
-method id filter does not select these C17 cases; shared H1 adds that check once.
-C15 extraction/cache/expansion and B2's scalar path remain their accepted homes.
+Each new rubric agrees with TL-P4-08 points 1–8. The four cases now score through `main`
+with scripted replies (`runner/test/b10-corpus.test.ts`); the synopsis is B10's, and
+B2's scalar path remains its accepted home.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
