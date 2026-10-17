@@ -352,9 +352,11 @@ export function Questions({ run }: { run?: RunState }) {
         run ? <p id={headingId} className={runStyles.linksLabel}>Bower has a question</p> :
           <h2 id={headingId} className={s.h2}>{plural(qs.length, 'question')} for you</h2>
       )}
-      <ul ref={list} className={s.questions}>
-        {shown.map((q) => <QuestionCard key={askingKey(q)} question={q} link={link} inSheet={!!run} answer={answer} />)}
-      </ul>
+      {shown.length > 0 && (
+        <ul ref={list} className={s.questions}>
+          {shown.map((q) => <QuestionCard key={askingKey(q)} question={q} link={link} inSheet={!!run} answer={answer} />)}
+        </ul>
+      )}
       {run && shown.length > 0 && askings.length > 1 && (
         <Link to="/" className={runStyles.moreQuestions} onClick={() => useUi.getState().setTidy(false)}>
           {plural(askings.length - 1, 'more question')} on Home

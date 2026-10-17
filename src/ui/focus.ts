@@ -115,7 +115,7 @@ const OPEN_LAYER = '[role="dialog"], [role="alertdialog"], [role="menu"], dialog
 
 const heading = (): HTMLElement | null => document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1');
 
-const toHeading = (h1: HTMLElement): void => {
+export const toHeading = (h1: HTMLElement): void => {
   if (!h1.hasAttribute('tabindex')) h1.setAttribute('tabindex', '-1');
   h1.focus({ preventScroll: true });
 };
