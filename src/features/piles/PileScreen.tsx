@@ -410,6 +410,27 @@ function readDraft(raw: string): { text: string; base: string } | null {
   }
 }
 
+/** A kept draft for these words over the note listed (`listed`), started from `from`: none when they are the note. */
+const draftOf = (words: string, listed: string, from: string): string => (words.trim() === listed ? '' : JSON.stringify({ text: words, base: from }));
+
+/** The kept draft's raw value when no editor shows the pile (storage blocked reads as none). */
+function storedDraft(key: string): string {
+  try {
+    return sessionStorage.getItem(key) ?? '';
+  } catch {
+    // expected: storage may be blocked (a private window); then the draft lived only on the screen that left.
+    return '';
+  }
+}
+
+/**
+ * The pile note editor on screen now, per pile. A save that ends after its own editor left (the pile was opened
+ * again) tells this one, so newer words typed there are kept over the saved note, not cleared (qa7-drafts-save-race).
+ */
+const onScreen = new Map<string, (saved: string) => void>();
+/** The words a save is sending now, per pile: a listing bringing them is that save, whose end tells the screen. */
+const sending = new Map<string, string>();
+
 /**
  * The pile's note: what you wrote about it. Saved as `Pile note.md` in the
  * pile's folder; Bower reads it with every thing in the pile. Editable until
@@ -418,7 +439,8 @@ function readDraft(raw: string): { text: string; base: string } | null {
 function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const { vault } = useSources();
   // Unsaved words are kept for the tab, one draft per pile, with the base they started from (qa7-drafts R3).
-  const [kept, keep] = useSessionDraft(`bower:pile-note:${pile.id}`);
+  const draftKey = `bower:pile-note:${pile.id}`;
+  const [kept, keep] = useSessionDraft(draftKey);
   const [restored] = useState(() => readDraft(kept));
   const [text, setText] = useState(restored?.text ?? pile.text);
   // The words the draft started from (its base), and the words last listed. When a listing brings new words,
@@ -431,13 +453,25 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const [keptBase, setKeptBase] = useState(restored?.base ?? pile.text);
   const typed = useRef(text);
   useEffect(() => { typed.current = text; }, [text]);
-  const remember = (words: string, listed: string, from = keptBase): void => keep(words.trim() === listed ? '' : JSON.stringify({ text: words, base: from }));
+  // The person typed on this screen: words equal to the base are then theirs, not merely the note shown.
+  const [typedHere, setTypedHere] = useState(false);
+  const remember = (words: string, listed: string, from = keptBase): void => keep(draftOf(words, listed, from));
+  // A save that ended (here or on a screen that left): the words on screen now stay kept, over the words just saved.
+  useEffect(() => {
+    const advance = (saved: string): void => {
+      setBase(saved);
+      setKeptBase(saved);
+      keep(draftOf(typed.current, saved, saved));
+    };
+    onScreen.set(pile.id, advance);
+    return () => { if (onScreen.get(pile.id) === advance) onScreen.delete(pile.id); };
+  });
   // After a refused save the words now there are shown next to the draft and become its base: the next save is an
   // informed overwrite (the usual edit-conflict pattern: look again, then retry against what is there now).
   const [clash, setClash] = useState(false);
   if (pile.text !== seen) {
     setSeen(pile.text);
-    if (text.trim() === base) {
+    if (text.trim() === base && !(typedHere &&sending.get(pile.id) === pile.text)) {
       setText(pile.text);
       setBase(pile.text);
       setKeptBase(pile.text);
@@ -455,13 +489,18 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const changed = text.trim() !== pile.text;
   const save = async (): Promise<void> => {
     setBusy(true);
+    const words = text.trim();
+    sending.set(pile.id, words);
     try {
       await vault.updatePile(pile.id, text, base);
       const saved = text.trim();
-      setBase(saved);
-      setKeptBase(saved);
-      // Words typed while it saved stay kept, now over the words just saved.
-      remember(typed.current, saved, saved);
+      const here = onScreen.get(pile.id);
+      if (here) here(saved);
+      else {
+        // No screen shows the pile: a draft still kept (none after sign-out) now starts from the words saved.
+        const left = readDraft(storedDraft(draftKey));
+        if (left) keep(draftOf(left.text, saved, saved));
+      }
       setClash(false);
       toast('Note saved. Bower reads it in the next tidy-up.');
     } catch (e) {
@@ -471,6 +510,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       }
       report(e, 'The note did not save. Try again.');
     } finally {
+      if (sending.get(pile.id) === words) sending.delete(pile.id);
       setBusy(false);
     }
   };
@@ -487,6 +527,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         placeholder={held ? undefined : 'One line about these things helps Bower most'}
         onChange={(e) => {
           if (off) return;
+          setTypedHere(true);
           setText(e.target.value);
           remember(e.target.value, pile.text);
         }}
