@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
 import { useNavigate } from 'react-router';
@@ -76,13 +76,26 @@ export function Add() {
   const zone = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
   const list = useRef<HTMLUListElement>(null);
+  // Delayed moves (Bower's peck, the keyboard after a removal) end with the screen.
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const all = timers.current;
+    return () => all.forEach(clearTimeout);
+  }, []);
+  const later = (run: () => void, ms: number): void => {
+    const t = setTimeout(() => {
+      timers.current.delete(t);
+      run();
+    }, ms);
+    timers.current.add(t);
+  };
 
   const remove = (key: string): void => {
     if (saving.current) return;
     const index = items.findIndex((it) => it.key === key);
     forget(key);
     setItems((x) => x.filter((it) => it.key !== key));
-    setTimeout(() => {
+    later(() => {
       if (document.activeElement && document.activeElement !== document.body) return;
       const rows = list.current?.querySelectorAll<HTMLButtonElement>(':scope > li > button');
       const next = rows?.[index] ?? rows?.[index - 1];
@@ -120,7 +133,7 @@ export function Add() {
         (e: unknown) => console.error(e),
       );
     // Bower goes to see what arrived, gives it a peck, and goes back to its edge.
-    setTimeout(() => {
+    later(() => {
       const b = bird.current;
       const row = document.querySelector('[data-pile-item]:last-of-type');
       b?.flyTo(() => b.pointOn(row, 0.85)).peck().wait(0.3);
