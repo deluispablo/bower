@@ -1,4 +1,4 @@
-import { env as testEnv } from 'cloudflare:test';
+import { env as testEnv, runInDurableObject } from 'cloudflare:test';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -47,7 +47,7 @@ async function someone() {
   const person = base.PERSON.get(base.PERSON.idFromName(sub));
   const enc = await encrypt('test-refresh-token', await importEncryptionKey(base.TOKEN_ENC_KEY));
   const { generation } = await person.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: enc });
-  await person.setFolderId('FOLDER_ID');
+  await person.pointFolder(generation, null, 'FOLDER_ID');
   await person.markFolderComplete(generation, 'FOLDER_ID');
   const { epoch } = await person.session('laptop', 'take', 0, Date.now());
   const cookie = `${SESSION_COOKIE}=${await signSession({ sub, gen: generation }, base.SESSION_SECRET)}`;
@@ -159,7 +159,7 @@ it('requests refused by session, origin, lease or folder checks are not counted'
   expect((await s.app.request(`${ORIGIN}/drive/token`, {}, s.env)).status).toBe(401);
   expect((await s.app.request(`${ORIGIN}/vault`, { method: 'POST', headers: { ...alex.headers, origin: 'https://elsewhere.example' } }, s.env)).status).toBe(403);
   expect((await s.app.request(`${ORIGIN}/vault`, { method: 'POST', headers: { ...alex.headers, 'x-bower-epoch': '999' } }, s.env)).status).toBe(409);
-  await alex.person.setFolderId(null);
+  await runInDurableObject(alex.person, (_instance, state) => { state.storage.sql.exec('UPDATE account SET folder_id = NULL, folder_complete = 0 WHERE id = 1'); });
   expect((await s.app.request(`${ORIGIN}/drive/token`, { headers: alex.headers }, s.env)).status).toBe(409);
   await base.BOWER_KV.delete(allowKey('you@example.com'));
   expect((await s.app.request(`${ORIGIN}/drive/token`, { headers: alex.headers }, s.env)).status).toBe(401);

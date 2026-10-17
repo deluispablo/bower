@@ -54,7 +54,7 @@ export async function holderOf(folder: DriveFolder): Promise<{ sub: string; head
   const { generation } = await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: enc });
   const cookie = `${SESSION_COOKIE}=${await signSession({ sub, gen: generation }, env.SESSION_SECRET)}`;
   const epoch = (await person(sub).session('laptop', 'check', 0, Date.now())).epoch;
-  await person(sub).setFolderId(folder.root);
+  await person(sub).pointFolder(generation, null, folder.root);
   await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
   return { sub, headers: { cookie, origin: APP, 'content-type': 'application/json', 'x-bower-place': 'laptop', 'x-bower-epoch': String(epoch) } };
 }

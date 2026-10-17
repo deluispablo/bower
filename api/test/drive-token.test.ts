@@ -35,7 +35,7 @@ async function someone(options: { folder?: boolean; allowed?: boolean } = {}): P
   if (options.allowed !== false) await kv.put(allowKey(EMAIL), '1');
   const enc = await encrypt(REFRESH_TOKEN, await importEncryptionKey(env.TOKEN_ENC_KEY));
   const { generation } = await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: enc });
-  if (options.folder !== false) await person(sub).setFolderId('FOLDER_ID');
+  if (options.folder !== false) await person(sub).pointFolder(generation, null, 'FOLDER_ID');
   const token = await signSession({ sub, gen: generation }, env.SESSION_SECRET);
   return { sub, cookie: `${SESSION_COOKIE}=${token}` };
 }

@@ -40,6 +40,11 @@ async function someone(): Promise<{ sub: string; cookie: string }> {
   return { sub, cookie };
 }
 
+/** The Worker forgets the folder pointer (the Drive folder stays), as no product call does. */
+async function forgetFolder(sub: string): Promise<void> {
+  await runInDurableObject(person(sub), (_instance, state) => { state.storage.sql.exec('UPDATE account SET folder_id = NULL, folder_complete = 0 WHERE id = 1'); });
+}
+
 interface Item {
   id: string;
   name: string;
@@ -350,7 +355,7 @@ describe('POST /vault', () => {
     const g = new FakeGoogle();
     const first = await body(await post(g, cookie));
     // The person signs out and in again: the Worker forgot the pointer, the Drive folder stayed.
-    await person(sub).setFolderId(null);
+    await forgetFolder(sub);
     const before = g.created.length;
     const again = await post(g, cookie);
     expect(await body(again)).toEqual({ folderId: first.folderId, found: true });
@@ -377,7 +382,7 @@ describe('POST /vault', () => {
     const { sub, cookie } = await someone();
     const g = new FakeGoogle();
     await post(g, cookie);
-    await person(sub).setFolderId(null);
+    await forgetFolder(sub);
     await post(g, cookie);
     await post(g, cookie);
     const writes = g.calls.filter((c) => c.method !== 'GET');

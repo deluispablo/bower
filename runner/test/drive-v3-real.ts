@@ -17,6 +17,8 @@ const FOLDER = 'application/vnd.google-apps.folder';
 export interface RealDrive {
   wire: DriveV3;
   fetch: Fetch;
+  /** The same Drive and tokens, paging by `size` on this transport alone (the Worker's), not by `paging.size`. */
+  fetchPaged(size: number): Fetch;
   /** A new access token Drive takes. */
   mint(): Promise<string>;
   /** Every token given so far stops working. */
@@ -33,7 +35,7 @@ export function realDrive(drive: FakeDrive): RealDrive {
   const revoked = new Set<string>();
   const given = new Set<string>();
   const writes: string[] = [];
-  const fetch: Fetch = async (input, sent = {}) => {
+  const transport = (pageSize?: number): Fetch => async (input, sent = {}) => {
     // A body as bytes: a page's Blob (jsdom's, in the app's suite) is not one Node's Response reads.
     const blob = sent.body as { arrayBuffer?: () => Promise<ArrayBuffer> } | null | undefined;
     const init: RequestInit = typeof blob?.arrayBuffer === 'function' ? { ...sent, body: new Uint8Array(await blob.arrayBuffer()) } : sent;
@@ -63,11 +65,12 @@ export function realDrive(drive: FakeDrive): RealDrive {
       for (const parent of parents) hits.push(...(await drive.fullText(parent, text)).filter((f) => f.parents[0] === parent));
       return json(200, { kind: 'drive#fileList', files: hits.map((f) => ({ kind: 'drive#file', id: f.id, name: f.name, mimeType: f.folder ? FOLDER : 'text/plain', parents: f.parents, modifiedTime: f.modifiedTime, createdTime: f.createdTime, ...(f.appProperties ? { appProperties: f.appProperties } : {}), trashed: false })) });
     }
-    return await wire.fetch(input, init);
+    return await (pageSize === undefined ? wire.fetch : wire.fetchPaged(pageSize))(input, init);
   };
   return {
     wire,
-    fetch,
+    fetch: transport(),
+    fetchPaged: transport,
     writes,
     mint: async () => {
       // The fake keeps the tokens Drive takes; its own token route is how one is added.

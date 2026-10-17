@@ -26,7 +26,7 @@ async function aRun() {
   const p = env.PERSON.get(env.PERSON.idFromName(sub));
   await env.BOWER_KV.put(allowKey('you@example.com'), '1');
   const { generation } = await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'made-up-enc-token' });
-  await p.setFolderId('FOLDER_ID');
+  await p.pointFolder(generation, null, 'FOLDER_ID');
   const cookie = `${SESSION_COOKIE}=${await signSession({ sub, gen: generation }, env.SESSION_SECRET)}`;
   const admitted = await p.admit({ accountEpoch: (await p.account())?.accountEpoch ?? -1, scope: 'all',
     allowWeb: false, requestId: 'Q1C_PRESS', now: at, dailyLimit: 100, manifest: MANIFEST });

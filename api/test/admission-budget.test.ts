@@ -143,10 +143,17 @@ describe('admission subrequest budget', () => {
     const unbudgeted = await planAdmission(driveRead(httpOf(folder)), folder.root, OPTS);
     if (unbudgeted.kind !== 'manifest') throw new Error('expected a manifest');
     expect(unbudgeted.manifest.piles.map((p) => p.pileId)).toEqual(['pile-plain']);
-    // Out of subrequests before the first read: no note is read at admission.
+    // Out of subrequests right after the listing, before the first read: no note is read at admission.
     const count = { n: 0, reads: 0 };
-    const spent = { n: SUBREQUEST_BUDGET };
-    const budgeted = await planAdmission(admissionRead(httpOf(folder, count), 'all', { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: () => spent.n + count.n }), folder.root, OPTS);
+    const spent = { n: 0 };
+    const http = httpOf(folder, count);
+    const listAll = http.listAll.bind(http);
+    http.listAll = async (root, o) => {
+      const all = await listAll(root, o);
+      spent.n = SUBREQUEST_BUDGET;
+      return all;
+    };
+    const budgeted = await planAdmission(admissionRead(http, 'all', { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: () => spent.n + count.n }), folder.root, OPTS);
     if (budgeted.kind !== 'manifest') throw new Error('expected a manifest');
     // Listed only: no file was read.
     expect(count.reads).toBe(0);

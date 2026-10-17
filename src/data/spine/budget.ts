@@ -19,3 +19,14 @@ export class NotReadHere extends Error {
     this.name = 'NotReadHere';
   }
 }
+
+/**
+ * The listing would fetch past the budget (the folder is too big for one press): admission refuses the press as too
+ * large (`payload-too-large`). Only the Worker's admission reader raises it, before a listing page.
+ */
+export class FolderTooBig extends Error {
+  constructor() {
+    super('The folder listing would pass the subrequest budget');
+    this.name = 'FolderTooBig';
+  }
+}

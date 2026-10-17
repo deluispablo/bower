@@ -53,7 +53,7 @@ async function withThings(): Promise<{ sub: string; cookie: string; fence: Recor
   const who = await holder();
   wire = await driveFolder();
   await withThingsIn(wire);
-  await person(who.sub).setFolderId(wire.root);
+  await person(who.sub).pointFolder((await person(who.sub).account())?.generation ?? -1, null, wire.root);
   await person(who.sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
   return who;
 }
@@ -349,7 +349,7 @@ describe('the admission manifest', () => {
   async function withFolder(): Promise<{ sub: string; cookie: string; fence: Record<string, string>; folder: DriveFolder }> {
     const who = await holder();
     const folder = await driveFolder();
-    await person(who.sub).setFolderId(folder.root);
+    await person(who.sub).pointFolder((await person(who.sub).account())?.generation ?? -1, null, folder.root);
     await person(who.sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
     return { ...who, folder };
   }
@@ -565,7 +565,7 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     const waits = (await (await post(cookie, answer('answer-a', 'p-receipt'), fence)).json()) as Reply;
     expect(waits.waits).toBe(true);
     // The folder is unpointed while the run goes; the run ends, and the start of the answer's run fails for good.
-    await person(sub).setFolderId(null);
+    await runInDurableObject(person(sub), (_instance, state) => { state.storage.sql.exec('UPDATE account SET folder_id = NULL, folder_complete = 0 WHERE id = 1'); });
     const late = T0 + 10 * 3600_000;
     expect((await person(sub).runStatus(late)).run).toMatchObject({ id: going.id, phase: 'failed' });
     await runInDurableObject(person(sub), async (instance: Person) => {

@@ -7,7 +7,7 @@ import { dispatchOutcome, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
 import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling } from './recovery.js';
 import type { Recovery, RecoveryWatch } from './recovery.js';
-import { TABLES_AT_DELETE, migrate, readSchemaVersion } from './person-schema.js';
+import { PERSON_TABLES, TABLES_AT_DELETE, migrate, readSchemaVersion } from './person-schema.js';
 import { ACTIVE_PHASES, PHASE_RANK } from '../../src/data/contracts/run-phases.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
 import type { RunScope, RunWire } from '../../src/data/contracts/run-wire.js';
@@ -211,7 +211,7 @@ export class Person extends DurableObject<Env> {
   }
 
   /** Adds one to the counter for `window` and returns the new count. */
-  countQuota(window: string): number {
+  private countQuota(window: string): number {
     return this.ctx.storage.sql
       .exec<{ counter: number }>(
         `INSERT INTO quota (window, counter) VALUES (?, 1)
@@ -288,23 +288,6 @@ export class Person extends DurableObject<Env> {
       .exec<{ folder_id: string | null }>('SELECT folder_id FROM account WHERE id = 1')
       .toArray()[0];
     return row?.folder_id ?? null;
-  }
-
-  /**
-   * Sets (or with null clears) the folder pointer. A different folder starts
-   * as not complete; the same one keeps its state. False when there is no account.
-   */
-  setFolderId(folderId: string | null): boolean {
-    return (
-      this.ctx.storage.sql.exec(
-        `UPDATE account SET
-           folder_complete = CASE WHEN folder_id IS ? THEN folder_complete ELSE 0 END,
-           folder_id = ?
-         WHERE id = 1`,
-        folderId,
-        folderId,
-      ).rowsWritten > 0
-    );
   }
 
   /** Everything `POST /vault` keeps about the folder. */
@@ -574,7 +557,7 @@ export class Person extends DurableObject<Env> {
       sql.exec(`DELETE FROM run_ticket WHERE expires_at <= ? OR (retired = 1 AND run_id <> ?)`, Date.now(), GONE_RUN);
       sql.exec('UPDATE run_ticket SET run_id = ?, retired = 1, report_seq = NULL, report_phase = NULL', GONE_RUN);
       sql.exec(`DELETE FROM deadlines WHERE kind <> 'gone'`);
-      for (const [table, kind] of Object.entries(TABLES_AT_DELETE)) if (kind === 'personal') sql.exec(`DELETE FROM ${table}`);
+      for (const table of PERSON_TABLES) if (TABLES_AT_DELETE[table] === 'personal') sql.exec(`DELETE FROM ${table}`);
       for (const key of PERSONAL_KEYS) kv.delete(key);
       kv.put(GENERATION_FLOOR, floor);
       for (const t of sql.exec<{ hash: string; expires_at: number }>('SELECT hash, expires_at FROM run_ticket').toArray()) this.arm('gone', t.hash, t.expires_at);
@@ -886,7 +869,8 @@ export class Person extends DurableObject<Env> {
       manifest = await admission(this.env, this, { scope, subjects: waiting.subjects, now }, github.fetchImpl, spent);
     } catch (err) {
       console.error('the answers that waited could not start their tidy-up', err);
-      const final = err instanceof HttpError && (err.code === 'signed-out' || err.code === 'no-folder' || err.code === 'nothing');
+      // A retry cannot shrink the folder (`payload-too-large`), choose one or sign in again.
+      const final = err instanceof HttpError && ['signed-out', 'no-folder', 'nothing', 'payload-too-large'].includes(err.code);
       this.ctx.storage.transactionSync(() => this.waitingFailed(requestId, final, now));
       return;
     }
@@ -1390,9 +1374,15 @@ interface TicketRow extends Record<string, SqlStorageValue> {
 function toWire(row: RunRow): RunWire {
   let questions: PublicQuestion[] | undefined;
   if (row.open_questions_snapshot !== null) {
-    const value: unknown = JSON.parse(row.open_questions_snapshot);
-    if (!isQuestionSnapshot(value)) throw new HttpError(500, 'internal');
-    questions = value;
+    // A tolerant reader (Fowler, "TolerantReader"): a list another build kept in a shape this one cannot read is left out.
+    let value: unknown;
+    try {
+      value = JSON.parse(row.open_questions_snapshot);
+    } catch {
+      value = undefined;
+    }
+    if (isQuestionSnapshot(value)) questions = value;
+    else console.error(`run ${row.id}: its stored questions are not readable here; left out`);
   }
   return {
     id: row.id,

@@ -32,9 +32,9 @@ import { Hono } from 'hono';
 
 import { DriveHttp, type Pacing } from '../../src/data/drive/drive-http.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
-import { NOTHING } from '../../src/data/spine/admission.js';
+import { ADMISSION_MANIFEST_LIMIT, NOTHING } from '../../src/data/spine/admission.js';
 import { planAdmission } from '../../src/data/spine/plan.js';
-import { DISPATCH_SUBREQUESTS, SUBREQUEST_BUDGET } from '../../src/data/spine/budget.js';
+import { DISPATCH_SUBREQUESTS, FolderTooBig, SUBREQUEST_BUDGET } from '../../src/data/spine/budget.js';
 import { admissionRead } from '../../src/data/spine/read.js';
 import { BowerError } from '../../src/data/types.js';
 import { requireSession } from './auth.js';
@@ -142,7 +142,8 @@ export interface AdmissionAsk {
 
 /**
  * The admission manifest for the person's folder, read now with their Drive token. Drive trouble answers as the
- * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only).
+ * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only). A press past
+ * its size limit (a listing past the budget, a manifest past `ADMISSION_MANIFEST_LIMIT`) is `payload-too-large`.
  */
 export async function admission(env: Env, person: PersonHandle, ask: AdmissionAsk, fetchImpl: FetchLike, spent: () => number, pacing?: Partial<Pacing>): Promise<AdmissionManifest> {
   const { scope, subjects, now } = ask;
@@ -171,9 +172,14 @@ export async function admission(env: Env, person: PersonHandle, ask: AdmissionAs
   } catch (err) {
     if (err instanceof HttpError) throw err;
     if (err instanceof BowerError && err.code === 'auth') throw new HttpError(401, 'signed-out', undefined, { cause: err });
+    if (err instanceof FolderTooBig) throw new HttpError(413, 'payload-too-large', undefined, { cause: err });
     throw new HttpError(500, 'internal', undefined, { cause: err });
   }
   if (planned.kind === 'nothing') throw new HttpError(409, 'nothing', NOTHING[planned.cause]);
+  // Stored whole in the run's row: past the limit it is refused before anything is kept or counted.
+  if (new TextEncoder().encode(JSON.stringify(planned.manifest)).byteLength > ADMISSION_MANIFEST_LIMIT) {
+    throw new HttpError(413, 'payload-too-large', undefined, { cause: new Error('the admission manifest is past its limit') });
+  }
   return planned.manifest;
 }
 

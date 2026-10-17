@@ -64,8 +64,8 @@ class FakeRunner {
 async function aRun(expiresAt?: number): Promise<{ sub: string; runner: FakeRunner }> {
   const sub = `runner-sub-${crypto.randomUUID()}`;
   const p = person(sub);
-  await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-  await p.setFolderId('FOLDER_ID');
+  const { generation } = await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+  await p.pointFolder(generation, null, 'FOLDER_ID');
   await p.cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + HOUR });
   const admitted = await p.admit({ accountEpoch: (await p.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');

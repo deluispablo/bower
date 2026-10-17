@@ -26,6 +26,8 @@ export interface DriveV3 {
   drive: FakeDrive;
   runId: string;
   fetch: typeof fetch;
+  /** The same Drive over a transport that pages by `size`, whatever `paging.size` is: the Worker's own, not the runner's. */
+  fetchPaged(size: number): typeof fetch;
   requests: WireRequest[];
   /** The attempt the token route reports as current. */
   attempt: number;
@@ -96,7 +98,10 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1, runId = RU
     revoked: false,
     reshape: null,
     checksums: true,
-    fetch: async (input, init = {}) => {
+    fetch: (input, init) => serve(input, init),
+    fetchPaged: (size) => (input, init) => serve(input, init, size),
+  };
+  const serve = async (input: Parameters<typeof fetch>[0], init: RequestInit = {}, pageSize?: number): Promise<Response> => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
       const method = (init.method ?? 'GET').toUpperCase();
       const auth = new Headers(init.headers).get('authorization') ?? '';
@@ -122,7 +127,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1, runId = RU
       if (url.origin !== 'https://www.googleapis.com') return json(404, driveFailure(404, 'notFound'));
       if (wire.revoked || !live.has(auth.replace(/^Bearer /, ''))) return json(401, driveFailure(401, 'authError'));
       try {
-        const res = await answer(wire, method, url, init.body ?? null);
+        const res = await answer(wire, method, url, init.body ?? null, pageSize);
         return wire.reshape && method !== 'GET' && res.ok ? json(res.status, wire.reshape((await res.json()) as Record<string, unknown>)) : res;
       } catch (e) {
         if (e instanceof BowerError && e.code === 'not-found') return json(404, driveFailure(404, 'notFound'));
@@ -130,7 +135,6 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1, runId = RU
         if (e instanceof BowerError && e.code === 'conflict') return json(409, driveFailure(409, 'conflict'));
         throw e;
       }
-    },
   };
   return wire;
 }
@@ -161,7 +165,7 @@ function status(wire: DriveV3, body: Omit<StatusPost, 'after'> & { ended?: unkno
   return json(200, { run: { id: wire.runId, phase: body.phase }, revision: wire.statuses.length });
 }
 
-async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit["body"]): Promise<Response> {
+async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit["body"], pageSize?: number): Promise<Response> {
   const drive = wire.drive;
   const path = url.pathname;
   const one = /^\/(upload\/)?drive\/v3\/files\/([^/]+)$/.exec(path);
@@ -172,7 +176,7 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
     if (count < 1 || count > 1000) return json(400, driveFailure(400, 'invalid'));
     return json(200, { ids: await drive.generateIds(count) });
   }
-  if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
+  if (method === 'GET' && path === '/drive/v3/files') return list(drive, url, pageSize ?? paging.size);
   // B1b's existing feed port, over the same fake state; no independent feed simulator.
   if (method === 'GET' && path === '/drive/v3/changes/startPageToken') return json(200, { startPageToken: await drive.getStartPageToken() });
   if (method === 'GET' && path === '/drive/v3/changes') {
@@ -261,7 +265,7 @@ async function withSums(wire: DriveV3, url: URL, file: DriveFile, trashed: boole
   };
 }
 
-async function list(drive: FakeDrive, url: URL): Promise<Response> {
+async function list(drive: FakeDrive, url: URL, pageSize: number): Promise<Response> {
   const q = url.searchParams.get('q') ?? '';
   const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
   // A run's stamp, looked for anywhere, in the Bin or not.
@@ -274,7 +278,7 @@ async function list(drive: FakeDrive, url: URL): Promise<Response> {
   if (!parents.length || !/trashed = false/.test(q)) return json(400, driveFailure(400, 'invalidQuery'));
   const all: DriveFile[] = [];
   for (const parent of parents) all.push(...(await drive.listAll(parent)).filter((f) => f.parents[0] === parent));
-  const size = Math.min(paging.size, Number(url.searchParams.get('pageSize') ?? paging.size));
+  const size = Math.min(pageSize, Number(url.searchParams.get('pageSize') ?? pageSize));
   const at = Number(url.searchParams.get('pageToken') || 0);
   const page = all.slice(at, at + size);
   const next = at + size < all.length ? { nextPageToken: String(at + size) } : {};
