@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { empty, failedReply, note, run, select, setup, type Base } from './b1-planning-support';
+import { SYSTEM } from '../../src/data/vault/layout';
 
 beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -39,8 +40,9 @@ const fixture = (inbox = INBOX, files: Record<string, string> = INBOX_FILES): Pr
 const offer = (base: Base, body: string, summary = 'A map designer offer beside Saltmere station.') => ({ ...empty,
   things: [{ fileId: base.sources.find((s) => s.name === OFFER)?.itemId, to: 'Projects/Job hunt', name: OFFER, note: { name: 'Saltmere offer.md', summary, body } }] });
 /** A refused first reply, then the corrected one: three calls, the retry naming `why`, the corrected note written. */
-async function refusedThenCorrected(base: Base, wants: string[], bad: unknown, good: unknown, why: RegExp) {
-  const result = await run(base, [select(base, wants.map(base.id), 'Projects/Job hunt'), bad, good]);
+async function refusedThenCorrected(base: Base, wants: string[], bad: unknown, good: unknown, why: RegExp, kind = 'unknown') {
+  const selection = select(base, wants.map(base.id), 'Projects/Job hunt');
+  const result = await run(base, [{ ...selection, items: selection.items.map((item) => ({ ...item, kind })) }, bad, good]);
   expect(result.frames[2]?.call.input ?? '', 'refused once at the reply, with its reason').toMatch(why);
   expect(result.frames[2]?.call.input ?? '').not.toContain('a line with keys outside the intent');
   expect(result.code, 'the corrected reply is accepted').toBe(0);
@@ -146,4 +148,111 @@ it('AC7 c06-body-links-prompt: the execution prompt asks for 0 to 5 related note
   expect(instructions).toMatch(/never a bare link/i);
   expect(instructions, 'never linked blind (ruling 5)').toMatch(/never a note not shown/i);
   expect(instructions, 'a hub line only for news (ruling 2)').toMatch(/only when the thing is news for it/);
+});
+
+// Review gaps, round 1 (specs/c06-connections/review-gaps-c06-body-links.md): binding reds.
+const MAP = 'Station map.txt';
+const TWO = [{ line: 'File this offer and its map with Job hunt.', files: [OFFER, MAP] }];
+const TWO_FILES = { ...INBOX_FILES, [MAP]: 'A map of the streets around Saltmere station.\n' };
+const withMap = (base: Base, body: string) => ({ ...offer(base, body), things: [...offer(base, body).things,
+  { fileId: base.sources.find((s) => s.name === MAP)?.itemId, to: 'Projects/Job hunt', name: MAP, note: { name: 'Streets.md', summary: 'Streets around Saltmere station.', body: 'Streets around Saltmere station.' } }] });
+const OFFER_TYPES = { v: 1, rows: [{ id: 'offer', match: ['offer'], template: 'source', properties: { contact: { type: 'text' }, skills: { type: 'list' } }, table: [] }] };
+const typed = (): Promise<Base> => setup({ folder: { ...FOLDER, [SYSTEM.typeTable]: JSON.stringify(OFFER_TYPES, null, 2) }, inbox: INBOX, inboxFiles: INBOX_FILES });
+const firstCall = async (base: Base, wants: string[], intent: unknown) => {
+  const result = await run(base, [select(base, wants.map(base.id), 'Projects/Job hunt'), intent]);
+  expect(result.frames[2]?.call.input.match(/^Your reply was refused: .*$/m)?.[0], 'no refusal').toBeUndefined();
+  expect(result.code, result.errors).toBe(0);
+  expect(result.frames, 'written on the first execution call').toHaveLength(2);
+  return result;
+};
+
+it.each([
+  ['its own source', `${LEAD}\n\nSee also [[${OFFER}]]: the letter itself.`],
+  ['a sibling source filed by the same reply', `${LEAD}\n\nSee also [[${MAP}]]: the streets around the office.`],
+])('AC5 gap 1 c06-body-links-shown: a note linking %s, a thing this reply files, is written on the first call (R3)', async (_name, body) => {
+  const base = await fixture(TWO, TWO_FILES);
+  const result = await firstCall(base, [JOB], withMap(base, body));
+  expect(result.after[NOTE]).toContain(body);
+});
+
+it('AC5 gap 2 c06-body-links-shown: an offer-kind reply linking its own filed source is written, never refused as noteBody (R3)', async () => {
+  const base = await typed();
+  const body = `${LEAD}\n\nSee also [[${OFFER}]]: the letter itself.`;
+  const result = await firstCall(base, [JOB], offer(base, body));
+  expect(result.after[NOTE]).toContain(body);
+});
+
+it.each([
+  ['a backtick fence', '```\n[[Nowhere at all]]\n```'],
+  ['a tilde fence', '~~~\n[[Nowhere at all]]\n~~~'],
+])('AC4 gap 3 c06-body-links-reason: a link to no note inside %s is an example, written as is with no refusal', async (_name, fence) => {
+  const base = await fixture();
+  const body = `${LEAD}\n\n${fence}`;
+  const result = await firstCall(base, [JOB], offer(base, body));
+  expect(result.after[NOTE]).toContain(body);
+});
+
+it.each([
+  ['an alias', '[[Job hunt|the hunt]]', '[[Flat hunt|the flats]]'],
+  ['a heading', '[[Job hunt#Timeline]]', '[[Flat hunt#Timeline]]'],
+  ['a block', '[[Job hunt^b]]', '[[Flat hunt^b]]'],
+])('AC5 gap 3 c06-body-links-shown: %s link to a shown note with a reason is written; the same to a note not shown is refused', async (_name, shown, unshown) => {
+  const good = `${LEAD}\n\nSee also ${shown}: the role search it belongs to.`;
+  const ok = await fixture();
+  expect((await firstCall(ok, [JOB], offer(ok, good))).after[NOTE]).toContain(good);
+  const base = await fixture();
+  await refusedThenCorrected(base, [JOB], offer(base, `${LEAD}\n\nSee also ${unshown}: the shortlist near the station.`), offer(base, good),
+    /^Your reply was refused: .*you were not shown/m);
+});
+
+it('AC5 gap 4 c06-body-links-shown: an unknown note in an authored property is refused at the reply; the corrected retry files', async () => {
+  const base = await typed();
+  const withContact = (contact: string) => {
+    const intent = offer(base, LEAD);
+    const thing = intent.things[0];
+    return { ...intent, things: [{ ...thing, note: { ...thing?.note, typeRow: 'offer', properties: { contact } } }] };
+  };
+  const result = await refusedThenCorrected(base, [JOB], withContact('[[Nowhere at all]]'), withContact('[[Job hunt]]'), /^Your reply was refused: .*you were not shown/m, 'offer');
+  expect(result.after[NOTE]).toContain('[[Job hunt]]');
+});
+
+it('AC4 gap 5 c06-body-links-reason: a numbered bare link gets the link refusal, not numbers', async () => {
+  const base = await fixture();
+  const result = await refusedThenCorrected(base, [JOB], offer(base, `${LEAD}\n\n1. [[Job hunt]]`), offer(base, GOOD), /^Your reply was refused: .*with no reason on its line/m);
+  expect(result.frames[2]?.call.input ?? '').not.toMatch(/^Your reply was refused: a number/m);
+});
+
+it('AC4 gap 5 c06-body-links-reason: a list marker is not a figure: "1. [[Job hunt]]: why" with no 1 in any source is written', async () => {
+  const base = await fixture();
+  const body = `${LEAD}\n\n1. [[Job hunt]]: the role search it belongs to.`;
+  const result = await firstCall(base, [JOB], offer(base, body));
+  expect(result.after[NOTE]).toContain(body);
+});
+
+// Review gaps, round 2 (items 8 and 9): binding reds.
+it('AC5 gap 8 c06-body-links-shown: an unclosed fence in the body never hides a property link; noteLink, then the corrected retry files', async () => {
+  const base = await typed();
+  const withContact = (contact: string, body: string) => {
+    const intent = offer(base, body);
+    const thing = intent.things[0];
+    return { ...intent, things: [{ ...thing, note: { ...thing?.note, typeRow: 'offer', properties: { contact } } }] };
+  };
+  // The corrected retry also closes the fence: a body left inside an open fence is no note Bower can read back.
+  const result = await refusedThenCorrected(base, [JOB], withContact('[[Nowhere at all]]', `${LEAD}\n\n\`\`\`\nan example left open`),
+    withContact('[[Job hunt]]', `${LEAD}\n\n\`\`\`\nan example\n\`\`\``), /^Your reply was refused: .*you were not shown/m, 'offer');
+  expect(result.after[NOTE]).toContain('[[Job hunt]]');
+  expect(result.after[NOTE]).not.toContain('Nowhere at all');
+});
+
+it.each([
+  ['Timeline', (id: string | undefined, text: string) => ({ lines: [{ note: JOB, text, cites: id }] })],
+  ['Current state', (id: string | undefined, text: string) => ({ states: [{ note: JOB, lines: [text], cites: id }] })],
+])('AC4 gap 9 c06-body-links-reason: an unsupported leading figure in %s text is still refused as a number', async (_name, extra) => {
+  const base = await fixture();
+  const id = base.sources.find((s) => s.name === OFFER)?.itemId;
+  const reply = (text: string) => ({ ...offer(base, GOOD), ...extra(id, text) });
+  const result = await refusedThenCorrected(base, [JOB], reply('7. Alex has the map designer offer.'), reply('Alex has the map designer offer.'),
+    /^Your reply was refused: a number that is in none of its sources: "7"/m);
+  expect(result.after[JOB]).toContain('Alex has the map designer offer.');
+  expect(result.after[JOB]).not.toContain('7. Alex');
 });

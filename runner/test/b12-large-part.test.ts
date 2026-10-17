@@ -71,7 +71,7 @@ type Folder = Awaited<ReturnType<typeof folder>>;
 type Ctx = { request: string; hunt: string; id: (path: string) => Promise<string>; frame: string };
 const empty = { kind: 'tidy-intent', v: 1, things: [] };
 type Press = { words?: string; request?: false; inbox?: { name: string; text: string }; answer?: { question: Question; yes: boolean };
-  around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch };
+  around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch; wants?: string[] };
 type Question = { id: string; askedAt: number; text: string; yes: string; no: string } & Record<string, unknown>;
 
 async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, o: Press = {}) {
@@ -91,14 +91,17 @@ async function press(f: Folder, intent: (ctx: Ctx, attempt: number) => unknown, 
   const admission = await planAdmission(fakeRead(f.drive), f.root, { scope, clock: () => DAY + f.press, newId: () => `b12-admission-${f.press}` });
   if (admission.kind !== 'manifest') throw new Error(`Not admitted: ${admission.cause}`);
   const hunt = await f.id(HUNT);
+  const wants = await Promise.all((o.wants ?? []).map(f.id));
   const calls: string[] = [];
   const frames: string[] = [];
   let attempt = 0;
   const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
     calls.push(phase);
     frames.push(call.input);
-    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string }> };
-    if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: hunt, wants: [] })), asks: [] });
+    const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string; candidates?: Array<{ id: string }> }> };
+    // Each item wants only the notes it was offered (the selection's own bound).
+    if (phase === 'selection') return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: hunt,
+      wants: wants.filter((id) => s.candidates?.some((c) => c.id === id)) })), asks: [] });
     return reply(await intent({ request: request?.id ?? '', hunt, id: f.id, frame: call.input }, attempt++));
   }, () => ({ drive: f.drive, root: f.root, admission: admission.manifest }), true);
   const run = await runOnDrive(f.c, f.drive, f.root, { claude: spawn, admission: admission.manifest, pacing: { baseMs: 0, sleep: async () => {} },
@@ -187,8 +190,8 @@ describe('B12d a set over 200 notes asks once; a yes runs exactly its stored fir
       const piles = (JSON.parse(ctx.frame.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ fileId: string; name: string }> }> }).piles;
       const notice = piles.flatMap((p) => p.things).find((t) => t.name === 'Garden notice.txt');
       return { ...asking(ctx), things: [{ fileId: notice?.fileId, to: HUNT, name: 'Garden notice.txt',
-        note: { name: 'Garden notice.md', summary: 'Alex can collect mulch at the amber gate.', body: 'Alex can collect mulch at the amber gate.\n\nRelated: [[Gardening]].' } }] };
-    }, { inbox: { name: 'Garden notice.txt', text: 'Alex can collect mulch at the amber gate.\n' } });
+        note: { name: 'Garden notice.md', summary: 'Alex can collect mulch at the amber gate.', body: 'Alex can collect mulch at the amber gate.\n\nRelated: [[Gardening]]: the garden the mulch is for.' } }] };
+    }, { inbox: { name: 'Garden notice.txt', text: 'Alex can collect mulch at the amber gate.\n' }, wants: ['Resources/Gardening/Gardening.md'] });
     expect(questions(run).map((q) => q.id)).toEqual([`q-request-${run.record}`]);
     expect(Object.keys(run.after).filter((p) => p.endsWith('Garden notice.txt')).map((p) => p.startsWith('Inbox/')), 'the notice is filed, out of the inbox').toEqual([false]);
   }, 120_000);

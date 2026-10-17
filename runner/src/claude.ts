@@ -55,7 +55,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
-import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { B_FAILURE, SHORTEN_SKIPPED, WIKI_LINK, assignedTags, authoredLinks, linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows } from '../../src/data/vault/layout';
@@ -325,8 +325,9 @@ function promptInstructions(options = false): string {
     `  Bower refuses a reply that leaves one out. Its summary is at`,
     `  most ${AUTHORED.summary} characters, its body at most ${AUTHORED.body}, with no front matter and no "## Current state", "## Timeline" or`,
     '  "## Bower\'s note" heading: Bower writes those. A saved link filed as a note takes none. Every new note links its hub',
-    '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 1 to 5 related notes below,',
-    '  as [[links]].',
+    '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 0 to 5 related notes shown below,',
+    '  each on a line that says why, as "See also [[X]]: <why>.": never a bare link, never a note not shown. Name a note by its',
+    '  title, or by its path when two notes share it. A hub gets a Timeline line only when the thing is news for it.',
     `- "lines" (optional): at most ${AUTHORED.lines} Timeline lines, each at most ${AUTHORED.line} characters with no link, only on the notes`,
     '  below; "cites" names a thing you file, and Bower links it as the source, or a pile of words only. A note\'s Timeline only grows. Look in each',
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
@@ -1112,7 +1113,6 @@ export function ungrounded(text: string, ground: ReadonlySet<string>): string | 
 /** A raw file name: underscores, a copy number "(2)", "final" ending a name, or a camera or scanner id (IMG_1234, DSC_0012, scan0001). */
 const RAW_NAME = /_|\s?\(\d{1,2}\)$|(?:^|[\s-])final$|^(?:IMG|DSC|DSCN|PXL|MVIMG|VID|MOV|SCAN)[-\s]?\d{3,}/i;
 
-const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
 const MD_LINK = /\[[^\]]*\]\(\s*<?([^)\s>]*)>?[^)]*\)/g;
 const WEB = /\b(?:https?:\/\/|www\.)[^\s<>()[\]]+/gi;
 
@@ -1121,11 +1121,10 @@ function profileSources(text: string): ProfileSources {
 }
 
 /**
- * Why a model's note body links outside what it was shown, or null: each [[link]] names a file or note of the folder,
- * or one the reply files or writes; each Markdown link and web address is one its thing's own text has.
+ * Why a model's note body links outside its thing, or null: each Markdown link and web address is one its thing's own
+ * text has. Its [[links]] follow the one link rule (`authoredLinks`, `linkIdentity`), checked with the reply.
  */
-function bodyLinks(body: string, ownText: string, named: (target: string) => boolean): RefusalKind | null {
-  for (const m of body.matchAll(WIKI_LINK)) if (!named((m[1] ?? '').trim())) return 'noteLink';
+function bodyLinks(body: string, ownText: string): RefusalKind | null {
   for (const m of body.matchAll(MD_LINK)) if (!(m[1] ?? '') || !ownText.includes(m[1] ?? '')) return 'noteMdLink';
   for (const m of body.matchAll(WEB)) if (!ownText.includes(m[0].replace(/[.,;:!?'"]+$/, ''))) return 'noteWeb';
   return null;
@@ -1605,7 +1604,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('noteBody', (t) => t.profile === undefined || t.profile.every((ref) => ref.source === t.fileId
       && !PROFILE_IDENTIFIER.test(t.name) && sentences.get(ref.source)?.[ref.sentence - 1] !== undefined)
       || 'a profile reference outside its offered source sentences'),
-    rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary, bodyOf(t.note), JSON.stringify(t.note.properties ?? {})], 'the note for')),
+    // The link check runs before numeric grounding (C06 R1, R2); properties need no reason line.
+    rule('noteLink', (t) => t.note === undefined || [t.note.summary, bodyOf(t.note)].flatMap(authoredLinks).every((l) => l.reason)
+      || 'a link with no reason on its line: write why on the same line, as "See also [[X]]: <why>."'),
+    // A Markdown ordered list marker in the body (CommonMark 0.31.2 §5.2: 1 to 9 digits, then "." or ")") is no figure
+    // (C06 gaps 5, 9); Timeline and Current state text keep every figure.
+    rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary,
+      bodyOf(t.note).replace(/^(\s*)\d{1,9}[.)](?=\s|$)/gmu, '$1'), JSON.stringify(t.note.properties ?? {})], 'the note for')),
   ], (t) => {
     placed.set(t.fileId, { to: t.to, name: t.name });
     if (t.profile !== undefined) {
@@ -1727,10 +1732,17 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     inPairs.add(k.kept).add(k.other);
     kept.push({ kept: k.kept, other: k.other, answer: pairOf(k)?.answer ?? '' });
   }));
-  // Links in each note body: only to what is in the folder or what this reply files or writes (P4-3 review).
-  const linked = (target: string): boolean => {
-    const made = new Set([...placed.values(), ...words.values()].flatMap((p) => [p.name, `${p.to}/${p.name}`]).concat([...authored.entries()].flatMap(([id, n]) => [n.name, `${placed.get(id)?.to ?? ''}/${n.name}`])));
-    return [target, `${target}.md`].some((t) => made.has(t) || (seen.names?.has(t) ?? false));
+  // C06 R3, R4: a link names a thing this reply files, or one note shown below by the planner's own identity rule.
+  const linkWhy = (target: string): string | null => {
+    const key = (name: string): string => linkTarget(name).replace(/\.md$/, '');
+    const filed = [...placed].flatMap(([id, p]) => [p.name, `${p.to}/${p.name}`, admitted.get(id)?.name ?? ''].map(key));
+    if (filed.includes(target)) return null;
+    const writes = [...words.values(), ...[...authored].map(([id, n]) => ({ to: placed.get(id)?.to ?? '', name: n.name }))];
+    if (writes.flatMap((p) => [p.name, `${p.to}/${p.name}`].map(key)).includes(target)) return 'a link to a note this reply also writes: it was not shown';
+    const named = linkIdentity(target, seen.files?.keys() ?? []);
+    if (named === 'not a note') return 'a link to a file that is not a note';
+    if (named === 'two notes share') return 'a bare name two notes share: give its path, as shown';
+    return named && seen.notes.has(named.note) ? null : 'a link to a note you were not shown: leave it out';
   };
   const whole: Array<Rule<unknown>> = [
     // Ending words are no fact of their own, and a fact ends once (R35).
@@ -1755,7 +1767,12 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }),
     () => {
       for (const [id, n] of authored) {
-        const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', linked);
+        // Each field is scanned on its own: an unclosed fence in one never hides a link in another (C06 gap 8).
+        for (const { target } of [n.summary, n.body, JSON.stringify(n.properties ?? {})].flatMap(authoredLinks)) {
+          const why = linkWhy(target);
+          if (why) return no('noteLink', why);
+        }
+        const why = bodyLinks(n.body, seen.texts?.get(id) ?? '');
         if (why) return no(why);
       }
       return null;
@@ -2558,10 +2575,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
             const token = new RegExp(`\\b${currency}\\b`, 'u');
             return token.test(words) && !token.test(own);
           }) || [...words.matchAll(/\p{Sc}/gu)].some(([currency]) => !own.includes(currency));
-          const linked = (target: string): boolean => shown.notes.some((note) =>
-            [note.path, note.path.replace(/\.md$/iu, ''), note.path.split('/').at(-1)?.replace(/\.md$/iu, '')].includes(target));
+          // Its [[links]] passed the reply's one link rule (C06 R3): own and sibling sources too.
           if (addedCurrency || /\b(?:scores?|should|recommend|advice)\b/iu.test(words)
-            || bodyLinks(String(note.body ?? ''), own, linked)) return no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link');
+            || bodyLinks(String(note.body ?? ''), own)) return no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link');
         }
         // The limit counts what each map keeps once installed, its stored entries included (R22, R44).
         const mapViews = (got.filing.views ?? []).filter((v) => v.kind === 'moc');
