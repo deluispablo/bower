@@ -141,7 +141,8 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   // One bad reply per refusal kind; the records make the compiler and the check below list every kind.
   type ViewKind = 'viewKeys' | 'viewBinding' | 'viewLimit';
   type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit';
-  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind>, (ctx: Context, id: Id) => string> = {
+  type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText';
+  const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind>, (ctx: Context, id: Id) => string> = {
     notJson: () => envelope('Here is my plan: file everything.'),
     noText: () => envelope(null),
     notIntent: edit((i) => ({ ...i, v: 2 })),
@@ -204,12 +205,16 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     mapLimit: () => [MAP, MAP],
   };
 
+  // C09 (c09-answers AC2): answers are refused through a request, which the offer-and-flat case has not; their bad replies are c09-answers.test.ts's table.
+  // An answer's links take the one link rule's own kind (noteLink, C06), so there is no answer link kind.
+  const answerKinds: AnswerKind[] = ['answerKeys', 'answerBinding', 'answerText'];
+
   const good = intentReply((_ctx, id) => filed(id));
 
   // The name stays the one earlier checks named; each kind is a test of its own inside it.
   describe('every validation refusal is retried once with its reason', () => {
     it('every refusal kind has a bad reply here', () => {
-      expect(Object.keys({ ...bad, ...viewBad, ...mapBad }).sort()).toEqual(Object.keys(REFUSALS).sort());
+      expect(Object.keys({ ...bad, ...viewBad, ...mapBad, ...Object.fromEntries(answerKinds.map((kind) => [kind, true])) }).sort()).toEqual(Object.keys(REFUSALS).sort());
     });
 
     // One test for each kind (vitest's test.for), so each takes its own few milliseconds and names itself when it fails.

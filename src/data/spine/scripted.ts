@@ -77,6 +77,9 @@ export function authoredLinks(text: string): Array<{ target: string; reason: boo
   return out;
 }
 
+/** C09 (review ruling 19): a [[link]] whose target is empty ("[[ ]]"), which `authoredLinks` leaves out: it names nothing. */
+export const hasEmptyLink = (text: string): boolean => [...text.matchAll(WIKI_LINK)].some((m) => !linkTarget(m[1] ?? '').replace(/\.md$/, ''));
+
 /**
  * C06 R4: what a link target (as `authoredLinks` gives it) names among the folder's file paths: one note, by its whole
  * path without `.md` or by its title; a file that is not a note, by its path or name; a title two notes share; or nothing.
@@ -542,6 +545,8 @@ export interface Filing {
   suggestions?: { first: boolean; views: readonly ViewSuggestion[] };
   /** Maps requests answer (B12), checked by the provider, in reply order. */
   maps?: readonly MapRequest[];
+  /** C09: answers to the person's questions about the folder, by request record id: each its request's done line, checked by the provider. */
+  answers?: ReadonlyMap<string, string>;
 }
 
 /** One op of a map on one note (B12): a property `set` or `union` (with the row it was checked against), or a tag (`key: 'tags'`) `add` or `remove`. */
@@ -697,8 +702,8 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
   suggestions?: Filing['suggestions'];
   /** The maps requests answer (B12); a request one answers settles once its notes are written, unavailable or as asked. */
   maps?: Filing['maps'];
-  /** How it answers a request; without it, requests wait. */
-  request?(text: string): RequestPlan | null;
+  /** How it answers a request, by its words and record id (two requests with the same words are two); without it, requests wait. */
+  request?(text: string, id: string): RequestPlan | null;
   /** The Timeline line an answer adds to a stored note (C07). */
   said?: { about(questionId: string): boolean; line(q: Question, yes: boolean): { note: string; line: string } | null };
   disagreements?(words: string): readonly Disagreement[];
@@ -724,6 +729,11 @@ export function modelDecisions(filing: Filing): Decisions {
     views: filing.views ?? [],
     ...(filing.suggestions ? { suggestions: filing.suggestions } : {}),
     ...(filing.maps ? { maps: filing.maps } : {}),
+    // C09 (R1): a reply's answer is its request's plain answer plan, by record id; the provider passes only the requests it acts on (R7).
+    ...(filing.answers?.size ? { request: (_text: string, id: string): RequestPlan | null => {
+      const answer = filing.answers?.get(id);
+      return answer === undefined ? null : { kind: 'answer', uses: [], answer };
+    } } : {}),
   };
 }
 
@@ -1297,9 +1307,11 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     return { options };
   };
-  // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for.
+  // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for. One answered
+  // (C09 R6) leaves it, as a map or view does: its answer is its result.
   const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)
-    && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)), listing, ix, appends, since);
+    && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)
+    && d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind !== 'answer'), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;
@@ -1921,7 +1933,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // the web off nothing is looked up or written, and its answer says so.
   const lookups = new Map<string, WantedLine>();
   for (const l of opts.allowWeb && date ? journal.filter((x) => x.rec.kind === 'request') : []) {
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     if (scripted?.kind !== 'lookup') continue;
     const [path] = scripted.uses;
     const f = ix.file(path);
@@ -2820,7 +2832,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // the notes it compares, read now, and the list of those sources. Only when every one is there and can be read.
   const compared = new Map<string, { to: string; name: string; text: string; what: string }>();
   for (const l of journal.filter((x) => x.rec.kind === 'request')) {
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     if (scripted?.kind !== 'compare' || !generatedPlace(scripted.note.to)) continue;
     const read: ParsedNote[] = [];
     for (const path of scripted.uses) {
@@ -3128,19 +3140,27 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    */
   const answerOf = (l: JournalLine): string => {
     if (declinedRequests.has(l.rec.id)) return REQUEST_DECLINED;
-    const scripted = d.request?.(l.rec.text ?? l.rec.what);
+    const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
     // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
     if (scripted?.kind === 'lookup') return !opts.allowWeb ? scripted.offline : lookups.has(l.rec.id) ? scripted.answer : NOTHING_LOOKED_UP;
     // A comparison names the note it wrote (C08).
     const note = compared.get(l.rec.id);
     if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
-    return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
+    if (!scripted || !scripted.uses.every(there)) return REQUEST_DONE;
+    // C09 R8: an answer's links name one note in the folder each, by the one link rule, whatever made the decision (two-sided
+    // with the reply check, which also wants it shown).
+    if (hasEmptyLink(scripted.answer)) refused('an answer with an empty link');
+    for (const { target } of authoredLinks(scripted.answer)) {
+      const named = linkIdentity(target, paths);
+      if (!named || typeof named !== 'object') refused('an answer with a link to nothing or to a name two notes share');
+    }
+    return scripted.answer;
   };
   const answers = new Map(journal.filter((l) => l.rec.kind === 'request').map((l) => [l.rec.id, answerOf(l)]));
   // A lookup that looked nothing up (web off, or its note gone) is never done (qa6).
   const lookedUpNothing = new Set(journal.filter((l) => l.rec.kind === 'request' && !lookups.has(l.rec.id)
-    && d.request?.(l.rec.text ?? l.rec.what)?.kind === 'lookup').map((l) => l.rec.id));
+    && d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind === 'lookup').map((l) => l.rec.id));
   // Bower's own files the run writes, as read now, so the writes pass what they read.
   const requestsRead = requests && answers.size ? { file: requests, content: await ownVerified(requests) } : null;
   const questionsRead = questionsText !== null && questionsFile ? { file: questionsFile, content: await ownVerified(questionsFile) } : null;
