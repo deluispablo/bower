@@ -82,7 +82,7 @@ describe('health-wording: the health note in plain words', () => {
   });
 
   it('AC4 health-nothing-links: a Bower note no other note links to says so in plain words', () => {
-    const lines = health([hub, note(`${GARDEN}/Plot diary.md`), note(`${GARDEN}/Lonely.md`)]);
+    const lines = health([hub, note(`${GARDEN}/Plot diary.md`), note(`${GARDEN}/Lonely.md`, { lint: { links: [], tags: 1, summary: true } })]);
     expect(lines).toContain(`- Nothing links to ${titled(`${GARDEN}/Lonely`)}.`);
     expect(lines.join('\n')).not.toMatch(/orphan/i);
   });

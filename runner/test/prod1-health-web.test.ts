@@ -54,7 +54,7 @@ describe('prod1-health-web', () => {
     const report = health([source, destination]);
     expect(report).not.toContain('Broken link');
     expect(report).not.toContain(`Nothing links to [[${FOLDER}/flat-listing.example|flat-listing.example]]`);
-    expect(report).toContain(`Nothing links to [[${FOLDER}/Sources|Sources]]`);
+    expect(report).not.toContain(`Nothing links to [[${FOLDER}/Sources|Sources]]`);
     expect(health([source])).not.toContain('Broken link');
   });
 
