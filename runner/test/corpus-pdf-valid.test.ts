@@ -21,9 +21,10 @@ async function pdfsUnder(dir: string): Promise<string[]> {
 }
 
 describe('corpus PDFs are valid PDFs', () => {
-  it('every corpus PDF parses: a text PDF yields its text, a scan has no text layer', async () => {
+  it('corpus-delete-bench-cases AC3: PDF inventory remains valid after benchmark removal', async () => {
     const pdfs = await pdfsUnder(ROOT);
-    expect(pdfs.length).toBeGreaterThan(10);
+    expect(pdfs.map((full) => relative(ROOT, full)).filter((path) => /^bench-[1-5]-[^/]+\//.test(path))).toEqual([]);
+    expect(pdfs.length).toBeGreaterThan(0);
     for (const full of pdfs) {
       const path = relative(ROOT, full);
       const name = path.split('/').at(-1) ?? '';
@@ -38,7 +39,7 @@ describe('corpus PDFs are valid PDFs', () => {
 
   it('the offer letters carry their terms', async () => {
     const offers = (await pdfsUnder(ROOT)).filter((p) => p.endsWith('Offer_letter_final(2).pdf'));
-    expect(offers.length).toBeGreaterThanOrEqual(4);
+    expect(offers.length).toBeGreaterThan(0);
     for (const full of offers) {
       const shown = await extract('Offer_letter_final(2).pdf', new Uint8Array(await readFile(full)));
       expect({ path: relative(ROOT, full), text: shown.text }).toEqual({ path: relative(ROOT, full), text: expect.stringContaining('Salary 42,000 a year. Start 2 November.') });

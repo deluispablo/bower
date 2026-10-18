@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CORPUS_CAPABILITIES, loadCase, loadCorpus, score, timelineOf, type Expected, type LoadedCase } from '../src/corpus';
 import { groundsOf, ungrounded } from '../src/claude';
@@ -17,6 +16,14 @@ async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
 }
 
 describe('the capability corpus', () => {
+  it('corpus-delete-bench-cases AC1: benchmark cases and external checkout dependency are absent', async () => {
+    const ids = (await loadCorpus(ROOT)).map((c) => c.id);
+    for (const id of ['bench-1-job-offer-clipping', 'bench-2-text-pdf', 'bench-3-receipt-pdf', 'bench-4-scanned-pdf', 'bench-5-question-about-filed-pdf']) {
+      expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
+      expect.soft(ids, id).not.toContain(id);
+    }
+  });
+
   it('every corpus capability has at least two cases', async () => {
     const cases = await loadCorpus(ROOT);
     for (const capability of CORPUS_CAPABILITIES) {
@@ -150,34 +157,6 @@ describe('the capability corpus', () => {
     expect(run('Dates only.', cited)).toEqual({ pass: true, unmet: [] });
     // A link from the plot note to something else is not one.
     expect(run('Dates only.', '---\nby: bower\n---\nSee [[Garden plot]] and [[Other]].\n').pass).toBe(false);
-  });
-
-  it('the bench cases start from the original\'s bench folder', async () => {
-    const bench = (await loadCorpus(ROOT)).filter((c) => c.speedBaseline);
-    expect(bench.map((c) => c.id)).toHaveLength(5);
-    const original = '/Users/deluisp/Projects/bower/agent/bench/vault';
-    const walk = async (dir: string): Promise<string[]> => {
-      const out: string[] = [];
-      for (const e of await readdir(dir, { withFileTypes: true })) {
-        if (e.isDirectory()) out.push(...(await walk(join(dir, e.name))));
-        else if (e.name !== '.gitkeep') out.push(join(dir, e.name));
-      }
-      return out;
-    };
-    for (const c of bench) {
-      const have = [...Object.keys(c.folder), ...Object.keys(c.folderBinary)].sort();
-      expect({ id: c.id, many: have.length > 50 }).toEqual({ id: c.id, many: true });
-      if (!existsSync(original)) continue;
-      const want = (await walk(original)).map((f) => relative(original, f)).sort();
-      expect({ id: c.id, files: have }).toEqual({ id: c.id, files: want });
-      for (const f of want) {
-        const mine = f in c.folder ? Buffer.from(c.folder[f] ?? '') : Buffer.from(c.folderBinary[f] ?? []);
-        expect({ id: c.id, f, same: mine.equals(await readFile(join(original, f))) }).toEqual({ id: c.id, f, same: true });
-      }
-    }
-    // The question about a filed PDF starts with that PDF filed.
-    const five = bench.find((c) => c.id === 'bench-5-question-about-filed-pdf');
-    expect([...Object.keys(five?.folder ?? {}), ...Object.keys(five?.folderBinary ?? {})]).toContain('2-Areas/Home/Home insurance policy 2026.pdf');
   });
 });
 
