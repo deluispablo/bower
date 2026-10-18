@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QuestionAnswer } from './contracts/questions';
 import { answerQuestion } from './answer-loop';
 import { answerToast } from '@/features/home/answer-words';
@@ -17,6 +17,17 @@ function sources(questions: Question[], current: RunState | null, started: Start
 }
 
 describe('answering a question (TL-P4-08 addendum 8)', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("asks for the answer's run without waiting on Web Crypto", async () => {
+    vi.spyOn(crypto.subtle, 'digest').mockReturnValue(new Promise(() => undefined)); // never resolves
+    const { vault, runs, start } = sources([ask], null);
+    void answerQuestion(vault, runs, ask.id, true, { allowWeb: false });
+    await new Promise((r) => setImmediate(r)); // drains microtasks only
+    // SHA-256 of "q-ask-file-1\n1": the idempotency key is unchanged, so old and new clients answering are one run.
+    expect(start).toHaveBeenCalledWith('all', expect.objectContaining({ requestId: 'answer-0c20dce13ff64b70dae9a18fa3c2330b05313dac' }));
+  });
+
   it('an answer during a run says Bower will do it when the tidy-up ends', async () => {
     // The Worker keeps the answer for the end of the run going, and says so (TL-P4-13 addendum): no run of its own now.
     const { vault, runs, start } = sources([ask], going, { ...going, waits: true });
