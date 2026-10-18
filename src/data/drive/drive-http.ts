@@ -6,6 +6,7 @@
  * else becomes one of `DRIVE_MESSAGES`, worded for where it ran (`context`: never "offline" outside a browser).
  */
 import { BowerError } from '../types';
+import { BodyReadError } from '../wait';
 import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { answerKind, askAgainNow, isNoAnswer, mayHaveLanded, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
@@ -229,10 +230,14 @@ export class DriveHttp implements DriveApi {
   }
 
   /** Consume response bodies under the same error mapping as media bytes. */
-  private async readBody<T>(read: () => Promise<T>): Promise<T> {
+  private async readBody<T>(read: () => Promise<T>, write = false): Promise<T> {
     try {
       return await read();
     } catch (e) {
+      if (write) {
+        console.error('Drive write response body could not be read');
+        throw unconfirmedWriteError();
+      }
       console.error(e);
       if (e instanceof BowerError) throw e;
       throw e instanceof TypeError ? this.lost() : driveError('unknown');
@@ -436,6 +441,7 @@ export class DriveHttp implements DriveApi {
         if (refreshed) await fence?.();
         res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, { ...opts, knownOffline, pacing: this.pacing, ...(fence ? { beforeResend: fence } : {}) });
       } catch (e) {
+        if (e instanceof BodyReadError) return this.readBody(() => Promise.reject(e.cause), !opts.idempotent);
         if (e instanceof FenceRefused) throw e.error;
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.
@@ -444,7 +450,14 @@ export class DriveHttp implements DriveApi {
         console.error(e);
         throw driveError('unknown');
       }
-      if (res.status !== 401) return res;
+      if (res.status !== 401) {
+        if (res.ok) {
+          // Keep the public Response API while mapping JSON failures for every caller here.
+          const json = res.json.bind(res);
+          res.json = (() => this.readBody(json, !opts.idempotent)) as typeof res.json;
+        }
+        return res;
+      }
       if (refreshed) throw await failureOf(res, write);
       token = await this.refreshed();
       if (existing && !fence) {
