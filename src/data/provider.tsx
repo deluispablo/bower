@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Sources, Unsubscribe } from './sources';
-import { BowerError, type Rule } from './types';
+import { BowerError, type Pile, type Rule } from './types';
+import { waitingIn } from './piles';
 
 const Ctx = createContext<Sources | null>(null);
 
@@ -114,6 +115,21 @@ export function useLoad<T>(
 export const useTree = () => useLoad((s) => s.vault.tree(), (s, cb) => s.vault.subscribe(cb));
 export const usePiles = () => useLoad((s) => s.vault.piles(), (s, cb) => s.vault.subscribe(cb));
 export const usePilesListed = () => useLoad(async (s) => (await s.vault.pilesListed?.()) ?? null, (s, cb) => s.vault.subscribe(cb));
+/** What waits in the Inbox, for every screen that shows or counts it: the full read plus the piles only a newer listing
+ * has. `waiting` is undefined until a full read answers, and while it fails: only that read says which piles are ready. */
+export function useInbox(): { piles: Pile[] | undefined; waiting: number | undefined; error: BowerError | null; reload: () => void; settled: () => Promise<void> } {
+  const full = usePiles();
+  const { data: read } = full;
+  const { data: listed } = usePilesListed();
+  // When the full read fails, the listing and any earlier read cannot be vouched for (which are ready, held or on
+  // their way), so nothing is listed. A full read kept from before a pile was added does not hide it: the newer
+  // listing adds the piles that read lacks.
+  const piles = full.error ? undefined : read && listed
+    ? [...read, ...listed.filter((l) => !read.some((p) => p.id === l.id))].sort((a, b) => b.createdAt - a.createdAt)
+    : read ?? listed ?? undefined;
+  const waiting = full.error || read === undefined ? undefined : waitingIn(piles);
+  return { piles, waiting, error: full.error, reload: full.reload, settled: full.settled };
+}
 export const useQuestions = () => useLoad((s) => s.vault.questions(), (s, cb) => s.vault.subscribe(cb));
 export const useRules = () => useLoad((s) => s.vault.rules(), (s, cb) => s.vault.subscribe(cb));
 export const useRulesProse = () => useLoad(async (s) => (await s.vault.rulesProse?.()) ?? '', (s, cb) => s.vault.subscribe(cb));

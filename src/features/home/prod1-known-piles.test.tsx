@@ -11,6 +11,7 @@ import { createUploadQueue, type UploadQueue } from '@/data/upload-queue';
 import { indexedDbUploadStore } from '@/data/upload-store';
 import { DriveVault } from '@/data/vault/drive-vault';
 import { loadingSources } from '@/testing/loading-sources';
+import { plural } from '@/app/words';
 import { Home } from './Home';
 
 const scan = (): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])], { type: 'application/pdf' }) });
@@ -81,13 +82,13 @@ describe('home_shows_known_upload_without_calling_it_a_note', () => {
     const subtitle = (): string => inbox.querySelector('p.muted')?.textContent ?? '';
     await waitFor(() => expect(subtitle()).not.toBe('Looking…'));
     const said = subtitle();
-    const tidy = within(inbox).queryByRole('button', { name: /^Tidy up/ })?.textContent ?? null;
     await act(async () => {
       await v.addPile({ text: 'Receipts', items: [scan()] });
       await reached(d);
     });
     expect(await within(inbox).findByRole('link', { name: /Receipts.*1 thing/ })).toBeVisible();
-    expect(subtitle()).toBe(said);
-    expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })?.textContent ?? null).toBe(tidy);
+    const n = said.startsWith('Nothing waiting') ? 0 : Number(/^(\d+) things? waiting/.exec(said)?.[1]);
+    expect(subtitle()).toBe(`${plural(n + 1, 'thing')} waiting. Tidy up when you have added everything.`);
+    expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })?.textContent ?? null).toBe(`Tidy up ${plural(n + 1, 'thing')}`);
   });
 });

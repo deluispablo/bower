@@ -343,7 +343,7 @@ describe('the Tidy up count waits for the full read', () => {
     { id: 'b', path: 'Inbox/B', text: 'Receipts', createdAt: at - 1, items: [thing('b1')] },
   ];
 
-  it('the listed Inbox shows with no count and no Tidy up button until readiness is known, then the number never drops', async () => {
+  it('the listed Inbox shows with no count and no Tidy up button until readiness is known, then the count follows the rows shown', async () => {
     const base = loadingSources();
     let finish!: (piles: Pile[]) => void;
     const full = new Promise<Pile[]>((r) => { finish = r; });
@@ -354,10 +354,11 @@ describe('the Tidy up count waits for the full read', () => {
     await within(inbox).findByRole('link', { name: /Papers/ });
     expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })).toBeNull();
     expect(within(inbox).queryByText(/\d+ things? waiting/)).toBeNull();
-    // The full read finds one pile already filed: the count that appears is the one that stays.
+    // The full read lacks Receipts, which the listing still shows: the count follows the rows shown.
     finish([listed[0] as Pile]);
-    expect(await within(inbox).findByRole('button', { name: 'Tidy up 2 things' })).toBeVisible();
-    expect(within(inbox).getByText(/2 things waiting/)).toBeVisible();
+    expect(await within(inbox).findByRole('button', { name: 'Tidy up 3 things' })).toBeVisible();
+    expect(within(inbox).getByText(/3 things waiting/)).toBeVisible();
+    expect(within(inbox).getByRole('link', { name: /Receipts/ })).toBeVisible();
   });
 });
 

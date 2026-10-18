@@ -1,9 +1,8 @@
 import { Command, useCommandState } from 'cmdk';
-import { waitingIn } from '@/data/piles';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useNavigate } from 'react-router';
-import { usePiles, useRun, useSources, useTree } from '@/data/provider';
+import { useInbox, useRun, useSources, useTree } from '@/data/provider';
 import { isRunning } from '@/features/tidy/run-words';
 import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import type { SearchHit, TreeNode } from '@/data/types';
@@ -41,7 +40,7 @@ export function Palette() {
   // The theme the system shows when none was chosen (the query tokens.css uses; dark by default).
   const shownTheme = useMedia('(prefers-color-scheme: light)') ? 'light' : 'dark';
   const { data: tree } = useTree();
-  const { data: piles } = usePiles();
+  const { waiting } = useInbox();
   const { data: current } = useRun();
   const running = isRunning(current);
   const nav = useNavigate();
@@ -50,7 +49,6 @@ export function Palette() {
     setPalette(false);
     setQ('');
   });
-  const waiting = waitingIn(piles);
   // Words inside notes, from the same search as the Search panel, a moment after typing stops.
   const { vault } = useSources();
   const [inside, setInside] = useState<{ q: string; hits: SearchHit[]; failed?: boolean }>({ q: '', hits: [] });
