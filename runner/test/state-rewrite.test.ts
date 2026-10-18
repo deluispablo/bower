@@ -8,14 +8,14 @@
  */
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ADOPT_STATES_RULE, applyChanges, stateMark, stateNewsLine, undoChanges } from '../../src/data/contracts/note-edit';
 import { serializeRules } from '../../src/data/contracts/rules-format';
 import type { Change, ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseNote } from '../../src/data/vault/note-format';
 import type { ClaudeSpawn } from '../src/claude';
-import { loadCorpus, type LoadedCase } from '../src/corpus';
-import { runWithClaude } from './corpus-run';
+import { loadCase, loadCorpus, type LoadedCase } from '../src/corpus';
+import { caseReplies, runWithClaude, scoreCase, type CaseRun } from './corpus-run';
 import { stateWrittenBefore } from './earlier-runs';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
@@ -30,7 +30,19 @@ const md5 = (text: string): string => createHash('md5').update(Buffer.from(text,
 /** A hub whose Current state carries Bower's mark of what it holds: Bower's own. */
 const marked = (text: string, lines: string[]): string => text.replace('by: bower\n', `by: bower\nbower_state: ${stateMark(lines)}\n`);
 
-afterEach(() => vi.restoreAllMocks());
+// An answer step goes through the app's answer path, which keeps the device outbox.
+beforeEach(() => {
+  const stored = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+    removeItem: (key: string) => void stored.delete(key),
+  });
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 
@@ -302,5 +314,73 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(parseNote(HUB, undone).currentState).toEqual([]);
     // Byte for byte what Bower had, but for the Timeline line this run added.
     expect(undone.replace(/^- 2026-10-07 · .*\n/m, '')).toBe(empty);
+  });
+});
+
+describe('corpus-fix-c05-c07-state: c07-answer-yes', () => {
+  const F = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
+  const NEW = ['Two bedrooms, second floor.', 'Rent £1,550 a month from 1 November.'];
+  type Asked = { id: string; text: string; yes: string; no: string; shown?: { lines: string[] } };
+  type AnswerRecord = { id: string; kind?: string; text?: string; questionId?: string };
+  /** F's state rewrites in every manifest (`.bower/runs/<id>/manifest-*.json`) of these files. */
+  const rewrites = (files: Record<string, string>): Change[] =>
+    Object.entries(files)
+      .filter(([p]) => /^\.bower\/runs\/[^/]+\/manifest-[^/]+\.json$/.test(p))
+      .flatMap(([, t]) => (JSON.parse(t) as ManifestV2).operations)
+      .flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === F ? o.effect.changes : []))
+      .filter((ch) => ch.kind === 'state-rewrite');
+  /** Every answer record in `.bower/changes`, archive included, with its path. */
+  const answers = (files: Record<string, string>): Array<[string, AnswerRecord]> =>
+    Object.entries(files)
+      .filter(([p]) => /^\.bower\/changes\/.+\.json$/.test(p))
+      .map(([p, t]): [string, AnswerRecord] => [p, JSON.parse(t) as AnswerRecord])
+      .filter(([, r]) => r.kind === 'answer');
+
+  it('corpus-fix-c05-c07-state AC2: C07 yes authorizes the bound state change once', async () => {
+    const c = await loadCase(resolve(ROOT, 'c07-answer-yes'));
+    // The red on main: the case started from a seeded, opaque question and a journal answer to it.
+    expect(c.questions).toEqual([]);
+    expect(c.journal.some((line) => line.questionId !== undefined)).toBe(false);
+    expect(c.presses?.[0]?.between).toEqual([{ kind: 'answer', question: { kind: 'state', note: F }, yes: true }]);
+
+    const run = await runWithClaude(c, caseReplies('c07-answer-yes'));
+    const runs: CaseRun[] = [...(run.runs ?? []), run];
+    expect(runs.map((r) => r.code)).toEqual([0, 0, 0]);
+    const [one, two, three] = runs as [CaseRun, CaseRun, CaseRun];
+    const fid = Object.entries(one.pathsById).find(([, p]) => p === F)?.[0] ?? '';
+
+    const asked = (JSON.parse(one.after['.bower/questions.json'] ?? '{}') as { questions: Asked[] }).questions;
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toEqual(expect.objectContaining({ id: `q-state-${fid}`, text: 'You changed the current state of Flat 3, 12 Larkspur Lane. Should Bower write its update there?', yes: 'Write it', no: 'Keep mine' }));
+    expect(asked[0]?.shown?.lines).toEqual(NEW);
+    const seed = c.folder[F] ?? '';
+    const stateOf = (text: string): string => text.slice(text.indexOf('## Current state'), text.indexOf('## Timeline'));
+    expect(stateOf(one.after[F] ?? '')).toBe(stateOf(seed));
+    expect(rewrites(one.after)).toEqual([]);
+
+    const all = answers(run.after);
+    expect(all).toHaveLength(1);
+    const [where, record] = all[0] ?? ['', { id: '' }];
+    expect(record).toEqual(expect.objectContaining({ text: 'yes', questionId: asked[0]?.id }));
+    expect(where.startsWith('.bower/changes/archive/')).toBe(true);
+    const A = record.id;
+    const granted = { kind: 'state-rewrite', recordIds: [A], previous: ['Two bedrooms, second floor.'], lines: NEW, granted: { answer: A, mark: '955d1bc28cd94400' } };
+    // Across all three presses' manifests, the one rewrite is press 2's, granted by that answer.
+    expect(rewrites(run.after)).toEqual([granted]);
+    expect(rewrites(two.after)).toEqual([granted]);
+
+    for (const r of [two, three]) {
+      expect(JSON.parse(r.after['.bower/questions.json'] ?? '{}')).toEqual({ v: 1, questions: [] });
+      expect(answers(r.after).every(([p]) => p.startsWith('.bower/changes/archive/'))).toBe(true);
+    }
+
+    const want = seed
+      .replace('bower_state: 955d1bc28cd94400', `bower_state: ${stateMark(NEW)}`)
+      .replace('- Two bedrooms, second floor.\n', '- Two bedrooms, second floor.\n- Rent £1,550 a month from 1 November.\n')
+      + '- 2026-10-07 · The rent is £1,550 a month from 1 November. · [[Flat 3 rent update.txt]]\n';
+    expect(two.after[F]).toBe(want);
+    expect(three.after[F]).toBe(two.after[F]);
+
+    expect(scoreCase(c, run)).toEqual({ pass: true, unmet: [] });
   });
 });

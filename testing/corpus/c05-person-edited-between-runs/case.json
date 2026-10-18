@@ -25,11 +25,16 @@
   "bowerOwned": [
     "Areas/Home/Garden plot.md"
   ],
-  "between": [
+  "presses": [
     {
-      "kind": "edit",
-      "path": "Areas/Home/Garden plot.md",
-      "text": "---\nsummary: Alex's plot at the Larkspur Lane community garden.\nby: bower\nbower_state: ad0d49f0788bfc33\n---\n\n## Current state\n- Alex will keep the shared water butt until the replacement arrives.\n\n## My plans\nAlex wants to paint the water butt amber.\n\n## Timeline\n- 2026-09-12 \u00b7 Planted garlic.\n- 2026-10-07 \u00b7 The committee will replace the shared water butt. \u00b7 [[Committee notice.txt]]\n"
-    }
+      "between": [
+        {
+          "kind": "edit",
+          "path": "Areas/Home/Garden plot.md",
+          "text": "---\nsummary: Alex's plot at the Larkspur Lane community garden.\nby: bower\nbower_state: ad0d49f0788bfc33\n---\n\n## Current state\n- Alex will keep the shared water butt until the replacement arrives.\n\n## My plans\nAlex wants to paint the water butt amber.\n\n## Timeline\n- 2026-09-12 \u00b7 Planted garlic.\n- 2026-10-07 \u00b7 The committee will replace the shared water butt. \u00b7 [[Committee notice.txt]]\n"
+        }
+      ]
+    },
+    {}
   ]
 }

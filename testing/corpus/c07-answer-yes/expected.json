@@ -1,5 +1,8 @@
 {
   "files": {
+    "present": [
+      "Projects/Flat hunt/Flat 3 rent update.txt"
+    ],
     "absent": [
       "Inbox/*"
     ]
@@ -13,8 +16,17 @@
   "notes": [
     {
       "path": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+      "contains": [
+        "rent: £1,450 a month",
+        "## Current state\n- Two bedrooms, second floor.\n- Rent £1,550 a month from 1 November.\n\nAlex liked the light in the kitchen.\n"
+      ],
+      "excludes": [
+        "You said the rent"
+      ],
       "timeline": [
-        "You said the rent is now £1,550."
+        "2026-09-28 · Viewed it with the agent.",
+        "The rent is £1,550 a month from 1 November.",
+        "[[Flat 3 rent update.txt]]"
       ],
       "timelineCount": 2
     }
@@ -22,12 +34,38 @@
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": ["Bower health.md"],
-    "updated": [
-      "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
-    ],
-    "setAside": 0,
-    "questions": [],
-    "yourChanges": 1
-  }
+    "created": [],
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
+        ],
+        "questionsExactly": 1,
+        "questionSubjects": [
+          {
+            "kind": "state",
+            "note": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
+          }
+        ]
+      }
+    },
+    {
+      "report": {
+        "filed": 0,
+        "updated": [
+          "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
+        ],
+        "questionsExactly": 0
+      }
+    },
+    {}
+  ]
 }

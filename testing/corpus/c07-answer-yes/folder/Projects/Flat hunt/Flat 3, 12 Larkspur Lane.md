@@ -1,6 +1,7 @@
 ---
 summary: A two-bedroom flat on Larkspur Lane.
 by: bower
+bower_state: 955d1bc28cd94400
 rent: £1,450 a month
 commute: 24 min
 status: viewing done

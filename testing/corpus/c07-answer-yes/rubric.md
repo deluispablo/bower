@@ -1,2 +1,2 @@
-After yes, the stored note records what the person said as a dated Timeline line. The question leaves the list.
-The scripted run does not rewrite the rent or the Current state; a model run should update the Current state and the property and keep the old figure in the Timeline with its date.
+Bower last wrote Flat 3's Current state; Alex has edited it since. A rent update arrives: Bower files it beside the flat, adds one sourced Timeline line, and asks one Write it question about Flat 3's Current state, showing the update, without writing it.
+Alex answers Write it. The run that follows writes exactly the update shown, once, as granted by that answer; Alex's kitchen sentence, the front matter (the rent property included) and the Timeline are kept byte for byte. A later tidy-up with nothing new changes nothing.
