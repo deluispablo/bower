@@ -5,7 +5,8 @@ import { report, undoToast } from '@/ui/report';
 import { startRun } from '@/features/tidy/start-run';
 import { Link } from 'react-router';
 import { noteRoute } from '@/app/paths';
-import { useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
+import { useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
+import { requestQuestionId } from '@/data/contracts/questions';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Segmented } from '@/ui/Segmented';
 import { Button } from '@/ui/Button';
@@ -97,23 +98,24 @@ export function BowerScreen() {
   // Rules being removed: the row says so until the list has dropped it (the toast waits for the list).
   const removeBusy = useRef(new Set<string>());
   const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
-  const removeRule = async (id: string): Promise<void> => {
+  // One removal for a rule and a request: the vault call, the list that must show it, and the words of the two toasts.
+  const remove = async (id: string, take: (id: string) => Promise<() => Promise<void>>, list: { settled: () => Promise<void> }, said: { removed: string; back: string }): Promise<void> => {
     if (removeBusy.current.has(id)) return;
     removeBusy.current.add(id);
     setRemoving(new Set(removeBusy.current));
     const pressed = document.activeElement;
     try {
-      const undo = await vault.removeRule(id);
-      await rulesState.settled();
+      const undo = await take(id);
+      await list.settled();
       // The pressed row is leaving: the keyboard goes to the page now, not after a render that may land later.
       // Only if the person has not moved on while the removal waited.
       const now = document.activeElement;
       if (!now || now === document.body || now === pressed) document.getElementById('main')?.focus();
       const back = async (): Promise<void> => {
         await undo();
-        await rulesState.settled();
+        await list.settled();
       };
-      undoToast('Rule removed. Bower stops following it from the next tidy-up.', back, () => 'The rule is back.');
+      undoToast(said.removed, back, () => said.back);
     } catch (e) {
       report(e, 'That did not work. Try again.');
     } finally {
@@ -121,6 +123,12 @@ export function BowerScreen() {
       setRemoving(new Set(removeBusy.current));
     }
   };
+  const removeRule = (id: string): Promise<void> => remove(id, (i) => vault.removeRule(i), rulesState, { removed: 'Rule removed. Bower stops following it from the next tidy-up.', back: 'The rule is back.' });
+  const removeAsked = (id: string): Promise<void> => remove(id, (i) => vault.removeRequest(i), requestsState, { removed: 'Request removed. Bower will not do it.', back: 'The request is back.' });
+  // Remove needs reads that agree: the run and the questions loaded, without error on their latest try, nothing going,
+  // and no open question about the request (a withdrawal would be held with it).
+  const asking = useQuestions();
+  const removable = (id: string): boolean => !runState.error && run !== undefined && !isRunning(run) && !asking.error && asking.data !== undefined && !asking.data.some((q) => q.id === requestQuestionId(id));
 
   return (
     <div className={s.page}>
@@ -214,7 +222,7 @@ export function BowerScreen() {
             What you asked
           </h2>
           {(requests ?? []).map((m, i) => (
-            <div key={m.id} className={s.bubble}>
+            <div key={m.id} className={s.bubble} aria-busy={removing.has(m.id) || undefined}>
               <p>{m.text}</p>
               {/* What Bower did, with links to what it names (C09). */}
               <p className={s.bubbleSub}>{m.done ? <Inline text={m.done} link={link} /> : 'Waiting for the next tidy-up.'}</p>
@@ -230,6 +238,11 @@ export function BowerScreen() {
                   }
                 >
                   Let Bower do it now
+                </Button>
+              )}
+              {!m.done && removable(m.id) && (
+                <Button size="sm" variant="ghost" aria-label={`Remove the request: ${m.text}`} aria-disabled={removing.has(m.id) || undefined} onClick={() => void removeAsked(m.id)}>
+                  {removing.has(m.id) ? 'Removing…' : 'Remove'}
                 </Button>
               )}
             </div>

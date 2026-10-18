@@ -37,7 +37,7 @@ import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
-import { pairsOf } from '../contracts/journal-record';
+import { isWithdrawal, pairsOf, takenBack } from '../contracts/journal-record';
 import { isHidden, isRunnerPath, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
@@ -1556,13 +1556,55 @@ export class DriveVault implements VaultSource {
     this.emit();
   }
 
-  async requests(): Promise<Request[]> {
-    const waiting = (await this.journal.list())
-      .filter((r) => r.kind === 'request')
+  /** The requests waiting for a tidy-up, newest first: not taken back, and not a withdrawal or its undo (a line with `undoes` and no `text`). */
+  private async waitingRequests(): Promise<Request[]> {
+    const lines = await this.journal.list();
+    const gone = takenBack(lines);
+    return lines
+      .filter((r) => r.kind === 'request' && !gone.has(r.id) && !isWithdrawal(r))
       .reverse()
       .map((r): Request => ({ id: r.id, text: r.text ?? r.what, at: r.at }));
+  }
+
+  async requests(): Promise<Request[]> {
     const done = (await this.json(SYSTEM.requests))?.done ?? [];
-    return [...waiting, ...done];
+    return [...(await this.waitingRequests()), ...done];
+  }
+
+  /**
+   * Takes a waiting request back (qa-live-claude-F3): a withdrawal line, never a drop of the request line, so a line
+   * whose reply was lost cannot run unwithdrawn and Undo finds the request as it was (`takenBack` reads the pair).
+   */
+  async removeRequest(id: string): Promise<() => Promise<void>> {
+    let r = (await this.waitingRequests()).find((x) => x.id === id);
+    if (!r) {
+      // Another page may have sent or drained the line since this listing.
+      await this.refresh();
+      r = (await this.waitingRequests()).find((x) => x.id === id);
+    }
+    if (!r) throw new BowerError('not-found', 'That request is no longer there.');
+    const words = r.text;
+    const w = await this.journal.record('request', 'Took back a request', { undoes: id });
+    this.emit();
+    return () => this.putBackRequest(w.id, words);
+  }
+
+  /**
+   * Undo of a withdrawal: dropped when never sent; otherwise a line that undoes it, unless a tidy-up took or archived
+   * the pair, when the words are asked again. Known limit: an Undo pressed offline whose line arrives after another
+   * device's tidy-up took the pair is archived with it and the request is not back (rare; the person asks again).
+   */
+  private async putBackRequest(w: string, words: string): Promise<void> {
+    if ((await this.journal.retract(w)) === 'sent') {
+      await this.refresh();
+      const ix = await this.index();
+      const listed = (await this.journal.list()).some((l) => l.id === w);
+      const file = ix.journalFiles().find((f) => f.name === `${w}.json`);
+      // A line with no listed file is still in the outbox: its undo is queued after it. A file a run holds is not ours to undo.
+      if (listed && !(file && ix.waitingRun(file.id) !== null)) await this.journal.record('request', 'Put back a request', { undoes: w });
+      else await this.addRequest(words);
+    }
+    this.emit();
   }
 
   async addRequest(input: string, intent?: string): Promise<Request> {

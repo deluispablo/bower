@@ -108,6 +108,8 @@ export interface VaultSource {
   addRule(text: string): Promise<Rule>;
   /** Takes a rule out (a tidy-up removes its line); gives back its Undo. */
   removeRule(id: string): Promise<() => Promise<void>>;
+  /** Takes a waiting request back (a withdrawal line); gives back its Undo. */
+  removeRequest(id: string): Promise<() => Promise<void>>;
   suggestions(): Promise<Suggestion[]>;
   /** Ticks or unticks the n-th task (`- [ ]`) of a note's body. */
   toggleTask(path: string, index: number): Promise<void>;
