@@ -8,7 +8,7 @@
   "allowWeb": false,
   "inbox": [
     {
-      "line": "The Job hunt offer again",
+      "line": "The Job hunt offer",
       "files": [
         "Offer_letter_final(2).pdf"
       ]
@@ -16,5 +16,15 @@
   ],
   "journal": [],
   "questions": [],
+  "presses": [
+    {
+      "between": [
+        {
+          "kind": "words",
+          "line": "Job hunt: the Ferrowick offer again, fully remote, 42,000 a year, start 2 November"
+        }
+      ]
+    }
+  ],
   "bowerOwned": []
 }
