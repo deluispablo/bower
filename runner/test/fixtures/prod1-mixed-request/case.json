@@ -1,0 +1,15 @@
+{
+  "about": "Made-up reconstruction of the qa-prod-1 mixed run (run1 log lines 5-6, run2 log line 5): two piles and one checklist request in one tidy-up. Production logs keep only the code (noteLink); the target class is inferred from linkWhy and the documents prompt line.",
+  "request": "Make me a checklist of everything I have to pay or do before 1 December, with the dates.",
+  "piles": {
+    "receipt": { "line": "Bike receipt", "file": "Bike receipt.pdf", "bytes": "made-up receipt bytes", "filedAs": "Bike repair receipt.pdf" },
+    "meeting": { "line": "Residents meeting on 20 November at 7pm in the community hall.", "writtenAs": "Residents meeting.md" }
+  },
+  "folder": "Areas/Home",
+  "shown": { "Areas/Home/Council tax.md": "---\nsummary: Alex has to pay the council tax second instalment before 1 December.\nby: bower\n---\n\nThe second instalment is due on 15 November 2026; the dates are on the council letter.\n\n## Timeline\n- 2026-10-01 · Filed by Bower.\n" },
+  "unshown": { "Resources/Old gym/Gym membership.md": "---\nsummary: Alex left the gym in 2024.\nby: bower\n---\n\nThe membership ended in 2024.\n\n## Timeline\n- 2024-06-01 · Filed by Bower.\n" },
+  "document": { "title": "Checklist before 1 December", "summary": "Two things to pay or do before 1 December." },
+  "target": "Bike repair receipt.pdf",
+  "refusal": { "kind": "noteLink", "before": "a link to a note you were not shown: leave it out", "after": "a link to a note this reply also writes: it was not shown" },
+  "drop": "drops a request (noteLink): a note link to nothing in the folder; it waits for the next tidy-up."
+}
