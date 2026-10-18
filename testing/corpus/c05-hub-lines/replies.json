@@ -1,0 +1,36 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Offer_letter_final(2).pdf",
+        "to": "Projects/Job hunt/Applications",
+        "basis": "Projects/Job hunt/Job hunt.md",
+        "name": "Offer, Industrial Designer, Ferrowick.pdf",
+        "note": {
+          "name": "Industrial Designer, Ferrowick.md",
+          "summary": "An offer from Ferrowick for Industrial Designer.",
+          "body": "Fully remote. Start 2 November. [[Job hunt]]"
+        }
+      },
+      {
+        "fileId": "$file:listing-88213.example.url",
+        "to": "Projects/Flat hunt",
+        "name": "Flat listing.md"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Flat hunt/Flat hunt.md",
+        "text": "A flat listing came in with the job offer.",
+        "cites": "$file:listing-88213.example.url"
+      },
+      {
+        "note": "Projects/Job hunt/Job hunt.md",
+        "text": "New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.",
+        "cites": "$file:Offer_letter_final(2).pdf"
+      }
+    ]
+  }
+]

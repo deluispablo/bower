@@ -11,9 +11,9 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c04-hardware-receipt | agrees | The person's rule decides the place (fit); the note states only the receipt's facts. |
 | c04-offer-and-flat | changed | The photo is a real picture with nothing legible, so it waits on one question; the listing keeps no detail its link does not show, and only the offer updates the job hunt. |
 | c05-confirms-known-fact | agrees | New case for point 2: the value gate files the letter beside the plot note, adds a line, makes no note. |
-| c05-hub-lines | changed | It pinned the hubs' Current state untouched; point 3 has Bower rewrite it where the pile changes it. |
+| c05-hub-lines | changed | Each hub gets one line from its own evidence; arriving in the same pile adds no line to the other hub. |
 | c05-keep-one-note | changed | The pair is asked by both notes first; the yes run carries the other note's facts into the kept note's Timeline and bins it once. |
-| c05-line-not-repeated | agrees | A line saying the same thing is not added twice: the Timeline only grows with new facts (points 2, 3). |
+| c05-line-not-repeated | changed | The repeat arrives after the first run; its line is there already, so the run adds nothing and touches no other note. |
 | c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping's summary note with the comparison moves to C08. |
 | c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
 | c06-stored-project-connection | agrees | The source note links both hubs by title, each on a line that says why; both hubs receive sourced news, since the offer is news for each, with no invented commute or acceptance (points 1, 3, 4, 7). |
@@ -160,6 +160,15 @@ record the method re-check, not an executed model result.
    yes appended "You said the rent is now £1,550.". Now: c05 runs its edit between real runs plus a tidy-up with nothing
    new; c07's Flat 3 carries Bower's earlier mark, press 1 asks the typed Write it question, the yes writes the shown
    update once, and a tidy-up with nothing new changes nothing. No answer writes a property, so the rent property stays.
+
+## Corpus clean changes (`corpus-fix-c05-value`)
+
+9. **c05-hub-lines and c05-line-not-repeated, `expected.json`, `rubric.md` and new `replies.json`; the
+   c05-line-not-repeated Job hunt seed.** Reason: the corpus audit (a co-arrival line on the job hunt, an invented listing
+   address, and a repeat that was only a seeded line). Was: the job hunt got a line about the flat from the same pile, and
+   the "repeat" was a line already in the seed. Now: each hub gets one line from its own evidence, and the repeat is a
+   second arrival after the first run, whose line is already there. The scripted replies replace the demo plan for these
+   two cases; the demo itself is unchanged.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
