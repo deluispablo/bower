@@ -15,6 +15,11 @@ test('the inbox shows before a slow report', async ({ page, allowConsole }) => {
   await expect(tidy).toHaveCount(0);
   // Readiness, the report and the questions come after, and the list does not move when the button arrives.
   const first = page.locator('section[aria-labelledby="inbox"] a[href^="/pile/"]').first();
+  // The first tidy-up checklist (shown here: a run happened, its report not yet opened) can arrive after the Inbox when
+  // the last run's record loads slowly; wait for it to settle. ux-loading-polish restores the strict no-shift check.
+  // Settled means its current step's button is drawn too, which waits for the last run's record.
+  const checklist = page.getByRole('region', { name: 'Your first tidy-up' });
+  await expect(checklist.getByRole('button', { name: 'See the report' })).toBeVisible({ timeout: 60_000 });
   const before = await first.boundingBox();
   await expect(tidy).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/Tidy-up finished/)).toBeVisible({ timeout: 60_000 });

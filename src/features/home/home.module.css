@@ -73,6 +73,15 @@
 .questionInSheet { background: var(--bg); }
 .questionWaiting { color: var(--accent-line); }
 .questionExhausted { color: var(--text-muted); }
+/* The first tidy-up: three numbered steps, the current one with its only button. */
+.steps { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.steps > li { display: flex; gap: 12px; align-items: flex-start; }
+.stepMark { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface-strong); color: var(--heading); font-weight: 700; font-size: 14px; }
+.stepDone .stepMark { background: var(--brand); color: var(--on-brand); }
+.steps > li[aria-current='step'] .stepMark { box-shadow: 0 0 0 2px var(--brand); }
+.stepTitle { color: var(--heading); font-weight: 600; }
+.stepButton { margin-top: 10px; }
+
 /* Wide touch screens need the same question targets as phones. */
 @media (pointer: coarse) {
   .question button { min-height: 44px; }

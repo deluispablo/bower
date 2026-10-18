@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { report } from '@/ui/report';
 import { useStartRun } from './start-run';
 import { pileName, thingsIn, waitingIn } from '@/data/piles';
@@ -18,6 +18,7 @@ import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import { RunLinks } from './RunLinks';
 import { Questions } from '@/features/home/Home';
+import { keepFirstTidyStep } from '@/features/home/useFirstTidy';
 import s from './tidy.module.css';
 
 /** The tidy-up: confirm, then the real phases, then the result. One sheet. */
@@ -32,7 +33,7 @@ export function TidySheet() {
   // Adjusted while rendering (React: storing information from previous renders), not in an effect.
   if (!tidyOpen && watched !== null) setWatched(null);
   else if (tidyOpen && running && run && watched !== run.id) setWatched(run.id);
-  const showRun = !!run && (running || (tidyReportRunId === run.id && run.phase === 'done' && !run.seen) || (run.phase === 'failed' && !run.seen) || watched === run.id);
+  const showRun = !!run && (running || (tidyReportRunId === run.id && run.phase === 'done') || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
   const pilesState = usePiles();
   const { data: piles } = pilesState;
@@ -55,13 +56,15 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
   const { data: piles } = pilesState;
   // Waiting keeps the focus: aria-disabled, not disabled (as on the pile page).
   const { busy, start: begin } = useStartRun();
+  const { vault } = useSources();
   const [error, setError] = useState<string | null>(null);
   const count = waitingIn(piles);
   const start = (): void => {
     const started = begin('all');
     if (!started) return;
     setError(null);
-    void started.catch((e: unknown) => {
+    // The Worker admitted it: the first tidy-up's step 2 is done (a refused start rejects and marks nothing).
+    void started.then(() => keepFirstTidyStep(vault, 'started'), (e: unknown) => {
       setError(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again.');
       if (!(e instanceof BowerError)) console.error(e);
     });
@@ -161,8 +164,13 @@ function Journal() {
 function RunView({ run }: { run: RunState }) {
   const now = useNow(isRunning(run));
   const { setTidy, startReplay } = useUi();
-  const { runs } = useSources();
+  const { runs, vault } = useSources();
   const { busy, start } = useStartRun();
+  // A finished report on screen is the first tidy-up's step 3 (a failed run is not).
+  const finished = run.phase === 'done';
+  useEffect(() => {
+    if (finished) void keepFirstTidyStep(vault, 'reviewed');
+  }, [finished, run.id, vault]);
   // The same condition useRunWatcher notifies on, read on render.
   const notifies = usePrefs((p) => p.notifyRuns) && typeof Notification !== 'undefined' && Notification.permission === 'granted';
   return (
