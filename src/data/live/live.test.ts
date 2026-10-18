@@ -626,7 +626,7 @@ describe('LiveRuns', () => {
     vi.spyOn(s.worker, 'status').mockImplementation(() => http.status() as never);
     const body = (run: RunWire | null, revision: number) => new Response(JSON.stringify({ run, revision }), { status: 200, headers: { 'content-type': 'application/json' } });
     const first = s.runs.current();
-    const second = s.runs.current();
+    const second = s.runs.current({ again: true });
     await vi.waitFor(() => expect(replies).toHaveLength(2));
     replies[0]?.resolve(body(wire('OLD', 'reading'), 5));
     expect(await first).toMatchObject({ id: 'OLD', phase: 'reading' });
@@ -646,7 +646,7 @@ describe('LiveRuns', () => {
     const newer = deferred<StatusReply>();
     status.mockImplementationOnce(() => older.promise).mockImplementationOnce(() => newer.promise);
     const first = s.runs.current();
-    const second = s.runs.current();
+    const second = s.runs.current({ again: true });
     const observations: Array<Promise<RunState | null>> = [];
     s.runs.subscribe(() => observations.push(s.runs.current()));
     newer.resolve(st(wire('OLD', 'done'), 2));
@@ -829,7 +829,7 @@ describe('LiveRuns', () => {
     const older = deferred<StatusReply>();
     status.mockImplementationOnce(() => older.promise).mockRejectedValueOnce(new Error('status unavailable'));
     const pending = s.runs.current();
-    await expect(s.runs.current()).rejects.toThrow('status unavailable');
+    await expect(s.runs.current({ again: true })).rejects.toThrow('status unavailable');
     older.resolve(st(wire('OLD', 'saving')));
     expect((await pending)?.phase).toBe('saving');
     lastRun.mockRejectedValueOnce(new Error('report unavailable'));
@@ -1140,6 +1140,7 @@ describe('LiveRuns', () => {
       vi.useFakeTimers();
       s.runs.subscribe(() => undefined);
       const first = s.runs.current().catch(() => undefined);
+      await s.runs.current({ again: true });
       await vi.advanceTimersByTimeAsync(61_000);
       const afterPoll = status.mock.calls.length;
       older.reject(new BowerError('not-found', 'Not found.'));

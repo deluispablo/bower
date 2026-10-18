@@ -4,7 +4,7 @@ import { isOpenElsewhere } from '../session';
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-function stub(handler: (url: URL, init: RequestInit) => Response): { fetch: typeof fetch; calls: Array<{ url: URL; init: RequestInit }> } {
+function stub(handler: (url: URL, init: RequestInit) => Response | Promise<Response>): { fetch: typeof fetch; calls: Array<{ url: URL; init: RequestInit }> } {
   const calls: Array<{ url: URL; init: RequestInit }> = [];
   const f = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
     const url = new URL(String(input));
@@ -105,6 +105,51 @@ describe('WorkerHttp', () => {
     await w.driveToken(false);
     await w.driveToken(false);
     expect(s.calls).toHaveLength(1);
+  });
+
+  function tokenAsks() {
+    const replies: Array<(response: Response) => void> = [];
+    const s = stub((url) => url.pathname === '/drive/token'
+      ? new Promise<Response>((resolve) => replies.push(resolve))
+      : new Response(null, { status: 204 }));
+    const w = new WorkerHttp(BASE, s.fetch);
+    const answer = (index: number, token = 'tok') => replies[index]?.(json({ accessToken: token, expiresAt: Date.now() + 3_600_000 }));
+    return { w, s, replies, answer };
+  }
+
+  it('driveToken: two asks at once send one /drive/token', async () => {
+    const { w, s, replies, answer } = tokenAsks();
+    const first = w.driveToken(false);
+    const second = w.driveToken(false);
+    for (let i = 0; i < replies.length; i++) answer(i);
+    expect(await Promise.all([first, second])).toEqual(['tok', 'tok']);
+    expect(s.calls.map((c) => c.url.pathname)).toEqual(['/drive/token']);
+  });
+
+  it('driveToken: a fresh ask is sent while a plain one is on its way', async () => {
+    const { w, s, answer } = tokenAsks();
+    const plain = w.driveToken(false);
+    const fresh = w.driveToken(true);
+    expect(s.calls.map((c) => c.url.search)).toEqual(['', '?fresh=1']);
+    answer(1, 'fresh');
+    expect(await fresh).toBe('fresh');
+    answer(0, 'plain');
+    expect(await plain).toBe('plain');
+  });
+
+  it.each(['signOut', 'deleteAccount'] as const)('driveToken: after %s a new ask does not share the one sent before', async (end) => {
+    const { w, s, answer } = tokenAsks();
+    const before = w.driveToken(false);
+    await w[end]();
+    const after = w.driveToken(false);
+    expect(s.calls.filter((c) => c.url.pathname === '/drive/token')).toHaveLength(2);
+    answer(0, 'before');
+    expect(await before).toBe('before');
+    const shared = w.driveToken(false);
+    answer(1, 'after');
+    expect(await Promise.all([after, shared])).toEqual(['after', 'after']);
+    expect(await w.driveToken(false)).toBe('after');
+    expect(s.calls.filter((c) => c.url.pathname === '/drive/token')).toHaveLength(2);
   });
 
   it('status gives the run or null', async () => {

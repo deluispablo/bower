@@ -55,6 +55,7 @@ export class LiveRuns implements RunSource {
   /** The highest revision of the run this took; an answer below it is older news and is dropped (TL-P3-15). */
   private revision = -1;
   private starts: Promise<unknown> = Promise.resolve();
+  private asking: Promise<RunState | null> | null = null;
   private foreground: Promise<void> | null = null;
   private refreshing: Promise<void> | null = null;
   private refreshIssued = 0;
@@ -87,6 +88,7 @@ export class LiveRuns implements RunSource {
   dispose(reset = false): void {
     this.disposed = true;
     this.generation++;
+    this.asking = null;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.listeners.clear();
@@ -132,6 +134,7 @@ export class LiveRuns implements RunSource {
     this.checkOpen();
     // Successful admission supersedes even status requests issued while process waited.
     this.generation++;
+    this.asking = null;
     this.refused = null;
     this.accepted = ++this.issued;
     // The admission answer counts like any other: one older than what this took is dropped.
@@ -154,6 +157,12 @@ export class LiveRuns implements RunSource {
   async current(opts: { again?: boolean } = {}): Promise<RunState | null> {
     if (this.disposed) return this.last ? this.state(this.last) : null;
     if (this.refused && !opts.again) throw this.refused;
+    if (!opts.again && this.asking) return this.asking;
+    this.asking = this.askStatus(opts);
+    return this.asking;
+  }
+
+  private async askStatus(opts: { again?: boolean }): Promise<RunState | null> {
     const generation = this.generation;
     const ticket = ++this.issued;
     let reply: StatusReply;
@@ -164,6 +173,9 @@ export class LiveRuns implements RunSource {
       if (clientError(e) && !this.disposed && generation === this.generation && ticket > this.accepted) this.refused = e;
       else if (opts.again) this.refused = null;
       throw e;
+    } finally {
+      // Report hydration has its own shared read; later status asks need not wait for it.
+      if (ticket === this.issued) this.asking = null;
     }
     const wasRefused = this.refused;
     this.refused = null;
