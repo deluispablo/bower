@@ -1,7 +1,7 @@
 Each thing is filed where a person would look for it, under a name that says what it is (the offer under the job hunt, the photo with the flat, the payslip in the person's money area). A name never keeps underscores, a copy number such as "(2)", "final" or a camera id.
 The payslip passes in any Area named for money, pay or finance ("Money", "Pay and tax records", "Finance"), new or existing.
 The photo `IMG_2301.jpg` is an unread image whose name says nothing. Passing outcomes: filed with the flat, or asked about with one plain yes-or-no question and left in the inbox with the pile's words. Nothing is filed only because of the pile's words.
-The note for the offer says what the letter says: the role, Ferrowick, fully remote, 42,000 a year, start 2 November. Every number in a note or a Timeline line is in the letter, the pile's words or a note shown; nothing is invented (no commute limit, no score).
+The note for the offer says what the letter says: the role, Ferrowick, fully remote, 42,000 a year, start 2 November. Every number in an authored field is in its own source or attached pile words. A reasoned citation to a shown note supplies figures only to its sentence in a summary or body. A Timeline or Current state update may also use its named destination note's supplied text; other shown notes, filenames and rules supply no figures automatically. Nothing is invented (no commute limit, no score).
 The note for the listing names the flat. It keeps the address only when the link's prepared text has one; the link has no prepared content today, so no address is expected (C15 checks it again once links are prepared).
 Both hub notes get a Timeline line.
 Scripted today: names only, never contents, so the facts in the notes are the model's job.
