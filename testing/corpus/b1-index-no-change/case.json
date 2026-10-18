@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "Index ignores stamps, excluded paths and summaries beyond the first four KB",
   "covers": "model",
-  "source": "new (TL-P4-39 B1; reused made-up TL-P4-38 index fixture; scripted proof pending)",
+  "source": "new (TL-P4-39 B1; reused made-up TL-P4-38 index fixture)",
   "scope": "instructions",
   "allowWeb": false,
   "inbox": [],

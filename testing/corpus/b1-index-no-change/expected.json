@@ -1,6 +1,7 @@
 {
   "unchanged": [
     "index.md",
+    ".bower/index.md",
     "Areas/Home/Home.md",
     "Resources/Gardening/Gardening.md",
     "Resources/Gardening/Plot diary.md",
@@ -37,6 +38,7 @@
     {
       "unchanged": [
         "index.md",
+        ".bower/index.md",
         "Areas/Home/Home.md",
         "Resources/Gardening/Gardening.md",
         "Resources/Gardening/Plot diary.md",
@@ -73,6 +75,7 @@
     {
       "unchanged": [
         "index.md",
+        ".bower/index.md",
         "Areas/Home/Home.md",
         "Resources/Gardening/Gardening.md",
         "Resources/Gardening/Plot diary.md",
