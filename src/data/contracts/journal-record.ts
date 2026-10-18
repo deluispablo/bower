@@ -51,3 +51,22 @@ export function pairsOf(lines: readonly JournalRecord[]): Set<string> {
   }
   return out;
 }
+
+/**
+ * The ids of a request the person took back (qa-live-claude F3): a withdrawal (a request record with `undoes` and no
+ * `text`, which the app writes) and the request it names when it is among `records`. A request with `undoes` and
+ * `text` is not a withdrawal; a withdrawal a later line undoes is not one either (it folds with that line, `pairsOf`),
+ * so its request stands. The one home for the planner and the runner, so a taken-back request is never shown or done.
+ */
+export function takenBack(records: readonly JournalRecord[]): Set<string> {
+  const undone = new Set(records.flatMap((r) => (r.undoes === undefined ? [] : [r.undoes])));
+  const out = new Set<string>();
+  const isWithdrawal = (r: JournalRecord): r is JournalRecord & { undoes: string } => r.kind === 'request' && r.undoes !== undefined && r.text === undefined;
+  for (const w of records) {
+    // A line that undoes a withdrawal is the other half of a folded pair, never a withdrawal itself.
+    if (!isWithdrawal(w) || undone.has(w.id) || records.some((r) => r.id === w.undoes && isWithdrawal(r))) continue;
+    out.add(w.id);
+    if (records.some((r) => r.kind === 'request' && r.id === w.undoes)) out.add(w.undoes);
+  }
+  return out;
+}

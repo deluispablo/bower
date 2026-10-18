@@ -36,7 +36,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
-import { type JournalRecord, isJournalRecord } from '../../src/data/contracts/journal-record';
+import { type JournalRecord, isJournalRecord, takenBack } from '../../src/data/contracts/journal-record';
 import { formulaInstalled, MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName, WAITING_WHY } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, propertyKeyOk, sameJson, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
@@ -2353,12 +2353,24 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     if (!token) return refuse('no Claude credential (CLAUDE_CODE_OAUTH_TOKEN is not set)');
     // B12d (R36): a request its large question holds is not taken this run: not shown, not archived, not asked again.
     const asked = await requestsAsked(read, run, admitted);
-    const took: Admitted = { ...admitted, taken: { ...admitted.taken, journal: admitted.taken.journal.filter((l) => !asked.held.has(l.fileId)) } };
+    // A request the person took back is never shown, answered or settled (qa-live-claude F3): both lines are the plan's, to archive.
+    // A withdrawal is held with its request when that request is held, and the open question is the way out.
+    const records: Array<{ fileId: string; rec: JournalRecord }> = [];
+    for (const line of admitted.taken.journal) {
+      const rec = jsonOf(await read.readText(line.fileId));
+      if (isJournalRecord(rec)) records.push({ fileId: line.fileId, rec });
+    }
+    const heldIds = new Set(records.filter((r) => asked.held.has(r.fileId)).map((r) => r.rec.id));
+    const withdrawn = takenBack(records.map((r) => r.rec));
+    const held = new Set([...asked.held, ...records.filter((r) => withdrawn.has(r.rec.id) && r.rec.undoes !== undefined && heldIds.has(r.rec.undoes)).map((r) => r.fileId)]);
+    const took: Admitted = { ...admitted, taken: { ...admitted.taken, journal: admitted.taken.journal.filter((l) => !held.has(l.fileId)) } };
+    const backIds = takenBack(records.filter((r) => !held.has(r.fileId)).map((r) => r.rec));
+    const back = new Set(records.filter((r) => backIds.has(r.rec.id) && !held.has(r.fileId)).map((r) => r.fileId));
     const { model, maxTurns } = claudeLimits(setup.env);
     // The model never sees a thing already saved: the plan bins it (`duplicates.ts`).
     const itemCount = took.taken.piles.reduce((n, p) => n + Math.max(1, thingsOf(p).length), 0);
     if (itemCount > 200) throw new LedgerExhausted(itemCount);
-    const shownTook = await forModel(read, run, took, asked.answered);
+    const shownTook = await forModel(read, run, took, new Set([...asked.answered, ...back]));
     const taken = await answersTaken(read, run, shownTook);
     // A large request's answer is the plan's (B12d): the model is shown the others.
     const answers = taken.answers.filter((a) => a.question.request === undefined);
@@ -2378,6 +2390,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const folders = listing.filter((f) => f.folder && MAIN_FOLDERS.includes((ix.pathOf(f.id) ?? '').split('/')[0] ?? ''));
       const requests = new Map<string, { id: string; text: string }>();
       for (const line of took.taken.journal) {
+        if (back.has(line.fileId)) continue;
         const rec = jsonOf(await read.readText(line.fileId));
         if (isJournalRecord(rec) && rec.kind === 'request') requests.set(line.fileId, { id: rec.id, text: rec.text ?? rec.what });
       }
@@ -2455,7 +2468,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     // Only your yes or no to "Write it" questions that kept the update they showed, and no pile: the plan writes that
     // update as shown, and the model is not asked (`c3-state-mark`, TL-P4-16 addendum 2).
     // A yes to a large request runs the same way (B12d R39): its stored part is the plan's, whatever else waits for the next tidy-up.
-    if ((taken.alone || taken.answers.some((a) => a.question.request !== undefined && a.yes)) && !shownTook.taken.piles.length) {
+    // A run that took only requests taken back has nothing to show a model.
+    const nothingShown = back.size > 0 && !shownTook.taken.journal.length;
+    if ((taken.alone || nothingShown || taken.answers.some((a) => a.question.request !== undefined && a.yes)) && !shownTook.taken.piles.length) {
       const listing = await read.listAll(run.rootId);
       const maps = await yesMaps();      return plannedWith({ thing: () => null, words: () => null, ...(maps.length ? { maps } : {}) }, undefined, VaultIndex.build(run.rootId, listing).file(SYSTEM.dir)?.id, 'with no model, from the updates shown');
     }
