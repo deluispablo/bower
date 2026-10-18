@@ -11,6 +11,7 @@ import { plural } from '@/app/words';
 import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
+import { PileStack } from '@/features/piles/PileStack';
 import { PoseBower } from '@/bird/Bower';
 import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
@@ -96,7 +97,7 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
           <ul className={s.piles} aria-label="In the inbox">
             {piles.map((p) => (
               <li key={p.id}>
-                <Icon name={!p.items.length ? 'note' : p.text ? 'pile' : p.items[0]?.kind === 'link' ? 'link' : 'file'} size={18} />
+                <PileStack items={p.items} />
                 <span>{pileName(p)}</span>
                 <span className="muted">{plural(thingsIn(p), 'thing')}</span>
               </li>
