@@ -28,6 +28,7 @@ import { Inline, type LinkFn } from '@/features/note/markdown';
 import { resolverFor } from '@/features/note/resolve';
 import ui from '@/ui/ui.module.css';
 import s from './home.module.css';
+import { FirstTidyChecklist } from './FirstTidyChecklist';
 import runStyles from '@/features/tidy/tidy.module.css';
 import noteStyles from '@/features/note/note.module.css';
 
@@ -100,6 +101,7 @@ export function Home() {
       <div className={s.grid}>
         <div className={s.colMain}>
           <LoadError state={runState} />
+          <FirstTidyChecklist run={run} />
           {running && run && <RunningCard run={run} />}
           <Inbox piles={piles} error={pilesState} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} />
           {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
