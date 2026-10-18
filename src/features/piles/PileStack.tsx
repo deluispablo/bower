@@ -2,7 +2,7 @@ import type { PileItem } from '@/data/types';
 import { Icon } from '@/ui/Icon';
 import s from './piles.module.css';
 
-const COLOR: Record<string, string> = { pdf: 'var(--accent)', image: 'var(--brand)', link: 'var(--para-resources)', note: 'var(--para-archive)' };
+const COLOR: Record<string, string> = { pdf: 'var(--accent-line)', image: 'var(--brand-line)', link: 'var(--para-resources)', note: 'var(--para-archive)' };
 
 /** A pile drawn as a pile: up to three cards, the count on top. */
 export function PileStack({ items }: { items: PileItem[] }) {

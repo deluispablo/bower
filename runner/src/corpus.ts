@@ -14,7 +14,7 @@ import { subjectOf } from '../../src/data/contracts/questions';
 import { distinctPaths } from '../../src/data/spine/report';
 import { timelineBullets } from '../../src/data/vault/note-format';
 import { displayName, nameOf } from '../../src/data/contracts/tree';
-import { WIKI_LINK, linkTarget } from '../../src/data/contracts/links';
+import { scanLinks, linkTarget } from '../../src/data/contracts/links';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
@@ -311,7 +311,7 @@ function scoreAnswer(want: AnswerExpectation, rows: ReadonlyArray<{ text: string
   if (want.links) {
     const got: string[] = [];
     let clear = true;
-    for (const m of done.matchAll(WIKI_LINK)) {
+    for (const m of scanLinks(done)) {
       const name = m[1] ?? '';
       if (!name) continue;
       const files = linkCandidates(name, after);
@@ -380,7 +380,7 @@ export function score(input: ScoreInput): Score {
       if (!rule) unmet.push(`placed outside the rubric: ${path}`);
       else if (rule.linking !== undefined) {
         // The exact link target ([[Garden plot]], [[Garden plot|text]], [[Garden plot#heading]]), not one that starts the same.
-        const linksTo = (text: string, target: string): boolean => [...text.matchAll(WIKI_LINK)].some((m) => named(m[1] ?? '').trim() === target);
+        const linksTo = (text: string, target: string): boolean => [...scanLinks(text)].some((m) => named(m[1] ?? '').trim() === target);
         const inFolder = (q: string): boolean => q.endsWith('.md') && q.startsWith(`${rule.under}/`);
         // Tied together either way: a placed note links the linking note, or the linking note's own lines link a placed note.
         const plot = after[`${rule.under}/${rule.linking}.md`] ?? '';
@@ -410,7 +410,7 @@ export function score(input: ScoreInput): Score {
   if (expected.linksResolve) {
     for (const [p, text] of Object.entries(after)) {
       if (!p.endsWith('.md') || p.startsWith('.bower/') || before[p] === text) continue;
-      for (const m of text.matchAll(WIKI_LINK)) {
+      for (const m of scanLinks(text)) {
         const name = named(m[1] ?? '');
         if (name && !resolves(name, after)) unmet.push(`${p}: link [[${name}]] does not resolve`);
       }

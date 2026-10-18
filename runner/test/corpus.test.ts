@@ -84,6 +84,19 @@ describe('the capability corpus', () => {
     }
   });
 
+  it('corpus-delete-revision-undo AC1: weaker revision and undo cases are absent', async () => {
+    const ids = (await loadCorpus(ROOT)).map((c) => c.id);
+    for (const id of ['c08-revise-comparison', 'c13-undo-protects-edit', 'c13-undo-whole-run']) {
+      expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
+      expect.soft(ids, id).not.toContain(id);
+    }
+    for (const id of ['c08-revise-keeps-personal-text', 'c13-manifest-move-and-create',
+      'c13-manifest-partial-edited-note', 'c13-manifest-state-with-personal-edit']) {
+      expect(ids, id).toContain(id);
+      expect((await loadCase(join(ROOT, id))).id).toBe(id);
+    }
+  });
+
   it('corpus-delete-bench-resources AC1: original-app seed directory is absent', () => {
     for (const name of ['_bench-vault/3-Resources', '_bench-vault']) {
       const path = join(ROOT, name);
@@ -152,6 +165,14 @@ describe('the capability corpus', () => {
   it('corpus-delete-bench-cases AC1: benchmark cases and external checkout dependency are absent', async () => {
     const ids = (await loadCorpus(ROOT)).map((c) => c.id);
     for (const id of ['bench-1-job-offer-clipping', 'bench-2-text-pdf', 'bench-3-receipt-pdf', 'bench-4-scanned-pdf', 'bench-5-question-about-filed-pdf']) {
+      expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
+      expect.soft(ids, id).not.toContain(id);
+    }
+  });
+
+  it('corpus-delete-overlaps AC2: redundant cases disappear without weakening capability coverage', async () => {
+    const ids = (await loadCorpus(ROOT)).map((c) => c.id);
+    for (const id of ['c05-conflicting-fact-kept', 'c06-offer-and-listing-linked', 'c07-rent-disagrees']) {
       expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
       expect.soft(ids, id).not.toContain(id);
     }

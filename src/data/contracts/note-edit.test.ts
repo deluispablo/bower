@@ -1189,3 +1189,10 @@ describe('a request\'s own line on a person\'s note (qa-live-claude F1, ruling 6
     expect(applyChanges(enc(diary), [append(null)], fetched([{ ...consent, requestId: 'change-1' }]))).toEqual({ ok: false, reason: 'not-bower' });
   });
 });
+
+it('rewrites adjacent links after an emoji with UTF-16 offsets', () => {
+  const before = legacy('\n', '😀[[Old]][[Other|label]]');
+  const after = legacy('\n', '😀[[New]][[Next|label]]');
+  expect(applyChanges(enc(before), [relink(['Old', 'New'], ['Other', 'Next'])]))
+    .toEqual({ ok: true, text: after, bytes: enc(after) });
+});
