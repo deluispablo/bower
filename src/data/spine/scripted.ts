@@ -4336,6 +4336,9 @@ export async function resultNoteKey(requestId: string): Promise<string> {
   return `result-${(await sha256(new Blob([new TextEncoder().encode(`bower-result-note\n${requestId}`)]))).slice(0, 32)}`;
 }
 
+/** qa-prod-6-F3: a note Bower wrote as a request's result (its key from `resultNoteKey`), derived, so never evidence for a request. */
+export const isResultNote = (f: Pick<DriveFile, 'appProperties'>): boolean => f.appProperties?.[PROP.item]?.startsWith('result-') === true;
+
 export async function runKeys(runId: string): Promise<(kind: string) => string> {
   const base = (await sha256(new Blob([new TextEncoder().encode(`bower-create-key\n${runId}`)]))).slice(0, 20);
   let n = 0;

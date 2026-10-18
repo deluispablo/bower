@@ -56,7 +56,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
-import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, authoredLinks, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, authoredLinks, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, isResultNote, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS, nameOf } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RECENT, RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, recentRows } from '../../src/data/vault/layout';
@@ -1125,7 +1125,7 @@ export const REFUSALS = {
   documentKeys: 'a document with keys outside the intent: give {requestId, to, title, summary, body}',
   documentBinding: "a document whose request is not one of the person's requests below, or a request given more than one result",
   documentPlace: 'a document whose "to" is not one of the folders shown under Projects, Areas, Resources or Archive',
-  documentText: 'a document whose title, summary or body breaks the note rules: a title of at most 48 characters with no slash, a summary of one line of at most 200 characters, a body of at most 16,000 characters with no My notes, Timeline or Current state heading',
+  documentText: 'a document whose title, summary or body breaks the note rules: a title of at most 48 characters with no slash, a summary of one line of at most 200 characters (178 when Bower read only some of the notes), a body of at most 16,000 characters with no My notes, Timeline or Current state heading',
   // F5 (ruling 6): the selection's checks and the execution's selection bounds, each with what to change.
   selectionKeys: 'a selection with keys outside its shape: give {"items":[{"itemId","kind","destination","wants"}],"asks":[]}',
   selectionItem: 'a selection item that is not a listed source, or a source selected twice',
@@ -1266,6 +1266,11 @@ const withLimit = (seen: Seen, requestId: string, text: string, gap: string): st
   const limit = seen.limited?.get(requestId);
   return limit ? `${text.trimEnd()}${gap}Bower read ${limit.read} of the ${limit.of} notes that may matter here, so some may be missing.` : text;
 };
+/** qa-prod-6-F3 R2: a limited request's document summary says so too; its bound leaves room for a full stop and the tail. */
+const SUMMARY_TAIL = ' Some may be missing.';
+const summaryMax = (seen: Seen, requestId: string): number => seen.limited?.has(requestId) ? AUTHORED.summary - SUMMARY_TAIL.length - 1 : AUTHORED.summary;
+const summaryWithLimit = (seen: Seen, requestId: string, summary: string): string =>
+  !seen.limited?.has(requestId) ? summary : `${summary}${/[.!?]$/.test(summary) ? '' : '.'}${SUMMARY_TAIL}`;
 
 /**
  * Numbers grounded (TL-P4-08 addendum 5). Every number in an authored summary, note body or Timeline line must be in the
@@ -2123,7 +2128,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('documentBinding', (d) => seen.requests?.has(d.requestId) === true),
     rule('documentBinding', (d) => !answered.has(seen.requests?.get(d.requestId)?.id ?? '') && !documented.has(seen.requests?.get(d.requestId)?.id ?? '') && !bound.has(d.requestId)),
     rule('documentPlace', (d) => placeOk(d.to) && seen.folders?.has(d.to) === true),
-    rule('documentText', (d) => lineOk(d.title.trim(), 48) && !/[/\\]/.test(d.title) && lineOk(d.summary, AUTHORED.summary)
+    rule('documentText', (d) => lineOk(d.title.trim(), 48) && !/[/\\]/.test(d.title) && lineOk(d.summary, summaryMax(seen, d.requestId))
       && d.body.trim() !== '' && d.body.length <= DOCUMENT_MAX && !CONTROL.test(d.body) && !HIDDEN_CHARS.test(d.body)
       && !/^##\s*(?:current state|document|my notes|timeline)\s*$/im.test(d.body) && !d.body.includes('<!-- bower:ownership')),
     (d) => {
@@ -2138,7 +2143,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const n = figureIn(d.body, d.requestId);
       return !n || quoting(`a number that is in none of its sources: "${n}" in the document "${d.title.trim()}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
-  ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: d.summary.trim(), body: withLimit(seen, d.requestId, d.body, '\n\n') })));
+  ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: summaryWithLimit(seen, d.requestId, d.summary.trim()), body: withLimit(seen, d.requestId, d.body, '\n\n') })));
   // live-refusal-wording: a request Bower will not do, once, given no answer, document, map, view, Timeline line or thing
   // (the whole request is declined), as a request named twice or not shown is no request of this run.
   // Checked on the reply as sent (below), so the refusal never depends on the order or validity of the other sections.
@@ -2755,6 +2760,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const sources: Array<(typeof items)[number] & { ids: string[] }> = [];
     // qa-prod-2-diag: each source's candidates with their tags and the provider's own cut, for the accepted selection's rows.
     const offers = new Map<string, { candidates: Array<{ id: string; tag: string }>; cut: number }>();
+    // qa-prod-6-F3: Bower's earlier results are derived from other notes, so a request never ranks them (pins still reach it).
+    const results = new Set(listing.filter(isResultNote).map((f) => f.id));
     const pinsFor = (itemId: string): string[] => [...new Set([
       ...answers.filter((a) => a.sourceId === itemId || subjectKey(a.question) === itemId).flatMap(answerPins),
       ...shown.requestNotes?.[itemId] ?? [],
@@ -2800,7 +2807,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const members = membership.get(id);
         if (note?.moc && members) note.members = members;
         return [id, ...members ?? []];
-      }))];
+      }))].filter((id) => !requests.has(source.itemId) || !results.has(id));
       // At most 12 notes a source: the pins first (never dropped), the profiles, then the neighbourhood and its maps' members.
       const pins = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId)])].filter((id) => indexed[id]);
       const profiles = listing.filter((file) => !file.folder && file.appProperties?.profile && file.appProperties.by === 'bower').map((file) => file.id);

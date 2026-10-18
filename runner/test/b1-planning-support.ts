@@ -190,6 +190,8 @@ export function phaseAwareClaude(
 export async function setup(options: {
   fixture?: string; folder?: Record<string, string>; inbox?: Array<{ line: string; files: string[] }>;
   inboxFiles?: Record<string, string>; journal?: LoadedCase['journal'];
+  /** Drive appProperties by folder path, as `seedCase` takes them. */
+  props?: Record<string, Record<string, string>>;
 } = {}) {
   const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', options.fixture ?? 'b1-index-job-offer'));
   if (!options.fixture) {
@@ -203,7 +205,7 @@ export async function setup(options: {
     c.bowerOwned = Object.entries(c.folder).filter(([, text]) => /^by: bower$/m.test(text)).map(([path]) => path);
   }
   const drive = fixedDrive();
-  const root = await seedCase(drive, c);
+  const root = await seedCase(drive, c, options.props);
   const ix = VaultIndex.build(root, await drive.listAll(root));
   const id = (path: string): string => {
     const found = ix.idOf(path);
