@@ -1160,19 +1160,24 @@ export function mocSnapshot(text: string): MocSnapshot | null {
   return { text, regions };
 }
 
-/** Add only framing and the format declaration; every legacy byte remains at its original relative position. */
+/** Add only framing and the format declaration; every legacy byte but the moved Timeline keeps its relative position. */
 function framedMoc(text: string): string | null {
   const bytes = encoder.encode(text);
   const own = parseOwnership(bytes);
   if (own.status === 'v2') return text;
   if (own.status !== 'legacy' || !mocSnapshot(text)) return null;
-  // Do not hide a stored Timeline behind newly empty framing during a legacy MOC upgrade.
-  if (own.layout.timeline) return null;
+  // A stored Timeline (Bower's own section in older notes) moves unchanged into the timeline frame; one before the
+  // map regions was never written by Bower and stays refused.
+  const timeline = own.layout.timeline;
+  const members = own.layout.moc?.['moc-members'];
+  if (timeline && (!members || timeline.start < members.end)) return null;
   const eol = eolOf(text);
+  const moved = timeline ? decoder.decode(bytes.subarray(timeline.start, timeline.end)) : '';
   const marker = (kind: 'begin' | 'end', region: string): string => `<!-- bower:ownership/2 ${kind} ${region} -->${eol}`;
   const inserts = new Map<number, string>();
   const add = (at: number, value: string): void => { inserts.set(at, (inserts.get(at) ?? '') + value); };
-  add(charAt(bytes, own.layout.frontEnd), ['current', 'personal', 'timeline', 'bower-note'].map((owner) => marker('begin', owner) + marker('end', owner)).join(''));
+  add(charAt(bytes, own.layout.frontEnd), ['current', 'personal', 'timeline', 'bower-note'].map((owner) => marker('begin', owner)
+    + (owner === 'timeline' && moved ? moved + (moved.endsWith('\n') ? '' : eol) : '') + marker('end', owner)).join(''));
   for (const region of MOC_REGIONS) {
     const span = own.layout.moc?.[region];
     if (!span) return null;
@@ -1182,7 +1187,8 @@ function framedMoc(text: string): string | null {
   const front = own.layout.front;
   if (!front) return null;
   add(charAt(bytes, front.start), `bower_format: ownership/2${eol}`);
-  let out = text;
+  // Every insertion sits at or before the cut, so the cut comes first.
+  let out = timeline ? text.slice(0, charAt(bytes, timeline.start)) + text.slice(charAt(bytes, timeline.end)) : text;
   for (const [at, insert] of [...inserts].sort(([a], [b]) => b - a)) out = out.slice(0, at) + insert + out.slice(at);
   return parseOwnership(encoder.encode(out)).status === 'v2' ? out : null;
 }
@@ -1268,9 +1274,11 @@ function applyAtVersion(before: Uint8Array, changes: readonly Change[], authors:
     if (shape && !shape.timeline && own.layout.timeline) {
       const nextBytes = encoder.encode(step.text);
       const nextOwn = parseOwnership(nextBytes);
-      if (nextOwn.status === 'invalid' || !nextOwn.layout.timeline
-        || decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end))
-          !== decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end))) return refuse('invariant');
+      const old = decoder.decode(before.subarray(own.layout.timeline.start, own.layout.timeline.end));
+      const next = nextOwn.status === 'invalid' || !nextOwn.layout.timeline ? null
+        : decoder.decode(nextBytes.subarray(nextOwn.layout.timeline.start, nextOwn.layout.timeline.end));
+      // A converted map's frame ends its Timeline with the one line break the older note lacked.
+      if (next !== old && (old.endsWith('\n') || next !== old + eolOf(text))) return refuse('invariant');
     }
     const kept = change.kind === 'about-append' ? step.text === current + (current && !current.endsWith('\n') ? '\n' : '') + change.text : change.kind === 'moc-rewrite' || change.kind === 'profile-rewrite' || change.kind === 'template-rewrite' || change.kind === 'about-rewrite' ? regionHolds(current, step.text, change) : change.kind === 'state-rewrite' ? stateHolds(current, step.text, change) : change.kind === 'views-set' ? viewsHold(current, step.text) : change.kind === 'computed-set' ? frontHold(current, step.text, new Set(change.values.map((v) => v.key)))
       : change.kind === 'property-set' ? frontHold(current, step.text, new Set([change.key])) : holds(current, step.text, change, step);
