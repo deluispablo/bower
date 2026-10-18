@@ -7,19 +7,21 @@ import { BowerError } from '@/data/types';
 import { loadingSources } from '@/testing/loading-sources';
 import { useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
-import { toast } from '@/ui/toast';
+import { useToasts } from '@/ui/toast';
 import { useFileActions } from './file-actions';
 import * as fileActions from './file-actions';
 import { NameSheet } from './NameSheet';
 
-vi.mock('@/ui/toast', () => ({ toast: vi.fn() }));
 const ui = useUi.getState();
 const tabs = useTabs.getState();
+/** What the real message stack shows, with whether each has a button (a saved or Undo promise would). */
+const said = (): Array<{ text: string; action: boolean }> => useToasts.getState().list.map((t) => ({ text: t.text, action: !!t.action }));
 afterEach(() => {
   cleanup();
+  useToasts.setState({ list: [] });
   useUi.setState(ui, true);
   useTabs.setState(tabs, true);
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
   history.replaceState(null, '', '/');
 });
 
@@ -42,11 +44,11 @@ it('a change kept only on this page follows its applied path without a saved or 
     fireEvent.click(screen.getByRole('button', { name: action }));
     await vi.waitFor(() => expect(screen.getByLabelText('Page').textContent).toBe(path === null ? '/files/Projects' : `/note/${path}`));
     if (path) expect(screen.getByLabelText('Result').textContent).toBe(path);
-    expect(toast).toHaveBeenCalledWith(failure.message);
-    expect(vi.mocked(toast).mock.calls.every((call) => call.length === 1)).toBe(true);
+    // One message, the warning itself (a Bin's pending words are replaced by it), with no button.
+    expect(said()).toEqual([{ text: failure.message, action: false }]);
     expect(useUi.getState().selected).toBe(path);
     cleanup();
-    vi.clearAllMocks();
+    useToasts.setState({ list: [] });
   }
 });
 
@@ -61,7 +63,7 @@ it('a named thing made before its journal warning opens once without a retry pro
   fireEvent.click(screen.getByRole('button', { name: 'Make the folder' }));
   await vi.waitFor(() => expect(screen.getByLabelText('Page').textContent).toBe('/files/Projects/New%20folder'));
   expect(create).toHaveBeenCalledOnce();
-  expect(toast).toHaveBeenCalledWith(failure.message);
+  expect(said()).toEqual([{ text: failure.message, action: false }]);
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
@@ -82,12 +84,12 @@ it("createNamed creates once and reports NameSheet's refused-create sentence", a
   expect(create).toHaveBeenCalledExactlyOnceWith('Resources', 'folder', 'Garden plans');
   expect(location.pathname).toBe('/files/Resources/Garden%20plans');
   expect(useUi.getState().selected).toBe(path);
-  expect(toast).not.toHaveBeenCalled();
+  expect(said()).toEqual([]);
 
   const failure = new Error('Create refused');
   create.mockClear();
   create.mockRejectedValueOnce(failure);
   await act(() => createNamed('Resources', 'Garden plans'));
   expect(create).toHaveBeenCalledExactlyOnceWith('Resources', 'folder', 'Garden plans');
-  expect(toast).toHaveBeenCalledExactlyOnceWith('The folder was not made. Try again.');
+  expect(said()).toEqual([{ text: 'The folder was not made. Try again.', action: false }]);
 });

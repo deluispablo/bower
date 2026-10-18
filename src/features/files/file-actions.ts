@@ -7,8 +7,12 @@ import { ancestors, useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
 import { BowerError, type TreeNode } from '@/data/types';
 import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
-import { toast } from '@/ui/toast';
+import { toast, useToasts } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
+import type { VaultSource } from '@/data/sources';
+
+/** Bins in flight per folder source and path: a second press, from any screen, joins the first (one write, one message). */
+const binning = new WeakMap<VaultSource, Map<string, Promise<void>>>();
 
 /**
  * What a person can do to a thing in their folder, with the words they see
@@ -96,26 +100,43 @@ export function useFileActions() {
           return e instanceof BowerError ? (e.applied?.path ?? null) : null;
         }
       },
-      async trash(path: string): Promise<void> {
-        try {
-          const folder = findNode(await vault.tree(), path)?.type === 'folder';
-          const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
-          await vault.trash(path);
-          follow(path, null);
-          const marks = useUi.getState().bookmarks;
-          useUi.getState().relocate(path, null);
-          undoToast(path.startsWith('Inbox/') ? "The pile is in your Drive's Bin." : `${label(path)} is in your Drive's Bin.`, () => vault.restore(path), () => {
-            useUi.getState().setRestored(path);
-            marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
-            return path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`;
-          });
-        } catch (e) {
-          if (e instanceof BowerError && e.applied?.path === null) {
+      trash(path: string): Promise<void> {
+        const running = binning.get(vault) ?? new Map<string, Promise<void>>();
+        binning.set(vault, running);
+        const joined = running.get(path);
+        if (joined) return joined;
+        // Said at once and held until Drive answers (WCAG 4.1.3 status messages); the outcome replaces it, never a claim before.
+        const pending = toast('Moving to Bin…');
+        useToasts.getState().hold(pending, true, 'action');
+        // Registered before the work starts, so a press re-entering during the read joins it.
+        let settle!: () => void;
+        const work = new Promise<void>((done) => (settle = done));
+        running.set(path, work);
+        void (async () => {
+          try {
+            const folder = findNode(await vault.tree(), path)?.type === 'folder';
+            const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
+            await vault.trash(path);
             follow(path, null);
+            const marks = useUi.getState().bookmarks;
             useUi.getState().relocate(path, null);
+            undoToast(path.startsWith('Inbox/') ? "The pile is in your Drive's Bin." : `${label(path)} is in your Drive's Bin.`, () => vault.restore(path), () => {
+              useUi.getState().setRestored(path);
+              marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
+              return path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`;
+            }, pending);
+          } catch (e) {
+            if (e instanceof BowerError && e.applied?.path === null) {
+              follow(path, null);
+              useUi.getState().relocate(path, null);
+            }
+            report(e, 'That did not work. Try again.', pending);
+          } finally {
+            running.delete(path);
+            settle();
           }
-          report(e, 'That did not work. Try again.');
-        }
+        })();
+        return work;
       },
       askFolderName(folder: string, inline = false): void {
         if (inline) useUi.getState().openAll([...ancestors(folder), folder]);

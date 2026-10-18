@@ -16,9 +16,10 @@ interface Toasts {
   show: (text: string, action?: Toast['action']) => number;
   /**
    * The same toast with new words and action (an Undo refused, then Try again): one message, never a second. It keeps
-   * its place and its button, so focus stays on the action, and its time starts again (paused while held).
+   * its place and its button, so focus stays on the action, and its time starts again (paused while held). Returns the
+   * id that now carries the words: the same one, or a new one when the old was put away meanwhile.
    */
-  replace: (id: number, text: string, action?: Toast['action']) => void;
+  replace: (id: number, text: string, action?: Toast['action']) => number;
   /** The action pressed: it runs, and the toast goes once it ends, unless it was replaced meanwhile. */
   press: (id: number) => void;
   dismiss: (id: number) => void;
@@ -73,13 +74,13 @@ export const useToasts = create<Toasts>((set, get) => {
     replace: (id, text, action) => {
       if (!get().list.some((t) => t.id === id)) {
         // Gone meanwhile (put away by something newer): said once, as a new message.
-        get().show(text, action);
-        return;
+        return get().show(text, action);
       }
       set({ list: get().list.map((t) => (t.id !== id ? t : action ? { id, text, action } : { id, text })) });
       const holders = held.get(id);
       holders?.delete('action');
       later(id, action ? ACTION_MS : PLAIN_MS);
+      return id;
     },
     press: (id) => {
       const t = get().list.find((x) => x.id === id);
