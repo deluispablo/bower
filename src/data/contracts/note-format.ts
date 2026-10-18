@@ -24,7 +24,7 @@ import { timelineLine, parseTimelineLine } from './timeline-line';
 import { ABOUT_REGIONS, fenceAfter, markLength, parseOwnership, togglePersonalTask, type ByteSpan, type Fence, type FetchedOwnership } from './ownership-format';
 import { NOTE_TEMPLATES, type NoteTemplate } from './note-templates';
 import { TASK_LINE } from './tasks';
-import { WIKI_LINK, renderLink } from './links';
+import { scanLinks, renderLink } from './links';
 import { normalizeTag, NOTE_TAGS_MAX, tagListOk } from './tag-format';
 import type { LintEvidence } from './run-manifest';
 import { computedBy, VIEW_LIMITS, viewFault, type FormulaView } from './view-format';
@@ -334,7 +334,7 @@ function linksIn(text: string): string[] {
     const previous = fence;
     fence = fenceAfter(line, fence);
     if (previous || fence) continue;
-    for (const m of line.matchAll(WIKI_LINK)) {
+    for (const m of scanLinks(line)) {
       const target = (m[1] ?? '').trim();
       if (target && !out.includes(target)) out.push(target);
     }
@@ -451,7 +451,7 @@ export function serializeNote(n: NoteFile): string {
       || (property('type') !== undefined && property('type')?.value !== (n.typeRow?.id ?? n.template))
       || !dateOk(property('created')?.value ?? '') || !dateOk(property('updated')?.value ?? '')
       || (n.template === 'document' ? related !== undefined || property('source') !== undefined || !documentBodyOk(n.body)
-        : !validSummary(property('source')?.link ?? property('source')?.value ?? '') || !links.length || links.length > 5 || links.length !== [...relatedText.matchAll(WIKI_LINK)].length
+        : !validSummary(property('source')?.link ?? property('source')?.value ?? '') || !links.length || links.length > 5 || links.length !== [...scanLinks(relatedText)].length
           || !/^\[\[[^\]|\r\n]+\]\](?:,\s*\[\[[^\]|\r\n]+\]\])*$/.test(relatedText))
       || (n.status !== undefined && !validSummary(n.status))
       || (n.template === 'source' && !validSummary(n.original ?? ''))) {
