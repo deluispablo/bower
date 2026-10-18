@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Outlet } from 'react-router';
 import { DataProvider } from '@/data/provider';
 import { loadingSources } from '@/testing/loading-sources';
@@ -17,6 +17,10 @@ vi.mock('@/features/onboarding/Welcome', () => ({ Welcome: () => <h1>Welcome</h1
 const KEY = 'bower:sign-in-from';
 const ALEX: User = { name: 'Alex', email: 'you@example.com' };
 const paths = ['/files/Projects', '/files/Projects/Flat%20hunt?view=list&tag=a%2Bb'] as const;
+
+// Models a loaded CI runner: RTL's post-find drain runs before React's passive effects (shard-1 flake).
+const realTimeout = globalThis.setTimeout;
+beforeEach(() => { vi.stubGlobal('setTimeout', ((fn: () => void, ms?: number, ...a: unknown[]) => (ms ? realTimeout(fn, ms, ...a) : (queueMicrotask(fn), 0))) as typeof setTimeout); });
 
 afterEach(() => {
   cleanup();
@@ -50,7 +54,7 @@ it.each([false, true])('browser root replaces the document and clears return (si
   open('/');
   await act(async () => undefined);
   expect(replace).toHaveBeenCalledWith('/landing/');
-  expect(sessionStorage.getItem(KEY)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
 });
 
 it.each(['media', 'ios'])('standalone root replaces the route using the %s signal', async (signal) => {
@@ -79,12 +83,12 @@ it.each(paths)('deep-link return preserves %s and consumes it once', async (path
   await screen.findByRole('button', { name: 'Continue with Google' });
   expect(window.location.pathname + window.location.search).toBe(`/sign-in?from=${encodeURIComponent(path)}`);
   expect(history.length).toBe(before);
-  expect(sessionStorage.getItem(KEY)).toBe(path);
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBe(path));
   await app.signIn();
   await screen.findByRole('heading', { name: 'Files' });
   expect(window.location.pathname + window.location.search).toBe(path);
   expect(window.location.hash).toBe('');
-  expect(sessionStorage.getItem(KEY)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
   cleanup();
   open('/', ALEX);
   await screen.findByRole('heading', { name: 'Home' });
@@ -96,18 +100,18 @@ it.each(['/', '/sign-in'])('callback at %s consumes stored return under Strict M
   await act(async () => undefined);
   expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument();
   expect(window.location.pathname + window.location.search).toBe(paths[1]);
-  expect(sessionStorage.getItem(KEY)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
 });
 
 it('an explicit return wins, omits its fragment, and survives callback failure and retry', async () => {
   sessionStorage.setItem(KEY, '/files/Old');
   open(`/sign-in?from=${encodeURIComponent(paths[1] + '#discard')}`);
   await screen.findByRole('button', { name: 'Continue with Google' });
-  expect(sessionStorage.getItem(KEY)).toBe(paths[1]);
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBe(paths[1]));
   cleanup();
   const app = open('/sign-in?signin=failed');
   await screen.findByRole('alert');
-  expect(sessionStorage.getItem(KEY)).toBe(paths[1]);
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBe(paths[1]));
   await app.signIn();
   await screen.findByRole('heading', { name: 'Files' });
   expect(window.location.pathname + window.location.search).toBe(paths[1]);
@@ -119,7 +123,7 @@ for (const value of ['', 'https://example.com', '//example.com', '/\\example.com
     open(where === 'query' ? `/sign-in?from=${encodeURIComponent(value)}` : '/', ALEX);
     await screen.findByRole('heading', { name: 'Home' });
     expect(window.location.pathname).toBe('/');
-    expect(sessionStorage.getItem(KEY)).toBeNull();
+    await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
   });
 }
 
@@ -130,7 +134,7 @@ for (const value of ['/sign-in', '/sign-in?from=%2Ffiles%2FProjects', '/landing/
     open(where === 'query' ? `/sign-in?from=${encodeURIComponent(value)}` : where.endsWith('/sign-in') ? '/sign-in' : '/', ALEX);
     await screen.findByRole('heading', { name: 'Home' });
     expect(window.location.pathname + window.location.search).toBe('/');
-    expect(sessionStorage.getItem(KEY)).toBeNull();
+    await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
   });
 }
 
@@ -140,7 +144,7 @@ it.each(['/privacy', '/terms'])('legal %s stays directly accessible signed out a
     open(path, user);
     await screen.findByRole('heading', { level: 1 });
     expect(window.location.pathname).toBe(path);
-    if (user) expect(sessionStorage.getItem(KEY)).toBeNull();
+    if (user) await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
     cleanup();
   }
 });
@@ -151,7 +155,7 @@ for (const path of ['/', '/privacy', '/terms', '/sign-in?from=%2Ffiles%2FProject
     open(path, ALEX, 'missing');
     await screen.findByRole('heading', { name: 'Welcome' });
     expect(window.location.pathname).toBe('/welcome');
-    expect(sessionStorage.getItem(KEY)).toBeNull();
+    await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
   });
   it(`elsewhere wins at ${path}, discards return, and takeover stays at the requested page`, async () => {
     sessionStorage.setItem(KEY, paths[0]);
@@ -163,7 +167,7 @@ for (const path of ['/', '/privacy', '/terms', '/sign-in?from=%2Ffiles%2FProject
     const app = open(path, ALEX, 'ready', place);
     const use = await screen.findByRole('button', { name: 'Use here' });
     expect(app.sources.session.folderState).not.toHaveBeenCalled();
-    expect(sessionStorage.getItem(KEY)).toBeNull();
+    await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
     await act(async () => use.click());
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Use here' })).toBeNull());
     expect(window.location.pathname).toBe(path.startsWith('/sign-in') ? '/' : path);
@@ -180,7 +184,7 @@ it('unresolved authentication and folder state expose no content or return navig
   render(<DataProvider sources={sources}><App /></DataProvider>);
   await act(async () => undefined);
   expect(screen.queryByRole('heading')).toBeNull();
-  expect(sessionStorage.getItem(KEY)).toBe(paths[0]);
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBe(paths[0]));
 });
 
 it('sign-out cleanup removes the pending destination', () => {
@@ -203,7 +207,7 @@ it('an invalid explicit return clears an old destination before signing in', asy
   sessionStorage.setItem(KEY, paths[0]);
   const app = open('/sign-in?from=%2F%2Fexample.com');
   await screen.findByRole('button', { name: 'Continue with Google' });
-  expect(sessionStorage.getItem(KEY)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
   await app.signIn();
   await screen.findByRole('heading', { name: 'Home' });
 });
@@ -215,5 +219,5 @@ it.each(['/', '/sign-in'])('callback at %s returning to /?view=list renders Home
   await act(async () => undefined);
   expect(screen.getByRole('heading', { name: 'Home' })).toBeInTheDocument();
   expect(window.location.pathname + window.location.search).toBe('/?view=list');
-  expect(sessionStorage.getItem(KEY)).toBeNull();
+  await waitFor(() => expect(sessionStorage.getItem(KEY)).toBeNull());
 });
