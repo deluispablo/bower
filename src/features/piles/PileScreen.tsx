@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { report } from '@/ui/report';
+import { report, undoToast } from '@/ui/report';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, type Pile, type SetAside } from '@/data/types';
@@ -335,6 +335,16 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
   }, [confirm]);
   const empty = isEmptyPile(pile);
   const onlyNote = !pile.items.length && !empty;
+  // Bytes still only on this device are discarded with the pile, so no Undo is promised for it (prod1-pile-undo).
+  const unsent = pile.items.some((item) => item.upload !== undefined && !item.chooseAgain);
+  const missing = pile.items.some((item) => item.chooseAgain);
+  const binSentence = onlyNote
+    ? 'The note goes to the Bin of your Drive.'
+    : unsent
+      ? 'Files already in Drive go to its Bin. Files still on this device will be discarded and cannot be restored.'
+      : missing
+        ? 'Files already in Drive go to its Bin. Missing files will still need to be chosen again.'
+        : 'Its files go to the Bin of your Drive, where you can get them back.';
   const size = block ? 'md' : 'sm';
   return (
     <div ref={box} className={confirm ? s.confirm : undefined} role={confirm ? 'alert' : undefined}>
@@ -345,7 +355,7 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
       ) : (
         <>
           {/* A pile with no things and no words has nothing to go to the Bin: only the buttons. */}
-          {unreached ? <p className={s.unreached}>{unreached}</p> : !empty && <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>}
+          {unreached ? <p className={s.unreached}>{unreached}</p> : !empty && <p>{binSentence}</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Button
               ref={removeButton}
@@ -355,7 +365,9 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
               onClick={() =>
                 void vault.removePile(pile.id).then(
                   () => {
-                    toast('Pile removed');
+                    // Undo is the restore entry the removal kept, by its place or, with none, its id.
+                    if (unsent) toast('Pile removed');
+                    else undoToast('Pile removed', () => vault.restore(pile.path ?? pile.id), () => 'The pile is back in the inbox');
                     onRemoved?.();
                   },
                   (e: unknown) => {
