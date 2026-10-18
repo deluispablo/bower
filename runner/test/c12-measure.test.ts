@@ -93,20 +93,28 @@ describe('model usage in the timing output (c12-measure)', () => {
   });
 });
 
-/** Characters of all every model call reads, its prompt file and its stdin (c12-prefix), in call order. */
-const sizes = (r: Awaited<ReturnType<typeof run>>): number[] => r.frames.map((f) => f.prompt.length);
+/**
+ * Characters every model call reads, its prompt file and its stdin (c12-prefix): the selection call's, and the largest
+ * writing call's (c12-fanout S10: read whatever order the writing calls come in, never by position).
+ */
+const sizes = (r: Awaited<ReturnType<typeof run>>): [number, number] => [
+  r.frames.find((f) => f.value.selection === undefined && f.value.sources !== undefined)?.prompt.length ?? 0,
+  Math.max(0, ...r.frames.filter((f) => f.value.selection !== undefined).map((f) => f.prompt.length)),
+];
 
 /**
- * Today's figures, measured on this fixture (main 316fbcce): the ceilings are those plus 5%, rounded up to a thousand;
- * the floors are the things filed today. The next C12 tasks move these numbers (c12-prefix, c12-map, c12-fanout).
+ * The figures measured on this fixture: the ceilings are those plus 5%, rounded up to a thousand, never above the
+ * execution ceilings before c12-fanout (128,000 and 245,000); the floors are the things filed. The calls are exact: one
+ * selection and one writing call per group (c12-fanout S10), the fixture being deterministic.
  */
 describe('the made-up large-folder benchmark (c12-measure)', () => {
   it.each([
-    // things, things filed at least, the selection call's characters at most, the execution call's characters at most
-    // The cards carry up to 12 candidates a source, so the calls are larger than with the old index (nothing is cut now).
-    [25, 25, 114_000, 128_000], // measured 25 filed, 107,874 and 121,199 characters (c12-map-cards)
-    [150, 50, 217_000, 245_000], // measured 50 filed, 206,486 and 232,991 characters (c12-map-cards); 14 before c12-map
-  ])('AC3 c12-measure-benchmark: 800 notes in 60 folders and %i things', async (things, filedMin, selectionMax, executionMax) => {
+    // things, things filed at least, calls, the selection call's characters at most, the largest writing call's at most
+    // The cards carry up to 12 candidates a source, so the selection is larger than with the old index (nothing is cut now).
+    [25, 25, 5, 114_000, 63_000], // measured 25 filed, 4 groups, 108,251 and 59,698 characters (c12-fanout; one call of 121,199 before)
+    // The 100 unselected things count 0 (c12-fanout S20) and ride in the first group, the largest writing call.
+    [150, 50, 8, 217_000, 199_000], // measured 50 filed, 7 groups, 206,863 and 189,255 characters (c12-fanout; one call of 232,991 before); 14 filed before c12-map
+  ])('AC3 c12-measure-benchmark: 800 notes in 60 folders and %i things', async (things, filedMin, calls, selectionMax, executionMax) => {
     expect(support, 'the made-up large folder is part of the planning test support').toHaveProperty('largeFolder');
     const large = support.largeFolder(800, 60, things);
     expect(Object.keys(large.folder), 'notes').toHaveLength(800);
@@ -114,25 +122,32 @@ describe('the made-up large-folder benchmark (c12-measure)', () => {
     expect(large.inbox.flatMap((p) => p.files), 'things').toHaveLength(things);
     expect(JSON.stringify(large), 'made-up names only').not.toMatch(/@|https?:/);
     const b = await setup(large); await seedState(b);
-    // Each thing with a candidate wants its first one and gets a note. With the index cut, a thing shown no candidate
-    // cannot be given a new note (TL-P4-47 Q6), so the scripted model leaves it unplaced: it waits in the inbox.
+    // Each thing with a candidate wants its first one and gets a note in that candidate's folder (as c12-map-cards AC4), so
+    // the groups form and the fan-out is what is measured. A thing shown no candidate is left unplaced: it waits in the inbox.
     const selected = select(b, [], large.to); const intent = fileIntent(b, large.to);
+    const placed = new Map<string, string>();
     const r = await run(b, [selected, intent], { beforeReply: async (turn, frame) => {
       if (turn !== 1) return;
+      const cards = (frame.value.cards ?? []) as Array<{ id: string; path: string }>;
       // The run holds whole above 200 operations until c12-admit, so the scripted model places at most 50 things.
-      selected.items = selected.items.flatMap((item) => { const wants = candidates(frame, item.itemId).slice(0, 1); return wants.length ? [{ ...item, wants }] : []; }).slice(0, 50);
-      intent.things = intent.things.filter((t) => selected.items.some((i) => i.itemId === t.fileId));
+      selected.items = selected.items.flatMap((item) => {
+        const id = candidates(frame, item.itemId)[0]; const path = cards.find((c) => c.id === id)?.path;
+        if (!id || !path) return [];
+        placed.set(item.itemId, path.slice(0, path.lastIndexOf('/')));
+        return [{ ...item, wants: [id], destination: b.id(path.slice(0, path.lastIndexOf('/'))) }];
+      }).slice(0, 50);
+      intent.things = intent.things.flatMap((t) => { const to = placed.get(t.fileId); return to && selected.items.some((i) => i.itemId === t.fileId) ? [{ ...t, to }] : []; });
     } });
-    const [selection = 0, execution = 0] = sizes(r);
+    const [selection, execution] = sizes(r);
     // c12-prefix spec review round 1 ruling 2: the measure counts the prompt file too, not stdin alone.
     expect(r.frames.every((f) => f.call.args.includes('--system-prompt-file')), 'each call names its prompt file').toBe(true);
     expect(selection, 'the prompt file is counted').toBeGreaterThan((r.frames[0]?.call.input.length ?? 0) + 1);
     // The figures, for the next tasks and staging to compare (console is mocked here).
     process.stdout.write(`c12-measure: things=${things} calls=${r.frames.length} chars=${selection}/${execution} filed=${report(r).filed.length}\n`);
     expect(r.code).toBe(0);
-    expect(r.frames.length, 'calls per run: one selection, one execution').toBe(2);
+    expect(r.frames.length, 'calls per run: one selection, one writing call per group').toBe(calls);
     expect(selection, 'the selection call\'s characters').toBeLessThanOrEqual(selectionMax);
-    expect(execution, 'the execution call\'s characters').toBeLessThanOrEqual(executionMax);
+    expect(execution, 'the largest writing call\'s characters').toBeLessThanOrEqual(executionMax);
     expect(report(r).filed.length, 'things filed').toBeGreaterThanOrEqual(filedMin);
   }, 120_000);
 });
