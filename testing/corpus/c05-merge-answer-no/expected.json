@@ -14,8 +14,33 @@
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": ["Bower health.md"],
+    "created": [],
     "updated": [],
-    "questions": []
-  }
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "report": {
+        "filed": 0,
+        "created": ["Bower health.md"],
+        "updated": [],
+        "questionsAtMost": 1,
+        "questionsExactly": 1,
+        "pairSubject": {
+          "kind": "pair",
+          "notes": [
+            "Projects/Flat hunt/Larkspur Lane flat.md",
+            "Projects/Flat hunt/Larkspur Lane flat, second listing.md"
+          ]
+        }
+      }
+    },
+    {
+      "report": {
+        "updated": [],
+        "questionsExactly": 0
+      }
+    },
+    {}
+  ]
 }

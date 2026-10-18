@@ -16,7 +16,7 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c04-offer-and-flat | C04 | scripted | p2-journey:C04, the demo's first pile; the two hub notes it updates are in the starting folder; the photo is a made-up plain JPEG with no metadata |
 | c05-confirms-known-fact | C05 | model | new (TL-P4-08 point 2: the value gate makes no note for a known fact) |
 | c05-hub-lines | C05 | scripted | p2-journey:C05, the hub lines of the same press as C04 |
-| c05-keep-one-note | C05 | model | p2-journey:C05 (fake only today: the merge question q1) |
+| c05-keep-one-note | C05 | scripted | p2-journey:C05 (the merge question asked as a typed pair, answered yes, then a tidy-up with nothing new) |
 | c05-line-not-repeated | C05 | scripted | p2-journey:C05 (idempotence: the same line twice is written once) |
 | c05-person-edited-between-runs | C05 | scripted | new (scripted intent replies through the planner) |
 | c05-merge-question-first | C05 | scripted | new (scripted intent replies through the planner) |
