@@ -34,6 +34,7 @@ const isStatus = (v: unknown): v is StatusReply => object(v) && (v.run === null 
 
 export class WorkerHttp implements WorkerApi {
   private token: { value: string; until: number } | null = null;
+  private tokenAsk: Promise<string> | null = null;
   /** The place this tab holds the lease for, sent with the calls the Worker fences (TL-P2-14, P3 contract). */
   private place: { place: string; epoch: number } | null = null;
   private readonly fetchFn: typeof fetch;
@@ -61,19 +62,27 @@ export class WorkerHttp implements WorkerApi {
 
   async signOut(): Promise<void> {
     this.token = null;
+    this.tokenAsk = null;
     await this.call('POST', '/auth/logout');
   }
 
   async deleteAccount(): Promise<void> {
     this.token = null;
+    this.tokenAsk = null;
     await this.call('DELETE', '/me', undefined, undefined, this.fence());
   }
 
   async driveToken(fresh: boolean): Promise<string> {
+    if (!fresh && this.tokenAsk) return this.tokenAsk;
     if (!fresh && this.token && this.token.until > Date.now() + 60_000) return this.token.value;
-    const t = await this.call<TokenReply>('GET', fresh ? '/drive/token?fresh=1' : '/drive/token', undefined, isToken);
-    this.token = { value: t.accessToken, until: t.expiresAt };
-    return t.accessToken;
+    const pending = this.call<TokenReply>('GET', fresh ? '/drive/token?fresh=1' : '/drive/token', undefined, isToken).then((t) => {
+      if (this.tokenAsk === pending) this.token = { value: t.accessToken, until: t.expiresAt };
+      return t.accessToken;
+    }).finally(() => {
+      if (this.tokenAsk === pending) this.tokenAsk = null;
+    });
+    this.tokenAsk = pending;
+    return pending;
   }
 
   async createFolder(): Promise<{ id: string; found: boolean }> {
