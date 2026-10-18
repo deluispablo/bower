@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Rent update.txt",
+        "to": "Projects/Flat hunt",
+        "name": "Flat 3 rent update.txt"
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+        "text": "The rent is £1,550 a month from 1 November.",
+        "cites": "$file:Rent update.txt"
+      }
+    ],
+    "states": [
+      {
+        "note": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+        "lines": [
+          "Two bedrooms, second floor.",
+          "Rent £1,550 a month from 1 November."
+        ],
+        "cites": "$file:Rent update.txt"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

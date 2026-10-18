@@ -18,7 +18,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
 | c06-stored-project-connection | agrees | The source note links both hubs by title, each on a line that says why; both hubs receive sourced news, since the offer is news for each, with no invented commute or acceptance (points 1, 3, 4, 7). |
 | c06-two-sources-attributed | agrees | Known facts receive separate confirmation lines citing their own letters, without redundant notes or an invented connection (points 1, 2, 3, 4, 7). |
-| c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
+| c07-answer-yes | changed | A typed Write it question about the edited Current state; the yes grants exactly the shown update once, and the property and prose stay. |
 | c07-dated-rent-change | changed | Points 1, 3, 7: the dated terms fit the flat note as one ordinary sourced line, with no marker and no question; Current state rewrites stay with C05's ownership rules. |
 | c07-same-period-rent | changed | Points 1, 3, 4, 7: one Contradiction line gives both figures, cites the later listing and links the earlier one; no winner, no question, no source note. |
 | c07-tentative-closure | changed | Points 1, 3, 4, 7: one Uncertain line keeps the condition, cites the notice and links the booking; no cancellation, no question, no source note. |
@@ -52,7 +52,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
 | c15-more-context-bounded | agrees | The words ("papers for the move") establish fit; both supplied one-page PDFs are read whole and each gets a grounded source note. |
 | c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
-| c05-person-edited-between-runs | agrees | Point 3 permits compiled state changes only with ownership or permission; a later personal edit requires an ask and sourced history. |
+| c05-person-edited-between-runs | changed | The edit happens between real runs; a later tidy-up with nothing new adds no news and no second question. |
 | c05-merge-question-first | agrees | Point 1 asks before combining near duplicates; pair identity binds both notes and neither changes before an answer. |
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
@@ -151,6 +151,15 @@ record the method re-check, not an executed model result.
    new changes nothing (`runs` scores each press). Keep-one-note is scripted now; its facts go to the kept note's
    Timeline (the code's only place for them). The declined-pair re-ask claim is left to quality review: no mechanism
    suppresses it. The old name-based question stays as a local seed in the tests of the legacy format.
+
+## Corpus clean changes (`corpus-fix-c05-c07-state`)
+
+8. **c05-person-edited-between-runs and c07-answer-yes, `case.json`, `expected.json`, `replies.json`, `rubric.md`; the
+   c07 Flat 3 note and its new rent source.** Reason: the corpus audit (a snapshot-era rubric; an opaque seeded question
+   and an append-only answer). Was: c05's rubric said the edit was a snapshot; c07 started from a seeded question and its
+   yes appended "You said the rent is now £1,550.". Now: c05 runs its edit between real runs plus a tidy-up with nothing
+   new; c07's Flat 3 carries Bower's earlier mark, press 1 asks the typed Write it question, the yes writes the shown
+   update once, and a tidy-up with nothing new changes nothing. No answer writes a property, so the rent property stays.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

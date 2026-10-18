@@ -4,25 +4,32 @@
   "title": "The person confirms the new figure",
   "covers": "scripted",
   "source": "p2-journey:C07 (the answer run)",
-  "scope": "instructions",
+  "scope": "all",
   "allowWeb": false,
-  "inbox": [],
-  "journal": [
+  "inbox": [
     {
-      "kind": "answer",
-      "text": "yes",
-      "questionId": "q-flat-3-rent-1550"
+      "line": "",
+      "files": [
+        "Rent update.txt"
+      ]
     }
   ],
-  "questions": [
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [],
+  "presses": [
     {
-      "id": "q-flat-3-rent-1550",
-      "text": "[[Flat 3 rent is now £1,550]] says the rent is £1,550, but [[Flat 3, 12 Larkspur Lane]] says £1,450. Is £1,550 right?",
-      "yes": "Yes, £1,550",
-      "no": "No, £1,450",
-      "about": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
-      "askedAt": 1791300000000
-    }
-  ],
-  "bowerOwned": []
+      "between": [
+        {
+          "kind": "answer",
+          "question": {
+            "kind": "state",
+            "note": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
+          },
+          "yes": true
+        }
+      ]
+    },
+    {}
+  ]
 }

@@ -27,12 +27,34 @@
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
+    "filed": 0,
     "created": [],
-    "updated": [
-      "Areas/Home/Garden plot.md"
-    ],
-    "questionsAtMost": 1,
-    "questionsExactly": 1
-  }
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Areas/Home/Garden plot.md"
+        ],
+        "questionsExactly": 0
+      }
+    },
+    {
+      "report": {
+        "filed": 1,
+        "created": [],
+        "updated": [
+          "Areas/Home/Garden plot.md"
+        ],
+        "questionsExactly": 1
+      }
+    },
+    {}
+  ]
 }
