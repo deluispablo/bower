@@ -40,7 +40,7 @@ describe('a note body adds to its summary', () => {
   it('F9-1: a saved link keeps its summary, Source and Timeline without a repeated body', async () => {
     const { note } = await planned();
     expect(note.summary).toBe(`Saved from ${ADDRESS}.`);
-    expect(note.properties).toContainEqual(expect.objectContaining({ key: 'source', value: ADDRESS }));
+    expect(note.properties).toContainEqual(expect.objectContaining({ key: 'source', value: `https://${ADDRESS}` }));
     expect(note.timeline).toContainEqual(expect.objectContaining({ text: 'Saved by you, filed by Bower.', source: ADDRESS }));
     expect(note.body).toBe('');
   });
