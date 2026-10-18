@@ -58,7 +58,7 @@ export function RightPanel() {
         items={[
           { key: 'links', label: 'Linked notes', icon: <Icon name="graph" size={18} /> },
           { key: 'outline', label: 'Outline', icon: <Icon name="outline" size={18} /> },
-          { key: 'bower', label: 'Bower', icon: <BowerHead size={20} /> },
+          { key: 'bower', label: 'Activity', icon: <BowerHead size={20} /> },
         ]}
       />
       <div ref={body} className={s.body} {...tabPanel('right', tab)}>

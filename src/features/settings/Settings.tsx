@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { useSources, useRules, useUser } from '@/data/provider';
+import { useSources, useRulesSection, useUser } from '@/data/provider';
+import { LoadError } from '@/ui/LoadError';
 import { usePrefs } from '@/app/prefs';
 import { plural } from '@/app/words';
 import { Button } from '@/ui/Button';
@@ -62,7 +63,8 @@ export function Settings() {
   const blocked = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   const { data: user } = useUser();
   const prefs = usePrefs();
-  const { data: rules } = useRules();
+  const rulesState = useRulesSection();
+  const { rules, prose } = rulesState;
   const { session, vault } = useSources();
   const nav = useNavigate();
   const signOut = (): void => {
@@ -97,11 +99,13 @@ export function Settings() {
           Open in Drive
         </Button>
       </Row>
-      <Row title="Rules" sub={plural(rules?.length ?? 0, 'rule')}>
+      {/* A count only once both reads answered and the rules note has no text of its own. */}
+      <Row title="Rules" sub={rulesState.error || prose ? undefined : rules && prose === '' ? plural(rules.length, 'rule') : 'Looking…'}>
         <Button size="sm" variant="ghost" onClick={() => nav('/bower')}>
           See them
         </Button>
       </Row>
+      <LoadError state={rulesState} />
 
       <h2 className={s.h2}>Tidying up</h2>
       <Row asLabel title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
