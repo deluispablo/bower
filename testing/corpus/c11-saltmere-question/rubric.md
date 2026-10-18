@@ -1,1 +1,1 @@
-Receipts are filed under Money by month with names that carry the place and the day. Bower asks one plain question (keep a copy of the list in the Saltmere note too?) and does not decide it.
+Receipts are filed under Money by month, as Alex's rule in Rules.md says, with names that carry the place and the day. Bower asks one plain question (keep a copy of the list in the Saltmere weekend note too?) about that existing note and does not decide it: the note and Rules.md stay byte identical.

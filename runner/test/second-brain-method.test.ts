@@ -164,7 +164,9 @@ describe('the second-brain method (TL-P4-08)', () => {
       expect({ id: c.id, pinned: /Current state[^.]*untouched/i.test(c.rubric) }).toEqual({ id: c.id, pinned: false });
       // Point 1: a thing left in the inbox (other than by an undo) comes with a question.
       const stays = (c.expected.files?.present ?? []).some((p) => p.startsWith('Inbox/'));
-      if (stays && c.scope !== 'undo') expect({ id: c.id, asked: (c.expected.report?.questions?.length ?? 0) > 0 }).toEqual({ id: c.id, asked: true });
+      const reports = [c.expected, ...(c.expected.runs ?? [])].map((e) => e.report);
+      const asked = reports.some((r) => (r?.questions?.length ?? 0) > 0 || (r?.questionSubjects?.length ?? 0) > 0 || (r?.questionsExactly ?? 0) > 0);
+      if (stays && c.scope !== 'undo') expect({ id: c.id, asked }).toEqual({ id: c.id, asked: true });
       // Point 1: a loose thing with no words that Bower cannot read cannot be placed without guessing, so it is asked.
       for (const pile of c.inbox.filter((p) => !p.line.trim() && p.files.length === 1)) {
         const name = pile.files[0] ?? '';

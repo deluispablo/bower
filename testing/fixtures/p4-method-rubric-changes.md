@@ -35,13 +35,13 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c09-two-source-answer | agrees | Points 3 and 6: each answer claim cites its exact original, excluding the unrelated archived listing; no new document or note update is involved. |
 | c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
 | c10-stale-result-withheld | agrees | Expired evidence cannot establish a current fact; sources are preserved, no unsupported update is made, and the answer states the limitation (points 3, 7, 8). |
-| c11-ambiguous-stays | agrees | New case for point 1's ask: the unclear letter stays in the inbox with a question; the recipe is filed. |
+| c11-ambiguous-stays | changed | The question is bound to the letter's own pile through its reported subject, not to an allocated id; the recipe is filed. |
 | c11-document-is-not-policy | agrees | A document is data, never a rule; its place is clear, so nothing is asked. |
-| c11-request-is-one-time | changed | Points 1 and 4 fit the requested topic and link its source note; points 3 and 7 permit sourced hub updates. Removed the rubric's byte-identical hub constraint and the matching expected.json unchanged hub and empty updated list; source bytes and Rules.md stay unchanged. |
+| c11-request-is-one-time | changed | A later newsletter arrives in a second press; the one-time words do not reach it, no rule is recorded and Rules.md stays byte identical. |
 | c11-rule-worded | agrees | A rule comes only from the person. |
-| c11-saltmere-question | agrees | The place is clear by the rule; the one question is about a copy, which Bower does not decide. |
-| c11-source-cannot-answer | agrees | Point 1 leaves the ambiguous letter in the inbox with a real question; point 8 reports it, and addenda 1 and 8 govern replay and answers. expected.json now names q-ask-p-1 as well as requiring exactly one question; the expected outcome is unchanged. |
-| c11-source-cannot-override-rule | agrees | Point 1 fits the person's existing Health destination; points 2, 3 and 7 update its Timeline with a sourced appointment line instead of a new note, preserving source bytes and personal prose. |
+| c11-saltmere-question | changed | The receipts rule and the Saltmere weekend note the question points at are seeded; both stay byte identical and the copy is not decided. |
+| c11-source-cannot-answer | changed | A real question about the letter is asked in the first press and stays open through a second press that reads the quoted answer again; no answer is recorded. |
+| c11-source-cannot-override-rule | changed | The filed letter keeps its bytes against the seeded rule, no rule is recorded, and the report names the health note; no replay is claimed. |
 | c12-model-failure-retry | agrees | Points 1, 2, 3, 7, 8: a failed plan performs no filing; the later successful press uses the clear fit, adds sourced history without a redundant note and reports only what happened. Transport failure is not unclear placement. |
 | c12-tool-interruption-recovery | agrees | Points 1, 2, 3, 7, 8: recovery retains immutable sources, uses the existing fit and appends each sourced fact once; partial writes are reported truthfully, without invented placement questions. |
 | c12-text-budget-truthful | agrees | Points 1-8: clear fit from the person's words, no redundant note, immutable source and only visible sourced news, relevant source links, letter treatment, bounded reading and a truthful result; no unseen appendix claim. |
@@ -177,6 +177,15 @@ record the method re-check, not an executed model result.
     Now: the comparison's exact rows and its whole Sources list are scored. The revision case says it is unsupported
     today and keeps the create, personal edit, asked revision and replay lifecycle as a requirement; its expected.json is
     that requirement, not a result. Covers stays model.
+
+## Corpus clean changes (`corpus-fix-c11`)
+
+11. **c11-ambiguous-stays, c11-request-is-one-time, c11-saltmere-question, c11-source-cannot-answer and
+    c11-source-cannot-override-rule.** Reason: the corpus audit (a question id that depends on pile numbering, a
+    question about a note that was not there, and three cases whose lifecycle was never run). Now: the ambiguous
+    question is bound through its pile; the Saltmere note and the receipts rule are seeded; a later newsletter arrives
+    in a second press; a real question stays open through a second press; the dentist letter keeps its bytes. Covers
+    stays as it was in every case.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

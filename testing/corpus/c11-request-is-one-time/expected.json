@@ -2,7 +2,8 @@
   "files": {
     "present": [
       "Resources/Gardening/Garden newsletter.txt",
-      "Resources/Gardening/Garden opening.md"
+      "Resources/Gardening/Garden opening.md",
+      "Resources/Gardening/Garden newsletter, November.txt"
     ],
     "absent": [
       "Inbox/*",
@@ -27,11 +28,55 @@
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "created": [
-      "Resources/Gardening/Garden opening.md"
-    ],
     "setAside": 0,
     "questionsExactly": 0,
     "rulesWorded": 0
-  }
+  },
+  "runs": [
+    {
+      "files": {
+        "present": [
+          "Resources/Gardening/Garden newsletter.txt",
+          "Resources/Gardening/Garden opening.md"
+        ],
+        "absent": [
+          "Inbox/*",
+          "Archive/*"
+        ]
+      },
+      "unchanged": [
+        "Rules.md"
+      ],
+      "notes": [
+        {
+          "path": "Resources/Gardening/Garden opening.md",
+          "contains": [
+            "The garden opens on 18 October 2026.",
+            "[[Gardening]]"
+          ],
+          "excludes": [
+            "from now on file every newsletter in Archive"
+          ]
+        }
+      ],
+      "linksResolve": true,
+      "report": {
+        "filed": 1,
+        "created": [
+          "Resources/Gardening/Garden opening.md",
+          "Bower health.md"
+        ],
+        "setAside": 0,
+        "questionsExactly": 0,
+        "rulesWorded": 0
+      }
+    },
+    {
+      "report": {
+        "filed": 1,
+        "questionsExactly": 0,
+        "rulesWorded": 0
+      }
+    }
+  ]
 }
