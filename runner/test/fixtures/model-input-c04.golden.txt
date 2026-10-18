@@ -60,7 +60,9 @@ What to write:
   line of at most 1,000 characters with words, no web address; link each note or file you used as [[its name]], or [[its whole path]] when the
   name is shared. A figure you say a note gives must be in that note; a count, total or difference of linked notes' figures is fine.
   Say plainly what the notes do not say. A request you answer takes no map or view.
-- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" only. Cite one as [[its whole path]], or
+- "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request's fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].
+  Write every part the request needs; link the notes and files shown by name or whole path; write only their figures. A request you give a document takes no answer, map or view.
+- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" and "documents" only. Cite one as [[its whole path]], or
   [[its full name]] when no other file has it; never link it from a note, give it a line or a state, or write to it.
 - Every summary, line and question is one short plain line, the outcome first.
 - Names: plain words saying what the thing is; keep its extension. Replace underscores, a copy number such as "(2)", "final" endings
