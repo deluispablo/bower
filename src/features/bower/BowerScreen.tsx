@@ -89,17 +89,31 @@ export function BowerScreen() {
     }
   };
 
+  // Rules being removed: the row says so until the list has dropped it (the toast waits for the list).
+  const removeBusy = useRef(new Set<string>());
+  const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
   const removeRule = async (id: string): Promise<void> => {
+    if (removeBusy.current.has(id)) return;
+    removeBusy.current.add(id);
+    setRemoving(new Set(removeBusy.current));
     const pressed = document.activeElement;
     try {
       const undo = await vault.removeRule(id);
+      await rulesState.settled();
       // The pressed row is leaving: the keyboard goes to the page now, not after a render that may land later.
       // Only if the person has not moved on while the removal waited.
       const now = document.activeElement;
       if (!now || now === document.body || now === pressed) document.getElementById('main')?.focus();
-      undoToast('Rule removed. Bower stops following it from the next tidy-up.', undo, () => 'The rule is back.');
+      const back = async (): Promise<void> => {
+        await undo();
+        await rulesState.settled();
+      };
+      undoToast('Rule removed. Bower stops following it from the next tidy-up.', back, () => 'The rule is back.');
     } catch (e) {
       report(e, 'That did not work. Try again.');
+    } finally {
+      removeBusy.current.delete(id);
+      setRemoving(new Set(removeBusy.current));
     }
   };
 
@@ -245,7 +259,7 @@ export function BowerScreen() {
         )}
         <ul className={s.ruleList}>
           {(rules ?? []).map((r) => (
-            <li key={r.id} className={r.pending ? s.pending : undefined}>
+            <li key={r.id} className={r.pending ? s.pending : undefined} aria-busy={removing.has(r.id) || undefined}>
               <span className={s.ruleText}>{r.pending ? `"${r.text}"` : r.text}</span>
               {r.pending ? (
                 <span className={s.pendingNote}>Waiting for the next tidy-up, where Bower words it clearly.</span>
@@ -254,8 +268,8 @@ export function BowerScreen() {
               )}
               <span className={s.ruleFoot}>
                 <span className="muted">Added {shortDay(r.since)}</span>
-                <Button size="sm" variant="ghost" aria-label={`Remove the rule: ${r.text}`} onClick={() => void removeRule(r.id)}>
-                  Remove
+                <Button size="sm" variant="ghost" aria-label={`Remove the rule: ${r.text}`} aria-disabled={removing.has(r.id) || undefined} onClick={() => void removeRule(r.id)}>
+                  {removing.has(r.id) ? 'Removing…' : 'Remove'}
                 </Button>
               </span>
             </li>
