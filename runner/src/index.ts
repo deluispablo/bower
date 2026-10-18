@@ -978,7 +978,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     if (!figures && (note.owner !== 'bower' || note.type !== 'moc')) continue;
     // Advisory incomplete regions cannot authorize an unrelated map edit.
     if (note.incomplete && !figures) {
-      console.log(`Skipped ${note.path}: its prefix has incomplete regions and this run does not need its full text.`);
+      console.log('Skipped a note because its prefix has incomplete regions and this run does not need its full text.');
       continue;
     }
     try {
