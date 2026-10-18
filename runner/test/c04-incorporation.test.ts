@@ -5,9 +5,11 @@
  * each scored by the corpus scorer.
  */
 import { phaseAwareClaude } from './b1-planning-support';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { extractImages, getDocumentProxy } from 'unpdf';
+import { extract } from '../src/extract';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead, type ScriptedRead } from '../../src/data/spine/read';
 import { listedPiles } from '../../src/data/spine/scripted';
@@ -22,6 +24,7 @@ import { dataOf, frameOf, promptOf, runWithClaude } from './corpus-run';
 import { RUN_ID, fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+const SCAN = resolve(import.meta.dirname, 'fixtures/corpus-scan.pdf');
 const AT = Date.UTC(2026, 9, 7, 9);
 
 /** The bounds the context keeps (characters): each thing's text, all things' text, each note's text, all notes'. */
@@ -54,6 +57,40 @@ function fakeScripted(drive: FakeDrive): ScriptedRead {
 }
 
 describe('what the model is shown (P4-3)', () => {
+  it('corpus-delete-bench-cases AC2: incorporation uses independent synthetic PDF inputs', async () => {
+    expect(existsSync(SCAN)).toBe(true);
+    const bytes = new Uint8Array(readFileSync(SCAN));
+    const pdf = await getDocumentProxy(bytes.slice());
+    try {
+      expect(pdf.numPages).toBe(1);
+      expect((await (await pdf.getPage(1)).getTextContent()).items).toEqual([]);
+      const images = await extractImages(pdf, 1);
+      expect(images).toHaveLength(1);
+      const image = images[0];
+      if (!image) throw new Error('expected one image');
+      expect([image.width, image.height]).toEqual([64, 64]);
+      const expected = new Uint8ClampedArray(64 * 64 * image.channels);
+      for (let y = 0; y < 64; y++) {
+        for (let x = 0; x < 64; x++) {
+          const shade = x >= 16 && x < 48 && y >= 16 && y < 48 ? 0 : 255;
+          for (let channel = 0; channel < image.channels; channel++) {
+            expected[(y * 64 + x) * image.channels + channel] = channel === 3 ? 255 : shade;
+          }
+        }
+      }
+      expect(Array.from(image.data)).toEqual(Array.from(expected));
+    } finally {
+      await pdf.loadingTask.destroy();
+    }
+    expect(await extract('corpus-scan.pdf', bytes)).toEqual({ text: null, why: expect.stringContaining('no text layer') });
+    for (const [path, content] of [
+      ['c04-garden-newsletter/inbox/Community garden newsletter, autumn.pdf', '18 October'],
+      ['c04-hardware-receipt/inbox/receipt-2026-09-14.pdf', '51.91'],
+    ] as const) {
+      expect((await extract(path, bytesOf(path))).text).toContain(content);
+    }
+  });
+
   it('the model context carries bounded extracted text for each admitted thing', async () => {
     const drive = fixedDrive();
     const root = (await drive.createFolder('root', 'Bower')).id;
@@ -74,7 +111,7 @@ describe('what the model is shown (P4-3)', () => {
     };
     await loose('Community garden newsletter, autumn.pdf', bytesOf('c04-garden-newsletter/inbox/Community garden newsletter, autumn.pdf'), 'p-news');
     await loose('Shopping list.md', '# Shopping\n\n- compost\n- twine\n', 'p-list');
-    await loose('scan0001.pdf', bytesOf('bench-4-scanned-pdf/inbox/scan0001.pdf'), 'p-scan');
+    await loose('scan0001.pdf', new Uint8Array(readFileSync(SCAN)), 'p-scan');
     await loose('IMG_0001.jpg', new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), 'p-photo');
     await loose('Broken.pdf', '%PDF-1.4 not really a PDF', 'p-broken');
     for (const n of [1, 2, 3, 4, 5]) await loose(`Long notes ${n}.txt`, `${n}`.repeat(30_000), `p-long-${n}`);
@@ -187,12 +224,6 @@ const PROPOSALS: Record<string, Proposal> = {
       { note: 'Projects/Job hunt/Job hunt.md', text: 'New offer from Ferrowick, fully remote.', cites: 'Offer_letter_final(2).pdf' },
       { note: 'Projects/Job hunt/Job hunt.md', text: 'A flat from the same pile went to the flat hunt.', cites: 'listing-88213.example.url' },
     ],
-  },
-  'bench-2-text-pdf': {
-    things: [{ thing: 'Community garden newsletter, autumn.pdf', to: 'Resources/Garden', name: 'Community garden newsletter, autumn.pdf', note: { name: 'Community garden newsletter, autumn.md', summary: 'Autumn newsletter of the community garden.', body: 'Bulb planting on 18 October; plot fees due by 31 January.' } }],
-  },
-  'bench-3-receipt-pdf': {
-    things: [{ thing: 'receipt-2026-09-14.pdf', to: 'Resources/Receipts', name: 'Example Hardware, 2026-09-14.pdf', note: { name: 'Example Hardware, 2026-09-14.md', summary: 'Hardware receipt, total 51.91.', body: 'Total 51.91, paid by card.' } }],
   },
 };
 
