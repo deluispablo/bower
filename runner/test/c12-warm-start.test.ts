@@ -319,6 +319,53 @@ describe('a press whose discovery is unfinished plans first (c12-warm-start)', (
     expect(known(resumed).length, 'with the progress').toBeGreaterThan(0);
   }, 120_000);
 
+  /** A concurrent edit before the first write: Offer.txt renamed (the filing is refused), retrieval.json touched when `both`. */
+  async function refusedRun(both: boolean, crashOn: string) {
+    const b = await cold();
+    const all = await b.drive.listAll(b.root);
+    const offer = all.find((f) => f.name === 'Offer.txt');
+    const retrieval = all.find((f) => f.name === 'retrieval.json');
+    const state = { sabotaged: false, crashed: false };
+    const values: unknown[] = [];
+    const m = b.admission;
+    const first = await run(b, values, { press: 1, admission: m, around: (next) => async (input, init) => {
+      const host = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).origin;
+      if (state.crashed && host === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
+      if (upload(init) && init?.body) {
+        const text = await new Response(init.body).clone().text();
+        // The plan is made and admitted: the edit lands between the opening checkpoint and the writes.
+        if (!state.sabotaged && /"name":"checkpoint-/.test(text)) {
+          state.sabotaged = true;
+          await b.drive.update(offer?.id ?? '', { name: 'Moved offer.txt' });
+          if (both) b.drive.touch(retrieval?.id ?? '');
+        }
+        if (/"name":"checkpoint-/.test(text) && text.includes(crashOn)) { state.crashed = true; throw new TypeError('Made-up connection lost at the checkpoint.'); }
+      }
+      return next(input, init);
+    }, beforeReply: async (turn, frame) => { values[turn - 1] = frame.value.selection === undefined ? select(b, m) : fileIntent(m); } });
+    expect(state.crashed, 'the checkpoint was reached').toBe(true);
+    const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A replay never calls a model.'); });
+    const resumed = await redispatchCase(b.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });
+    expect(model, 'no model replay').not.toHaveBeenCalled();
+    return { first, resumed };
+  }
+
+  it('WS21 c12-warm-start-rejected-filing: a filing refused by a conflict, the progress applied: the run finishes with the progress kept and no log line, and so does its replay', async () => {
+    const { resumed } = await refusedRun(false, '"state":"applied"');
+    expect(resumed.code).toBe(0);
+    expect(resumed.wire?.statuses.at(-1)?.phase).toBe('done');
+    expect(resumed.after['Inbox/Alex has a remote developer offer./Moved offer.txt'], 'the filing did not happen').toBeDefined();
+    expect(known(resumed).length, 'the progress is kept').toBeGreaterThan(0);
+    expect(resumed.after[MONTH] ?? '', 'no log line').not.toContain(' | ');
+  }, 120_000);
+
+  it('WS22 c12-warm-start-rejected-all: the filing and the progress both refused by a concurrent edit of retrieval.json: the run finishes with no log line, and so does its replay', async () => {
+    const { first, resumed } = await refusedRun(true, '"state":"pending"');
+    for (const r of [first, resumed]) expect(r.after[MONTH] ?? '', 'no log line').not.toContain(' | ');
+    expect(resumed.code).toBe(0);
+    expect(resumed.wire?.statuses.at(-1)?.phase).toBe('done');
+  }, 120_000);
+
   it('WS18 c12-warm-start-answers-wait: a queued answer is not consumed while discovery is unfinished; the press that completes applies it once', async () => {
     const A = 'Projects/Remote search/A.md';
     const B = 'Projects/Remote search/B.md';

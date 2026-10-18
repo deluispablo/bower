@@ -1204,7 +1204,8 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       const log = op.effect.inputs.targets?.find((t) => t.kind === 'log');
       const target = log && logEvents(manifest, log.declaration, head.outcomes).length ? log
         : op.effect.inputs.targets?.find((t) => t.kind === 'health') ?? op.effect.inputs.targets?.find((t) => t.path === SYSTEM.retrieval);
-      if (!target && !op.effect.inputs.targets?.length) {
+      // WS10, WS21: a maintain with nothing to log lands as the write it follows, and not at all when that one did not.
+      if (!target && logOnly(op)) {
         const prior = head.outcomes.find((o) => o.operationId === (op.effect as Maintain).inputs.operationIds.at(-1));
         return prior?.state === 'applied' ? { state: 'landed', evidence: prior.evidence } : { state: 'not-landed' };
       }
@@ -1393,10 +1394,14 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       }
       if (!last) {
         if (refused) return refused;
-        // WS10: a plan with memory and no log line ends in a maintain with no target; it settles as the write it follows.
+        // WS10, WS21: a log-only maintain with no line to write settles as the write it follows; refused when that one did not apply (WS22).
         const before = op.effect.inputs.operationIds.at(-1);
         const prior = head.outcomes.find((o) => o.operationId === before);
-        if (!targets.length && prior?.state === 'applied') { await sending(); return { state: 'applied', evidence: prior.evidence }; }
+        if (logOnly(op) && prior?.state === 'applied') { await sending(); return { state: 'applied', evidence: prior.evidence }; }
+        if (logOnly(op)) {
+          const error = new BowerError('unknown', 'Bower will finish updating its notes next time.'); console.error(error);
+          return { state: 'rejected', failure: { code: 'unknown', message: error.message } };
+        }
         throw unavailable();
       }
       // Even a fully reconciled partial effect was already named by the opening checkpoint.
