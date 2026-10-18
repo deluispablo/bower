@@ -307,9 +307,9 @@ describe('B11b figures through production main', () => {
     const ops = manifests(run).flatMap(([, text]) => (JSON.parse(text) as { operations?: Op[] }).operations ?? []).filter((op) => op.effect.kind === 'maintain');
     expect(ops.length, 'the run maintained').toBeGreaterThan(0);
     expect(ops.flatMap((op) => Object.values(op.effect.inputs?.snapshot ?? {})).filter((entry) => 'properties' in entry), 'the manifest snapshot is unchanged').toEqual([]);
-    const indexed = (run.frames.at(-1)?.indexed ?? {}) as Record<string, Record<string, unknown>>;
-    expect(Object.keys(indexed).length, 'the model is shown the indexed notes').toBeGreaterThan(0);
-    expect(Object.values(indexed).filter((entry) => 'properties' in entry), 'property evidence never reaches the model').toEqual([]);
+    const cards = (run.frames.at(-1)?.cards ?? []) as Array<Record<string, unknown>>;
+    expect(cards.length, 'the model is shown the cards').toBeGreaterThan(0);
+    expect(cards.filter((card) => 'properties' in card), 'property evidence never reaches the model').toEqual([]);
   });
 
   it('AC13 b11-figures-stored-faults: a stored view the grammar refuses is skipped and logged; the others are computed', async () => {

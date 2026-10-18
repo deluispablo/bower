@@ -205,6 +205,16 @@ const CUT = (left: number): string => `\n[cut here: ${left} more characters not 
 interface ShownThing { fileId: string; name: string; kind: string; text: string | null; cut: number; why?: string; pagesNotRead?: number; sentences?: Array<{ sentence: number; text: string }> }
 type ProfileSources = Array<{ path: string }>;
 
+type MapRow = { id: string; path: string; notes: number; hub?: { id: string; path: string; summary: string }; types?: string[]; tags?: string[] };
+type Card = { id: string; path: string; summary?: string; type?: string; tags?: string[]; members?: string[] };
+/** The most common values of `values`, most first (ties by name), at most `n`. */
+const commonest = (values: readonly string[], n: number): string[] | undefined => {
+  const counts = new Map<string, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  const top = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, n).map(([v]) => v);
+  return top.length ? top : undefined;
+};
+
 /** What the model is shown of the folder: the piles it took, with their words and things, the notes it may update, and the folders there are. */
 interface Shown {
   /** Bower's own folder (`.bower`), for the check on what the plan writes; not shown to the model. */
@@ -226,17 +236,20 @@ interface Shown {
   rules?: string;
   aboutMe?: ReturnType<typeof aboutContext>;
   learnedFacts?: ReturnType<typeof parseObservations>['live'];
-  index?: string;
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
   answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }>;
   /** C09 (R12): each request this run took, by its journal file id and its words, in journal order; none when it took none. */
   requests?: Array<{ requestId: string; text: string }>;
   /** The paths and names of the folder's files, for the check on a note's links; not shown to the model. */
   names?: Set<string>;
+  /** Every folder path under the main folders, for the checks; the model sees `map`. */
   folders: string[];
-  folderCandidates?: Array<{ folderId: string; path: string }>;
-  sources?: Array<{ itemId: string; candidates: Array<{ id: string; path?: string; version?: string; summary?: string; coverage?: MaintenanceNote['coverage'] }> }>;
-  indexed?: Readonly<Record<string, MaintenanceNote>>;
+  /** L1, the folder map (c12-map-cards): one row per folder in path order, bounded; `foldersCut` when rows are left out. */
+  map?: MapRow[];
+  foldersCut?: boolean;
+  /** L2, the candidate cards: each note once, however many sources name it; a source names its candidates by id. */
+  cards?: Card[];
+  sources?: Array<{ itemId: string; candidates: string[] }>;
   types?: readonly TypeRow[];
   tags?: readonly string[];
   selection?: z.output<typeof SelectionShape>;
@@ -334,7 +347,7 @@ function promptInstructions(): string {
     '3. Ask: when where a thing goes is genuinely unclear, never guess. Leave it out of "things" and add one plain yes-or-no',
     `   question about it to "asks" by its "fileId" (at most ${ASK.text} characters, no links, answers at most ${ASK.answer}). For a pile of`,
     '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
-    '   When 2 to 4 folderCandidates fit, options may select {folderId,label} from those candidates. Bower supplies option ids and actions.',
+    '   When 2 to 4 folders of the map fit, options may select {folderId,label} from those folders. Bower supplies option ids and actions.',
     '   What is asked about stays in the inbox untouched with its pile\'s words until answered. File the rest; never wait.',
     '',
     'What to write:',
@@ -429,50 +442,16 @@ function inStableOrder(piles: Shown['piles']): Shown['piles'] {
 const nearName = (name: string): string => name.normalize('NFC').toLowerCase().replace(/\.md$/u, '').replace(/\s*\(\d+\)$/u, '')
   .replace(/^(?:the|a|an)\s+/u, '').replace(/[^\p{L}\p{N}]/gu, '');
 
-/** Count the serialized projection, metadata and repeated candidate rows together, including cut notices. */
-function boundIndexContext(shown: Shown): void {
-  const size = (): number => JSON.stringify({ index: shown.index, indexed: shown.indexed, sources: shown.sources }).length;
-  if (size() <= 32_000) return;
-  const notice = '\n> index cut: context omitted; no match does not mean no destination.\n';
-  const original = shown.index ?? '';
-  shown.index = notice;
-  let indexed = { ...shown.indexed };
-  shown.indexed = indexed;
-  const remove = (id: string): void => {
-    const { [id]: _removed, ...remaining } = indexed;
-    indexed = remaining;
-    shown.indexed = indexed;
-  };
-  // Dictionary rows already carry the exact version and coverage. Repeat only their ids in large neighbourhoods.
-  for (const source of shown.sources ?? []) source.candidates = source.candidates.map((candidate) =>
-    indexed[candidate.id] ? { id: candidate.id } : candidate);
-  const candidateIds = new Set(shown.sources?.flatMap((s) => s.candidates.map((c) => c.id)));
-  // Keep neighbourhood metadata ahead of unrelated rows, without truncating an id or a coverage record.
-  for (const id of Object.keys(indexed).reverse()) {
-    if (size() <= 32_000) break;
-    const note = indexed[id];
-    const hub = note?.type === 'moc' || (note && VaultIndex.isHub(note.path, note.path.split('/').at(-1) ?? ''));
-    if (!candidateIds.has(id) && !hub) remove(id);
+/** The folder map within 32,000 characters as JSON: the first rows in path order, a prefix of the full list (c12-map-cards). */
+function boundMap(rows: readonly MapRow[]): MapRow[] {
+  let size = 1;
+  const kept: MapRow[] = [];
+  for (const row of rows) {
+    size += JSON.stringify(row).length + 1;
+    if (size > 32_000) break;
+    kept.push(row);
   }
-  for (const source of [...(shown.sources ?? [])].reverse()) {
-    while (size() > 32_000 && source.candidates.length) {
-      const removed = source.candidates.pop();
-      if (removed && !shown.sources?.some((s) => s.candidates.some((c) => c.id === removed.id))) remove(removed.id);
-    }
-  }
-  for (const id of Object.keys(indexed).reverse()) {
-    if (size() <= 32_000) break;
-    if (!shown.sources?.some((s) => s.candidates.some((c) => c.id === id))) remove(id);
-  }
-  if (size() > 32_000) throw new LedgerExhausted(shown.sources?.length ?? 0);
-  // Serialized string escaping is part of the bound. Retain only whole index lines.
-  let prefix = '';
-  for (const line of original.split('\n')) {
-    shown.index = `${prefix}${line}\n${notice}`;
-    if (size() > 32_000) break;
-    prefix += `${line}\n`;
-  }
-  shown.index = prefix + notice;
+  return kept;
 }
 
 /**
@@ -488,13 +467,14 @@ function systemPrompt(run: ScriptedRun, shown: Shown): string {
     '| Type | Matches | Template | Properties | Table | Group by | Profile |',
     '| --- | --- | --- | --- | --- | --- | --- |',
     ...(shown.types ?? []).map((row) => `| ${[row.id, row.match, row.template, row.properties, row.table, row.group_by ?? null, row.profile ?? null].map(cell).join(' | ')} |`),
-    JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe, learnedFacts: shown.learnedFacts } : {}), ...(shown.index !== undefined ? { index: shown.index } : {}), ...(run.hot ? { hot: run.hot } : {}), folders: shown.folders, ...(shown.folderCandidates ? { foldersById: Object.fromEntries(shown.folderCandidates.map((f) => [f.folderId, f.path])) } : {}), ...(shown.indexed ? { indexed: shown.indexed } : {}) }),
+    JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe, learnedFacts: shown.learnedFacts } : {}), ...(run.hot ? { hot: run.hot } : {}), map: shown.map ?? [] }),
+    ...(shown.foldersCut ? ['> folders cut: no match does not mean no destination.'] : []),
   ].join('\n');
 }
 
 /** A planning call's own text (c12-prefix): one JSON line on stdin, after the run context of the prompt file. */
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
-  return JSON.stringify({ ...(shown.tags ? { tags: shown.tags } : {}), runId: run.runId, admission: took.taken.id, ...(shown.requests?.length ? { requests: shown.requests } : {}), piles: inStableOrder(shown.piles), notes: shown.notes, ...(shown.files ? { files: shown.files } : {}), ...(shown.profileSources ? { profileSources: shown.profileSources } : {}), ...(shown.sources ? { sources: shown.sources } : {}), ...(shown.selection ? { selection: shown.selection, allowedTargets: shown.allowedTargets } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) });
+  return JSON.stringify({ ...(shown.tags ? { tags: shown.tags } : {}), runId: run.runId, admission: took.taken.id, ...(shown.requests?.length ? { requests: shown.requests } : {}), piles: inStableOrder(shown.piles), notes: shown.notes, ...(shown.files ? { files: shown.files } : {}), ...(shown.profileSources ? { profileSources: shown.profileSources } : {}), ...(shown.cards ? { cards: shown.cards } : {}), ...(shown.sources ? { sources: shown.sources } : {}), ...(shown.selection ? { selection: shown.selection, allowedTargets: shown.allowedTargets } : {}), ...(shown.answers?.length ? { answers: shown.answers } : {}) });
 }
 
 /** The main folders a model may file into: never the inbox, Bower's own files or the top of the folder. */
@@ -525,8 +505,6 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
       ({ about: aboutMe, facts: learnedFacts } = learnedContext(ledger, personal));
     }
   }
-  const indexFile = ix.file(SYSTEM.index);
-  const index = run.index ?? (indexFile ? bounded(await read.readText(indexFile.id), 32_000).text ?? undefined : undefined);
   const inMain = (path: string | undefined): path is string => path !== undefined && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
   const folders = listing.flatMap((f) => {
     const path = f.folder ? ix.pathOf(f.id) : undefined;
@@ -630,9 +608,7 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   // Repeating a line already shown is valid input, but grants no fresh consent or source evidence.
   // The planner's existing Timeline check still decides whether anything may be written.
   const presentLines = presentLinesOf(notes, listing, ix, run);
-  const folderCandidates = listing.flatMap((f) => { const path = f.folder ? ix.pathOf(f.id) : undefined;
-    return inMain(path) && path.includes('/') ? [{ folderId: f.id, path }] : []; });
-  return { ...(aboutMe ? { aboutMe, learnedFacts } : {}), ...(index !== undefined ? { index } : {}), own: ix.file(SYSTEM.dir)?.id, piles, long, notes, folders, ...(folderCandidates.length >= 2 && folderCandidates.length <= 4 ? { folderCandidates } : {}), names, suppressed, retrySources, requestNotes, presentLines, moves, personalNotes: new Set(listing.flatMap((f) => {
+  return { ...(aboutMe ? { aboutMe, learnedFacts } : {}), own: ix.file(SYSTEM.dir)?.id, piles, long, notes, folders, names, suppressed, retrySources, requestNotes, presentLines, moves, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
   })), ...(rules ? { rules } : {}) };
@@ -2505,10 +2481,12 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const source of items) {
       const waiting = ix.waitingRun(source.itemId) !== null;
       // Built at each use: captureMaps adds a matched map's links to metadata, and the hop must see them.
-      const pool = () => requests.has(source.itemId) ? { ...metadata, ...originals } : metadata;
-      const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : ix.neighbourhood(source.words, pool()))])];
+      const near = (): string[] => ix.neighbourhood(source.words, metadata);
+      // Originals (a request's) ride beside the 12 notes and do not count toward them (c12-map-cards ruling 7).
+      const nearOriginals = (): string[] => requests.has(source.itemId) ? ix.neighbourhood(source.words, { ...metadata, ...originals }).filter((id) => originals[id]) : [];
+      const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : near())])];
       await captureMaps(matched);
-      const neighbourhood = waiting ? matched : ix.neighbourhood(source.words, pool());
+      const neighbourhood = waiting ? matched : near();
       await captureMaps(neighbourhood);
       const membership = mocMembership(indexed);
       const notes = [...new Set(neighbourhood.flatMap((id) => {
@@ -2517,27 +2495,40 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (note?.moc && members) note.members = members;
         return [id, ...members ?? []];
       }))];
-      const parents = listing.filter((f) => f.folder && (MAIN_FOLDERS.includes(ix.pathOf(f.id) ?? '')
-        || notes.some((id) => ix.byId(id)?.parents.includes(f.id)))).map((f) => f.id);
-      sources.push({ ...source, ids: [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId), ...listing.filter((file) => !file.folder && file.appProperties?.profile && file.appProperties.by === 'bower').map((file) => file.id), ...notes, ...parents])].slice(0, 30) });
+      // At most 12 notes a source: the pins first (never dropped), the profiles, then the neighbourhood and its maps' members.
+      const pins = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId)])].filter((id) => indexed[id]);
+      const profiles = listing.filter((file) => !file.folder && file.appProperties?.profile && file.appProperties.by === 'bower').map((file) => file.id);
+      const kept = [...new Set([...pins, ...profiles, ...notes.filter((id) => !originals[id])])].filter((id) => indexed[id]).slice(0, Math.max(12, pins.length));
+      sources.push({ ...source, ids: [...kept, ...(waiting ? [] : nearOriginals())] });
     }
     await captureMaps(sources.flatMap((source) => source.ids));
-    shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids.flatMap((id) => {
-      const note = indexed[id]; const folder = ix.byId(id); return note ? [{ id, path: note.path, version: note.version, summary: note.summary, coverage: note.coverage }] : folder?.folder ? [{ id, path: ix.pathOf(id) ?? '', version: folder.modifiedTime, summary: folder.name, coverage: { kind: 'prefix' as const, bytes: 0 } }]
-        : folder && originals[id] ? [{ id, path: ix.pathOf(id) ?? '', version: folder.modifiedTime }] : [];
-    }) }));
-    // Id/version coverage accompanies the cut projection; it is metadata, never complete L3 evidence.
-    shown.indexed = Object.fromEntries(Object.entries(indexed).map(([id, note]) => { const { moc: _moc, lint: _lint, ...metadata } = note; return [id, metadata]; }));
-    // The index itself was cut (not merely bounded here): no match in it proves nothing, so no new note is justified by it.
-    const indexCutAtSource = /index cut: \d+ folders omitted/.test(shown.index ?? '');
-    boundIndexContext(shown);
+    shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids }));
+    const cardIds = [...new Set(shown.sources.flatMap((source) => source.candidates))];
+    const isCard = new Set(cardIds);
+    shown.cards = cardIds.map((id): Card => {
+      const note = indexed[id];
+      if (!note) return { id, path: ix.pathOf(id) ?? '' };
+      const tags = metadata[id]?.tags; const members = note.members?.filter((m) => isCard.has(m));
+      return { id, path: note.path, summary: note.summary, ...(note.type ? { type: note.type } : {}), ...(tags?.length ? { tags } : {}), ...(members?.length ? { members } : {}) };
+    });
     const folders = listing.filter((f) => f.folder && MAIN_FOLDERS.includes((ix.pathOf(f.id) ?? '').split('/')[0] ?? ''));
-    shown.folderCandidates = folders.map((folder) => ({ folderId: folder.id, path: ix.pathOf(folder.id) ?? '' }));
     const hubId = (folderId: string): string | null => {
       const path = ix.pathOf(folderId);
       return Object.entries(indexed).find(([, note]) => ix.file(note.path)?.parents.includes(folderId)
         && (note.type === 'moc' || note.path === `${path}/${path?.split('/').at(-1)}.md`))?.[0] ?? null;
     };
+    // L1: one row per folder under the main folders, in path order; a cut leaves a prefix, and then no match proves nothing.
+    const inFolder = (id: string): string[] => Object.keys(indexed).filter((noteId) => ix.file(indexed[noteId]?.path ?? '')?.parents.includes(id));
+    const allRows = folders.map((f): MapRow => {
+      const here = inFolder(f.id); const hub = hubId(f.id); const hubNote = hub ? indexed[hub] : undefined;
+      const types = commonest(here.flatMap((id) => indexed[id]?.type ?? []), 3);
+      const tags = commonest(here.flatMap((id) => metadata[id]?.tags ?? []), 5);
+      return { id: f.id, path: ix.pathOf(f.id) ?? '', notes: here.length,
+        ...(hub && hubNote ? { hub: { id: hub, path: hubNote.path, summary: hubNote.summary } } : {}), ...(types ? { types } : {}), ...(tags ? { tags } : {}) };
+    }).sort((a, b) => a.path < b.path ? -1 : 1);
+    shown.map = boundMap(allRows);
+    const foldersCut = shown.map.length < allRows.length;
+    shown.foldersCut = foldersCut;
     const typeFile = ix.file(SYSTEM.typeTable);
     shown.types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
     // Stored answers pin their own source; requests only nominate candidates.
@@ -2551,21 +2542,19 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     };
     const context: SelectionContext = { itemIds: [...sources.map((s) => s.itemId), ...shownTook.taken.journal.map((j) => j.fileId)],
       kinds: shown.types.map((row) => row.id),
-      candidates: [...Object.keys(shown.indexed), ...leftOut, ...Object.keys(originals)], folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
+      candidates: [...cardIds, ...leftOut, ...Object.keys(originals)], folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
       pinned: Object.fromEntries(sources.map((s) => [s.itemId,
         answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
-    const indexCut = (): boolean => /index cut:/.test(shown.index ?? '');
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
-      const cut = indexCut();
-      // A cut index cannot show that a new folder is needed: that item waits unplaced, nothing is created (TL-P4-47 Q6).
-      result.value.items = result.value.items.filter((item) => !cut || typeof item.destination === 'string');
+      // A cut map cannot show that a new folder is needed: that item waits unplaced, nothing is created (TL-P4-47 Q6).
+      result.value.items = result.value.items.filter((item) => !foldersCut || typeof item.destination === 'string');
       result.allowedTargets = Object.fromEntries(Object.entries(result.allowedTargets).filter(([id]) => result.value.items.some((item) => item.itemId === id)));
       for (const item of result.value.items) {
         // A note left out this run is simply not read; a line on it is refused by the reply check.
         item.wants = item.wants.filter((id) => !leftOut.has(id));
-        const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates.map((c) => c.id) ?? [];
+        const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates ?? [];
         if (item.wants.some((id) => !candidates.includes(id))) return no('selectionWants');
         if (item.basis && !sourceBasisOk(item.basis, item.itemId, sources.find((s) => s.itemId === item.itemId)?.words)) return no('selectionBasis');
         const destinationId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
@@ -2577,7 +2566,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (typeof item.destination !== 'string') {
           const destination = item.destination;
           const path = ix.pathOf(destination.parentId) ?? '';
-          const visible = candidates.includes(destination.parentId);
+          const visible = shown.map?.some((row) => row.id === destination.parentId) === true;
           try { checkCreationName(item.destination.name, 'folder'); } catch (error) { console.error(error); return no('selectionPlace'); }
           if (!visible || ix.filesIn(path).some((f) => nearName(f.name) === nearName(destination.name))) return no('selectionPlace');
         }
@@ -2779,7 +2768,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         merges: mergesOf(answers, shown.notes.map((n) => n.path)), requests,
         requestNotes: new Map(Object.entries(shown.requestNotes ?? {}).map(([id, notes]) => [id, new Set(notes.flatMap((n) => ix.pathOf(n) ?? []))])), maps: new Set(Object.entries(indexed)
           .flatMap(([id, note]) => (note.type === 'moc' && note.owner === 'bower' ? [id] : []))),
-        sets: mapSets, noteTypes, skipped: mapSkipped, shownIds: new Set(Object.entries(shown.indexed ?? {}).flatMap(([id, n]) => (MAIN_FOLDERS.includes(n.path.split('/')[0] ?? '') ? [id] : []))) };
+        sets: mapSets, noteTypes, skipped: mapSkipped, shownIds: new Set([...cardIds, ...(shown.map ?? []).flatMap((row) => row.hub?.id ?? [])]) };
       let validatedPlan: RunManifest | undefined;
       const targets = new Set(Object.values(selection.allowedTargets).flat());
       // The plan's journal, for every plan of a reply: a request whose targets were not selected stays in the inbox for a
@@ -2802,7 +2791,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const thing = shown.piles.flatMap((p) => p.things).find((t) => t.fileId === id);
         const own = thing ? new Set(ix.neighbourhood(`${thing.name} ${thing.text ?? ''}`, metadata)) : undefined;
         const places = [...new Set((shown.sources?.find((source) => source.itemId === id)?.candidates ?? [])
-          .filter((c) => indexed[c.id] && (!own || own.has(c.id))).map((c) => ix.byId(c.id)?.parents[0] ?? ''))]
+          .filter((id) => indexed[id] && (!own || own.has(id))).map((id) => ix.byId(id)?.parents[0] ?? ''))]
           .flatMap((folderId) => folders.some((f) => f.id === folderId) && (ix.pathOf(folderId) ?? '').includes('/') ? [folderId] : [])
           .map((folderId) => ({ folderId, path: ix.pathOf(folderId) ?? '' })).sort((x, y) => (x.path < y.path ? -1 : 1))
           .map(({ folderId, path }) => ({ folderId, label: path.split('/').at(-1) ?? path }));
@@ -2862,7 +2851,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const source = from(key, row);
           if (!item) return at(no('thingPlace'), source);
           // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder, and a pile-word note has none (TL-P4-47 Q6; B1: a selected visible note backs a new one).
-          if (indexCutAtSource && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return at(no('noteCut'), source);
+          if (foldersCut && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return at(no('noteCut'), source);
           const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
             : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
           if (row.to !== path) return at(no('thingPlace'), source);

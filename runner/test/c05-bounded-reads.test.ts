@@ -85,13 +85,13 @@ function reply(line = false, wants = [PATH]): ClaudeSpawn {
       notes: Array<{ path: string }>;
       selection?: unknown;
       sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
-      foldersById: Record<string, string>;
+      map: Array<{ id: string; path: string }>;
     };
     const source = context.piles.flatMap((p) => p.things).find((t) => t.name === SOURCE)?.fileId;
     const offered = line && source && context.notes.some((note) => note.path === PATH);
     const intent = context.selection === undefined ? {
       items: context.sources.map((source) => ({ itemId: source.itemId, kind: 'unknown',
-        destination: Object.entries(context.foldersById).find(([, path]) => path === 'Areas/Home')?.[0],
+        destination: context.map.find((row) => row.path === 'Areas/Home')?.id,
         wants: source.candidates.filter((candidate) => wants.includes(candidate.path)).map((candidate) => candidate.id),
       })), asks: [],
     } : { kind: 'tidy-intent', v: 1,
