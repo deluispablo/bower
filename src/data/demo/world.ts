@@ -909,6 +909,22 @@ export class DemoWorld {
           this.record('request', `Asked Bower: "${t}"`);
           return r;
         }),
+      removeRequest: (id) =>
+        change(() => {
+          const r = this.requests.find((x) => x.id === id && !x.done);
+          if (!r) throw new BowerError('not-found', 'That request is no longer there.');
+          const at = this.requests.indexOf(r);
+          this.requests = this.requests.filter((x) => x !== r);
+          // As a pending rule: its "Asked Bower" line goes with it, and Undo puts both back.
+          const was = [...this.journal].reverse().find((c) => c.kind === 'request' && c.what === `Asked Bower: "${r.text}"`);
+          const place = was ? this.journal.indexOf(was) : -1;
+          if (was) this.unrecord(was.id);
+          return () =>
+            change(() => {
+              this.requests = [...this.requests.slice(0, at), r, ...this.requests.slice(at)];
+              if (was) this.journal = [...this.journal.slice(0, place), was, ...this.journal.slice(place)];
+            });
+        }),
       linkAddress: (path) =>
         this.wait(() => {
           if (!path.endsWith('.url') || !this.entries.has(path)) return null;
