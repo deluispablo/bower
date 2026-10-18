@@ -103,10 +103,9 @@ const sizes = (r: Awaited<ReturnType<typeof run>>): number[] => r.frames.map((f)
 describe('the made-up large-folder benchmark (c12-measure)', () => {
   it.each([
     // things, things filed at least, the selection call's characters at most, the execution call's characters at most
-    // c12-map: ranking gives each thing its own notes in place of the same 30 newest, and the bound shared by `indexed`
-    // and `sources` then drops the last sources' candidates; c12-map-cards removes that bound and asks all 25 filed.
-    [25, 5, 92_000, 95_000], // measured 5 filed, 87,110 and 89,912 characters (24 before c12-map)
-    [150, 4, 119_000, 121_000], // measured 4 filed, 112,853 and 115,127 characters (14 before c12-map)
+    // The cards carry up to 12 candidates a source, so the calls are larger than with the old index (nothing is cut now).
+    [25, 25, 114_000, 128_000], // measured 25 filed, 107,874 and 121,199 characters (c12-map-cards)
+    [150, 50, 217_000, 245_000], // measured 50 filed, 206,486 and 232,991 characters (c12-map-cards); 14 before c12-map
   ])('AC3 c12-measure-benchmark: 800 notes in 60 folders and %i things', async (things, filedMin, selectionMax, executionMax) => {
     expect(support, 'the made-up large folder is part of the planning test support').toHaveProperty('largeFolder');
     const large = support.largeFolder(800, 60, things);
@@ -120,7 +119,8 @@ describe('the made-up large-folder benchmark (c12-measure)', () => {
     const selected = select(b, [], large.to); const intent = fileIntent(b, large.to);
     const r = await run(b, [selected, intent], { beforeReply: async (turn, frame) => {
       if (turn !== 1) return;
-      selected.items = selected.items.flatMap((item) => { const wants = candidates(frame, item.itemId).slice(0, 1); return wants.length ? [{ ...item, wants }] : []; });
+      // The run holds whole above 200 operations until c12-admit, so the scripted model places at most 50 things.
+      selected.items = selected.items.flatMap((item) => { const wants = candidates(frame, item.itemId).slice(0, 1); return wants.length ? [{ ...item, wants }] : []; }).slice(0, 50);
       intent.things = intent.things.filter((t) => selected.items.some((i) => i.itemId === t.fileId));
     } });
     const [selection = 0, execution = 0] = sizes(r);

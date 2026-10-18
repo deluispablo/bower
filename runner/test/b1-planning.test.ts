@@ -56,7 +56,7 @@ it('b1-scripted-two-step-reply-freezes-every-execution-target', async () => {
     admission: b.admission, pacing: { baseMs: 0, sleep: async () => {} } }, 1);
   expect(result.code).toBe(0);
   expect(calls).toHaveLength(2);
-  expect(candidates(calls[0], b.sources[0]?.itemId ?? '')).toContain(b.id('Projects/Remote search'));
+  expect((calls[0]?.value.map as Array<{ id: string }>).map((row) => row.id), 'the parent is a row of the folder map').toContain(b.id('Projects/Remote search'));
   expect(JSON.stringify(calls[1]?.value)).toContain(b.id(HUB));
   expect(JSON.stringify(calls[1]?.value)).toContain(b.id(schedule));
   expect(result.after[HUB]).toContain('Alex received the remote offer.');
@@ -105,12 +105,12 @@ it('b1-changes-person-edit', async () => {
   const r = await run(b, [{ items: [], asks: [] }, empty], { press: 2,
     admission: { ...b.admission, id: 'person-edit-2', at: AT + 1, journal: [], piles: [] } });
   expect.soft(r.code).toBe(0); twoSteps(r);
-  for (const turn of [0, 1]) {
-    expect.soft(payload(r, turn), `call ${turn + 1} uses refreshed summary`).toContain('Alex is looking for a remote developer role.');
-    expect.soft(payload(r, turn), `call ${turn + 1} binds refreshed id`).toContain(file.id);
-    expect.soft(payload(r, turn), `call ${turn + 1} binds refreshed version`).toContain(newer.modifiedTime);
-    expect.soft(payload(r, turn)).not.toContain('local developer role');
-  }
+  // c12-map-cards: the model sees a note only as a candidate's card (no version), and this press names no source; the refreshed
+  // summary, id and version are what retrieval keeps, and no call carries the stale summary.
+  const kept = (JSON.parse(r.after[SYSTEM.retrieval] ?? '{}') as { files: Record<string, { summary: string; version: string }> }).files[file.id];
+  expect.soft(kept?.summary, 'retrieval keeps the refreshed summary').toBe('Alex is looking for a remote developer role.');
+  expect.soft(kept?.version, 'retrieval binds the refreshed version').toBe(newer.modifiedTime);
+  for (const turn of [0, 1]) expect.soft(payload(r, turn)).not.toContain('local developer role');
   expect.soft(r.after[path]).toBe(changed);
   const garden = 'Resources/Gardening/Garden plans.md';
   expect.soft(r.after[garden]).toBe(b.c.folder[garden]);
@@ -120,18 +120,19 @@ it('b1-changes-person-edit', async () => {
 
 it('b1-cut-index-no-new-destination', async () => {
   const large = { ...folder, ...Object.fromEntries(Array.from({ length: 155 }, (_, i) => [
-    `Resources/Group ${String(i).padStart(3, '0')}/Evidence.md`, note(`Remote offer ${i} ${'x'.repeat(180)}.`),
+    // Each note is its folder's hub (named as the folder), so the folder map passes its bound and is cut.
+    `Resources/Group ${String(i).padStart(3, '0')}/Group ${String(i).padStart(3, '0')}.md`, note(`Remote offer ${i} ${'x'.repeat(180)}.`),
   ])) };
   const b = await setup({ folder: large }); await seedState(b);
-  const clear = await run(b, [select(b, [b.id('Resources/Group 154/Evidence.md')]), fileIntent(b)]);
+  const clear = await run(b, [select(b, [b.id('Resources/Group 154/Group 154.md')]), fileIntent(b)]);
   completed(clear); twoSteps(clear);
-  expect.soft(payload(clear, 0), 'positive existing-id control preserves honest cut notice').toContain('index cut:');
+  expect.soft(clear.frames[0]?.prompt, 'positive existing-id control preserves honest cut notice').toContain('folders cut');
   const refused = await setup({ folder: large }); await seedState(refused);
   const selection = select(refused);
   selection.items[0] = { ...selection.items[0] as Item, destination: { parentId: refused.id('Projects/Remote search'), name: 'Missing remote offers' } };
   const r = await run(refused, [selection, selection]);
   failedReply(r);
-  expect.soft(payload(r, 0)).toContain('index cut:');
+  expect.soft(r.frames[0]?.prompt).toContain('folders cut');
   expect.soft(Object.values(r.pathsById)).not.toContain('Projects/Remote search/Missing remote offers');
   // Separate unresolved subject with a clear sibling: the asking does not stop the known filing.
   const mixed = await setup({ folder: large, inbox: [
@@ -139,7 +140,7 @@ it('b1-cut-index-no-new-destination', async () => {
     { line: 'Alex has a remote offer with no clear place.', files: ['Second.txt'] },
   ] }); await seedState(mixed);
   const ask = { fileId: mixed.sources[1]?.itemId, text: 'Should this stay with the remote search?', yes: 'Yes', no: 'No' };
-  const selected = select(mixed, [mixed.id('Resources/Group 154/Evidence.md')]); selected.items = selected.items.slice(0, 1); selected.asks = [ask];
+  const selected = select(mixed, [mixed.id('Resources/Group 154/Group 154.md')]); selected.items = selected.items.slice(0, 1); selected.asks = [ask];
   const intent = fileIntent(mixed); intent.things = intent.things.slice(0, 1);
   const sibling = await run(mixed, [selected, { ...intent, asks: [ask] }]);
   expect.soft(report(sibling).filed).toHaveLength(1); expect.soft(report(sibling).questions).toHaveLength(1);
@@ -250,14 +251,15 @@ it('b1-folded-moc-expansion', async () => {
   const picked = [b.id(f.map), ...Object.keys(f.members).slice(0, 4).map(b.id)];
   const r = await run(b, [select(b, picked, 'Resources/Remote offers'), fileIntent(b, 'Resources/Remote offers')]);
   completed(r); twoSteps(r);
-  expect.soft(payload(r, 0)).toContain('→ [[Remote offers]] (41)');
+  const card = (r.frames[0]?.value.cards as Array<{ id: string; members?: string[] }>).find((c) => c.id === b.id(f.map));
+  expect.soft(card?.members, 'the requested MOC card names its members that are cards').toEqual(expect.arrayContaining(picked.slice(1)));
   const memberIds = new Set(Object.keys(f.members).map(b.id));
   for (const turn of [0, 1]) {
     const text = payload(r, turn);
     // A folded member may be listed, but its L3 body appears only if it was picked.
     expect.soft(text.match(/FOLDED_L3_41/g) ?? [], `unpicked member is metadata only at step ${turn + 1}`).toEqual([]);
     expect.soft(text.match(/FOLDED_L3_1\\n/g) ?? [], 'picked member never appears twice in one step').toHaveLength(turn === 1 ? 1 : 0);
-    expect.soft(expansionTables(r.frames[turn]?.value, memberIds), 'the requested MOC has at most one member expansion per step').toBeLessThanOrEqual(1);
+    expect.soft(expansionTables(r.frames[turn]?.value.cards, memberIds), 'the requested MOC has at most one member expansion per step').toBeLessThanOrEqual(1);
   }
   expect.soft(payload(r, 1), 'existing retrieval resolves picked member ids').toContain(b.id(Object.keys(f.members)[0] ?? ''));
   expect.soft(media(r, b.id(Object.keys(f.members)[40] ?? '')), 'expansion itself downloads no unpicked L3').toEqual([]);
@@ -379,7 +381,7 @@ it('b1-shared-ledger', async () => {
   expect.soft(manifest(r).operations.length).toBeLessThanOrEqual(200);
   expect.soft(r.traffic.length, 'whole production run stays in the 300-call envelope').toBeLessThanOrEqual(300);
   for (const frame of r.frames) {
-    expect.soft(typeof frame.value.index === 'string' ? frame.value.index.length : 0).toBeLessThanOrEqual(32000);
+    expect.soft(JSON.stringify(frame.value.map).length).toBeLessThanOrEqual(32000);
     const notes = Array.isArray(frame.value.notes) ? frame.value.notes as Array<{ text?: string }> : [];
     expect.soft(notes.reduce((n, row) => n + (row.text?.length ?? 0), 0)).toBeLessThanOrEqual(24000);
   }
@@ -401,7 +403,7 @@ it('b1-shared-ledger', async () => {
     expect.soft(sources, 'words and files share the 48000-character source envelope').toBeLessThanOrEqual(48000);
     const notes = Array.isArray(frame.value.notes) ? frame.value.notes as Array<{ text?: string }> : [];
     expect.soft(notes.reduce((n, row) => n + (row.text?.length ?? 0), 0), 'picked L3 shares the 24000-character note envelope').toBeLessThanOrEqual(24000);
-    expect.soft(typeof frame.value.index === 'string' ? frame.value.index.length : 0).toBeLessThanOrEqual(32000);
+    expect.soft(JSON.stringify(frame.value.map).length).toBeLessThanOrEqual(32000);
   }
   const expired = await setup(); await seedState(expired);
   const exhausted = await run(expired, [select(expired), fileIntent(expired)], { beforeReply: async (turn, frame) => {
@@ -421,10 +423,12 @@ it('b1-refresh-cache-hot-order', async () => {
   for (const frame of r.frames) {
     const input = frame.prompt.replace(/\\n/g, '\n');
     const atHot = input.indexOf('# Hot');
-    for (const prefix of ['Kinds of document', 'RULES_PREFIX', 'ABOUT_PREFIX', 'changed remote developer applications']) {
+    for (const prefix of ['Kinds of document', 'RULES_PREFIX', 'ABOUT_PREFIX']) {
       expect.soft(input.indexOf(prefix), `${prefix} is present`).toBeGreaterThanOrEqual(0);
       expect.soft(atHot, 'hot is prefix position 6').toBeGreaterThan(input.indexOf(prefix));
     }
+    // c12-map-cards: the refreshed note's card is call text, after the run context that holds hot.
+    expect.soft(input.indexOf('changed remote developer applications'), 'the refreshed note is shown as a card').toBeGreaterThan(atHot);
     expect.soft(input.indexOf('Alex has a remote developer offer.')).toBeGreaterThan(atHot);
     expect.soft(input).toContain('012345abcdef');
   }

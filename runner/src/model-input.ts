@@ -29,9 +29,10 @@ function fixKeys(value: unknown, references: ReadonlyMap<string, string>): unkno
   const out: Record<string, unknown> = {};
   for (const [key, inner] of Object.entries(value)) {
     // Type-row ids are stable configuration, rather than physical ids assigned to this run.
-    if (key === 'members' && Array.isArray(inner)) out[key] = inner.map((id: unknown) => typeof id === 'string' ? references.get(id) ?? id : fixKeys(id, references));
+    // A card's members and a source's candidates are card ids: they name the note by its path.
+    if (['members', 'candidates'].includes(key) && Array.isArray(inner)) out[key] = inner.map((id: unknown) => typeof id === 'string' ? references.get(id) ?? id : fixKeys(id, references));
     else if (key === 'types') out[key] = inner;
-    else if (['indexed', 'foldersById', 'allowedTargets'].includes(key) && inner !== null && typeof inner === 'object' && !Array.isArray(inner)) {
+    else if (key === 'allowedTargets' && inner !== null && typeof inner === 'object' && !Array.isArray(inner)) {
       // Dictionary keys are physical ids too. Keep every row, ordered by its stable content.
       out[key] = Object.fromEntries(Object.values(inner).map((row) => fixKeys(row, references))
         .sort((a, b) => canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0)
@@ -65,22 +66,21 @@ function parsed(line: string): unknown {
 }
 
 /**
- * The id-to-path references of the `indexed` and `foldersById` of every JSON line: since c12-prefix the run context (the
- * prompt file) names them and the call text (stdin) uses them, so they normalize as one input.
+ * The id-to-path references of the `map` rows (and their hubs) and the `cards` of every JSON line: the run context (the
+ * prompt file) holds the map and the call text (stdin) the cards, so they normalize as one input.
  */
 function referencesOf(values: readonly unknown[]): Map<string, string> {
   const references = new Map<string, string>();
+  const add = (row: unknown): void => {
+    if (row === null || typeof row !== 'object') return;
+    const { id, path } = row as Record<string, unknown>;
+    if (typeof id === 'string' && typeof path === 'string') references.set(id, path);
+  };
   for (const value of values) {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) continue;
     const context = value as Record<string, unknown>;
-    for (const key of ['indexed', 'foldersById']) {
-      const rows = context[key];
-      if (rows === null || typeof rows !== 'object' || Array.isArray(rows)) continue;
-      for (const [id, row] of Object.entries(rows)) {
-        const path = typeof row === 'string' ? row : row !== null && typeof row === 'object' && 'path' in row ? row.path : undefined;
-        if (typeof path === 'string') references.set(id, path);
-      }
-    }
+    for (const row of Array.isArray(context.map) ? context.map : []) { add(row); add((row as { hub?: unknown } | null)?.hub); }
+    for (const card of Array.isArray(context.cards) ? context.cards : []) add(card);
   }
   return references;
 }

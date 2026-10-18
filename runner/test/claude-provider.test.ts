@@ -223,13 +223,15 @@ describe('the Claude provider', () => {
   });
 
   it('a new Area with a responsibility is made and the report says why', async () => {
-    const { wire, admission } = await wired();
+    const { wire } = await wired();
     const areas = (await wire.drive.listAll(wire.folderId)).find((f) => f.folder && f.name === 'Areas');
     const money = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Finance', responsibility: 'pay and tax records' }); });
     const calls: ClaudeCall[] = [];
     const respond = phaseAwareClaude(() => ({ code: 0, stderr: '', cut: null, stdout: money }),
       () => ({ drive: wire.drive, root: wire.folderId, admission: wire.manifest }));
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); return respond(call); };
+    // The prompt file lives only while its call runs (c12-prefix), so the map is read then.
+    const maps: Array<Array<{ id: string; path: string }> | undefined> = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => { calls.push(call); maps.push(frameOf<{ map?: Array<{ id: string; path: string }> }>(call).map); return respond(call); };
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
@@ -237,9 +239,9 @@ describe('the Claude provider', () => {
     // Selection then execution: the responsibility is the basis for the new Area, and the report says why it was made.
     expect(calls).toHaveLength(2);
     expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
-    const selectionContext = JSON.parse(claudeInput(calls[0])) as Record<string, unknown>;
-    expect(candidates(calls[0] ? { value: selectionContext } : undefined,admission.piles[0]?.items[0]?.fileId ?? ''))
-      .toContain(areas?.id);
+    // c12-map-cards: folders reach the selection call as the map (the prompt file), no longer among a source's candidates.
+    expect(maps[0]?.filter((row) => row.id === areas?.id), 'selection offers the Areas folder as a destination')
+      .toEqual([expect.objectContaining({ path: 'Areas' })]);
     const listing = await wire.drive.listAll(wire.folderId);
     expect(listing.filter((f) => f.folder && f.name === 'Finance')).toHaveLength(1);
     const last = listing.find((f) => f.name === 'last-run.json');

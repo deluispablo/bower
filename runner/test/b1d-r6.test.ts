@@ -49,14 +49,6 @@ function owned(type: string, size = 918, summary = 'Ceramic glazing.', members =
   return padded;
 }
 
-/** The contract requires an incomplete marker, without choosing its eventual nesting or field spelling. */
-function incomplete(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(incomplete);
-  if (!value || typeof value !== 'object') return value === 'incomplete';
-  return Object.entries(value).some(([key, row]) =>
-    (/incomplete/i.test(key) && row === true) || (/complete/i.test(key) && row === false) || incomplete(row));
-}
-
 it('b1d-r6 A1 crossing prefixes are advisory for every note type', async () => {
   for (const type of ['source', 'concept', 'project', 'area', 'moc']) {
     const path = `Resources/Ceramics/${type}.md`;
@@ -73,8 +65,6 @@ it('b1d-r6 A1 crossing prefixes are advisory for every note type', async () => {
         expect.soft(r.code, `${type}: a valid 4,918-byte unrelated note cannot fail main`).toBe(0);
         expect.soft(r.wire?.statuses.at(-1)?.phase, `${type}: unrelated work reaches done`).toBe('done');
         expect.soft(report(r).filed, `${type}: the unrelated offer still files`).toHaveLength(1);
-        const indexed = r.frames[0]?.value.indexed as Record<string, unknown> | undefined;
-        expect.soft(incomplete(indexed?.[id]), `${type}: the cut region is marked incomplete`).toBe(true);
         expect.soft(media(r, id), `${type}: an unrelated cut prefix requires no planner read; only lint's one maintenance read (AC20)`).toHaveLength(1);
         expect.soft(r.after[path], `${type}: unrelated cut bytes stay intact`).toBe(text);
       }
@@ -258,8 +248,8 @@ it('b1d-r6 C2 MOC member ids have one stable fingerprint', async () => {
     } }); } finally { factory.mockRestore(); }
     const r = await replies(b, select(b, [b.id(map)]), fileIntent(b));
     done(r);
-    const indexed = r.frames[0]?.value.indexed as Record<string, { members?: string[] }>;
-    expect(indexed[b.id(map)]?.members, 'the actual main input exposes the MOC member').toEqual([b.id(member)]);
+    const cards = r.frames[0]?.value.cards as Array<{ id: string; members?: string[] }>;
+    expect(cards.find((card) => card.id === b.id(map))?.members, 'the actual main input exposes the MOC member').toEqual([b.id(member)]);
     memberIds.push(b.id(member));
     inputs.push(r.frames[0]?.call.input ?? '');
     const fingerprint = /\binput=([a-f0-9]{12})\b/.exec(r.consoleLines.find((line) => line.startsWith('timing:')) ?? '')?.[1];
