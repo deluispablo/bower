@@ -359,6 +359,12 @@ function resolveBinned(declaration: Declaration, folder: DriveFile, states: Memb
   });
 }
 
+/** The keys a read asks the Bin about: members with no live keyed file, and a text context with none. The one rule for every caller. */
+export function binKeys(declaration: Declaration, files: readonly DriveFile[]): string[] {
+  const context = declaration.context.kind === 'text' ? [declaration.context.memberKey] : [];
+  return [...new Set([...declaration.members.map((m) => m.memberKey), ...context])].filter((k) => !keyed(files, k).length);
+}
+
 /** Each member's state; the pile waits while any member is missing, changed or unchecked. The context only has to be there. */
 export async function observePile(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<Readiness> {
   // Missing members and context share the one identity-based Bin lookup.
@@ -366,7 +372,7 @@ export async function observePile(declaration: Declaration, folder: DriveFile, f
   const contextKey = declaration.context.kind === 'text' ? declaration.context.memberKey : null;
   const contextFiles = contextKey ? keyed(files, contextKey).filter((f) => f.parents[0] === folder.id) : [];
   const missingContext = contextKey && !keyed(files, contextKey).length ? contextKey : null;
-  const keys = [...new Set([...states.filter((s) => s.state === 'missing').map((s) => s.memberKey), ...(missingContext ? [missingContext] : [])])];
+  const keys = binKeys(declaration, files);
   const hits = binned && keys.length ? await binned(keys) : [];
   const members = resolveBinned(declaration, folder, states, hits);
   const context = contextFiles.length === 1 ? (contextFiles[0] ?? null) : null;
