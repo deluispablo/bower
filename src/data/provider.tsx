@@ -19,6 +19,11 @@ export interface Loaded<T> {
   error: BowerError | null;
   loading: boolean;
   reload: () => void;
+  /**
+   * Resolves (never rejects) once the newest read has landed and is on screen, a read replaced by a newer one not counting
+   * (TanStack Query: a mutation waits for the refetch). At once if nothing is in flight or the reader is unmounted.
+   */
+  settled: () => Promise<void>;
 }
 
 const sameDeps = (a: readonly unknown[], b: readonly unknown[]) => a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
@@ -48,6 +53,26 @@ export function useLoad<T>(
     loadRef.current = { load, deps };
   });
   const seq = useRef(0);
+  // `landed`: the newest read that answered; `shown`: the newest answer committed to the screen (layout effect below).
+  const landed = useRef(0);
+  const shown = useRef(0);
+  const alive = useRef(true);
+  const waiters = useRef<Array<() => void>>([]);
+  const release = useCallback(() => {
+    if (alive.current && shown.current !== seq.current) return;
+    waiters.current.splice(0).forEach((done) => done());
+  }, []);
+  useLayoutEffect(() => {
+    shown.current = landed.current;
+    release();
+  });
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      release();
+    };
+  }, [release]);
 
   const run = useCallback((again = false) => {
     const n = ++seq.current;
@@ -55,9 +80,14 @@ export function useLoad<T>(
     // An answer lands only on the deps it was asked for (seq orders answers for the same deps).
     const mine = (s: State) => sameDeps(s.deps, asked);
     read(sources, again).then(
-      (data) => n === seq.current && setState((s) => (mine(s) ? { data, error: null, loading: false, deps: s.deps } : s)),
+      (data) => {
+        if (n !== seq.current) return;
+        landed.current = n;
+        setState((s) => (mine(s) ? { data, error: null, loading: false, deps: s.deps } : s));
+      },
       (e: unknown) => {
         if (n !== seq.current) return;
+        landed.current = n;
         const err = e instanceof BowerError ? e : new BowerError('unknown', 'Something went wrong.');
         if (!(e instanceof BowerError)) console.error(e);
         setState((s) => (mine(s) ? { ...s, error: err, loading: false } : s));
@@ -74,7 +104,11 @@ export function useLoad<T>(
 
   // Only the person's reload asks again after a client error; mounts and listeners do not.
   const reload = useCallback(() => run(true), [run]);
-  return { data: state.data, error: state.error, loading: state.loading, reload };
+  const settled = useCallback(
+    () => (!alive.current || shown.current === seq.current ? Promise.resolve() : new Promise<void>((done) => waiters.current.push(done))),
+    [],
+  );
+  return { data: state.data, error: state.error, loading: state.loading, reload, settled };
 }
 
 export const useTree = () => useLoad((s) => s.vault.tree(), (s, cb) => s.vault.subscribe(cb));
@@ -84,10 +118,17 @@ export const useQuestions = () => useLoad((s) => s.vault.questions(), (s, cb) =>
 export const useRules = () => useLoad((s) => s.vault.rules(), (s, cb) => s.vault.subscribe(cb));
 export const useRulesProse = () => useLoad(async (s) => (await s.vault.rulesProse?.()) ?? '', (s, cb) => s.vault.subscribe(cb));
 /** The rules section's two reads as one: one error (the rules', else the prose's) and one retry for both. */
-export function useRulesSection(): { rules: Rule[] | undefined; prose: string | undefined; error: BowerError | null; reload: () => void } {
+export function useRulesSection(): {
+  rules: Rule[] | undefined;
+  prose: string | undefined;
+  error: BowerError | null;
+  reload: () => void;
+  /** The rules list has shown what the last change left (see `Loaded.settled`). */
+  settled: () => Promise<void>;
+} {
   const rules = useRules();
   const prose = useRulesProse();
-  return { rules: rules.data, prose: prose.data, error: rules.error ?? prose.error, reload: () => { rules.reload(); prose.reload(); } };
+  return { rules: rules.data, prose: prose.data, error: rules.error ?? prose.error, reload: () => { rules.reload(); prose.reload(); }, settled: rules.settled };
 }
 export const useSuggestions = () => useLoad((s) => s.vault.suggestions(), (s, cb) => s.vault.subscribe(cb));
 export const useRun = () => useLoad((s, again) => s.runs.current({ again }), (s, cb) => s.runs.subscribe(cb));
