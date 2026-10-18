@@ -24,6 +24,11 @@ import { FailedChanges } from './FailedChanges';
 import s from './bower.module.css';
 
 
+const sameWords = (a: string, b: string): boolean => {
+  const norm = (t: string): string => t.trim().replace(/\.$/, '').trim().toLowerCase();
+  return norm(a) === norm(b);
+};
+
 /**
  * Talking to Bower: a request for the next tidy-up ("put my visa papers
  * together") or a rule it keeps ("receipts go to Money, by month").
@@ -160,7 +165,7 @@ export function BowerScreen() {
         />
         {kind === 'rule' && (
           <div className={s.samples} aria-label="Try one">
-            {RULE_EXAMPLES.map((r) => (
+            {RULE_EXAMPLES.filter((r) => !rules?.some((k) => sameWords(k.text, r))).map((r) => (
               <button key={r} type="button" onClick={() => setText(r)}>
                 {r}
               </button>
