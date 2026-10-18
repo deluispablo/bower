@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CORPUS_CAPABILITIES, loadCase, loadCorpus, score, timelineOf, type Expected, type LoadedCase } from '../src/corpus';
@@ -6,6 +7,10 @@ import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+
+function assertNoBenchmarkSeed(meta: Pick<LoadedCase, 'id' | 'folderFrom'>): void {
+  expect(meta.folderFrom, meta.id).not.toBe('_bench-vault');
+}
 
 async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
   for (const c of scripted) {
@@ -16,6 +21,28 @@ async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
 }
 
 describe('the capability corpus', () => {
+  it('corpus-delete-bench-projects AC1: legacy project and auxiliary trees are absent', async () => {
+    for (const name of ['1-Projects', '4-Archives', 'Clippings', 'Answers', '0-Inbox']) {
+      const path = join(ROOT, '_bench-vault', name);
+      expect.soft(existsSync(path), path).toBe(false);
+    }
+    const cases = await loadCorpus(ROOT);
+    const dirs = (await readdir(ROOT, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, 'case.json')))
+      .map((entry) => entry.name).sort();
+    expect(cases.length).toBeGreaterThan(0);
+    expect(cases.map((c) => c.id).sort()).toEqual(dirs);
+  });
+
+  it('corpus-delete-bench-projects AC2: no surviving case uses the detached benchmark seed', async () => {
+    for (const c of await loadCorpus(ROOT)) assertNoBenchmarkSeed(c);
+  });
+
+  it('the benchmark seed guard rejects synthetic metadata and identifies the case', async () => {
+    const seed = await loadCase(join(ROOT, 'c09-closest-flat'));
+    expect(() => assertNoBenchmarkSeed({ ...seed, folderFrom: '_bench-vault' })).toThrow(seed.id);
+  });
+
   it('corpus-delete-bench-cases AC1: benchmark cases and external checkout dependency are absent', async () => {
     const ids = (await loadCorpus(ROOT)).map((c) => c.id);
     for (const id of ['bench-1-job-offer-clipping', 'bench-2-text-pdf', 'bench-3-receipt-pdf', 'bench-4-scanned-pdf', 'bench-5-question-about-filed-pdf']) {
