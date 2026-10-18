@@ -49,8 +49,8 @@ function sentBytes(body: RequestInit["body"]): number {
 /**
  * What the provider offered the model for one source and what the accepted selection took, by raw id (hashed here).
  * `tag`: p pinned, f profile, else nK, the one-based rank in the expanded neighbourhood (not a raw BM25 rank). `cut` counts
- * only the provider's final cut of its merged list: `VaultIndex.neighbourhood` already bounds itself at 12, so cut=0 does not
- * show retrieval was exhaustive. `of`: the lowest one-based candidate whose parents include the destination (folder
+ * what the provider left out of the source's list, which for a request is every ranked note past the first 12 (pins never
+ * cut); for a pile or thing the ranking itself stops at 12. `of`: the lowest one-based candidate whose parents include the destination (folder
  * coincidence, not the model's reasoning); `required` is the selection check's own count.
  */
 export interface SelectionFacts {

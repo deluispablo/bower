@@ -260,7 +260,7 @@ describe('C05 person notes through runner main', () => {
       yes: 'Write it', no: 'Keep mine', shown: expect.objectContaining({ lines: [NEW_STATE, OTHER] }) }));
     // A missing question is an assertion failure above, never a fabricated answer or a driver load error.
     if (!question) return;
-    const lifecycle = { ...c, presses: [{ between: [{ kind: 'answer' as const, question: { kind: 'state' as const, note: PATH }, yes }] }, {}, {}] };
+    const lifecycle = { ...c, presses: [{ between: [{ kind: 'answer' as const, question: { kind: 'state' as const, note: PATH }, yes }], ...(yes ? {} : { request: { kind: 'tidy' as const, text: 'Update Garden plot.' } }) }, {}, {}] };
     let turn = 0; let cwd = '';
     const spawn: ClaudeSpawn = async (call) => {
       if (cwd !== call.cwd) { cwd = call.cwd; turn++; }
