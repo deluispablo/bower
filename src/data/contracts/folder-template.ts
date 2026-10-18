@@ -19,6 +19,9 @@ export interface FolderTemplateFile {
 /** The placeholder that keeps an empty folder in the list. */
 export const PLACEHOLDER_FILE = '.gitkeep';
 
+/** The person's About me note, at the folder root. */
+export const ABOUT_ME = 'About me.md';
+
 export const FOLDER_TEMPLATE: readonly FolderTemplateFile[] = [
   { path: '.bower/changes/.gitkeep', content: '' },
   { path: '.bower/hashes.json', content: '{ "v": 1, "hashes": {} }\n' },
@@ -26,7 +29,7 @@ export const FOLDER_TEMPLATE: readonly FolderTemplateFile[] = [
   { path: '.bower/requests.json', content: '{ "v": 1, "done": [] }\n' },
   { path: '.bower/suggestions.json', content: '{ "v": 1, "suggestions": [] }\n' },
   {
-    path: 'About me.md',
+    path: ABOUT_ME,
     content: '---\nsummary: What Bower knows about you. Change it whenever you like.\n---\n\nWrite a few lines about yourself: where you live, what you do, who is in your life.\n',
   },
   { path: 'Archive/.gitkeep', content: '' },

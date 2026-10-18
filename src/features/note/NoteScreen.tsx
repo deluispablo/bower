@@ -16,6 +16,7 @@ import { PoseBower } from '@/bird/Bower';
 import { Inline, Markdown, presentedBody } from './markdown';
 import { useResolver } from './resolve';
 import { webSource } from '@/data/contracts/links';
+import { ABOUT_ME } from '@/data/contracts/folder-template';
 import { useFileActions } from '@/features/files/file-actions';
 import { AnsweredRows } from '@/features/tidy/RunLinks';
 import { isRunning } from '@/features/tidy/run-words';
@@ -130,7 +131,7 @@ function NoteView({ path }: { path: string }) {
         </p>
       )}
       <h1 className={s.title}>{note.title}</h1>
-      {path === 'About me.md' && <p className="muted">Bower reads this note to understand you.</p>}
+      {path === ABOUT_ME && <p className="muted">Bower reads this note to understand you.</p>}
       {note.summary && (
         <p className={s.summary}>
           <Inline text={note.summary} link={link} />
