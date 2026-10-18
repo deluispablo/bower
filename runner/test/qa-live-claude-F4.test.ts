@@ -93,7 +93,7 @@ it('AC1 f4-picture-call-shape', async () => {
   expect(phases(r.seen)).toEqual(['picture', 'selection', 'execution']);
   const call = r.seen[0]?.call;
   if (!call) throw new Error('The picture call is missing.');
-  expect(call.args).toEqual(expect.arrayContaining(['--input-format', 'stream-json', '--output-format', 'json', '--model', 'claude-haiku-5-5']));
+  expect(call.args).toEqual(expect.arrayContaining(['--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', 'claude-haiku-5-5']));
   expect(call.args).not.toContain('--system-prompt-file');
   expect(call.images).toEqual([{ mediaType: 'image/png', data: Buffer.from(PNG).toString('base64') }]);
   expect(call.input.split('\n').some((l) => l.startsWith('{'))).toBe(false);
