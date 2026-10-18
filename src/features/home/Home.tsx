@@ -19,7 +19,7 @@ import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { FieldError, fieldBox, Textarea } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
-import { toast } from '@/ui/toast';
+import { toast, useToasts } from '@/ui/toast';
 import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, RUNNING_WAITS, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
@@ -358,12 +358,15 @@ export function Questions({ run }: { run?: RunState }) {
   };
   const answer = async (q: Question, value: QuestionAnswer, label: string): Promise<void> => {
     const index = shown.findIndex((row) => askingKey(row) === askingKey(q));
+    // Said at once and held until Drive answers, as the Bin action does (WCAG 4.1.3); the outcome replaces it.
+    const pending = toast('Saving your answer…');
+    useToasts.getState().hold(pending, true, 'action');
     try {
       const done = await answerQuestion(vault, runs, q.id, value, { allowWeb: usePrefs.getState().lookUpWeb });
-      toast(done ? answerToast(done.outcome, label) : answered(label));
+      useToasts.getState().replace(pending, done ? answerToast(done.outcome, label) : answered(label));
       setAfter({ index: Math.max(index, 0), key: askingKey(q) });
     } catch (e) {
-      report(e, 'That answer did not save. Try again.');
+      report(e, 'That answer did not save. Try again.', pending);
     }
   };
   if (questionsState.error) return <LoadError state={questionsState} />;
