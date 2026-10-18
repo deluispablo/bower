@@ -151,7 +151,7 @@ describe('the capability corpus', () => {
       expect(c.dir, c.id).toBe(join(ROOT, c.id));
       assertNoBenchmarkSeed(c);
     }
-    for (const id of ['c15-more-context-bounded', 'c15-scanned-letter']) {
+    for (const id of ['c15-short-pdfs-read-whole', 'c15-image-only-pdf-asked']) {
       const c = cases.find((c) => c.id === id);
       expect(c?.folder, id).toEqual({});
       expect(c?.folderBinary, id).toEqual({});

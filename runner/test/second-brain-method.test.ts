@@ -173,7 +173,7 @@ describe('the second-brain method (TL-P4-08)', () => {
         const bytes = c.inboxBinary[name];
         if (!bytes || !/\.pdf$/i.test(name) || (await extract(name, bytes, 2_000)).text !== null) continue;
         expect({ id: c.id, guessed: (c.expected.files?.absent ?? []).includes('Inbox/*') }).toEqual({ id: c.id, guessed: false });
-        expect({ id: c.id, asked: (c.expected.report?.questions?.length ?? 0) > 0 }).toEqual({ id: c.id, asked: true });
+        expect({ id: c.id, asked: (c.expected.report?.questions?.length ?? 0) > 0 || (c.expected.report?.questionsExactly ?? 0) > 0 }).toEqual({ id: c.id, asked: true });
       }
     }
   });

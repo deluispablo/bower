@@ -3,6 +3,7 @@
  * own extraction (`extract`, unpdf), so a corpus PDF that is only text behind a `%PDF-1.4` header is filed with no
  * terms. A text PDF yields its text layer; a scan (`scan0001.pdf`) parses and has no text layer.
  */
+import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -71,6 +72,27 @@ describe('corpus PDFs are valid PDFs', () => {
       const shown = await extract('Offer_letter_final(2).pdf', new Uint8Array(await readFile(full)));
       expect({ path: relative(ROOT, full), text: shown.text }).toEqual({ path: relative(ROOT, full), text: expect.stringContaining('Salary 42,000 a year. Start 2 November.') });
     }
+  });
+
+  it('corpus-fix-c15 AC2: image-only negative makes no readable-letter claim', async () => {
+    const id = 'c15-image-only-pdf-asked';
+    const path = join(ROOT, id, 'inbox/scan0001.pdf');
+    expect(existsSync(path)).toBe(true);
+    const bytes = new Uint8Array(await readFile(path));
+    expect(await extract('scan0001.pdf', bytes)).toEqual({ text: null, why: expect.stringContaining('no text layer') });
+    const raw = new TextDecoder('latin1').decode(bytes);
+    expect({ image: raw.includes('/Subtype /Image'), font: raw.includes('/Font') }).toEqual({ image: true, font: false });
+    const TEXT_CLAIM = /letter|\bOCR\b|\breads?\b|readab|legib/i;
+    const c = JSON.parse(await readFile(join(ROOT, id, 'case.json'), 'utf8')) as { title: string; source: string };
+    const replies = JSON.parse(await readFile(join(ROOT, id, 'replies.json'), 'utf8')) as Array<{ asks?: Array<{ text: string }> }>;
+    const rowOf = (text: string): string => text.split('\n').find((l) => l.startsWith(`| ${id} |`)) ?? '';
+    const readmeRow = rowOf(await readFile(join(ROOT, 'README.md'), 'utf8'));
+    const logRow = rowOf(await readFile(resolve(ROOT, '../fixtures/p4-method-rubric-changes.md'), 'utf8'));
+    expect({ readme: readmeRow !== '', log: logRow !== '' }).toEqual({ readme: true, log: true });
+    const texts = [c.title, c.source, await readFile(join(ROOT, id, 'rubric.md'), 'utf8'), ...replies.flatMap((r) => (r.asks ?? []).map((a) => a.text)), readmeRow, logRow];
+    expect(texts.filter((t) => TEXT_CLAIM.test(t))).toEqual([]);
+    const expected = JSON.parse(await readFile(join(ROOT, id, 'expected.json'), 'utf8')) as { notes?: unknown };
+    expect(expected.notes).toBeUndefined();
   });
 
   it('corpus-fix-c04 AC1: C04 binary inputs have valid content and synthetic provenance', async () => {

@@ -1,7 +1,7 @@
 {
-  "id": "c15-more-context-bounded",
+  "id": "c15-short-pdfs-read-whole",
   "capability": "C15",
-  "title": "Two short PDFs are read whole within the context bounds",
+  "title": "Two one-page PDFs are read whole",
   "covers": "model",
   "source": "new (runner extraction of admitted source bytes)",
   "scope": "all",
