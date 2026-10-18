@@ -1718,9 +1718,14 @@ export class BirdEngine {
     for (const name in C) {
       const c = C[name as SpringName];
       if (c.vel === 0 && c.v === c.t) continue;
-      const a = c.k * (c.t - c.v) - c.c * c.vel;
-      c.vel += a * dt;
-      c.v += c.vel * dt;
+      // The jaw spring is unstable above ~29.9 ms; dt is capped at 33 ms.
+      const steps = dt > 0.025 ? 2 : 1;
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        const a = c.k * (c.t - c.v) - c.c * c.vel;
+        c.vel += a * h;
+        c.v += c.vel * h;
+      }
     }
     const h = this.H;
     const rising = S.startleRising;
