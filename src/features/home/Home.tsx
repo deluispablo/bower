@@ -76,7 +76,10 @@ export function Home() {
   const pilesState = usePiles();
   const { data: read } = pilesState;
   const { data: listed } = usePilesListed();
-  const piles = pilesState.error ? undefined : read ?? listed ?? undefined;
+  // A full read kept from before a pile was added does not hide it: the newer listing adds the piles that read lacks.
+  const piles = pilesState.error ? undefined : read && listed
+    ? [...read, ...listed.filter((l) => !read.some((p) => p.id === l.id))].sort((a, b) => b.createdAt - a.createdAt)
+    : read ?? listed ?? undefined;
   // Which piles are ready is known only from the full read: the listed Inbox shows without a count, and the Tidy up
   // button and its number wait for that read, so neither can drop or move once the person can press it.
   const ready = !pilesState.error && read !== undefined;
