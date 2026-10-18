@@ -16,7 +16,7 @@ import { toast } from '@/ui/toast';
 import { useUi } from '@/app/ui-store';
 import { RULE_EXAMPLES } from '@/data/examples';
 import { canDictate, dictate } from './dictation';
-import { isRunning } from '@/features/tidy/run-words';
+import { isRunning, RUNNING_WAITS } from '@/features/tidy/run-words';
 import { Inline, Markdown } from '@/features/note/markdown';
 import { useNoteLink } from '@/features/note/note-link';
 import { useIsDesktop } from '@/ui/media';
@@ -225,7 +225,7 @@ export function BowerScreen() {
             <div key={m.id} className={s.bubble} aria-busy={removing.has(m.id) || undefined}>
               <p>{m.text}</p>
               {/* What Bower did, with links to what it names (C09). */}
-              <p className={s.bubbleSub}>{m.done ? <Inline text={m.done} link={link} /> : 'Waiting for the next tidy-up.'}</p>
+              <p className={s.bubbleSub}>{m.done ? <Inline text={m.done} link={link} /> : isRunning(run) ? RUNNING_WAITS : 'Waiting for the next tidy-up.'}</p>
               {i === 0 && !m.done && !isRunning(run) && (
                 <Button
                   size="sm"

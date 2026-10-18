@@ -20,7 +20,7 @@ import { Button } from '@/ui/Button';
 import { FieldError, fieldBox, Textarea } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
+import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, RUNNING_WAITS, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -280,7 +280,7 @@ function YourChanges({ running }: { running: boolean }) {
         Since the last tidy-up
       </h2>
       <p className="muted" style={{ fontSize: 15 }}>
-        Bower reads {list.length === 1 ? 'this change' : `these ${list.length} changes`} in the next tidy-up, so it knows what you changed and where to look.
+        {running ? RUNNING_WAITS : `Bower reads ${list.length === 1 ? 'this change' : `these ${list.length} changes`} in the next tidy-up, so it knows what you changed and where to look.`}
       </p>
       <ul className={s.changes}>
         {list.slice(-5).reverse().map((c) => (
