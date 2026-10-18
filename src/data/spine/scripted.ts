@@ -27,7 +27,7 @@ import { md5Hex } from '../contracts/hashes';
 import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
-import { linkTarget, renderLink } from '../contracts/links';
+import { WIKI_LINK, linkTarget, renderLink } from '../contracts/links';
 import { fenceAfter, type Fence } from '../contracts/ownership-format';
 import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
@@ -50,8 +50,6 @@ import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contr
 
 export { SET_ASIDE, listedPiles };
 
-/** A [[link]] in a model's words: its target before any `|` alias or `#` heading (a `^block` stays for `linkTarget`). */
-export const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
 
 /** A leading list marker ("-", "*", "+", "1." or "1)") of a Markdown line, after any indentation. */
 const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u;
@@ -2557,7 +2555,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
     if (!span || !parseNote(path, new TextDecoder().decode(bytes), fetched(target.id)).byBower) continue;
     const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
-    const history = [...previous.matchAll(/\[\[[^\]\r\n]+\]\]/gu)].map(([link]) => link);
+    const history = [...previous.matchAll(WIKI_LINK)].map(([link]) => link).filter((link) => link !== '[[]]');
     const retained = [...new Set(history)].filter((link) => !citations.includes(link));
     const text = body + (retained.length ? `${retained.join(' ')}\n` : '');
     if (!profileTextOk(text)) return refused('a profile beyond its 400 word bound');
@@ -4269,7 +4267,7 @@ const citedAsWords = (text: string): string => {
 const asLineText = (text: string): string => {
   const clean = text.replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' || c === '\u2028' || c === '\u2029' ? ' ' : c)).join('');
   const { text: words, citation } = splitCitation(clean);
-  return words.replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_m, target: string, alias?: string) => (alias ?? target).trim())
+  return words.replace(WIKI_LINK, (_m, target: string, alias?: string) => (alias ?? target).trim())
     .replace(/^#+\s*|^[-*+]\s+/, '').trim() + citation;
 };
 

@@ -1,6 +1,7 @@
 import type { Note } from '@/data/types';
 import { LIST_MARK, TASK_BOX } from '@/data/tasks';
 import { tableCells } from '@/data/search-text';
+import { WIKI_LINK } from '@/data/contracts/links';
 import type { ReactNode } from 'react';
 import { Checkbox } from '@/ui/Field';
 
@@ -20,12 +21,13 @@ interface Token {
 /** The one matcher, in a single pass: what `inline` renders and `shown` reads cannot differ. */
 function tokens(text: string): Token[] {
   const out: Token[] = [];
-  const re = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
+  const re = new RegExp(`${WIKI_LINK.source}|\\*\\*([^*]+)\\*\\*|\\*([^*]+)\\*|\`([^\`]+)\``, 'g');
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push({ kind: 'text', text: text.slice(last, m.index) });
-    if (m[1]) out.push({ kind: 'link', text: m[2] ?? m[1], target: m[1] });
+    // A link naming nothing ([[]], [[|b]]) stays as written.
+    if (m[1] !== undefined) out.push(m[1] ? { kind: 'link', text: m[2]?.trim() ? m[2] : m[1], target: m[1] } : { kind: 'text', text: m[0] });
     else if (m[3]) out.push({ kind: 'strong', text: m[3] });
     else if (m[4]) out.push({ kind: 'em', text: m[4] });
     else if (m[5]) out.push({ kind: 'code', text: m[5] });

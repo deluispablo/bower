@@ -14,7 +14,7 @@ import { subjectOf } from '../../src/data/contracts/questions';
 import { distinctPaths } from '../../src/data/spine/report';
 import { timelineBullets } from '../../src/data/vault/note-format';
 import { displayName, nameOf } from '../../src/data/contracts/tree';
-import { linkTarget } from '../../src/data/contracts/links';
+import { WIKI_LINK, linkTarget } from '../../src/data/contracts/links';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
@@ -242,7 +242,8 @@ export interface Score {
   unmet: string[];
 }
 
-const LINK = /\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g;
+/** A link's name as the corpus checks read it: before any #heading (a ^block stays). */
+const named = (name: string): string => name.split('#')[0] ?? '';
 
 /** The Timeline lines of a note: the bullets of its Timeline section, as the app's one note parser frames it. */
 export const timelineOf = timelineBullets;
@@ -308,8 +309,9 @@ function scoreAnswer(want: AnswerExpectation, rows: ReadonlyArray<{ text: string
   if (want.links) {
     const got: string[] = [];
     let clear = true;
-    for (const m of done.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
+    for (const m of done.matchAll(WIKI_LINK)) {
       const name = m[1] ?? '';
+      if (!name) continue;
       const files = linkCandidates(name, after);
       if (files.length !== 1) { clear = false; unmet.push(`${at}: link [[${name}]] ${files.length ? `could be ${files.length} files` : 'does not resolve'}`); }
       else if (!got.includes(files[0] ?? '')) got.push(files[0] ?? '');
@@ -376,7 +378,7 @@ export function score(input: ScoreInput): Score {
       if (!rule) unmet.push(`placed outside the rubric: ${path}`);
       else if (rule.linking !== undefined) {
         // The exact link target ([[Garden plot]], [[Garden plot|text]], [[Garden plot#heading]]), not one that starts the same.
-        const linksTo = (text: string, target: string): boolean => [...text.matchAll(/\[\[([^\]|#]*)[^\]]*\]\]/g)].some((m) => (m[1] ?? '').trim() === target);
+        const linksTo = (text: string, target: string): boolean => [...text.matchAll(WIKI_LINK)].some((m) => named(m[1] ?? '').trim() === target);
         const inFolder = (q: string): boolean => q.endsWith('.md') && q.startsWith(`${rule.under}/`);
         // Tied together either way: a placed note links the linking note, or the linking note's own lines link a placed note.
         const plot = after[`${rule.under}/${rule.linking}.md`] ?? '';
@@ -406,7 +408,10 @@ export function score(input: ScoreInput): Score {
   if (expected.linksResolve) {
     for (const [p, text] of Object.entries(after)) {
       if (!p.endsWith('.md') || p.startsWith('.bower/') || before[p] === text) continue;
-      for (const m of text.matchAll(LINK)) if (!resolves(m[1] ?? '', after)) unmet.push(`${p}: link [[${m[1] ?? ''}]] does not resolve`);
+      for (const m of text.matchAll(WIKI_LINK)) {
+        const name = named(m[1] ?? '');
+        if (name && !resolves(name, after)) unmet.push(`${p}: link [[${name}]] does not resolve`);
+      }
     }
   }
   const want = expected.report;

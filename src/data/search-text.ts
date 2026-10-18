@@ -4,6 +4,7 @@
  * as #tag), and the matching line as plain text. Shared by every source.
  */
 import type { Note } from './types';
+import { plainLinks } from './contracts/links';
 
 export function searchLines(n: Pick<Note, 'summary' | 'currentState' | 'body' | 'properties' | 'timeline' | 'tags'>): string[] {
   return [
@@ -28,8 +29,7 @@ export function tableCells(line: string): string[] {
 export function plainText(line: string): string {
   const table = /^\s*\|/.test(line);
   if (table) line = tableCells(line).filter(Boolean).join(', ');
-  line = line
-    .replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, (_m, target: string, _a, alias: string | undefined) => alias ?? target)
+  line = plainLinks(line)
     .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')
     .replace(/^\s*(#{1,6}|[-*+]|\d+[.)])\s+/, '');
   // A table row's pipes are already its cell breaks; any left are literal.

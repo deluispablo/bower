@@ -28,16 +28,28 @@ export function formerNames(changes: readonly ChangeEntry[], taken: ReadonlySet<
   return out;
 }
 
+/**
+ * The one [[link]] pattern of the app and the runner (Obsidian's wikilink): group 1 the name as written, with any
+ * #heading or ^block, possibly empty; group 2 the label after the first `|`, possibly empty. A link never spans a
+ * line. Use it with `matchAll` or `replace` only (it is global); a matcher that adds alternatives builds its own
+ * RegExp from `WIKI_LINK.source`.
+ */
+export const WIKI_LINK = /\[\[([^\]|\r\n]*)(?:\|([^\]\r\n]*))?\]\]/g;
+
+/** Text with each [[link]] as its shown words: the label when not blank, else the name; a link naming nothing stays as written. */
+export const plainLinks = (text: string): string =>
+  text.replace(WIKI_LINK, (all, name: string, label: string | undefined) => (name ? (label?.trim() || name).trim() : all));
+
 /** The note a link names, without a #heading or ^block after it. */
 const target = (name: string): string => name.split(/[#^]/)[0]?.trim().toLowerCase() ?? '';
 
-/** Every [[link]] to a former name written with the note's name now (a #heading and a label after | stay). */
+/** Every [[link]] to a former name written with the note's name now (a #heading and a label after | stay as written). */
 export function rewriteLinks(text: string, former: ReadonlyMap<string, string>): string {
   if (!former.size) return text;
-  return text.replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (all, name: string, label: string | undefined) => {
+  return text.replace(WIKI_LINK, (all, name: string, label: string | undefined) => {
     const now = former.get(target(name));
     const rest = name.slice(name.search(/[#^]/) < 0 ? name.length : name.search(/[#^]/));
-    return now ? `[[${displayName(nameOf(now))}${rest}${label ?? ''}]]` : all;
+    return now ? `[[${displayName(nameOf(now))}${rest}${label === undefined ? '' : `|${label}`}]]` : all;
   });
 }
 

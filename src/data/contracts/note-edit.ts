@@ -8,7 +8,7 @@
  * last non-blank line" splice adapt `app/src/history.ts` `appendHistoryLine`; the literal, regex-free token
  * replacement follows `agent/run.sh` `sheet_relink`, without its path and stem forms (TL-P2-20 never rewrites them).
  */
-import { formerNames, linkTarget } from './links';
+import { WIKI_LINK, formerNames, linkTarget } from './links';
 import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
@@ -137,7 +137,7 @@ export function stateLinesOk(previous: readonly string[], lines: readonly string
 }
 /** Profile prose has its own framed region; source extraction and grounding remain the planner's job. */
 export function profileTextOk(text: string): boolean {
-  return text.trim().length > 0 && text.trim().split(/\s+/).length <= 400 && /\[\[[^\]\r\n]+\]\]/.test(text)
+  return text.trim().length > 0 && text.trim().split(/\s+/).length <= 400 && [...text.matchAll(WIKI_LINK)].some(([link]) => link !== '[[]]')
     && !text.includes('<!-- bower:ownership');
 }
 function fieldsOk(change: Change): boolean {
@@ -647,8 +647,8 @@ const renameMap = (renames: readonly Rename[]): Map<string, string> => new Map(r
 function tokens(text: string, start: number, end: number, renames: ReadonlyMap<string, string>, out: Replacement[], cited = NOT_CITED): void {
   const line = blankCode(text.slice(start, end));
   const { citation } = splitCitation(cited(line));
-  for (const match of line.matchAll(/\[\[([^\]\r\n]*)\]\]/g)) {
-    const name = (match[1] ?? '').split('|')[0] ?? '';
+  for (const match of line.matchAll(WIKI_LINK)) {
+    const name = match[1] ?? '';
     const to = renames.get(linkTarget(name));
     if (to === undefined) continue;
     if (to.includes(' · ') && citation && match.index === line.lastIndexOf(citation) + ' (also from '.length) {
@@ -1363,7 +1363,7 @@ export function mocMembership(files: Notes): Map<string, string[]> {
     }
     // Existing peer maps encode the ruled split. Resolve each old link once to one stable id.
     const ids = f.members ? f.members.filter((member) => member !== id && files[member] && !isBowerMoc(files[member]))
-      : [...(f.moc?.regions['moc-members'] ?? '').matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)]
+      : [...(f.moc?.regions['moc-members'] ?? '').matchAll(WIKI_LINK)]
       .flatMap((match) => {
         const link = match[1] ?? '';
         const matches = Object.entries(files).filter(([other, note]) => other !== id && !isBowerMoc(note)
