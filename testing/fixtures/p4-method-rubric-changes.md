@@ -231,6 +231,14 @@ record the method re-check, not an executed model result.
     first filing with no question, and the later idle run is compared with the run before it, where only Bower's run
     records change. Covers stays model.
 
+## Corpus clean changes (`corpus-fix-b7-capacity`)
+
+17. **c17-b7-automatic-capacity-order.** Reason: the corpus audit (a case named for a shared approval budget that
+    TL-P4-49 removed, README and method rows that kept a third topic waiting, and a report missing the health note).
+    Now: the case is named for automatic capacity and order; RainWater merges with rainwater before the two-per-run
+    limit, rainwater and compost join the topics in reply order with one write, and seed-saving is dropped with no
+    question. Covers stays model.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.
@@ -291,7 +299,7 @@ not a new filing hierarchy; schema consent is B5/Q1's exact-payload mechanism.
 | --- | --- | --- |
 | c17-b7-reuse-known | agrees | Points 1–8: reuse the Gardening destination and allowed topics, create only its useful linked source note, retain original evidence/history and personal prose, and report actual filing; three generated tags do not cause a vocabulary write. |
 | c17-b7-automatic-growth-replay | changed | Points 1–8: the clear source files beside Gardening with its existing topic and a linked note, rainwater joins the topics on its own with no question, and a later idle run changes no note or topic; source and personal text are never rewritten (TL-P4-49; F7/R2). |
-| c17-b7-proposal-budget | agrees | Points 1–8: file three clear sources with grounded linked notes, deduplicate topic proposals before the shared two-per-run cap and keep the explicit third request remainder pending through B5, without a tag queue or guessed schema (TL-P4-47 Q3). |
+| c17-b7-automatic-capacity-order | changed | Points 1–8: three clear sources file beside Gardening with its existing topic and grounded linked notes; duplicate topics merge before the two-per-run limit, so rainwater and compost join on their own in reply order and seed-saving is dropped with no question or log line; source and personal text are never rewritten (TL-P4-49; F7/R2). |
 | c17-b7-authority-full-cap | agrees | Points 1–8: sources fit the existing topic, full vocabulary does not evict or grow from document instructions, and the moved person note keeps its legacy four-tag frontmatter/prose byte-identical; only new Bower notes receive generated caps (F7/R2; TL-P4-42 addendum 3). |
 
 ## B8 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)

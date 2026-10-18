@@ -22,6 +22,7 @@ import { fixedDrive, paging } from './drive-v3';
 
 const TAGS = '.bower/tags.json';
 const GROWTH = 'c17-b7-automatic-growth-replay';
+const CAPACITY = 'c17-b7-automatic-capacity-order';
 const DEST = 'Resources/Gardening';
 const KNOWN = ['gardening', 'remote-work', 'learning'];
 const pageSize = paging.size;
@@ -219,7 +220,7 @@ describe('B7 through production main', () => {
     expect(mutations(r)).toEqual([]);
   });
 
-  it.each(['reuse-known', 'automatic-growth-replay', 'proposal-budget', 'authority-full-cap'])('%s untagged positive control', async (slug) => {
+  it.each(['reuse-known', 'automatic-growth-replay', 'automatic-capacity-order', 'authority-full-cap'])('%s untagged positive control', async (slug) => {
     await control(await fixture(slug));
   });
 
@@ -353,7 +354,7 @@ describe('B7 through production main', () => {
   });
 
   it('b7-r18-newTags-order wins over reversed things and admission order', async () => {
-    const b = await fixture('proposal-budget');
+    const b = await fixture('automatic-capacity-order');
     const topics: Record<string, string> = { 'Rain barrel guide.txt': 'rainwater', 'Compost guide.txt': 'compost', 'Seed saving guide.txt': 'seed-saving' };
     const candidates = [b.sources[0], b.sources[2], b.sources[1]].map((source) => topics[source?.name ?? ''] ?? 'missing-topic');
     expect([...candidates].sort()).toEqual(['compost', 'rainwater', 'seed-saving']);
@@ -530,7 +531,7 @@ describe('B7 through production main', () => {
   });
 
   it.each([0, 5])('b7-r27-growth and B5 proposal capacity remain independent with %i open cards', async (open) => {
-    const b = await fixture('proposal-budget');
+    const b = await fixture('automatic-capacity-order');
     const prior: Question[] = Array.from({ length: open }, (_, i) => ({ id: `q-proposal-old-${i}`,
       text: 'Remember this kind?', yes: 'Yes', no: 'No', askedAt: AT, proposal: { id: `old-${i}`,
         payload: { kind: 'type-row', row: { id: `old-${i}`, match: [`old-${i}`], template: 'source', properties: {}, table: [] } } } }));
@@ -539,7 +540,7 @@ describe('B7 through production main', () => {
     const askAfter = b.sources.slice(0, 2).map((source, i) => ({ pileId: source.pileId,
       text: 'Remember this garden reference kind?', yes: 'Yes', no: 'No', proposal: { id: `garden-${i}`,
         payload: { kind: 'type-row', row: { id: `garden-${i}`, match: [`garden-${i}`], template: 'source', properties: {}, table: [] } } } }));
-    const plain = await fixture('proposal-budget');
+    const plain = await fixture('automatic-capacity-order');
     const plainFile = await plain.drive.get(plain.id(SYSTEM.questions));
     await plain.drive.writeText(plainFile.id, JSON.stringify({ v: 1, questions: prior }), plainFile.modifiedTime);
     const baseline = await run(plain, [select(plain, [], DEST), { ...intent(plain),
@@ -780,7 +781,7 @@ describe('B7 through production main', () => {
     expect(mutations(r)).toHaveLength(oracle.runs[0]?.vocabularyMutationSends ?? 0);
   });
 
-  it.each(['automatic-growth-replay', 'proposal-budget', 'authority-full-cap'].map((slug) => ({ slug })))('b7-r30-corpus-oracles $slug', async ({ slug }) => {
+  it.each(['automatic-growth-replay', 'automatic-capacity-order', 'authority-full-cap'].map((slug) => ({ slug })))('b7-r30-corpus-oracles $slug', async ({ slug }) => {
     const b = await fixture(slug);
     const replies = JSON.parse(await readFile(resolve(b.c.dir, 'replies.json'), 'utf8')) as unknown[];
     const oracle = JSON.parse(await readFile(resolve(b.c.dir, 'expected-tag-results.json'), 'utf8')) as {
@@ -871,5 +872,46 @@ describe('B7 through production main', () => {
     const changed = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((p) => a[p] !== b[p]).sort();
     expect(changed.filter((p) => !p.startsWith(RECORDS))).toEqual(['.bower/changes/press-2.json', '.bower/last-run.json', '.bower/retrieval.json']);
     expect(changed.filter((p) => p.startsWith(RECORDS))).not.toEqual([]);
+  });
+
+  it('corpus-fix-b7-capacity AC1: automatic additions obey capacity and reply order', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', CAPACITY));
+    expect(c.id).toBe(CAPACITY);
+    const events: Observation[] = [];
+    let drive: FakeDrive | undefined;
+    let root = '';
+    const final = await runScripted(c, (f) => observe(drive as FakeDrive, root, events)(f), false, async (d, r) => { drive = d; root = r; });
+    expect(final.code).toBe(0);
+    expect(vocabulary(final)).toEqual(['gardening', 'rainwater', 'compost']);
+    expect(mutations({ events })).toHaveLength(1);
+    for (const path of ['Resources/Gardening/Rain barrel guide.md', 'Resources/Gardening/Compost guide.md', 'Resources/Gardening/Seed saving guide.md']) {
+      expect(tagged(final, path)).toEqual(['gardening']);
+    }
+    expect(report(final).questions).toEqual([]);
+    expect((JSON.parse(final.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions).toEqual([]);
+    expect(Object.keys(final.after).filter((p) => p.startsWith(SYSTEM.proposals + '/'))).toEqual([]);
+    expect(Object.entries(final.after).filter(([p, v]) => !p.startsWith('.bower/runs/') && /seed-saving|RainWater/.test(v ?? '')).map(([p]) => p)).toEqual([]);
+    const lines = async (file: string) => (await readFile(resolve(import.meta.dirname, '../..', file), 'utf8')).split('\n');
+    const readme = await lines('testing/corpus/README.md');
+    const method = await lines('testing/fixtures/p4-method-rubric-changes.md');
+    const readmeRow = readme.find((l) => l.startsWith('| c17-b7-automatic-capacity-order |'));
+    const methodRow = method.find((l) => l.startsWith('| c17-b7-automatic-capacity-order |'));
+    expect(readmeRow).toBe('| c17-b7-automatic-capacity-order | C17 / B7 | model | TL-P4-49 automatic growth; duplicate topics merge before the two-per-run limit, so rainwater and compost join in reply order and seed-saving is dropped |');
+    expect(methodRow).toBe('| c17-b7-automatic-capacity-order | changed | Points 1–8: three clear sources file beside Gardening with its existing topic and grounded linked notes; duplicate topics merge before the two-per-run limit, so rainwater and compost join on their own in reply order and seed-saving is dropped with no question or log line; source and personal text are never rewritten (TL-P4-49; F7/R2). |');
+    expect(readmeRow).not.toMatch(/yes|consent|proposal|pending/i);
+    expect(methodRow).not.toMatch(/yes|consent|proposal|pending/i);
+    expect([...readme, ...method].filter((l) => l.startsWith('| c17-b7-proposal-budget |'))).toEqual([]);
+  });
+
+  it('corpus-fix-b7-capacity AC2: capacity case expectations describe the complete run', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', CAPACITY));
+    const final = await runScripted(c);
+    expect(final.code).toBe(0);
+    expect(scoreCase(c, final).unmet).toEqual([]);
+    const oracle = JSON.parse(await readFile(resolve(c.dir, 'expected-tag-results.json'), 'utf8')) as { runs: { log: { path: string; action: string; topics: string[] } }[] };
+    const log = oracle.runs[0]?.log;
+    if (!log) throw new Error('The capacity log oracle is missing.');
+    const pattern = new RegExp('^2026-10-07 \\| ' + log.action + ' \\| Tags \\| Added tags: ' + log.topics.join(', ') + ' · op:');
+    expect((final.after[log.path] ?? '').split('\n').filter((l) => pattern.test(l))).toHaveLength(1);
   });
 });
