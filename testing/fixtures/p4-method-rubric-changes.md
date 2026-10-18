@@ -2,7 +2,7 @@
 
 Entry `second-brain-method`. Each case's `case.json`, `expected.json` and `rubric.md` was read against TL-P4-08
 points 1-8. A rubric changes only where it contradicts the method (the corpus describes the person, not the code;
-TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the method" checks every row below.
+TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict records that the case's rubric agrees with the method; it is never a run result or a semantic judgment of model output. The test "the C04 to C15 rubrics agree with the method" also checks the C04-C15 rubrics against points 1 and 3.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
@@ -15,19 +15,16 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c05-keep-one-note | agrees | Facts move into the kept note's Current state or Timeline; the second note goes to the Bin. |
 | c05-line-not-repeated | agrees | A line saying the same thing is not added twice: the Timeline only grows with new facts (points 2, 3). |
 | c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping's summary note with the comparison moves to C08. |
-| c06-offer-and-listing-linked | agrees | Links only where the connection is real (point 4). |
 | c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
 | c06-stored-project-connection | agrees | The source note links both hubs by title, each on a line that says why; both hubs receive sourced news, since the offer is news for each, with no invented commute or acceptance (points 1, 3, 4, 7). |
 | c06-two-sources-attributed | agrees | Known facts receive separate confirmation lines citing their own letters, without redundant notes or an invented connection (points 1, 2, 3, 4, 7). |
 | c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
 | c07-dated-rent-change | changed | Points 1, 3, 7: the dated terms fit the flat note as one ordinary sourced line, with no marker and no question; Current state rewrites stay with C05's ownership rules. |
-| c07-rent-disagrees | agrees | The disagreement is asked with both notes and both figures, never resolved silently (point 3). |
 | c07-same-period-rent | changed | Points 1, 3, 4, 7: one Contradiction line gives both figures, cites the later listing and links the earlier one; no winner, no question, no source note. |
 | c07-tentative-closure | changed | Points 1, 3, 4, 7: one Uncertain line keeps the condition, cites the notice and links the booking; no cancellation, no question, no source note. |
 | c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |
 | c08-compare-missing-fact | agrees | Points 1, 3, 4 and 7: the requested comparison fits the existing project, links its hub and sources, states the missing deposit honestly, and its briefing changes no existing facts. |
 | c08-report-with-sources | changed | Points 3, 4 and 7: the sourced report links its hub, but the rubric must allow updating Bower-owned hub state where the briefing changes it; expected.json is unchanged and still pins the hub under this rubric-only scope. |
-| c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
 | c08-revise-keeps-personal-text | agrees | Points 2, 3 and 4: revise the same sourced comparison, retain personal text and earlier history, append a truthful revision line, and preserve unchanged source notes. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
@@ -38,8 +35,6 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c09-two-source-answer | agrees | Points 3 and 6: each answer claim cites its exact original, excluding the unrelated archived listing; no new document or note update is involved. |
 | c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
 | c10-stale-result-withheld | agrees | Expired evidence cannot establish a current fact; sources are preserved, no unsupported update is made, and the answer states the limitation (points 3, 7, 8). |
-| c10-web-allowed | agrees | The finding is a Timeline line with its source (point 3). |
-| c10-web-denied | agrees | Nothing looked up, nothing changed. |
 | c11-ambiguous-stays | agrees | New case for point 1's ask: the unclear letter stays in the inbox with a question; the recipe is filed. |
 | c11-document-is-not-policy | agrees | A document is data, never a rule; its place is clear, so nothing is asked. |
 | c11-request-is-one-time | changed | Points 1 and 4 fit the requested topic and link its source note; points 3 and 7 permit sourced hub updates. Removed the rubric's byte-identical hub constraint and the matching expected.json unchanged hub and empty updated list; source bytes and Rules.md stay unchanged. |
@@ -52,23 +47,22 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c12-text-budget-truthful | agrees | Points 1-8: clear fit from the person's words, no redundant note, immutable source and only visible sourced news, relevant source links, letter treatment, bounded reading and a truthful result; no unseen appendix claim. |
 | c12-group-waits | agrees | Points 1, 2, 3, 7: both piles fit their folders by the person's words; the group that gets no valid reply waits whole and untouched with a plain row, no question, and the next press files it with one sourced line per receipt. |
 | c12-admission-waits | agrees | Points 1, 2, 3, 7: each notice fits the plot by the person's words; the pile past the run's room waits untouched, uncounted as a problem and unasked, and the next press files it with its sourced line once. |
-| c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
-| c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
 | c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |
 | c13-manifest-partial-edited-note | agrees | Later personal text is protected and independent effects recover; point 8 requires the partial result, and point 1 permits an inbox return by undo without a question. |
 | c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
 | c15-more-context-bounded | agrees | The words ("papers for the move") establish fit; both supplied one-page PDFs are read whole and each gets a grounded source note. |
 | c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
-
 | c05-person-edited-between-runs | agrees | Point 3 permits compiled state changes only with ownership or permission; a later personal edit requires an ask and sourced history. |
 | c05-merge-question-first | agrees | Point 1 asks before combining near duplicates; pair identity binds both notes and neither changes before an answer. |
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
-| c05-conflicting-fact-kept | agrees | Point 3 keeps both claims attributed in history; C05 preservation never silently resolves a disagreement. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
 | c17-b56-personal-sale-project | agrees | Rechecked 2026-10-10: points 1–4/7/8; existing sale project beats Ideas, source links/history and personal prose survive. TL-P4-41 requires candidate ids and complete retrieval; B2/B6 supply summary/Source construction, not a second writer. |
 | c17-b56-cv-profile | changed | Rechecked 2026-10-10: points 1/3/4/7/8; originals/profile fit remains. Clarified TL-P4-39 F2/F7/R2: short state through C05, full grounded profile through a new Bower region, never a larger state or About me preference. No new-region personal-edit handling; expected.json unchanged. |
 | c17-b56-offer-job-search | agrees | Rechecked 2026-10-10: points 1/3/4/7/8; offer fits Job hunt with factual profile comparison, no shared-word decoy or score. B1 selects hub/profile ids within five; F13 forbids inventing currency/column authority from the source. |
 | c17-b56-clear-topic-templates | agrees | Rechecked 2026-10-10: points 1–4/8; clear trusted reference creates Source/Concept/MOC. TL-P4-41 cut-index rule, B2 scalar summary, marked evergreen MOC and immutable Source apply. Ambiguous variants use TL-P4-44 stored file-to/option ids, not this clear case. |
+| c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
+| c15-stale-package-rebuilt | agrees | Points 1, 2, 3, 7: current source evidence supplies the venue and sourced history; the runner reads the current letter and never invents the old venue. |
+| c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
 
 C17 rows were reread with every delivered input, expected.json and rubric against TL-P4-08,
 TL-P4-39/addenda 1–3, TL-P4-41/available addenda 1–3, TL-P4-42/addenda 1–2,
@@ -76,16 +70,10 @@ TL-P4-44/addenda 1–2 and TL-P4-45. TL-P4-41 addendum 4 is absent from this che
 the refresh records that source gap as Q7. All four rubrics clarify dependencies; only
 CV's old full-profile/state wording needed a changed verdict. No expected outcome, count,
 case metadata or test was changed or weakened. Legacy seeds are not new-format backfill
-fixtures. Script views use .bower/index.md, .bower/hot.md and .bower/log.md; none of these
+fixtures. Script views use .bower/index.md, .bower/hot.md and the monthly .bower/log/YYYY-MM.md; none of these
 four cases relies on root reserved names or hidden maintenance report rows. The current
 method test selects c04–c15 ids and does not enforce C17. Registration stays H1 in
 2026-10-10-b56-prep.md; green is not C17 execution or semantic proof.
-
-| c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
-
-| c15-ready-package-reused | agrees | Points 1, 2, 3, 7: a known fee fits the existing plot note and receives one sourced confirmation; the runner reads the admitted current source without changing ownership. |
-| c15-stale-package-rebuilt | agrees | Points 1, 2, 3, 7: current source evidence supplies the venue and sourced history; the runner reads the current letter and never invents the old venue. |
-| c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
 
 ## Changes
 
@@ -126,12 +114,6 @@ record the method re-check, not an executed model result.
    - The scripted proposals in `c04-incorporation.test.ts` and the recorded replies drop "(2)" from the payslip and the
      invented "7 out of 10" from a Timeline line, since both now break a prompt rule.
 
-## Not changed, for the lead
-
-- **bench-4-scanned-pdf** expects the unread scan filed (`report.filed: 1`), as c15-scanned-letter did. It is the
-  original's benchmark case, kept unchanged as a speed baseline, so it is left
-  as it is; under the method a live run asks instead, which changes that baseline's work. The lead rules.
-
 ## Addendum 7 changes (`c05-incorporation`)
 
 4. **c05-hub-lines, c05-line-not-repeated, c06-offer-and-listing-linked and c07-rent-disagrees, `expected.json`** (and the
@@ -153,8 +135,7 @@ record the method re-check, not an executed model result.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
-These verdicts review proposed semantics, not execution. The existing test at second-brain-method.test.ts:150–175
-selects C04–C15 ids only; B1/C17 gate admission is a proposed small support entry, not changed in this preparation.
+These verdicts review proposed semantics, not execution.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
@@ -177,7 +158,6 @@ Semantic review only: covers:model cases are not executed by the existing C04–
 ## B4 preparation verdicts — 2026-10-10
 
 Every new case was checked against TL-P4-08 points 1–8 and the later brain contracts.
-These verdicts cover the proposed method, not implemented B4 outcomes or accepted numeric budgets.
 No existing rubric, expectation or threshold changes. C17 is still outside the method id filter.
 
 | Case | Verdict | Reason |
@@ -216,11 +196,6 @@ not a new filing hierarchy; schema consent is B5/Q1's exact-payload mechanism.
 | c17-b7-proposal-budget | agrees | Points 1–8: file three clear sources with grounded linked notes, deduplicate topic proposals before the shared two-per-run cap and keep the explicit third request remainder pending through B5, without a tag queue or guessed schema (TL-P4-47 Q3). |
 | c17-b7-authority-full-cap | agrees | Points 1–8: sources fit the existing topic, full vocabulary does not evict or grow from document instructions, and the moved person note keeps its legacy four-tag frontmatter/prose byte-identical; only new Bower notes receive generated caps (F7/R2; TL-P4-42 addendum 3). |
 
-Current method-test selection omits C17; these rows are lead-review evidence until
-H1/B7c admits them. expected-tag-results.json stays outside model input and is not
-scored today. Proposed reply extensions/consent selector are pending contracts/driver
-work, so the requested gate cannot prove tag semantics, growth or proposal acceptance.
-
 ## B8 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
 
 These are method verdicts, not execution verdicts. C17 is not selected by today's
@@ -231,7 +206,7 @@ write permissions, automatic repairs or another report mechanism.
 | --- | --- | --- |
 | c17-b8-settled-recovery | agrees | Points 1–8: fit the notice, preserve its original/history, link the useful source note, and report/log only applied outcomes; rejected hub work grants no success, recovery makes no duplicate fact or note (F3/U3). Fault proof remains pending. |
 | c17-b8-report-only-grammar | agrees | Points 1–8: useful diagnostics reuse Bower health and the actual graph, never fill personal metadata, rewrite notes, repair links, invent related links or teach tags; semantic reads stay bounded and only the health create is reported (R2/U3). |
-| c17-b8-bounded-encoding | agrees | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields and bounded lossless sealing preserve primary outcomes without schema growth, fabricated facts or visible internal-file rows (F14). Bounds await the lead. |
+| c17-b8-bounded-encoding | agrees | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields in the monthly log preserve primary outcomes without schema growth, fabricated facts or visible internal-file rows (F14). |
 | c17-b8-findings-refresh | agrees | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair or external-edit Bower log event (F3/F10/U3). No-change policy awaits Q7. |
 
 ## B9 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
@@ -239,14 +214,11 @@ write permissions, automatic repairs or another report mechanism.
 Each case was reviewed against TL-P4-08 points 1–8. These are semantic preparation
 verdicts, not executed C17 acceptance: the current method test selects c04–c15 ids only.
 No prior rubric, expected outcome, test or numeric threshold is changed. B9 carries
-qualification and compatible marker text; C07 still determines disagreement. New
-marker schema/source binding and production/display oracles await the lead's packet.
+qualification and compatible marker text; C07 still determines disagreement.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
-| c17-b9-contradiction-two-sources | agrees | Points 1–8: reuse the flat note, apply the value gate, preserve immutable evidence and personal prose, append both sourced claims without a winner, use clear listing placement and bounded reads, and report only the real update; B9 adds a plain label, not a second C07 mechanism. |
 | c17-b9-uncertain-and-inferred | agrees | Points 1–8: fit the visit, carry conditional source news and a visibly qualified inference with relevant sources, no redundant note, cancellation, invented number, policy or schema; both entries share one bounded edit and a truthful existing update row. |
-| c17-b9-legacy-readable | agrees | Points 1–8: an instruction-only read does not migrate old or unknown marker strings, rewrite source/personal bytes, add metadata, create redundant notes or asks, or claim an update; tolerant reading is distinct from strict new writes. |
 | c17-b9-person-list-kept | agrees | Points 1–8 plus TL-P4-32/-42 and c05-timeline-list: one explicitly named sourced append uses the value gate and preserves prior star bullets, CRLF, quoted summary and prose; replay adds nothing, source syntax grants no authority, and the unnamed non-list note stays personal. |
 
 ## B12 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-50)
