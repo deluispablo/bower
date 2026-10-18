@@ -871,6 +871,10 @@ export class DemoWorld {
         }
         return change(() => {
           if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+          const at = this.piles.findIndex((p) => p.id === id);
+          const pile = this.piles[at];
+          // Kept where Undo (`restore`) looks: by its place, or by its id when it has none.
+          if (pile) this.trash.set(this.pilePath.get(id) ?? id, { entries: [], pile: { pile, at }, change: null });
           this.piles = this.piles.filter((p) => p.id !== id);
           this.syncInbox();
         });
