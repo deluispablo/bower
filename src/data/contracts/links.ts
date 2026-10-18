@@ -55,3 +55,25 @@ export function rewriteLinks(text: string, former: ReadonlyMap<string, string>):
 
 /** For a resolver: the note name a link points at, whatever heading follows it. */
 export const linkTarget = target;
+
+/** Bare sources ending in a known file extension stay local. Explicit HTTP(S) URLs do not. */
+const FILE = /\.(pdf|jpe?g|png|heic|webp|gif|docx?|xlsx?|csv|md|txt|url)$/i;
+const HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#]\S*)?$/i;
+
+/** A web citation: full HTTP(S) URLs keep their spelling; dotted bare hosts open over HTTPS. */
+export function webSource(source: string): { href: string; label: string } | null {
+  const s = source.trim();
+  if (/\s/.test(s)) return null;
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const url = new URL(s);
+      if (!url.hostname || (url.protocol !== 'http:' && url.protocol !== 'https:')) return null;
+      return { href: s, label: s.replace(/^https?:\/\//i, '') };
+    } catch {
+      // expected: not a valid web address, so the caller treats it as a note link.
+      return null;
+    }
+  }
+  if (!HOST.test(s) || FILE.test(s.replace(/[?#].*$/, ''))) return null;
+  return { href: `https://${s}`, label: s };
+}
