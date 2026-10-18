@@ -30,7 +30,7 @@ const authored = (value: unknown): string[] => (Array.isArray(value) ? value.fla
   : value && typeof value === 'object' ? Object.entries(value).flatMap(([key, v]) => ((key === 'body' || key === 'summary') && typeof v === 'string' ? [v] : authored(v)))
     : []);
 
-const CASES = ['c17-b7-authority-full-cap', 'c17-b7-automatic-growth-replay', 'c17-b7-proposal-budget', 'c17-b7-reuse-known', 'c17-b8-bounded-encoding', 'c17-b8-settled-recovery'];
+const CASES = ['c17-b7-authority-full-cap', 'c17-b7-automatic-growth-replay', 'c17-b7-automatic-capacity-order', 'c17-b7-reuse-known', 'c17-b8-bounded-encoding', 'c17-b8-settled-recovery'];
 const TESTS = ['b8-health.test.ts'];
 
 it.each(CASES)('AC2 c06-sweep-b: %s authors no bare link line', (id) => {

@@ -1,5 +1,5 @@
 {
-  "id": "c17-b7-proposal-budget",
+  "id": "c17-b7-automatic-capacity-order",
   "capability": "C17",
   "title": "Duplicate-before-cap automatic growth installs only two topics without proposal slots",
   "covers": "model",
