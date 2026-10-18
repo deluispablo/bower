@@ -11,14 +11,14 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
 };
 
-test('after the tour a reload opens the app', async ({ page }) => {
+test('after making the folder a reload opens the app', async ({ page }) => {
   await open(page, '/', 'first');
-  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click({ timeout: 10_000 });
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   // With the folder there (kept by the pretend Drive) Home opens; with no folder the
-  // welcome makes it again. Either way a heading shows: no loop.
+  // welcome asks again. Either way a heading shows: no loop.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
   void isFake;
 });

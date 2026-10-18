@@ -66,9 +66,8 @@ export function readTimeScale(): TimeScale {
 export function chooseScenario(s: Scenario, scale?: TimeScale): void {
   try {
     sessionStorage.setItem(KEY, s);
-    // A new situation starts as it says: signed in or not, toured or not.
+    // A new situation starts as it says: signed in or not.
     sessionStorage.removeItem(SIGNED_KEY);
-    sessionStorage.removeItem('bower:toured');
     // Folders open in one situation are not open in the next, nor its tabs.
     localStorage.removeItem('bower:open');
     sessionStorage.removeItem('bower:tabs');
@@ -113,7 +112,7 @@ export function keepSignedIn(on: boolean): void {
 /**
  * Before anything reads the device's storage: an address opened with another
  * situation than the one this tab had starts it clean, as choosing it in the
- * panel does (signed in or not, toured or not, no tabs, folders closed).
+ * panel does (signed in or not, no tabs, folders closed).
  */
 export function startCleanIfNewSituation(): void {
   try {
@@ -121,7 +120,7 @@ export function startCleanIfNewSituation(): void {
     const how = (performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined)?.type;
     const before = sessionStorage.getItem(KEY);
     if (!isScenario(q) || how !== 'navigate' || before === null || before === q) return;
-    for (const k of [SIGNED_KEY, 'bower:toured', 'bower:tabs']) sessionStorage.removeItem(k);
+    for (const k of [SIGNED_KEY, 'bower:tabs']) sessionStorage.removeItem(k);
     localStorage.removeItem('bower:open');
   } catch {
     // expected: storage may be blocked (a private window); nothing was kept.

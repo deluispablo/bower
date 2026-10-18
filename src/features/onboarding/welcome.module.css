@@ -1,17 +1,16 @@
 .page { min-height: 100dvh; max-width: 560px; margin: 0 auto; padding: 48px 22px 30px; display: flex; flex-direction: column; align-items: stretch; }
-.head { display: flex; align-items: flex-end; gap: 12px; }
 .title { font-size: clamp(26px, 5vw, 34px); line-height: 1.1; margin-top: 10px; }
 .text { margin-top: 10px; font-size: 18px; color: var(--text); }
-.folders { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.folders li { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: var(--bg-alt); transition: opacity 0.35s, transform 0.35s var(--ease-out); }
-.out { opacity: 0.25; transform: translateY(-6px); }
-.in { opacity: 1; animation: drop 0.4s var(--ease-out); }
-@keyframes drop { 0% { transform: translateY(-14px) scale(0.97); } 60% { transform: translateY(2px) scale(1.01, 0.98); } 100% { transform: none; } }
-.ftile { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--surface); flex: none; }
-.fmain { flex: 1; display: flex; flex-direction: column; font-size: 14px; }
-.fname { font: 700 17px var(--font-display); color: var(--heading); letter-spacing: -0.02em; }
-.check { color: var(--success); }
+.error { margin-top: 18px; display: grid; gap: 8px; justify-items: start; }
 .foot { margin-top: auto; padding-top: 24px; display: flex; flex-direction: column; gap: 10px; }
-.dots { display: flex; gap: 6px; margin-bottom: 24px; }
-.dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--control-line); }
-.dots .dotOn { background: var(--brand); width: 22px; border-radius: 4px; }
+/* the stage: twigs on the ground, a bower that grows twig by twig, Bower between them */
+.stage { position: relative; height: 150px; margin: 0 -4px; }
+.ground { position: absolute; left: 4%; right: 4%; bottom: 22px; height: 2px; border-radius: 1px; background: var(--twig); opacity: 0.6; }
+.twigs, .arch { position: absolute; bottom: 22px; }
+.twigs { left: 22%; width: 36px; height: 24px; }
+.twigs i { position: absolute; left: 0; width: 34px; height: 3px; border-radius: 2px; background: var(--twig); }
+.arch { left: 62%; width: 90px; height: 56px; }
+.arch i { position: absolute; bottom: 0; width: 4px; height: 100%; border-radius: 2px; background: var(--twig); opacity: 0.25; transition: opacity 0.4s; }
+.arch i.laid { opacity: 1; }
+.held { display: block; width: 24px; height: 3px; border-radius: 2px; background: var(--twig); }
+.still { position: absolute; left: 22%; bottom: 18px; }

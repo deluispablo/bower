@@ -162,14 +162,10 @@ function Gatekeeper() {
       </Routes>
     );
   }
-  if (gate.folder === 'missing') {
-    return (
-      <Routes>
-        <Route path="/welcome" element={<Welcome missing />} />
-        <Route path="*" element={<Navigate to="/welcome" replace />} />
-      </Routes>
-    );
-  }
+  // One Welcome for both folder states: making the folder tells the session it is ready, and Welcome must stay
+  // mounted until its own result is handled (a view in another branch below would start over).
+  if (loc.pathname === '/welcome') return <Welcome />;
+  if (gate.folder === 'missing') return <Navigate to="/welcome" replace />;
   return <Signed discardedFrom={discardedFrom} />;
 }
 
@@ -189,7 +185,6 @@ function Signed({ discardedFrom }: { discardedFrom: string | null }) {
   const loc = useLocation();
   return (
     <Routes location={loc}>
-      <Route path="/welcome" element={<Welcome />} />
       <Route path="/sign-in" element={<BackFromSignIn discard={discardedFrom === loc.key} />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />

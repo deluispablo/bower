@@ -29,8 +29,8 @@ const landmarkOf = (el: Element): Element | null => el.closest('main, header, na
 describe.each([
   ['AC1 privacy-main', '/privacy', <Privacy key="p" />, 'Privacy'],
   ['AC1 terms-main', '/terms', <Terms key="t" />, 'Terms'],
-  ['AC2 welcome-main', '/welcome', <Welcome key="w" />, 'Making your Bower folder'],
-  ['AC2 welcome-step-main', '/welcome?step=0', <Welcome key="s" />, 'Throw it in'],
+  ['AC2 welcome-main', '/welcome', <Welcome key="w" />, 'Checking your Drive'],
+  ['AC2 welcome-step-main', '/welcome?step=0', <Welcome key="s" />, 'Checking your Drive'],
 ] as const)('%s', (_name, path, view, heading) => {
   it(`has one main landmark holding the heading on ${path}`, () => {
     show(view, path);

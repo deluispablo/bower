@@ -72,14 +72,15 @@ test('the inbox reads the same in the tree and on Home: same order, same names',
   for (const t of await homePiles.allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,5}$/);
 });
 
-test('starting again in first sign-in shows the welcome again, with every main folder alike', async ({ page }) => {
+test('starting again in first sign-in asks for the folder again', async ({ page }) => {
   await open(page, '/', 'first');
-  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click({ timeout: 10_000 });
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   await page.getByRole('button', { name: 'Demo situations' }).click();
   await page.getByRole('button', { name: 'Start this situation again' }).click();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  await expect(page.getByRole('heading', { name: /Welcome back|Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Where Bower keeps things' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Make my Bower folder' })).toBeEnabled();
 });
 
 test('deleting the account and coming back: one name for it, and a fresh start', async ({ page }) => {
@@ -90,7 +91,10 @@ test('deleting the account and coming back: one name for it, and a fresh start',
   await expect(page.getByRole('status').getByText(/Your account is gone/)).toBeVisible();
   await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(page).toHaveURL(/\/welcome/, { timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: /Welcome back|Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
+  // The old folder is still in the Drive, and still needs the person's yes before it is linked again.
+  await expect(page.getByRole('heading', { name: 'Where Bower keeps things' })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({ timeout: 15_000 });
 });
 
 test('a saved link opens its web page, and a filed file is not promised a reading', async ({ page }) => {

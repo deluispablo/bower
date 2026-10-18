@@ -18,9 +18,15 @@ test('a signed-out visitor lands on the landing, signs in and gets in', async ({
 
 test('first sign-in makes the five folders', async ({ page }) => {
   await open(page, '/', 'first');
-  await expect(page.getByRole('heading', { name: 'Your folder is ready' })).toBeVisible({ timeout: 8000 });
-  await page.getByRole('button', { name: 'Show me around' }).click();
-  await expect(page.getByRole('heading', { name: 'Throw it in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where Bower keeps things' })).toBeVisible({ timeout: 8000 });
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click();
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+  // The five main folders exist now, as the folder tree shows them.
+  const files = page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link', { name: 'Files', exact: true });
+  if (await files.isVisible()) await files.click();
+  for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) {
+    await expect(page.getByRole('link', { name: new RegExp(`^${name}`) }).or(page.getByRole('treeitem', { name: new RegExp(`^${name}`) })).first(), name).toBeVisible();
+  }
 });
 
 test('a tidy-up walks the phases, files the inbox and offers the replay', async ({ page }) => {

@@ -1,9 +1,9 @@
 /**
  * qa5-welcome-progress (qa-5 Claude F1 = Codex F1; WAI-ARIA 1.2 "naming prohibited" on generic, axe
- * `aria-prohibited-attr`, WCAG 4.1.2): the tour's step progress is text a screen reader reads ("Step 1 of 3"), the dots
- * are decoration, and no role-less element carries a name.
+ * `aria-prohibited-attr`, WCAG 4.1.2): the setup screen has no tour progress to read, so nothing role-less carries a
+ * name, and the scene is hidden from assistive technology.
  */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DataProvider } from '@/data/provider';
@@ -12,9 +12,9 @@ import { Welcome } from './Welcome';
 
 afterEach(cleanup);
 
-function show(step: number) {
+function show(path: string) {
   render(
-    <MemoryRouter initialEntries={[`/welcome?step=${step}`]}>
+    <MemoryRouter initialEntries={[path]}>
       <DataProvider sources={loadingSources()}>
         <Welcome />
       </DataProvider>
@@ -26,34 +26,22 @@ function show(step: number) {
 /** Whether an element, or one around it, is hidden from assistive technology. */
 const hidden = (el: Element): boolean => el.closest('[aria-hidden="true"]') !== null;
 
-describe('qa5-welcome-progress: the step progress is read, not named on a div', () => {
-  it.each([
-    [0, 'Throw it in', 'Step 1 of 3'],
-    [2, 'Find it later', 'Step 3 of 3'],
-  ])('AC1 welcome-progress-text: on step %i the page says "%s" is %s', (step, heading, progress) => {
-    const main = show(step);
-    // Positive control: the step itself rendered.
-    expect(screen.getByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
-    const text = screen.getByText(progress, { exact: true });
-    expect(main.contains(text), 'inside the main landmark').toBe(true);
-    expect(hidden(text), 'not hidden from screen readers').toBe(false);
+describe('qa5-welcome-progress: the setup screen is read, not named on a div', () => {
+  it.each(['/welcome', '/welcome?step=0'])('AC1 welcome-heading-in-main: %s has the page heading inside main and no tour', (path) => {
+    const main = show(path);
+    expect(main.querySelector('h1'), 'the heading is inside the main landmark').not.toBeNull();
+    expect(screen.queryByText(/Step \d of \d/), 'no tour progress').toBeNull();
+    expect(screen.queryByRole('button', { name: /Next|Skip|Show me around/ }), 'no tour buttons').toBeNull();
   });
 
-  it('AC1 welcome-progress-next: pressing Next says the next step', () => {
-    show(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Press Tidy up' })).toBeInTheDocument();
-    expect(screen.getByText('Step 2 of 3', { exact: true })).toBeInTheDocument();
-  });
-
-  it('AC2 welcome-progress-no-generic-name: no role-less element carries aria-label; the dots are hidden', () => {
-    const main = show(0);
+  it('AC2 welcome-progress-no-generic-name: no role-less element carries aria-label; the scene is hidden', () => {
+    const main = show('/welcome');
     const named = [...main.querySelectorAll('[aria-label]:not([role])')].filter((el) => ['DIV', 'SPAN', 'P'].includes(el.tagName));
     expect(named.map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
-    // The dots: three marks, one current; decoration only, the text above says it.
     // Vitest's CSS modules are not scoped (vite.config.ts), so the class is its own name.
-    const dots = main.querySelectorAll('.dots span');
-    expect(dots.length, 'positive control: the three dots are drawn').toBe(3);
-    for (const dot of dots) expect(hidden(dot), 'a dot is hidden from screen readers').toBe(true);
+    const stage = main.querySelector('.stage');
+    expect(stage, 'positive control: the scene is drawn').not.toBeNull();
+    expect(stage ? hidden(stage) : false, 'the scene is hidden from screen readers').toBe(true);
+    expect(main.querySelector('.dots'), 'the tour dots are gone').toBeNull();
   });
 });
