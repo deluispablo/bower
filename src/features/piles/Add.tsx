@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent } from 'react';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
 import { useNavigate } from 'react-router';
@@ -65,6 +65,7 @@ const folderWords = (path: string): string => path.slice(0, Math.max(0, path.las
 
 /** A draft file whose bytes are gone (the page was reloaded) cannot be sent. */
 const missing = (d: Draft): boolean => d.kind !== 'link' && !get(d.key);
+const MISSING_WORDS = 'Add the missing files again, or take them out.';
 
 /**
  * Add makes a pile: things that belong together and one line about them.
@@ -73,6 +74,7 @@ const missing = (d: Draft): boolean => d.kind !== 'link' && !get(d.key);
 export function Add() {
   const { vault } = useSources();
   const nav = useNavigate();
+  const reasonId = useId();
   const [text, setText, clearIf] = useSessionDraft('bower:add-draft');
   // The things in the draft are kept for the visit too (in the real app, files are already
   // in the upload queue, so only their list needs keeping).
@@ -203,12 +205,14 @@ export function Add() {
     fromFiles(e.dataTransfer.files, 'Dropped here');
   };
   const ready = items.filter((d) => !missing(d));
+  // At most one reason under the action: busy says so on the button, then missing bytes, then an empty pile.
+  const reason = busy ? null : ready.length !== items.length ? MISSING_WORDS : !ready.length && !text.trim() ? 'Add a file, a photo or a link first.' : null;
   const save = (): void => {
     if (inFlight) return;
     // Bytes can disappear after rendering an enabled button. Refuse the whole draft.
     if (items.some(missing)) {
       setItemsState((cur) => [...cur]);
-      toast('Add the missing files again, or take them out.');
+      toast(MISSING_WORDS);
       return;
     }
     start((pile) => vault.addPile(pile), {
@@ -225,11 +229,6 @@ export function Add() {
     <div className={s.page}>
       <h1 className={s.title}>Add a pile</h1>
       <p className="muted">Things that belong together, and a line about them. They wait in the inbox until you tidy up.</p>
-
-      <label className={s.what}>
-        <span>What is this?</span>
-        <Textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} disabled={busy} onChange={(e) => { if (!inFlight) setText(e.target.value); }} />
-      </label>
 
       <div
         ref={zone}
@@ -256,7 +255,7 @@ export function Add() {
             <Icon name="file" size={18} /> Choose files
           </Button>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { if (!inFlight) camera.current?.click(); }}>
-            <Icon name="camera" size={18} /> Take a photo
+            <Icon name="camera" size={18} /> Add a photo
           </Button>
         </div>
         <input ref={files} type="file" multiple disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From this device')} />
@@ -337,10 +336,16 @@ export function Add() {
         </ul>
       )}
 
+      <label className={s.what}>
+        <span>What is this? <span className={s.optional}>(optional)</span></span>
+        <Textarea rows={2} placeholder="For example, receipts from a weekend away" value={text} disabled={busy} onChange={(e) => { if (!inFlight) setText(e.target.value); }} />
+      </label>
+
       <div className={s.footer}>
-        <Button block disabled={busy || ready.length !== items.length || (!ready.length && !text.trim())} onClick={save}>
+        <Button block disabled={busy || reason !== null} aria-describedby={reason ? reasonId : undefined} onClick={save}>
           {busy ? 'Saving…' : ready.length ? `Add ${plural(ready.length, 'thing')} to the inbox` : 'Add to the inbox'}
         </Button>
+        {reason && <p id={reasonId} className="muted">{reason}</p>}
       </div>
     </div>
   );

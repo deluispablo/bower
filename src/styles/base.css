@@ -44,6 +44,12 @@
 *::after {
   box-sizing: border-box;
 }
+/* The one placeholder colour for every input; full opacity, since Firefox dims placeholders by default. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
 html,
 body,
 #root {

@@ -96,7 +96,7 @@ describe.each([false, true])('qa7-a11y-empty: taking a thing out of Add keeps th
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     fireEvent.click(button);
     expect(button).not.toBeInTheDocument();
-    const field = screen.getByRole('textbox', { name: 'What is this?' });
+    const field = screen.getByRole('textbox', { name: 'What is this? (optional)' });
     field.focus();
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(field).toHaveFocus();
