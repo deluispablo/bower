@@ -1,9 +1,9 @@
 {
   "id": "c17-b56-clear-topic-templates",
   "capability": "C17",
-  "title": "A clear new reference topic creates its MOC, concept and source from templates",
+  "title": "A clear new reference topic starts with its own MOC hub",
   "covers": "model",
-  "source": "new (TL-P4-38 B6 preparation; scripted intent proof pending)",
+  "source": "new (TL-P4-38 B6 preparation; scripted through production main in runner/test/b56-corpus.test.ts, not semantic model evidence)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -18,7 +18,7 @@
   "questions": [],
   "bowerOwned": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Resources/Paper craft/Paper craft.md"
   ]
 }

@@ -1,64 +1,48 @@
 {
   "files": {
     "present": [
-      "Resources/Rainwater/Sources/Rainwater article.txt",
-      "Resources/Rainwater/Rainwater.md",
-      "Resources/Rainwater/*concept*.md",
-      "Resources/Rainwater/Sources/*source*.md"
+      "Resources/Rainwater/Rainwater article.txt",
+      "Resources/Rainwater/Rainwater.md"
     ],
     "absent": [
       "Inbox/*",
       "Areas/Rainwater/*",
-      "Projects/Rainwater/*"
+      "Projects/Rainwater/*",
+      "Resources/Rainwater/Sources/*",
+      "Resources/Rainwater/*concept*",
+      "Resources/Paper craft/*ainwater*"
     ]
   },
   "unchanged": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Resources/Paper craft/Paper craft.md"
   ],
   "notes": [
     {
       "path": "Resources/Rainwater/Rainwater.md",
       "contains": [
+        "summary: Keeping leaves and twigs out of a rainwater container.",
         "type: moc",
         "status: evergreen",
-        "## Overview",
+        "## Overview\nA covered rainwater container keeps leaves out. A removable screen catches twigs.\n",
         "## Notes",
-        "## Sources"
-      ]
-    },
-    {
-      "path": "Resources/Rainwater/*concept*.md",
-      "contains": [
-        "type: concept",
-        "summary:",
-        "## Current state",
-        "## Notes",
-        "## Related",
-        "## Timeline",
-        "[[Resources/Rainwater/Rainwater]]"
-      ]
-    },
-    {
-      "path": "Resources/Rainwater/Sources/*source*.md",
-      "contains": [
-        "type: source",
-        "summary:",
-        "original:",
-        "## Summary",
-        "## Key points",
-        "## Related",
-        "## Transcript",
-        "[[Resources/Rainwater/Rainwater]]",
-        "covered rainwater container"
+        "## Sources\nRainwater article.txt\n"
+      ],
+      "excludes": [
+        "Paper craft",
+        "## Timeline"
       ]
     }
   ],
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "createdAtLeast": 3,
+    "created": [
+      "Resources/Rainwater/Rainwater.md",
+      "Bower health.md"
+    ],
+    "updated": [],
     "questionsExactly": 0,
     "setAside": 0
   }

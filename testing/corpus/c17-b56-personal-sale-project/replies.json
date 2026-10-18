@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Bicycle sale details.txt",
+        "to": "Projects/Bicycle sale",
+        "name": "Bicycle sale details.txt",
+        "basis": "Projects/Bicycle sale/Bicycle sale.md",
+        "note": {
+          "name": "Bicycle sale details.md",
+          "template": "source",
+          "summary": "The blue touring bicycle is for sale at 240, collected in Saltmere, reply by 2026-10-12.",
+          "body": "Asking price: 240. Collection in Saltmere. Reply by 2026-10-12.\n\nSee also [[Projects/Bicycle sale/Bicycle sale]]: the sale this listing belongs to."
+        }
+      }
+    ],
+    "lines": [
+      {
+        "note": "Projects/Bicycle sale/Bicycle sale.md",
+        "text": "The bicycle asking price is 240; collection is in Saltmere; reply by 2026-10-12.",
+        "cites": "$file:Bicycle sale details.txt"
+      }
+    ]
+  }
+]

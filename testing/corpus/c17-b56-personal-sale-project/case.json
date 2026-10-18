@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "A personal sale fits its project before a generic Ideas folder",
   "covers": "model",
-  "source": "new (TL-P4-38 B5/B6 preparation; scripted intent proof pending)",
+  "source": "new (TL-P4-38 B5/B6 preparation; scripted through production main in runner/test/b56-corpus.test.ts, not semantic model evidence)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -18,7 +18,7 @@
   "questions": [],
   "bowerOwned": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Projects/Bicycle sale/Bicycle sale.md",
     "Resources/Ideas/Ideas.md"
   ]

@@ -12,7 +12,7 @@
   },
   "unchanged": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Resources/Ideas/Ideas.md"
   ],
   "protectedRanges": [
@@ -35,10 +35,16 @@
     {
       "path": "Projects/Bicycle sale/Bicycle sale details.md",
       "contains": [
-        "[[Projects/Bicycle sale/Bicycle sale]]",
+        "bower_template: source",
+        "original: Bicycle sale details.txt",
+        "See also [[Projects/Bicycle sale/Bicycle sale]]: the sale this listing belongs to.",
         "240",
         "Saltmere",
         "2026-10-12"
+      ],
+      "excludes": [
+        "Alex will keep the bell.",
+        "[[Resources/Ideas/Ideas]]"
       ]
     }
   ],
@@ -46,7 +52,8 @@
   "report": {
     "filed": 1,
     "created": [
-      "Projects/Bicycle sale/Bicycle sale details.md"
+      "Projects/Bicycle sale/Bicycle sale details.md",
+      "Bower health.md"
     ],
     "updated": [
       "Projects/Bicycle sale/Bicycle sale.md"
