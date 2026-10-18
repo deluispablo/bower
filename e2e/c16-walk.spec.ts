@@ -71,8 +71,8 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   await expect(page.getByRole('status').filter({ hasText: /inbox/i }).or(main.getByRole('link', { name: /Car insurance renewal/ })).first()).toBeVisible();
 
   // Tell Bower: a request, then a rule (the arrow keys pick the second choice).
-  await press(page, nav(page, 'Bower', 'Talk to Bower', isMobile));
-  await expect(page.getByRole('heading', { name: 'Tell Bower', level: 1 })).toBeVisible();
+  await press(page, nav(page, 'Ask', 'Ask', isMobile));
+  await expect(page.getByRole('heading', { name: 'Ask Bower', level: 1 })).toBeVisible();
   await scan(page);
   await typeIn(page, page.getByRole('textbox', { name: 'Your request' }), 'Put my visa papers together');
   await press(page, page.getByRole('button', { name: 'Send' }));
@@ -100,8 +100,8 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   await expect(sheet).toHaveCount(0);
 
   // Undo: remove a rule from Tell Bower, then take it back.
-  await press(page, nav(page, 'Bower', 'Talk to Bower', isMobile));
-  await expect(page.getByRole('heading', { name: 'Tell Bower', level: 1 })).toBeVisible();
+  await press(page, nav(page, 'Ask', 'Ask', isMobile));
+  await expect(page.getByRole('heading', { name: 'Ask Bower', level: 1 })).toBeVisible();
   await press(page, main.getByRole('button', { name: /^Remove the rule: / }).first());
   const dock = page.getByRole('status');
   await expect(dock.getByText(/Rule removed/)).toBeVisible();
