@@ -64,7 +64,7 @@ import { repairRules } from './rules-repair';
 import { LedgerExhausted, RunTiming } from './timing';
 import { boundHot } from './hot';
 import { VaultIndex } from '../../src/data/vault/vault-index';
-import { refreshPlanning, planningIndex, withMaintenance, withProgress, maintenanceEffects } from './index';
+import { refreshPlanning, planningIndex, withMaintenance, withProgress, keepProgress, knownNotes, maintenanceEffects } from './index';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -480,21 +480,34 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
           const refreshed = await timing.maintenance(() => refreshPlanning(drive, rootId), items);
           drive.planReads().handoff(rootId, refreshed.listing);
           // c12-admit A5: what waits with no row of its own rides the manifest, for any provider.
-          const waits = (m: RunManifest, n: number): RunManifest => (n ? { ...m, waitingThings: n } : m);
-          // Held when maintenance's ledger ends discovery or declaration (R6, R7), or the planner's ledger stops it (A7):
-          // any plan is dropped and nothing is admitted; the run's one write is what it read, outside the ledger, and its
-          // report counts every thing it took and the budget left.
+          const waits = (m: RunManifest, n: number): RunManifest => (n ? { ...m, waitingThings: (m.waitingThings ?? 0) + n } : m);
+          // Held when maintenance's ledger ends declaration (R7), or the planner's ledger stops it (A7): any plan is
+          // dropped and nothing is admitted; the run's one write is what it read, outside the ledger, and its report
+          // counts every thing it took and the budget left.
           const held = async (exhausted: LedgerExhausted): Promise<RunManifest> => {
             console.log(`${exhausted.count} items left in the inbox for the next run.`);
             return waits(await withProgress(drive, { rootId, runId, allowWeb, taken: admitted.taken }, refreshed),
               admittedThings(admitted.taken) + (admitted.waiting ?? 0));
           };
-          if (refreshed.exhausted) return held(refreshed.exhausted);
+          // Nothing admitted and discovery unfinished: nothing to plan, so no model call; the run keeps its progress.
+          // WS14: a request needs the whole folder read, so unfinished discovery leaves your changes out of what it takes: they
+          // stay unconsumed and wait for the press that completes discovery. Only piles are planned early.
+          const taking = refreshed.exhausted ? { ...admitted, taken: { ...admitted.taken, journal: [] } } : admitted;
+          if (refreshed.exhausted && !taking.taken.piles.length) {
+            return waits(await withProgress(drive, { rootId, runId, allowWeb, taken: taking.taken }, refreshed), admitted.waiting ?? 0);
+          }
+          // Discovery the ledger ended plans on what is known; unread notes are cards marked unread (WS9).
+          const known = refreshed.exhausted ? knownNotes(refreshed) : undefined;
           const index = await planningIndex(drive, rootId, refreshed);
-          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: refreshed.snapshot, prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
+          const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: known?.files ?? refreshed.snapshot,
+            ...(known?.unread ? { unread: true } : {}), prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
           try {
-            const manifest = await provider(admitted);
-            return waits(await timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed)), admitted.waiting ?? 0);
+            const manifest = await provider(taking);
+            // Discovery unfinished: the progress and the log, outside the ledger (R13, WS4, WS5); maintenance waits for a complete run.
+            const planned = refreshed.exhausted
+              ? await withMaintenance(drive, await keepProgress(drive, manifest, refreshed), undefined, refreshed)
+              : await timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed));
+            return waits(planned, admitted.waiting ?? 0);
           } catch (error) {
             if (!(error instanceof LedgerExhausted)) throw error;
             return held(error);

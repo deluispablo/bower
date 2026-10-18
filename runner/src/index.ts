@@ -301,17 +301,14 @@ async function cursorOnly(drive: RunnerDrive, manifest: RunManifest, ix: VaultIn
   return state.cursor === cursor ? manifest : retrievalWrite(drive, manifest, ix, old, JSON.stringify({ ...state, cursor }));
 }
 
+type Refreshed = Awaited<ReturnType<typeof refreshPlanning>>;
+
 /**
- * A run that ends on the ledger before its chain keeps what it read (R6-R8): the state as read and validated, `files`
- * gaining this run's entries, its cursor and every other key unchanged; never charged to maintenance's ledger (R13).
- * Its manifest captures nothing and plans nothing else, with no model and no scripted plan (R7, R19): what the run
- * took, its questions and its requests wait for a run that completes discovery.
+ * What a run knows of each note (R8, R11): stored entries under their path now, then this run's snapshot; `unread` when a
+ * listed note has no entry (the health note and hidden paths are not notes: `notesIn`).
  */
-export async function withProgress(drive: RunnerDrive, run: { rootId: string; runId: string; allowWeb: boolean; taken: AdmissionManifest },
-  refreshed: Awaited<ReturnType<typeof refreshPlanning>>): Promise<RunManifest> {
-  const { ix, old, state, snapshot, lints, cursor } = refreshed;
-  const manifest: RunManifest = await emptyManifest(run.rootId,
-    { scope: run.taken.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: run.taken.id, requestedAt: run.taken.at });
+export function knownNotes(refreshed: Refreshed): { files: Notes; unread: boolean } {
+  const { ix, state, snapshot, lints } = refreshed;
   const files: Notes = {};
   // Stored entries stay as stored, under their path now; a note binned or gone loses its entry (R8, R11).
   for (const [id, stored] of Object.entries(state?.files ?? {})) {
@@ -332,8 +329,29 @@ export async function withProgress(drive: RunnerDrive, run: { rootId: string; ru
     delete entry.members;
     files[id] = entry;
   }
-  // A cold folder keeps its bootstrap token, taken before its listing, so the next feed misses no change (R8, R9).
-  return retrievalWrite(drive, manifest, ix, old, JSON.stringify(state ? { ...state, files } : { v: 1, folderId: run.rootId, account: run.rootId, cursor, files }));
+  return { files, unread: notesIn(ix).some(({ file }) => file.id !== state?.health && !files[file.id]) };
+}
+
+/**
+ * The reading progress (R6-R8) as one ordinary write appended to `manifest`, outside maintenance's ledger (R13): the
+ * state as read and validated, `files` gaining this run's entries, its cursor and every other key unchanged. A cold
+ * folder keeps its bootstrap token, taken before its listing, so the next feed misses no change (R8, R9).
+ */
+export async function keepProgress(drive: RunnerDrive, manifest: RunManifest, refreshed: Refreshed): Promise<RunManifest> {
+  const { ix, old, state, cursor } = refreshed;
+  const { files } = knownNotes(refreshed);
+  const rootId = manifest.scope.rootId;
+  return retrievalWrite(drive, manifest, ix, old, JSON.stringify(state ? { ...state, files } : { v: 1, folderId: rootId, account: rootId, cursor, files }));
+}
+
+/**
+ * A run held before any plan (a ledger ended its declaration, or its planning) keeps what it read: its manifest captures
+ * nothing and plans nothing else (R7, R19); what the run took, its questions and its requests wait for a run that completes.
+ */
+export async function withProgress(drive: RunnerDrive, run: { rootId: string; runId: string; allowWeb: boolean; taken: AdmissionManifest },
+  refreshed: Refreshed): Promise<RunManifest> {
+  return keepProgress(drive, await emptyManifest(run.rootId,
+    { scope: run.taken.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: run.taken.id, requestedAt: run.taken.at }), refreshed);
 }
 
 /** The retrieval state as an ordinary manifest write: an update at the version read, else a create with a reserved id. */
@@ -868,14 +886,15 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   }
   const rootId = manifest.scope.rootId;
   const refreshed = prepared ?? await refreshPlanning(drive, rootId);
-  // Unfinished discovery declares nothing from a partial view (R6, R10); the run keeps its progress (`withProgress`).
-  if (refreshed.exhausted) throw refreshed.exhausted;
+  // Unfinished discovery declares nothing from a partial view (R6, R10), only the log, which no later run can rebuild
+  // (WS5); its progress is the plan's own write (`keepProgress`).
+  const partial = !!refreshed.exhausted;
   let { listing, snapshot } = refreshed;
   const { ix, old, state, cursor, changes, drop } = refreshed;
   const files = new Map(listing.map((f) => [f.id, f]));
   const ledgerFile = ix.file('.bower/observations.jsonl');
   const hasLedgerEffect = manifest.operations.some(({ effect: e }) => e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl');
-  const aboutDeclaration = ledgerFile || hasLedgerEffect ? await aboutTarget.declare?.(drive, manifest, ix, snapshot) : undefined;
+  const aboutDeclaration = !partial && (ledgerFile || hasLedgerEffect) ? await aboutTarget.declare?.(drive, manifest, ix, snapshot) : undefined;
   const ledgerText = aboutDeclaration?.sources.find((s) => s.path === '.bower/observations.jsonl')?.text ?? '';
   const aboutBefore = aboutDeclaration?.sources.find((s) => s.path === 'About me.md')?.text;
   // A damaged About me is skipped like any damaged note: logged, left as it is, and the rest of the run goes on.
@@ -883,7 +902,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
   const aboutDamaged = aboutOwnership?.status === 'invalid';
   if (aboutOwnership?.status === 'invalid') console.error(ownershipError(aboutOwnership.reason));
   const aboutRendered = ledgerText && !aboutDamaged ? aboutTarget.render(aboutDeclaration, { v: 1, folderId: rootId, account: state?.account ?? rootId, cursor, files: snapshot }, [], manifest) : undefined;
-  const needsAbout = !aboutDamaged && (hasLedgerEffect || !!ledgerText && (typeof aboutRendered === 'object' && aboutRendered.text !== aboutBefore));
+  const needsAbout = !partial && !aboutDamaged && (hasLedgerEffect || !!ledgerText && (typeof aboutRendered === 'object' && aboutRendered.text !== aboutBefore));
   if (!needsAbout && !state && !notesIn(ix).length && !manifest.operations.length && !ix.file(SYSTEM.hot) && !manifest.capture.journal.length) return manifest;
   // A folder without a health note keeps the cursor-only press (R21). Once Bower keeps one, a lost note or a note
   // still not checked is a coverage change it owes the person (TL-P4-50 Q7, R22, R26).
@@ -892,7 +911,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     return !note.lint && !!f && f.size !== undefined;
   };
   const healthDeclaration: MaintenanceDeclaration = { at: new Date(manifest.requestedAt).toISOString(), sources: [] };
-  for (const path of [SYSTEM.tags, SYSTEM.typeTable]) {
+  for (const path of partial ? [] : [SYSTEM.tags, SYSTEM.typeTable]) {
     const source = ix.file(path);
     if (!source || source.folder) continue;
     try {
@@ -919,14 +938,14 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     return refreshed.tableChanged && (!!recorded.length || !!table && readTypeTable(await drive.readListedText(table)).table.rows
       .some((row) => rowViews(row).length > 0));
   };
-  if (!needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && !await formulasOwed() && await healthKept()) {
+  if (!partial && !needsAbout && state && ix.file(SYSTEM.index) && !changes.length && !figuresOwed && !manifest.operations.length && !await formulasOwed() && await healthKept()) {
     return old ? cursorOnly(drive, manifest, ix, old, state, cursor) : manifest;
   }
   // Absent or malformed evidence is rebuilt from one read of this version (R26).
   const reads = limiter(READ_AHEAD, (error) => error instanceof LedgerExhausted);
   // A run reads at most NOTE_READS notes for the index and lint together, lint's in path order; the notes left stay owed
   // for the next run, and the index's own reads (a cold folder) are never refused.
-  const turn = Object.entries(snapshot).filter(([id, note]) => owed(id, note)).sort(([, a], [, b]) => a.path.localeCompare(b.path))
+  const turn = partial ? [] : Object.entries(snapshot).filter(([id, note]) => owed(id, note)).sort(([, a], [, b]) => a.path.localeCompare(b.path))
     .slice(0, Math.max(0, NOTE_READS - refreshed.read));
   await Promise.all(turn.map(([id, note]) => reads(async () => {
     const f = files.get(id);
@@ -942,7 +961,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     }
   })));
   // A write or migration needs complete owned regions; unchanged maps reuse retrieval state's snapshot and members.
-  for (const [id, note] of Object.entries(snapshot)) {
+  for (const [id, note] of partial ? [] : Object.entries(snapshot)) {
     const before = files.get(id);
     if (note.moc || !before || note.lint === 'unreadable') continue;
     // Declared figures need the map's full text, even when the declaration runs past the indexed prefix (R37); the
@@ -988,16 +1007,23 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
     if (path) logDeclaration.sources.push(await readSource(drive, path, f));
   }
   const plannedEvents = logEvents(manifest, logDeclaration);
+  const isMemory = ({ effect: e }: OperationV2): boolean => e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl'
+    || e.kind === 'edit-text' && e.path === 'About me.md'
+    || e.kind === 'create-text' && (e.purpose === 'about-archive' || e.purpose === 'runner-json' && e.name === 'observations.jsonl'
+      || e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === rootId);
+  // No line to keep and no memory to end the plan on: the progress write stands alone (WS10 keeps the guard's last op).
+  if (partial && !plannedEvents.length && !manifest.operations.some(isMemory)) return manifest;
   const firstEvent = plannedEvents[0];
   const logPath = firstEvent ? formatLogEvent(firstEvent).path : undefined;
   const logFolder = '.bower/log';
   const missingLogFolder = logPath && !ix.file(logFolder);
-  const kinds = [indexTarget, ...declared, ...(needsAbout ? [aboutTarget] : [])];
+  const kinds = partial ? [] : [indexTarget, ...declared, ...(needsAbout ? [aboutTarget] : [])];
   if (new Set(kinds.map((kind) => kind.path)).size !== kinds.length) throw unavailable();
-  const paths = [...kinds.map((kind) => kind.path), SYSTEM.retrieval, ...(missingLogFolder ? [logFolder] : []), ...(logPath ? [logPath] : [])];
+  // The progress is already in the plan when partial (WS4), so retrieval is no target then.
+  const paths = [...kinds.map((kind) => kind.path), ...(partial ? [] : [SYSTEM.retrieval]), ...(missingLogFolder ? [logFolder] : []), ...(logPath ? [logPath] : [])];
   const missing = paths.filter((path) => !ix.file(path));
-  const health = await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }, healthDeclaration);
-  const holders: Holder[] = [...missing.map(() => ({})), ...(health ? [] : [{}])];
+  const health = partial ? undefined : await healthNote(drive, ix, state, manifest, { folderId: rootId, snapshot, listing: listing.map(seen) }, healthDeclaration);
+  const holders: Holder[] = [...missing.map(() => ({})), ...(health || partial ? [] : [{}])];
   await reserveFor(drive.fencedWrites(), holders);
   const targets: NonNullable<Maintain['inputs']['targets']> = [];
   const places = new Map(manifest.capture.places.map((place) => [place.file.fileId, place]));
@@ -1032,7 +1058,7 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       ...(before && bytes ? { beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } } : {}) });
   }
   // MOC inputs contain the exact original bytes and every owned region; no whole-note permission is inferred.
-  for (const [id, note] of Object.entries(snapshot)) {
+  for (const [id, note] of partial ? [] : Object.entries(snapshot)) {
     const before = files.get(id);
     if (!note.moc || !before || before.parents.length !== 1 || paths.includes(note.path)) continue;
     const path = ix.pathOf(id);
@@ -1043,9 +1069,9 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       beforeContent: { encoding: 'utf8', size: bytes.length, sha256: await sha256Hex(bytes), provenance: drive.provenance, observedModifiedTime: before.modifiedTime } });
   }
   // Declared only to change it, after retrieval stores its id (R20); a create uses its reserved id.
-  const healthId = health?.file.id ?? holders.at(-1)?.reserved;
-  if (!healthId) throw unavailable();
-  if (!health || health.text !== undefined) {
+  const healthId = partial ? undefined : health?.file.id ?? holders.at(-1)?.reserved;
+  if (!partial && !healthId) throw unavailable();
+  if (healthId && (!health || health.text !== undefined)) {
     const name = health?.file.name ?? freeName(ix.entries(), '', HEALTH_NAME);
     places.set(healthId, { path: name, file: health ? seen(health.file)
       : { fileId: healthId, name, parents: [rootId], folder: false, modifiedTime: new Date(manifest.requestedAt).toISOString() } });
@@ -1113,29 +1139,32 @@ export async function withMaintenance(drive: RunnerDrive, manifest: RunManifest,
       ...(note.op ? { op: ids.get(note.op) ?? note.op } : {}),
       ...(note.stamp ? { stamp: stamps.get(note.stamp) ?? note.stamp } : {}) })) } }));
   const inputs: Maintain['inputs'] = { folderId: rootId, account: state?.account ?? rootId, cursor,
-    changes: [...new Set(changes)], operationIds: operations.map((o) => o.operationId), targets,
-    snapshot, listing: listing.map(seen), health: healthId };
+    changes: partial ? [] : [...new Set(changes)], operationIds: operations.map((o) => o.operationId), targets,
+    ...(partial ? {} : { snapshot }), listing: listing.map(seen), ...(healthId ? { health: healthId } : {}) };
   const effect: Maintain = { kind: 'maintain', inputs };
   const ordinal = manifest.operations.length;
   const operationId = (await canonical({ runId: manifest.runId, captureId, ordinal, effect })).hash;
-  const lastMemory = operations.findLast(({ effect: e }) => e.kind === 'write-runner-json' && e.path === '.bower/observations.jsonl'
-    || e.kind === 'edit-text' && e.path === 'About me.md'
-    || e.kind === 'create-text' && (e.purpose === 'about-archive' || e.purpose === 'runner-json' && e.name === 'observations.jsonl'
-      || e.name === 'About me.md' && 'fileId' in e.parent && e.parent.fileId === rootId));
+  const lastMemory = operations.findLast(isMemory);
   return { ...manifest, v: 2, capture, captureId, reportPlan,
     ...(manifest.satisfiedAppends ? { satisfiedAppends: manifest.satisfiedAppends.map((row) => ({ ...row,
       operationId: ids.get(row.operationId) ?? row.operationId })) } : {}),
     operations: [...operations, { ordinal, operationId, dependsOn: lastMemory ? [lastMemory.operationId] : [], effect }] };
 }
 
+/** A maintain with log targets only (or none): what an unfinished press plans (WS5). */
+const logOnly = (op: OperationV2): boolean => op.effect.kind === 'maintain'
+  && (op.effect.inputs.targets ?? []).every((t) => t.kind === 'log' || t.kind === 'log-folder');
+
 export function maintenanceEffects(drive: RunnerDrive, declared: readonly DeclaredTarget[] = [hotTarget], timing?: RunTiming,
   reached: { health?: Settled } = {}): Effects {
   if (timing) {
     const effects = maintenanceEffects(drive, declared, undefined, reached);
     return { ...effects,
-      readBack: (...args) => timing.maintenance(() => effects.readBack(...args)),
+      // The log of an unfinished press is outside the ledger (R13, WS5), as its progress write is.
+      readBack: (...args) => logOnly(args[0]) ? effects.readBack(...args) : timing.maintenance(() => effects.readBack(...args)),
       apply: async (...args) => {
         delete reached.health;
+        if (logOnly(args[0])) return effects.apply(...args);
         try { return await timing.maintenance(() => effects.apply(...args)); }
         catch (error) {
           if (!(error instanceof LedgerExhausted)) throw error;
@@ -1175,6 +1204,11 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       const log = op.effect.inputs.targets?.find((t) => t.kind === 'log');
       const target = log && logEvents(manifest, log.declaration, head.outcomes).length ? log
         : op.effect.inputs.targets?.find((t) => t.kind === 'health') ?? op.effect.inputs.targets?.find((t) => t.path === SYSTEM.retrieval);
+      // WS10, WS21: a maintain with nothing to log lands as the write it follows, and not at all when that one did not.
+      if (!target && logOnly(op)) {
+        const prior = head.outcomes.find((o) => o.operationId === (op.effect as Maintain).inputs.operationIds.at(-1));
+        return prior?.state === 'applied' ? { state: 'landed', evidence: prior.evidence } : { state: 'not-landed' };
+      }
       if (!target) throw unavailable();
       try {
         const ev = await drive.evidence(target.fileId);
@@ -1205,7 +1239,7 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       const subHead = (fileId: string) => ({ ...head, outcomes: head.outcomes.map((o) => o.operationId === op.operationId ? { operationId: o.operationId, state: 'possible-effect' as const, dispatchId: op.operationId, fileId } : o) });
       // Computed values first, each note in one edit under the maintain's stamp, so figures read them (B11 R51). A landed
       // write found on redispatch counts as applied (R39); a write refused for the person's change skips that note (R10).
-      for (const write of await figures.formulas()) {
+      for (const write of logOnly(op) ? [] : await figures.formulas()) {
         const f = state.listing?.find((x) => x.id === write.id);
         const before = f === undefined ? undefined : write.text ?? await figures.whole(write.id);
         if (f === undefined || before === undefined) { write.settle('refused'); continue; }
@@ -1360,6 +1394,14 @@ export function maintenanceEffects(drive: RunnerDrive, declared: readonly Declar
       }
       if (!last) {
         if (refused) return refused;
+        // WS10, WS21: a log-only maintain with no line to write settles as the write it follows; refused when that one did not apply (WS22).
+        const before = op.effect.inputs.operationIds.at(-1);
+        const prior = head.outcomes.find((o) => o.operationId === before);
+        if (logOnly(op) && prior?.state === 'applied') { await sending(); return { state: 'applied', evidence: prior.evidence }; }
+        if (logOnly(op)) {
+          const error = new BowerError('unknown', 'Bower will finish updating its notes next time.'); console.error(error);
+          return { state: 'rejected', failure: { code: 'unknown', message: error.message } };
+        }
         throw unavailable();
       }
       // Even a fully reconciled partial effect was already named by the opening checkpoint.

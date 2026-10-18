@@ -13,7 +13,7 @@ import { loadCase } from '../src/corpus';
 import { RunnerDrive } from '../src/drive';
 import { HEALTH_NAME } from '../src/lint';
 import { LedgerExhausted, RunTiming } from '../src/timing';
-import { empty, fileIntent, folder, note, phaseAwareClaude, reply, report, run, select, setup, type Base } from './b1-planning-support';
+import { empty, fileIntent, folder, HUB, note, phaseAwareClaude, reply, report, run, select, setup, type Base } from './b1-planning-support';
 import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import * as transport from './drive-v3';
 
@@ -53,7 +53,14 @@ async function press(b: Base, n: number, around?: Around, turns = { count: 0 }):
   const values: unknown[] = [];
   return run(b, values, { press: n, admission: await admitted(b, n), ...(around ? { around } : {}), beforeReply: async (turn, frame) => {
     turns.count = turn;
-    values[turn - 1] = frame.value.selection === undefined ? select(b) : fileIntent(b);
+    // The job hunt's hub is a wanted card discovery has not read yet, so the new-note rule passes (c12-warm-start WS3);
+    // a frame whose twelve cards leave it out (a map's members fill them) cannot want it.
+    const offered = (frame.value.sources as Array<{ candidates: Array<{ id: string }> }> | undefined)?.some((s) => s.candidates.some((c) => c.id === b.id(HUB)));
+    // Only the sources the frame lists are placed: a later press has none left (the pile is filed).
+    const shown = new Set((frame.value.sources as Array<{ itemId: string }> | undefined)?.map((s) => s.itemId));
+    const placed = select(b, offered ? [b.id(HUB)] : []);
+    values[turn - 1] = frame.value.selection === undefined ? { ...placed, items: placed.items.filter((i) => shown.has(i.itemId)) }
+      : { ...fileIntent(b), things: fileIntent(b).things.filter((t) => shown.has(t.fileId)) };
   } });
 }
 /** A run with nothing admitted: maintenance only. */
@@ -117,21 +124,25 @@ function ledgerProbe() {
 }
 
 describe('cold discovery keeps its reading progress', () => {
-  it('AC1 cold-discovery-progress-held: a cold run over 204 notes keeps what it read and holds the model', async () => {
+  it('AC1 cold-discovery-progress-plans-first: a cold run over 204 notes plans on what it read, files the pile and keeps its progress', async () => {
     const b = await cold();
     const seeded = await contents(b);
     const first = await press(b, 1);
     const state = stateOf(first);
-    expect(state, 'the held run keeps its reading progress in the one retrieval state').not.toBeNull();
+    expect(state, 'the run keeps its reading progress in the one retrieval state').not.toBeNull();
     const count = known(first).length;
     expect(count, 'some notes are read').toBeGreaterThan(0);
     expect(count, 'not every note fits one cold run').toBeLessThan(204);
     const listed = new Map((await b.drive.listAll(b.root)).map((f) => [f.id, f.modifiedTime]));
     for (const [id, entry] of Object.entries(state?.files ?? {})) expect(entry.version, 'each entry is keyed by its read version').toBe(listed.get(id));
-    expect(first.frames, 'no model call while discovery is unfinished').toHaveLength(0);
+    expect(first.frames, 'the model plans while discovery is unfinished').toHaveLength(2);
     expect(first.wire?.statuses.at(-1)?.phase).toBe('done');
-    expect(Object.keys(first.after).filter((p) => p.startsWith('Inbox/') && p.endsWith('Offer.txt')), 'the pile waits in the inbox').toHaveLength(1);
-    expect(personFiles(first), 'every person file is byte-identical').toEqual(personFiles({ ...first, after: seeded }));
+    expect(report(first).filed, 'the pile is filed').toHaveLength(1);
+    expect(first.after[SYSTEM.index], 'no index from a partial view').toBeUndefined();
+    expect(first.after[SYSTEM.hot], 'no hot').toBeUndefined();
+    expect(first.after[HEALTH_NAME], 'no health note').toBeUndefined();
+    const outside = (r: CaseRun) => Object.fromEntries(Object.entries(personFiles(r)).filter(([p]) => !p.startsWith('Inbox/') && !p.startsWith('Projects/Remote search/')));
+    expect(outside(first), 'every person file outside the inbox and the job hunt is byte-identical').toEqual(outside({ ...first, after: seeded }));
   });
 
   it('AC1 cold-discovery-progress-continues: the next run reads only notes it does not know yet', async () => {
@@ -139,26 +150,25 @@ describe('cold discovery keeps its reading progress', () => {
     const first = await press(b, 1);
     const before = new Set(known(first));
     expect(before.size, 'the first run kept its progress').toBeGreaterThan(0);
-    const second = await press(b, 2);
-    expect(prefixed(second).filter((id) => before.has(id)), 'no note read before is fetched again').toEqual([]);
+    const second = await press(b, 2);    expect(prefixed(second).filter((id) => before.has(id)), 'no note read before is fetched again').toEqual([]);
     expect(known(second).length, 'progress grows').toBeGreaterThan(before.size);
     for (const id of before) expect(known(second), 'progress is never lost').toContain(id);
   });
 
   it(`AC1 cold-discovery-progress-reaches-model: a never-warm folder of 204 notes reaches the model within ${BOUND} runs and files the pile`, async () => {
     const b = await cold();
-    let last: Result | undefined;
-    let runs = 0;
-    while (runs < BOUND && !last?.frames.length) last = await press(b, ++runs);
-    expect(last?.frames.length, `the model is reached within ${BOUND} runs`).toBe(2);
-    expect(report(last as Result).filed, 'the pile is filed on that run').toHaveLength(1);
+    const first = await press(b, 1);
+    expect(first.frames.length, 'the first press reaches the model').toBe(2);
+    expect(report(first).filed, 'the pile is filed on that press').toHaveLength(1);
     // The selection index is cut at 32,000 characters by design, so discovery is judged by the retrieval state (ruling).
-    expect(last?.frames[0]?.value.selection, 'a selection frame reaches the model').toBeUndefined();
+    expect(first.frames[0]?.value.selection, 'a selection frame reaches the model').toBeUndefined();
+    let last: Result = first;
+    for (let n = 2; n <= BOUND + 4 && !last.after[SYSTEM.index]?.includes('[[Record 203]]'); n++) last = await idle(b, n);
     const records = (await b.drive.listAll(b.root)).filter((f) => f.name.startsWith('Record ')).map((f) => f.id);
     expect(records).toHaveLength(204);
-    for (const id of records) expect(known(last as Result), 'the model is reached with every note discovered').toContain(id);
-    expect(last?.after[SYSTEM.index], 'the completing run writes the index').toContain('[[Record 203]]');
-    expect(last?.after[HEALTH_NAME], 'and the health note').toBeDefined();
+    for (const id of records) expect(known(last), 'discovery completes with every note known').toContain(id);
+    expect(last.after[SYSTEM.index], 'the completing press writes the index').toContain('[[Record 203]]');
+    expect(last.after[HEALTH_NAME], 'and the health note').toBeDefined();
   });
 
   it(`AC1 cold-discovery-progress-stale-question: a folder over the ledger with an open question whose thing left the inbox still reaches the model within ${BOUND} runs`, async () => {
@@ -167,13 +177,12 @@ describe('cold discovery keeps its reading progress', () => {
     // The question's thing left the inbox: a plan with nothing taken would still close it (R7, R21).
     await edit(b, questions, `${JSON.stringify({ v: 1, questions: [{ id: 'q-stale', text: 'Where does the old offer go?', yes: 'Projects', no: 'Leave it',
       askedAt: AT - 60_000, subject: 'GONE_FILE_ID' }] })}\n`);
-    const held: Result[] = [];
-    let last: Result | undefined;
-    for (let n = 1; n <= BOUND && !last?.frames.length; n++) held.push(last = await press(b, n));
-    expect(stateOf(held[0] as Result), 'the held run keeps its reading progress despite the stale question').not.toBeNull();
-    expect(held[0]?.after[SYSTEM.questions], 'a held run leaves the questions as they were').toContain('q-stale');
-    expect(last?.frames.length, `the model is reached within ${BOUND} runs`).toBe(2);
-    expect(report(last as Result).filed, 'the pile is filed on that run').toHaveLength(1);
+    const first = await press(b, 1);
+    expect(first.frames.length, 'the first press reaches the model').toBe(2);
+    expect(report(first).filed, 'the pile is filed on that press').toHaveLength(1);
+    // c12-warm-start WS8: its plan closes the question, whose subject left the inbox.
+    expect(first.after[SYSTEM.questions], 'the plan closes the stale question').not.toContain('q-stale');
+    expect(stateOf(first), 'the press keeps its reading progress').not.toBeNull();
   });
 
   it('AC1 cold-discovery-progress-each-once: across the runs each note prefix is fetched exactly once', async () => {
@@ -181,11 +190,12 @@ describe('cold discovery keeps its reading progress', () => {
     const ids = new Set((await b.drive.listAll(b.root)).filter((f) => f.name.startsWith('Record ')).map((f) => f.id));
     const fetched: string[] = [];
     let last: Result | undefined;
-    for (let n = 1; n <= BOUND && !last?.frames.length; n++) {
+    // c12-warm-start WS2: the first press already plans, so the runs go on until discovery completes.
+    for (let n = 1; n <= BOUND + 4 && !last?.after[SYSTEM.index]?.includes('[[Record 203]]'); n++) {
       last = await press(b, n);
       fetched.push(...prefixed(last).filter((id) => ids.has(id)));
     }
-    expect(last?.frames.length, 'discovery completed').toBe(2);
+    expect(last?.after[SYSTEM.index], 'discovery completed').toContain('[[Record 203]]');
     expect(fetched.length, 'one prefix read per note, never repeated').toBe(ids.size);
     expect(new Set(fetched).size).toBe(ids.size);
   });
@@ -249,13 +259,14 @@ describe('cold discovery keeps its reading progress', () => {
     expect(stateOf(last as Result)?.files[target]?.summary, 'the person\'s change is read, never the stale version').toBe('Alex changed this during the run.');
   });
 
-  it('AC3 cold-discovery-progress-only-progress: a held run writes only the retrieval state; questions, requests and the pile stay', async () => {
+  it('AC3 cold-discovery-progress-only-progress: a press that files nothing writes only the retrieval state; questions and requests stay', async () => {
     const b = await cold();
     const changes = b.id(SYSTEM.changes);
     await b.drive.createText(changes, 'ask-1.json', JSON.stringify({ v: 1, id: 'ask-1', device: 'device-1', at: AT, kind: 'request',
       what: 'Asked Bower: "Keep my records tidy."', text: 'Keep my records tidy.' }));
     const seeded = await contents(b);
-    const first = await press(b, 1);
+    // Nothing is admitted, so the request is not taken either.
+    const first = await idle(b, 1);
     expect(stateOf(first), 'progress is kept').not.toBeNull();
     expect(first.frames, 'no model call').toHaveLength(0);
     onlyProgress(first, seeded);
@@ -397,8 +408,7 @@ describe('cold discovery keeps its reading progress', () => {
     });
     expect(state.reached, 'main came to the progress write').toBe(true);
     const model = vi.fn<ClaudeSpawn>(async () => { throw new Error('A held run never calls a model.'); });
-    const resumed = await redispatchCase(b.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });
-    expect(await retrievalFiles(b), 'one retrieval state').toBe(1);
+    const resumed = await redispatchCase(b.c, first, 2, { claude: model, pacing: { baseMs: 0, sleep: async () => {} } });    expect(await retrievalFiles(b), 'one retrieval state').toBe(1);
     expect(known(resumed).length, 'with the progress').toBeGreaterThan(0);
     expect(model).not.toHaveBeenCalled();
   });
@@ -460,34 +470,38 @@ describe('cold discovery keeps its reading progress', () => {
     const drive = transport.fixedDrive();
     const root = await seedCase(drive, c);
     const gardening = (await drive.listAll(root)).find((f) => f.folder && f.name === 'Gardening')?.id ?? '';
-    let reached: { filed: number; after: Record<string, string> } | undefined;
-    for (let n = 1; n <= BOUND && !reached; n++) {
-      const a = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT + n, newId: () => `large-${n}` });
-      if (a.kind !== 'manifest') throw new Error(`Not admitted: ${a.cause}`);
-      let selected = false;
-      const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
-        const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string }>;
-          piles?: Array<{ things: Array<{ fileId: string; name: string }> }> };
-        if (phase === 'selection') {
-          selected = true;
-          return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: gardening, wants: [] })), asks: [] });
-        }
-        return reply({ ...empty, things: (frame.piles ?? []).flatMap((p) => p.things).map((t) => ({ fileId: t.fileId, to: 'Resources/Gardening', name: t.name,
-          note: { name: t.name.replace(/\.[^.]+$/, '.md'), summary: 'Alex has a garden notice.', body: 'Alex has a garden notice.' } })) });
-      }, () => ({ drive, root, admission: a.manifest }), true);
-      const r = await runOnDrive(c, drive, root, { claude: spawn, admission: a.manifest, pacing: { baseMs: 0, sleep: async () => {} },
-        answerStart: { scope: 'all', requestId: `large-run-${n}` } }, n);
-      if (selected) reached = { filed: report(r as Result).filed.length, after: r.after };
-      else expect(Object.keys(r.after).some((p) => p.startsWith('Inbox/') && p.endsWith('Garden notice.txt')), 'a held run leaves the notice in the inbox').toBe(true);
-    }
-    expect(reached, `the large case reaches the model within ${BOUND} runs`).toBeDefined();
+    const a = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT + 1, newId: () => 'large-1' });
+    if (a.kind !== 'manifest') throw new Error(`Not admitted: ${a.cause}`);
+    let selected = false;
+    const spawn: ClaudeSpawn = phaseAwareClaude(async (call, _step, _attempt, phase) => {
+      const frame = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { sources?: Array<{ itemId: string; candidates: string[] }>;
+        piles?: Array<{ things: Array<{ fileId: string; name: string }> }> };
+      if (phase === 'selection') {
+        selected = true;
+        // The run's map is not fully read, so a new note needs a wanted card (`noteCut`); the thing's first candidate is one.
+        return reply({ items: (frame.sources ?? []).map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: gardening, wants: s.candidates.slice(0, 1) })), asks: [] });
+      }
+      return reply({ ...empty, things: (frame.piles ?? []).flatMap((p) => p.things).map((t) => ({ fileId: t.fileId, to: 'Resources/Gardening', name: t.name,
+        note: { name: t.name.replace(/\.[^.]+$/, '.md'), summary: 'Alex has a garden notice.', body: 'Alex has a garden notice.' } })) });
+    }, () => ({ drive, root, admission: a.manifest }), true);
+    const options = { pacing: { baseMs: 0, sleep: async () => {} } };
+    const first = await runOnDrive(c, drive, root, { claude: spawn, admission: a.manifest, ...options, answerStart: { scope: 'all', requestId: 'large-run-1' } }, 1);
+    expect(selected, 'the first press reaches the model').toBe(true);
+    expect(report(first as Result).filed, 'the notice is filed').toHaveLength(1);
+    expect(Object.keys(first.after).some((p) => p.startsWith('Resources/Gardening/') && p.endsWith('Garden notice.txt'))).toBe(true);
     // The selection index is cut at 32,000 characters by design (seeing all 201 is B12), so discovery is judged by the
-    // retrieval state the reaching run writes (ruling).
+    // retrieval state the press that completes it writes (ruling).
     const readings = (await drive.listAll(root)).filter((f) => !f.folder && /^Reading \d{3}\.md$/.test(f.name)).map((f) => f.id);
     expect(readings).toHaveLength(201);
-    const files = (JSON.parse(reached?.after[SYSTEM.retrieval] ?? 'null') as RetrievalFile | null)?.files ?? {};
-    for (const id of readings) expect(Object.keys(files), 'the model is reached with every Reading note discovered').toContain(id);
-    expect(reached?.filed, 'the notice is filed').toBe(1);
-    expect(Object.keys(reached?.after ?? {}).some((p) => p.startsWith('Resources/Gardening/') && p.endsWith('Garden notice.txt'))).toBe(true);
+    const complete = (r: CaseRun): boolean => readings.every((id) => id in (stateOf(r)?.files ?? {}));
+    let last: CaseRun = first;
+    for (let n = 2; n <= BOUND + 4 && !complete(last); n++) {
+      const idled: AdmissionManifest = { v: 1, id: `large-${n}`, rootId: root, scope: 'all', at: AT + n, piles: [], journal: [] };
+      // A press that completes discovery reaches the provider with nothing to place, as a warm idle press does.
+      const none: ClaudeSpawn = phaseAwareClaude(async (_call, _step, _attempt, phase) => reply(phase === 'selection' ? { items: [], asks: [] } : empty),
+        () => ({ drive, root, admission: idled }), true);
+      last = await runOnDrive(c, drive, root, { claude: none, admission: idled, ...options, answerStart: { scope: 'all', requestId: `large-run-${n}` } }, n);
+    }
+    expect(complete(last), 'idle presses discover every Reading note').toBe(true);
   });
 });
