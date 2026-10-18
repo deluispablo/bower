@@ -12,6 +12,8 @@ import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
 import { linkTarget } from '../contracts/links';
 
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
 /**
  * C06 R4 and C09 (ruling 11), the one link rule: what a link target (lower case, no `.md`, as `authoredLinks` gives it)
  * names among the folder's file paths: one note, by its whole path without `.md` or by its title; one other file, by
@@ -144,12 +146,28 @@ export class VaultIndex {
   /**
    * Script neighbourhood: notes ranked by BM25 over name, summary and tags, folder maps, then one resolved link hop, at
    * most 12. `notes` may hold originals (C09 R14, with an empty summary): matched by their name, or reached by a link.
+   * `at`, a request's run time (epoch ms): "before|by|until <month>" adds the month names from the run month (UTC) to it.
    */
-  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[]; tags?: readonly string[] }>>): string[] {
+  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[]; tags?: readonly string[] }>>, at?: number): string[] {
     const ignored = new Set(['a', 'an', 'the', 'is', 'has', 'for', 'and', 'of', 'to', 'alex', 'txt', 'md', 'pdf']);
-    const tokens = (text: string): string[] => (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((word) => !ignored.has(word));
+    const all = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+    const tokens = (text: string): string[] => all(text).filter((word) => !ignored.has(word));
     const textOf = (id: string): string[] => tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''} ${(notes[id]?.tags ?? []).join(' ')}`);
     const own = new Set(tokens(words));
+    // Temporal query expansion (Berberich et al., ECIR 2010): a dated request also matches notes dated inside its window.
+    // shortcut: only "before|by|until" with a full month name in the next three words (day numbers, "the", "of" between); numeric dates (28/11, 2026-11-28), abbreviations and relative spans ("next week") are not expanded, and a note with no month name in its name, summary or tags is still missed; upgrade with a date parser if requests miss dated notes.
+    if (at !== undefined) {
+      const start = new Date(at).getUTCMonth();
+      const said = all(words);
+      said.forEach((word, i) => {
+        if (word !== 'before' && word !== 'by' && word !== 'until') return;
+        const next = said.slice(i + 1, i + 4);
+        const m = next.findIndex((w) => MONTHS.includes(w));
+        if (m < 0 || !next.slice(0, m).every((w) => /^\d{1,2}(st|nd|rd|th)?$/.test(w) || w === 'the' || w === 'of')) return;
+        const span = (MONTHS.indexOf(next[m] ?? '') - start + 12) % 12;
+        for (let k = 0; k <= span; k++) own.add(MONTHS[(start + k) % 12] ?? '');
+      });
+    }
     const order = (a: string, b: string): number => (this.byId(b)?.modifiedTime ?? '').localeCompare(this.byId(a)?.modifiedTime ?? '')
       || (this.pathOf(a) ?? '').localeCompare(this.pathOf(b) ?? '');
     const ids = Object.keys(notes).filter((id) => this.pathOf(id) !== undefined);
