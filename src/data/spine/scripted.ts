@@ -572,6 +572,8 @@ export interface Filing {
   maps?: readonly MapRequest[];
   /** C09: answers to the person's questions about the folder, by request record id: each its request's done line, checked by the provider. */
   answers?: ReadonlyMap<string, string>;
+  /** C08: documents that answer requests, by request record id, checked by the provider. */
+  documents?: ReadonlyMap<string, { to: string; title: string; what: string; body: string }>;
 }
 
 /** One op of a map on one note (B12): a property `set` or `union` (with the row it was checked against), or a tag (`key: 'tags'`) `add` or `remove`. */
@@ -676,6 +678,8 @@ export interface ThingSeen {
 export type RequestPlan =
   | { kind: 'answer'; uses: readonly string[]; answer: string }
   | { kind: 'compare'; uses: readonly string[]; note: { to: string; title: string; what: string }; answer: string }
+  /** C08: a document note the model wrote for the request; its done row links it. */
+  | { kind: 'document'; note: { to: string; title: string; what: string }; body: string }
   | { kind: 'lookup'; uses: readonly [string]; found: { text: string; url: string }; answer: string; offline: string };
 
 /** A Timeline line a reply wants on a note, citing a thing by the name it was added under, with the name it cites. */
@@ -755,9 +759,12 @@ export function modelDecisions(filing: Filing): Decisions {
     ...(filing.suggestions ? { suggestions: filing.suggestions } : {}),
     ...(filing.maps ? { maps: filing.maps } : {}),
     // C09 (R1): a reply's answer is its request's plain answer plan, by record id; the provider passes only the requests it acts on (R7).
-    ...(filing.answers?.size ? { request: (_text: string, id: string): RequestPlan | null => {
+    // C08: so is a reply's document, by the same record id.
+    ...(filing.answers?.size || filing.documents?.size ? { request: (_text: string, id: string): RequestPlan | null => {
       const answer = filing.answers?.get(id);
-      return answer === undefined ? null : { kind: 'answer', uses: [], answer };
+      const document = filing.documents?.get(id);
+      return answer !== undefined ? { kind: 'answer', uses: [], answer }
+        : document ? { kind: 'document', note: { to: document.to, title: document.title, what: document.what }, body: document.body } : null;
     } } : {}),
   };
 }
@@ -1333,10 +1340,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     return { options };
   };
   // A person's request (C05): the one settlement decides what it binds, refuses, reports and waits for. One answered
-  // (C09 R6) leaves it, as a map or view does: its answer is its result.
+  // (C09 R6) leaves it, as a map or view does: its answer is its result; so does one given a document (C08 R12).
   const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)
     && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)
-    && d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind !== 'answer'), listing, ix, appends, since);
+    && !['answer', 'document'].includes(d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind ?? '')), listing, ix, appends, since);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;
@@ -2794,14 +2801,18 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const finalPath = new Map(mapMoves.map((mv) => [mv.file.id, join(ix.pathOf(mv.parentId) ?? '', mv.name)] as const));
   for (const path of finalPath.values()) plannedFile(path);
   // Worded once the plan has reserved every other name (words notes, comparisons, filings, renames): each counts toward a title's ambiguity.
+  /** How many files each title has: every listed file outside `.bower/` and the Inbox, and every file the plan creates or renames into place, once. */
+  const countTitles = (): { titles: Map<string, number>; count: (path: string) => void } => {
+    const titles = new Map<string, number>();
+    const count = (path: string): void => { if (path.endsWith('.md')) titles.set(titleKey(path), (titles.get(titleKey(path)) ?? 0) + 1); };
+    for (const [path, entry] of ix.entries()) if (entry.type === 'file' && !path.startsWith(`${SYSTEM.dir}/`) && !path.startsWith('Inbox/')) count(finalPath.get(ix.idOf(path) ?? '') ?? path);
+    // A member's final path is already counted for its id above.
+    for (const path of new Set(madeFiles)) if (!path.startsWith(`${SYSTEM.dir}/`) && ![...finalPath.values()].includes(path)) count(path);
+    return { titles, count };
+  };
   const renderResultNotes = async (): Promise<void> => {
-  const titles = new Map<string, number>();
-  const titleOf = (path: string): string => displayName(nameOf(path)).toLowerCase();
-  const count = (path: string): void => { if (path.endsWith('.md')) titles.set(titleOf(path), (titles.get(titleOf(path)) ?? 0) + 1); };
-  for (const [path, entry] of outcomes.length ? ix.entries() : []) if (entry.type === 'file' && !path.startsWith(`${SYSTEM.dir}/`) && !path.startsWith('Inbox/')) count(finalPath.get(ix.idOf(path) ?? '') ?? path);
-  // Every file the plan creates or renames into place, once; a member's final path is already counted for its id above.
-  for (const path of new Set(madeFiles)) if (!path.startsWith(`${SYSTEM.dir}/`) && ![...finalPath.values()].includes(path)) count(path);
-  const linkTo = (path: string): string => `[[${(titles.get(titleOf(path)) ?? 0) > 1 ? path.slice(0, -'.md'.length) : displayName(nameOf(path))}]]`;
+  const { titles, count } = countTitles();
+  const linkTo = (path: string): string => requestNoteLink(path, titles);
   const reserved: Array<(typeof outcomes)[number] & { key: string; to: string; name: string }> = [];
   for (const { m, reasons, updated } of [...outcomes].sort((a, b) => (requestAt.get(a.m.requestId) ?? 0) - (requestAt.get(b.m.requestId) ?? 0) || (a.m.requestId < b.m.requestId ? -1 : 1))) {
     const key = await resultNoteKey(m.requestId);
@@ -2861,10 +2872,32 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   // A comparison request (C08, TL-P2-40 (1)): a generated note under a main folder (TL-P2-17) with a GFM table of
   // the notes it compares, read now, and the list of those sources. Only when every one is there and can be read.
-  const compared = new Map<string, { to: string; name: string; text: string; what: string }>();
+  // A document the model wrote for a request (C08) is written the same way, one note keyed by its request (R8): one an earlier
+  // attempt made stands as written (`existing`), and only the bookkeeping completes.
+  const compared = new Map<string, { to: string; name: string; text: string; what: string; key: string; existing?: string }>();
   for (const l of journal.filter((x) => x.rec.kind === 'request')) {
     const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
-    if (scripted?.kind !== 'compare' || !generatedPlace(scripted.note.to)) continue;
+    if ((scripted?.kind !== 'compare' && scripted?.kind !== 'document') || !generatedPlace(scripted.note.to)) continue;
+    const key = await resultNoteKey(l.rec.id);
+    const earlier = listing.find((f) => !f.trashed && !f.folder && f.appProperties?.bowerItem === key);
+    if (earlier) {
+      compared.set(l.rec.id, { to: scripted.note.to, name: earlier.name, text: '', what: scripted.note.what, key, existing: ix.pathOf(earlier.id) ?? earlier.name });
+      continue;
+    }
+    if (scripted.kind === 'document') {
+      // The reply check's link rule, kept here as an invariant: a reply it accepts never fails here.
+      if (hasEmptyLink(scripted.body)) refused('a document with an empty link');
+      for (const { target } of [scripted.note.what, scripted.body].flatMap(authoredLinks)) {
+        const named = linkIdentity(target, paths);
+        if (!named || typeof named !== 'object') refused('a document with a link to nothing or to a name two notes share');
+      }
+      const { to, title, what } = scripted.note;
+      destination(to);
+      const name = freeName(planned, to, generatedName(title));
+      plannedFile(join(to, name));
+      compared.set(l.rec.id, { to, name, text: documentText(scripted.body, what, noteDate), what, key });
+      continue;
+    }
     const read: ParsedNote[] = [];
     for (const path of scripted.uses) {
       const f = ix.file(path);
@@ -2883,7 +2916,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     destination(to);
     const name = freeName(planned, to, generatedName(title));
     plannedFile(join(to, name));
-    compared.set(l.rec.id, { to, name, text: comparisonNote(read, what, noteDate), what });
+    compared.set(l.rec.id, { to, name, text: documentText(comparisonBody(read), what, noteDate), what, key });
   }
   await renderResultNotes();
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
@@ -3169,6 +3202,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * What a request's done line says (C09, TL-P2-40): a scripted answer names what was found, with links to the notes
    * it used, when every one is there; the plain line only when nothing specific can be named.
    */
+  let titlesOnce: Map<string, number> | undefined;
+  const documentTitles = (): Map<string, number> => (titlesOnce ??= countTitles().titles);
   const answerOf = (l: JournalLine): string => {
     if (declinedRequests.has(l.rec.id)) return REQUEST_DECLINED;
     const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
@@ -3178,6 +3213,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // A comparison names the note it wrote (C08).
     const note = compared.get(l.rec.id);
     if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
+    // A document links the note it wrote, or the earlier attempt's, as a result note is (C08 R9).
+    if (scripted?.kind === 'document') return note ? `Done. See ${requestNoteLink(note.existing ?? join(note.to, note.name), documentTitles())}.` : REQUEST_DONE;
     if (!scripted || !scripted.uses.every(there)) return REQUEST_DONE;
     // C09 R8: an answer's links name one note or original in the folder each, by the one link rule, whatever made the
     // decision (two-sided with the reply check, which also wants it shown).
@@ -3592,7 +3629,7 @@ export async function build(decided: Decided): Promise<Ended> {
     // A comparison's note, before the answer that links it; claimed by its one created row (C08).
     const notes: string[] = [];
     // A map's result note (R32) is keyed by its request and waits for everything the request changes; the requests row waits for it.
-    for (const l of asked) for (const [note, key, after] of [[compared.get(l.rec.id), () => newKey('note'), []], [resultNotes.get(l.rec.id), () => resultNotes.get(l.rec.id)?.key ?? '',
+    for (const l of asked) for (const [note, key, after] of [[compared.get(l.rec.id)?.existing === undefined ? compared.get(l.rec.id) : undefined, () => compared.get(l.rec.id)?.key ?? '', []], [resultNotes.get(l.rec.id), () => resultNotes.get(l.rec.id)?.key ?? '',
       [...new Set([...need(l.rec.id).edits, ...need(l.rec.id).derived])]]] as const) {
       if (!note) continue;
       const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: key(), text: note.text, content: await utf8(note.text), purpose: 'generated' }, [...after]);
@@ -4087,12 +4124,25 @@ function generatedPlace(to: string): boolean {
  * its rent, commute and status as that note says them, then the list of those notes as its sources. A cell never
  * holds a pipe, which would end it.
  */
-function comparisonNote(notes: readonly ParsedNote[], what: string, date: string): string {
+function comparisonBody(notes: readonly ParsedNote[]): string {
   const cell = (value: string | undefined): string => (value ?? '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
   const prop = (n: ParsedNote, key: string): string | undefined => n.properties.find((p) => p.key === key)?.value;
   const rows = notes.map((n) => `| [[${n.title}]] | ${cell(prop(n, 'rent'))} | ${cell(prop(n, 'commute'))} | ${cell(n.status)} |`);
-  const body = ['| Flat | Rent | Commute | Status |', '| --- | --- | --- | --- |', ...rows, '', '## Sources', '', ...notes.map((n) => `- [[${n.title}]]`)].join('\n');
-  return serializeNote({ summary: what, properties: [{ key: 'kind', label: 'Kind', value: 'Comparison' }], tags: [], currentState: [], body, timeline: [{ date, text: 'Written for a request you made.' }], byBower: true });
+  return ['| Flat | Rent | Commute | Status |', '| --- | --- | --- | --- |', ...rows, '', '## Sources', '', ...notes.map((n) => `- [[${n.title}]]`)].join('\n');
+}
+
+/** The one document writer (C08 R11): a Bower document note, its region then the person's My notes (`document` template, dated the run's day). */
+function documentText(body: string, what: string, date: string): string {
+  return serializeNote({ template: 'document', byBower: true, summary: what, tags: [], currentState: [], body,
+    properties: [{ key: 'created', label: 'Created', value: date }, { key: 'updated', label: 'Updated', value: date }], timeline: [{ date, text: 'Written for a request you made.' }] });
+}
+
+/** A title's key for the link rule: files with one key share a title. */
+const titleKey = (path: string): string => displayName(nameOf(path)).toLowerCase();
+
+/** A note's link in a request's done row or result note (R9): its title, or its path without `.md` when another file has that title. */
+export function requestNoteLink(path: string, titles: ReadonlyMap<string, number>): string {
+  return `[[${(titles.get(titleKey(path)) ?? 0) > 1 ? path.slice(0, -'.md'.length) : displayName(nameOf(path))}]]`;
 }
 
 /** A generated note's name from its authored title, by the Inbox's naming rules, as `.md`. */

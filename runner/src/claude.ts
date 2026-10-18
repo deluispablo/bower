@@ -368,8 +368,11 @@ function promptInstructions(): string {
     '  line of at most 1,000 characters with words, no web address; link each note or file you used as [[its name]], or [[its whole path]] when the',
     '  name is shared. A figure you say a note gives must be in that note; a count, total or difference of linked notes\' figures is fine.',
     '  Say plainly what the notes do not say. A request you answer takes no map or view.',
+    // C08: a request for a report, comparison or other document is answered by one document note.
+    '- "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request\'s fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].',
+    '  Write every part the request needs; link the notes and files shown by name or whole path; write only their figures. A request you give a document takes no answer, map or view.',
     // C09 (R15, ruling 15): originals are evidence for answers, never a note's link, line or target.
-    '- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" only. Cite one as [[its whole path]], or',
+    '- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" and "documents" only. Cite one as [[its whole path]], or',
     '  [[its full name]] when no other file has it; never link it from a note, give it a line or a state, or write to it.',
     '- Every summary, line and question is one short plain line, the outcome first.',
     '- Names: plain words saying what the thing is; keep its extension. Replace underscores, a copy number such as "(2)", "final" endings',
@@ -1085,6 +1088,11 @@ export const REFUSALS = {
   answerKeys: 'an answer with keys outside the intent: give {requestId, text}',
   answerBinding: "an answer whose request is not one of the person's requests below, or a second answer for one request",
   answerText: 'an answer that is not one plain line of at most 1,000 characters, with [[links]] only',
+  // C08 (round 1 ruling 9): a document's links take noteLink and its figures numbers, as an answer's do.
+  documentKeys: 'a document with keys outside the intent: give {requestId, to, title, summary, body}',
+  documentBinding: "a document whose request is not one of the person's requests below, or a request given more than one result",
+  documentPlace: 'a document whose "to" is not one of the folders shown under Projects, Areas, Resources or Archive',
+  documentText: 'a document whose title, summary or body breaks the note rules: a title of at most 48 characters with no slash, a summary of one line of at most 200 characters, a body of at most 16,000 characters with no My notes, Timeline or Current state heading',
   // F5 (ruling 6): the selection's checks and the execution's selection bounds, each with what to change.
   selectionKeys: 'a selection with keys outside its shape: give {"items":[{"itemId","kind","destination","wants"}],"asks":[]}',
   selectionItem: 'a selection item that is not a listed source, or a source selected twice',
@@ -1107,7 +1115,7 @@ export type RefusalKind = keyof typeof REFUSALS;
 const ITEM_LEVEL: ReadonlySet<RefusalKind> = new Set<RefusalKind>([
   'nameChangesKind', 'rawName', 'numbers', 'newFolder', 'noteForNote', 'noteName', 'noteSummary', 'noteBody', 'noteSections', 'noteLink',
   'noteMdLink', 'noteWeb', 'noNote', 'lineNote', 'lineText', 'lineCites', 'lineUncited', 'lineMarker', 'lineAlsoCites', 'stateNote',
-  'stateText', 'stateCites', 'askNotes', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget']);
+  'stateText', 'stateCites', 'askNotes', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'documentText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget']);
 /**
  * `quoted`: the reason quotes the reply or a note, so it is told to the model and never logged (sec-hardening L4).
  * `source`: the pile (`pileId`) or request (journal file id) the refused row names, when it names one.
@@ -1356,6 +1364,7 @@ const Envelope = z.strictObject({
   kind: z.literal('tidy-intent', intentIssue), v: z.literal(1, intentIssue), things: z.array(z.unknown(), intentIssue),
   newTags: z.unknown().optional(), notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, views: section, maps: section, observations: memorySection, forget: memorySection, ends: memorySection,
   answers: z.array(z.unknown(), named('answerKeys')).optional(),
+  documents: z.array(z.unknown(), named('documentKeys')).optional(),
 }, intentIssue);
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
@@ -1423,6 +1432,10 @@ const answerIssue = named('answerKeys');
 const AnswerShape = z.strictObject({ requestId: z.string(answerIssue), text: z.string(answerIssue) }, answerIssue);
 /** An answer's longest text (C09 R2). */
 const ANSWER_MAX = 1_000;
+const documentIssue = named('documentKeys');
+const DocumentShape = z.strictObject({ requestId: z.string(documentIssue), to: z.string(documentIssue), title: z.string(documentIssue), summary: z.string(documentIssue), body: z.string(documentIssue) }, documentIssue);
+/** A document's longest body (C08 R6). */
+const DOCUMENT_MAX = 16_000;
 type NoteIn = z.output<typeof NoteShape>;
 
 /** No link, middle dot or web address: a Timeline or Current state line Bower links itself. */
@@ -1887,11 +1900,11 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
    * the request. One that links two or more notes is a count, total or difference computed from them: not arithmetic-checked
    * (a validation limit, design for normal use). One with no link holds only figures of the request or a note shown.
    */
-  const answerFigure = (a: AnswerIn): string | null => {
+  const figureIn = (text: string, requestId: string): string | null => {
     if (seen.words === undefined) return null;
-    const request = seen.requests?.get(a.requestId)?.text ?? '';
+    const request = seen.requests?.get(requestId)?.text ?? '';
     let earlier: string[] = [];
-    for (const { segment } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(a.text)) {
+    for (const { segment } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(text)) {
       for (const part of segment.split(';')) {
         const own = [...new Set(authoredLinks(part).map((l) => l.target))];
         // Ruling 18: a part with no link speaks of the nearest earlier part's links ("Together they cost 3,030.").
@@ -1928,10 +1941,34 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return null;
     },
     rule('numbers', (a) => {
-      const n = answerFigure(a);
+      const n = figureIn(a.text, a.requestId);
       return !n || quoting(`a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
   ], (a) => answered.set(seen.requests?.get(a.requestId)?.id ?? '', a.text.trim())));
+  // C08 (R6-R8): a document answers one of this run's requests, once, as an answer does (an answer, map or view for it is
+  // the document's refusal), in a folder shown; its text bounds, links (the one link rule) and figures as an answer's.
+  const documented = new Map<string, { to: string; title: string; what: string; body: string }>();
+  type DocumentIn = z.output<typeof DocumentShape>;
+  const Document = DocumentShape.superRefine(inOrder<DocumentIn>([
+    rule('documentBinding', (d) => seen.requests?.has(d.requestId) === true),
+    rule('documentBinding', (d) => !answered.has(seen.requests?.get(d.requestId)?.id ?? '') && !documented.has(seen.requests?.get(d.requestId)?.id ?? '') && !bound.has(d.requestId)),
+    rule('documentPlace', (d) => placeOk(d.to) && seen.folders?.has(d.to) === true),
+    rule('documentText', (d) => lineOk(d.title.trim(), 48) && !/[/\\]/.test(d.title) && lineOk(d.summary, AUTHORED.summary)
+      && d.body.trim() !== '' && d.body.length <= DOCUMENT_MAX && !CONTROL.test(d.body) && !HIDDEN_CHARS.test(d.body)
+      && !/^##\s*(?:current state|document|my notes|timeline)\s*$/im.test(d.body) && !d.body.includes('<!-- bower:ownership')),
+    (d) => {
+      if (hasEmptyLink(d.body)) return no('noteLink', 'an empty link: name a note you were shown, or leave it out');
+      for (const { target } of [d.summary, d.body].flatMap(authoredLinks)) {
+        const why = linkWhy(target, false);
+        if (why) return no('noteLink', why);
+      }
+      return null;
+    },
+    rule('numbers', (d) => {
+      const n = figureIn(d.body, d.requestId);
+      return !n || quoting(`a number that is in none of its sources: "${n}" in the document "${d.title.trim()}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
+    }),
+  ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: d.summary.trim(), body: d.body })));
   const whole: Array<Rule<unknown>> = [
     // Ending words are no fact of their own, and a fact ends once (R35).
     rule('memory', () => new Set(ends.map((e) => e.factId)).size === ends.length && !ends.some((e) => observations.some((o) => {
@@ -1975,7 +2012,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     lines: z.array(Line).max(AUTHORED.lines, named('tooManyLines')).optional(),
     states: z.array(State).optional(), asks: z.array(Asked).optional(), keep: z.array(Keep).optional(),
     // Answers before views and maps: an answer and a map or view for one request is the answer's refusal (R11).
-    askAfter: z.array(After).optional(), answers: z.array(Answer).optional(), views: z.array(View).optional(), maps: z.array(MapEntry).optional(),
+    askAfter: z.array(After).optional(), answers: z.array(Answer).optional(), documents: z.array(Document).optional(), views: z.array(View).optional(), maps: z.array(MapEntry).optional(),
     observations: z.array(z.unknown()).max(20, named('memory')).optional().transform((value) => { observations = value ?? []; return value; }),
     forget: z.array(z.strictObject({ factId: z.string(named('memory')), quote: z.string(named('memory')).optional() }, named('memory'))).max(20, named('memory')).optional().transform((value) => { forget = value ?? []; return value; }),
     // Endings share the memory kind, worded for endings (R35).
@@ -2008,7 +2045,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       // The two-new budget goes in reply order (R73): the reply's own key order says which section came first.
       const keys = isRecord(value) ? Object.keys(value) : [];
       const suggestions = suggested.length ? { suggestions: { first: keys.indexOf('views') < keys.indexOf('askAfter'), views: suggested } } : {};
-      return { ok: true, held, filing: { ...suggestions, newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}), ...(maps.length ? { maps } : {}), ...(answered.size ? { answers: answered } : {}) } };
+      return { ok: true, held, filing: { ...suggestions, newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}), ...(maps.length ? { maps } : {}), ...(answered.size ? { answers: answered } : {}), ...(documented.size ? { documents: documented } : {}) } };
     },
   };
 }
@@ -2044,10 +2081,10 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
 function sourceOf(section: string, row: unknown, piles: Admitted['taken']['piles'], requests: ReadonlyMap<string, unknown> | undefined): string | undefined {
   if (!isRecord(row)) return undefined;
   const id = { things: row.fileId, notes: row.pileId, asks: row.fileId ?? row.pileId, askAfter: row.pileId, lines: row.cites, states: row.cites,
-    answers: row.requestId, views: row.requestId, maps: row.requestId }[section as 'things'];
+    answers: row.requestId, documents: row.requestId, views: row.requestId, maps: row.requestId }[section as 'things'];
   if (typeof id !== 'string') return undefined;
   if (requests?.has(id)) return id;
-  if (['answers', 'views', 'maps'].includes(section)) return undefined;
+  if (['answers', 'documents', 'views', 'maps'].includes(section)) return undefined;
   return piles.find((p) => p.pileId === id || thingsOf(p).some((i) => i.fileId === id))?.pileId;
 }
 
@@ -2754,8 +2791,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         return took.taken.journal.filter((line) => {
           const request = requests.get(line.fileId);
           if (dropped.has(line.fileId)) return false;
-          if (asked.answered.has(line.fileId) || installing.has(request?.id ?? '') || filing.answers?.has(request?.id ?? '')) return true;
-          return (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)) && (!filing.answers?.size || !request
+          if (asked.answered.has(line.fileId) || installing.has(request?.id ?? '') || filing.answers?.has(request?.id ?? '') || filing.documents?.has(request?.id ?? '')) return true;
+          return (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)) && (!(filing.answers?.size || filing.documents?.size) || !request
             || requestTargets(listing, ix, request.text).notes.length > 0 || ix.waitingRun(line.fileId) !== null);
         });
       };
@@ -2797,7 +2834,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         for (let source = pending.pop(); source !== undefined; source = pending.pop()) {
           if (dropped.has(source)) continue;
           dropped.set(source, refused.kind);
-          for (const section of ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'views', 'maps']) {
+          for (const section of ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps']) {
             const rows: unknown = reply[section];
             if (!Array.isArray(rows)) continue;
             reply[section] = rows.filter((row) => {
@@ -2808,7 +2845,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
             });
           }
         }
-        return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'views', 'maps'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
+        return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
       };
       const intent = await twice(input, 'execution', async (value) => {
         await prepareMaps(value);
