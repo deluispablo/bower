@@ -51,7 +51,7 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   await press(page, page.getByRole('button', { name: 'Continue with Google' }));
 
   // Home.
-  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
   await scan(page);
 
   // A note, from Recent.

@@ -11,6 +11,17 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
 };
 
+/** Suggestions wait for the first tidy-up's report: open `back`, see the report from the checklist, close it. */
+const openReviewed = async (page: Page): Promise<void> => {
+  await open(page, '/', 'back');
+  const checklist = page.getByRole('region', { name: 'Your first tidy-up' });
+  await checklist.getByRole('button', { name: 'See the report' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: /^(Skip|Done|Close)$/ }).first().click();
+  await expect(dialog).toHaveCount(0);
+  await expect(checklist).toHaveCount(0);
+};
+
 test('a situation opened by its address starts clean: no earlier tabs, main folders alike', async ({ page, isMobile }) => {
   test.skip(isMobile, 'desktop tabs and tree');
   await open(page, '/');
@@ -60,7 +71,7 @@ test('the keyboard stays in the page after closing, answering, removing or sayin
   await open(page, '/');
   await page.locator('section[aria-labelledby="qs"] li').first().getByRole('button').first().click();
   await notBody(page).toBe(true);
-  await open(page, '/');
+  await openReviewed(page);
   await page.getByRole('region', { name: 'Bower suggests' }).getByRole('button', { name: 'No thanks' }).first().click();
   await notBody(page).toBe(true);
   await open(page, '/bower');
@@ -86,7 +97,7 @@ test('every Undo says what came back: a move and a removed rule', async ({ page,
 });
 
 test('No thanks can be taken back', async ({ page }) => {
-  await open(page, '/');
+  await openReviewed(page);
   const box = page.getByRole('region', { name: 'Bower suggests' });
   const title = (await box.locator('[class*="suggestTitle"]').first().textContent()) ?? '';
   await box.getByRole('button', { name: 'No thanks' }).first().click();

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { countOr } from './words';
+import { countOr, greeting } from './words';
+
+describe('greeting', () => {
+  it('says hello, with the name when there is one', () => {
+    expect(greeting('Sam')).toBe('Hello, Sam');
+    expect(greeting()).toBe('Hello');
+    expect(greeting('')).toBe('Hello');
+  });
+});
 
 describe('counts', () => {
   it('a count still loading reads as the thing, not as zero', () => {

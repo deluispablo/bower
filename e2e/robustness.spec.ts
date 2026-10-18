@@ -30,7 +30,7 @@ test('the demo panel is reachable offline and leads back', async ({ page, allowC
   await expect(page.getByText("You're offline")).toBeVisible({ timeout: 8000 });
   await page.getByRole('button', { name: 'Demo situations' }).click();
   await page.getByLabel('Alex, with piles waiting').click();
-  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible({ timeout: 8000 });
+  await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible({ timeout: 8000 });
 });
 
 test('a sample pile and a note-only pile go to the inbox and get filed', async ({ page }) => {
@@ -92,7 +92,7 @@ test('a crafted address after sign-in lands on Home, never off the app', async (
   await page.goto('/sign-in?from=%2F%5Cexample.com&scenario=signed-out&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await page.getByRole('button', { name: 'Continue with Google' }).click();
-  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
 });
 
 test('Add keeps its links when you leave and come back', async ({ page, isMobile }) => {
@@ -123,7 +123,7 @@ test('a tab or newline in the sign-in address still lands on Home', async ({ pag
     await page.goto(`/sign-in?from=${from}&scenario=signed-out&time=instant`);
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
     await page.getByRole('button', { name: 'Continue with Google' }).click();
-    await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
   }
 });
 

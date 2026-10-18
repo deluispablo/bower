@@ -44,7 +44,7 @@ describe('runner data errors', () => {
       const read = vi.fn().mockRejectedValueOnce(new BowerError('unknown', MESSAGE)).mockResolvedValue(c.good);
       const sources: Sources = {
         ...base,
-        vault: new Proxy(base.vault, { get: (target, key) => c.source === 'vault' && key === c.read ? read : Reflect.get(target, key) }),
+        vault: new Proxy(base.vault, { get: (target, key) => c.source === 'vault' && key === c.read ? read : c.component === Home && key === 'firstTidy' ? async () => null : Reflect.get(target, key) }),
         runs: new Proxy(base.runs, { get: (target, key) => c.source === 'runs' && key === c.read ? read : Reflect.get(target, key) }),
       };
       if (c.component === TidySheet) useUi.getState().setTidy(true);

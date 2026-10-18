@@ -86,7 +86,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', row: 1 | 2 | 5 |
   await page.goto(`/?source=${source}&scenario=empty&time=instant`);
   await expect(page.locator('#boot')).toHaveCount(0);
   // Positive control: each original source boots Home and the existing tidy-up flow and result list.
-  await expect(page.getByRole('heading', { level: 1, name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
   await page.getByRole('button', { name: /^Tidy up 1 thing$/ }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: 'Tidy up 1 thing', exact: true }).click();
   await expect(page.getByRole('dialog').getByText('Reading 1 thing', { exact: true }).first()).toBeVisible();
@@ -139,7 +139,7 @@ for (const source of ['demo', 'fake'] as const) {
         await expect(page.getByRole('heading', { level: 1, name: 'Garden plot', exact: true })).toBeVisible();
         if (row < 5) await expect(page.getByRole('region', { name: 'Timeline', exact: true })).toContainText(NEWS);
         await page.goBack();
-        await expect(home.getByRole('heading', { level: 1, name: /G'day, Alex/ })).toBeVisible();
+        await expect(home.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
       }
     });
   }

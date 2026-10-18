@@ -16,7 +16,7 @@ const FAKE_KEY = 'bower:fake:default';
 const settled = async (page: Page): Promise<void> => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
 };
-const home = (page: Page) => page.getByRole('heading', { level: 1, name: /G'day, Alex/ });
+const home = (page: Page) => page.getByRole('heading', { level: 1, name: /Hello, Alex/ });
 const blocked = (page: Page) => page.getByRole('heading', { level: 1, name: 'Bower is open in another window.' });
 
 /** Marks the page's document, so a reload (which forgets the mark) shows. */

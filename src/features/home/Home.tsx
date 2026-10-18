@@ -29,6 +29,7 @@ import { resolverFor } from '@/features/note/resolve';
 import ui from '@/ui/ui.module.css';
 import s from './home.module.css';
 import { FirstTidyChecklist } from './FirstTidyChecklist';
+import { useFirstTidy } from './useFirstTidy';
 import runStyles from '@/features/tidy/tidy.module.css';
 import noteStyles from '@/features/note/note.module.css';
 
@@ -90,10 +91,13 @@ export function Home() {
   const running = isRunning(run);
   // One Bower per screen: it sits on whichever card matters most now.
   const birdOn: 'away' | 'stopped' | 'run' | 'inbox' = away ? 'away' : stopped ? 'stopped' : running ? 'run' : 'inbox';
+  // Suggestions wait until the first tidy-up has been reviewed (or its progress cannot be known), so they never flash.
+  const progress = useFirstTidy();
+  const showSuggestions = Boolean(progress.error) || progress.data === null || progress.data?.reviewed === true;
   return (
     <div className={s.page}>
       <header className={s.top}>
-        <h1 className={s.hello}>{name ? greeting(name) : "G'day"}</h1>
+        <h1 className={s.hello}>{greeting(name)}</h1>
         <Link to="/settings" className={s.avatar} aria-label="Your account and settings">
           {name ? name.slice(0, 1).toUpperCase() : '…'}
         </Link>
@@ -101,7 +105,7 @@ export function Home() {
       <div className={s.grid}>
         <div className={s.colMain}>
           <LoadError state={runState} />
-          <FirstTidyChecklist run={run} />
+          <FirstTidyChecklist run={run} progress={progress.data} />
           {running && run && <RunningCard run={run} />}
           <Inbox piles={piles} error={pilesState} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} />
           {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
@@ -113,7 +117,7 @@ export function Home() {
           <SearchField />
           <YourChanges running={running} />
           <Questions />
-          <Suggestions />
+          {showSuggestions && <Suggestions />}
           <JustFiled run={run ?? null} />
         </div>
       </div>
@@ -524,8 +528,8 @@ function JustFiled({ run }: { run: RunState | null }) {
   const recent = useMemo(() => {
     const out: TreeNode[] = [];
     const walk = (ns: TreeNode[]): void => ns.forEach((n) => (n.type === 'file' ? out.push(n) : walk(n.children ?? [])));
-    // The inbox has its own card; Recent is what lives in your folders.
-    walk((tree ?? []).filter((n) => n.path !== 'Inbox'));
+    // Recent is what lives in your folders: not the root notes, the Inbox (its own card) or Bower's own files.
+    walk((tree ?? []).filter((n) => n.type === 'folder' && n.path !== 'Inbox' && n.path !== '.bower'));
     return out.sort((a, b) => b.modified - a.modified).slice(0, 6);
   }, [tree]);
   if (!recent.length) return null;
@@ -542,14 +546,14 @@ function JustFiled({ run }: { run: RunState | null }) {
         )}
       </div>
       <ul className={s.recent}>
-        {recent.map((n) => (
+        {recent.map((n) => { const k = n.kind ?? kindOf(n.name); return (
           <li key={n.path}>
             <Link to={routeFor(n)} className={s.recentRow}>
-              <span className={s.tile}>{n.byBower ? <BowerHead size={20} /> : <Icon name={n.kind === 'image' ? 'image' : 'file'} />}</span>
+              <span className={s.tile}><Icon name={k === 'note' ? 'note' : k === 'image' ? 'image' : 'file'} /></span>
               <span className={s.pileMain}>
                 <span className={s.pileText}>{thingName(n.name)}</span>
                 <span className={s.pileSub}>
-                  <span>{KIND_WORD[n.kind ?? kindOf(n.name)]}</span>
+                  <span>{KIND_WORD[k]}</span>
                   <span className={s.dot} style={{ background: paraColor(n.path) }} />
                   {crumbs(parentOf(n.path))}
                 </span>
@@ -557,7 +561,7 @@ function JustFiled({ run }: { run: RunState | null }) {
               {n.isNew && <span className={`${ui.freshPill} ${s.new}`}>New</span>}
             </Link>
           </li>
-        ))}
+        ); })}
       </ul>
     </section>
   );

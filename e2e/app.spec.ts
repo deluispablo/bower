@@ -13,7 +13,7 @@ test('a signed-out visitor lands on the landing, signs in and gets in', async ({
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/sign-in/);
   await page.getByRole('button', { name: 'Continue with Google' }).click();
-  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
 });
 
 test('first sign-in makes the five folders', async ({ page }) => {

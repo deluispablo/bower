@@ -18,13 +18,13 @@ describe('Home identity', () => {
   it('Home greets the person who signed in', async () => {
     const base = loadingSources();
     render(<MemoryRouter><DataProvider sources={{ ...base, session: { ...base.session, current: async () => ({ name: 'Sam', email: 'sam@example.com' }) } }}><Home /></DataProvider></MemoryRouter>);
-    await waitFor(() => expect(screen.queryByRole('heading', { name: "G'day, Sam" })).not.toBeNull());
+    await waitFor(() => expect(screen.queryByRole('heading', { name: "Hello, Sam" })).not.toBeNull());
     expect(screen.getByRole('link', { name: 'Your account and settings' })).toHaveTextContent('S');
-    expect(screen.queryByText(/G'day, Alex/)).toBeNull();
+    expect(screen.queryByText(/Hello, Alex/)).toBeNull();
     cleanup();
     render(<MemoryRouter><DataProvider sources={loadingSources()}><Home /></DataProvider></MemoryRouter>);
     expect(screen.queryByText(/Alex/)).toBeNull();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("G'day");
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("Hello");
   });
 });
 
@@ -493,7 +493,7 @@ describe('Q1b Home questions', () => {
     </DataProvider></MemoryRouter>);
     await settle();
     // Every red's positive control: Home loaded through the real data hooks.
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("G'day, Alex");
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("Hello, Alex");
     for (const q of qs) expect(screen.getByText(q.text, { exact: true })).toBeVisible();
     return { answer, start };
   }
