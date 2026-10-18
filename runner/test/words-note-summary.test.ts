@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { REFUSALS } from '../src/claude';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { AT, caseReplies, runWithClaude } from './corpus-run';
+import { frontValues, scalarOf } from '../../src/data/contracts/note-format';
+import { AT, caseReplies, runWithClaude, scoreCase, type CaseRun } from './corpus-run';
 
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(AT);
@@ -38,7 +39,18 @@ async function filed(words: string, summary: string) {
   expect(run.code).toBe(0);
   return { run, note: run.after[NOTE] ?? '' };
 }
-const summaryOf = (note: string) => /^summary: (.*)$/m.exec(note)?.[1]?.replace(/^"|"$/g, '');
+/** The two summary corpus cases (corpus-fix-b23-summaries), person-lint first: the filed note and the personal note beside it. */
+const SUMMARY_CASES = [
+  { id: 'b23-summary-person-lint', note: 'Resources/Gardening/Mulch notice.md', name: 'Mulch notice',
+    summary: 'Mulch: collection at #amber.', personal: 'Resources/Gardening/Plot diary.md', personalName: 'Plot diary' },
+  { id: 'b23-summary-words', note: NOTE, name: 'Garden bed',
+    summary: 'Alex\'s garden bed plan: the "amber" label, #mulch by the gate.', personal: 'Resources/Gardening/Personal plan.md', personalName: 'Personal plan' },
+] as const;
+const createdRows = (run: CaseRun, key: 'created' | 'updated'): string[] =>
+  (JSON.parse(run.after['.bower/last-run.json'] ?? '{}') as { run?: { report?: Record<string, Array<{ path: string }>> } })
+    .run?.report?.[key]?.map((r) => r.path) ?? [];
+
+const summaryOf =(note: string) => /^summary: (.*)$/m.exec(note)?.[1]?.replace(/^"|"$/g, '');
 
 describe('a words note\'s summary', () => {
   it.each([
@@ -79,5 +91,34 @@ describe('a words note\'s summary', () => {
     const want = c.expected.notes?.find((n) => n.path === NOTE)?.contains ?? [];
     expect(want.join('\n')).not.toContain('Keep #mulch beside the gate in Saltmere; the path stays clear."');
     for (const text of want) expect(run.after[NOTE]).toContain(text);
+  });
+
+  it('corpus-fix-b23-summaries AC1: summary cases assert parsed scalar summaries in hidden context', async () => {
+    for (const k of SUMMARY_CASES) {
+      const c = await loadCase(join(ROOT, k.id)); const run = await runWithClaude(c, caseReplies(k.id));
+      expect(run.code).toBe(0);
+      expect({ id: k.id, unmet: scoreCase(c, run).unmet }).toEqual({ id: k.id, unmet: [] });
+      expect(c.folder['index.md']).toBeUndefined(); expect(run.after['index.md']).toBeUndefined();
+      expect(c.expected.notes?.map((n) => n.path)).not.toContain('index.md');
+      expect(scalarOf(frontValues(run.after[k.note] ?? '')?.summary ?? '')).toBe(k.summary);
+      const hidden = run.after['.bower/index.md'] ?? '';
+      expect(hidden).toContain(`- [[${k.name}]] — ${k.summary}`); expect(hidden).not.toContain('[[index]]');
+    }
+    expect(refusals()).toEqual([]);
+  });
+
+  it('corpus-fix-b23-summaries AC2: personal notes remain personal and reports include actual bookkeeping', async () => {
+    for (const k of SUMMARY_CASES) {
+      const c = await loadCase(join(ROOT, k.id));
+      expect(c.expected.report?.created).toEqual([k.note, 'Bower health.md']);
+      expect(c.expected.report?.createdAtLeast).toBeUndefined(); expect(c.expected.report?.updated).toEqual([]);
+      expect(c.expected.unchanged).toContain(k.personal); expect(c.rubric).toContain("Bower's health note");
+      const run = await runWithClaude(c, caseReplies(k.id)); expect(run.code).toBe(0);
+      expect(createdRows(run, 'created')).toEqual([k.note, 'Bower health.md']); expect(createdRows(run, 'updated')).toEqual([]);
+      expect(run.after[k.personal]).toBe(c.folder[k.personal]); expect(Object.keys(frontValues(run.after[k.personal] ?? '') ?? {})).toEqual(['custom']);
+      expect(run.after['Bower health.md']).toContain('by: bower');
+      expect(run.after['.bower/index.md']).toContain(`- [[${k.personalName}]] — (no summary)`);
+      expect(scoreCase(c, run).unmet).toEqual([]);
+    }
   });
 });
