@@ -201,7 +201,7 @@ test('the landing page opens without console errors', async ({ page }) => {
 });
 
 test('run your own Bower opens the repo', async ({ page }) => {
-  await open(page, '/', 'signed-out');
+  await open(page, '/sign-in', 'signed-out');
   await expect(page.getByRole('link', { name: /Run your own Bower/ })).toHaveAttribute('href', 'https://github.com/deluispablo/bower');
 });
 

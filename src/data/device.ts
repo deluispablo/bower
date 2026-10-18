@@ -36,7 +36,7 @@ export function forgetThisPerson(): void {
     catch (e) { console.error(e); }
   }
   let keyed: string[] = [];
-  try { keyed = Object.keys(sessionStorage).filter((k) => k.startsWith(PERSON_SESSION_PREFIX)); }
+  try { keyed = Object.keys(sessionStorage).filter((k) => k.startsWith(PERSON_SESSION_PREFIX) || k === 'bower:sign-in-from'); }
   catch (e) { console.error(e); }
   for (const key of [...PERSON_SESSION, ...keyed]) {
     try { sessionStorage.removeItem(key); }

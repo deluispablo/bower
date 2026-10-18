@@ -49,6 +49,12 @@ for (const [from, to] of COPY) fixed = fixed.split(from).join(to);
 const MAIN = /<div class="pg"(?![^>]*\brole="main")/;
 fixed = fixed.replace(MAIN, '<div class="pg" role="main"');
 const main = Number(MAIN.test(html));
+// Headerless minimal exports stay valid; the real header always offers sign-in.
+fixed = fixed.replace(/(<header\b[^>]*>[\s\S]*?<nav aria-label="Main"[^>]*>)([\s\S]*?)(<\/nav>)/, (match, start, links, end) => {
+  if (links.includes('href="/sign-in"')) return match;
+  return `${start}${links}<a class="btn btn-g btn-s" href="/sign-in">Sign in</a>\n      ${end}`;
+});
+const signIn = Number(fixed.includes('href="/sign-in"') && !html.includes('href="/sign-in"'));
 const n = (html.match(SVG_ATTRS) ?? []).length;
 const words = COPY.filter(([from]) => html.includes(from)).length;
 const supportFile = new URL('../public/landing/support.js', import.meta.url);
@@ -74,13 +80,13 @@ const fixedSupport = support.replace(old, () => compiled);
 new Script(fixedSupport, { filename: 'landing/support.js' });
 const logic = fixedSupport !== support;
 if (process.argv.includes('--check')) {
-  if (n || words || main || logic) {
-    console.error(`${n} placeholder attribute(s) the browser would parse, ${words} copy fix(es), ${main} missing main landmark(s),${Number(logic)} page script(s) needing precompilation: run node scripts/fix-landing.mjs`);
+  if (fixed !== html || logic) {
+    console.error(`${n} placeholder attribute(s) the browser would parse, ${words} copy fix(es), ${main} missing main landmark(s), ${signIn} missing sign-in link(s),${Number(logic)} page script(s) needing precompilation: run node scripts/fix-landing.mjs`);
     process.exit(1);
   }
   console.log('landing ok');
 } else {
   writeFileSync(file, fixed);
   writeFileSync(supportFile, fixedSupport);
-  console.log(`fixed ${n} attribute(s), ${words} copy line(s), and ${Number(logic)} page script(s)`);
+  console.log(`fixed ${n} attribute(s), ${words} copy line(s), ${signIn} sign-in link(s), and ${Number(logic)} page script(s)`);
 }

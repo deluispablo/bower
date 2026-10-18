@@ -7,8 +7,10 @@ const open = async (page: import('@playwright/test').Page, path: string, scenari
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 5000 });
 };
 
-test('a signed-out visitor lands on sign in and gets in', async ({ page }) => {
+test('a signed-out visitor lands on the landing, signs in and gets in', async ({ page }) => {
   await open(page, '/', 'signed-out');
+  await expect(page).toHaveURL(/\/landing\/$/);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/sign-in/);
   await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();

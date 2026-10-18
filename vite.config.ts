@@ -11,6 +11,15 @@ export default defineConfig({
     react(),
     // Dev and preview servers only: tells e2e which worktree a server serves (e2e/port.ts).
     identityPlugin(),
+    // Dev only: serve the landing's directory index as Cloudflare assets do in production (html_handling auto-trailing-slash).
+    {
+      name: 'bower-landing-index',
+      apply: 'serve',
+      configureServer: (server) => void server.middlewares.use((req, _res, next) => {
+        if (req.url === '/landing/' || req.url?.startsWith('/landing/?')) req.url = req.url.replace('/landing/', '/landing/index.html');
+        next();
+      }),
+    },
     // Installable, and the app shell opens with no network. Only the shell is cached:
     // never Google Drive or the Worker (their answers are the person's own notes).
     VitePWA({
