@@ -1,0 +1,34 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "asks": [
+      {
+        "notes": [
+          "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+          "Projects/Flat hunt/Flat 3 (second).md"
+        ],
+        "text": "Flat 3, 12 Larkspur Lane and Flat 3 (second) look like one flat. Keep one note?",
+        "yes": "Yes, keep one",
+        "no": "No, keep both"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [],
+    "keep": [
+      {
+        "kept": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+        "other": "Projects/Flat hunt/Flat 3 (second).md"
+      }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": []
+  }
+]

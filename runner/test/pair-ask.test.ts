@@ -7,11 +7,11 @@
  * new note. No live call.
  */
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { subjectOf } from '../../src/data/contracts/questions';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
-import { runWithClaude, type CaseRun } from './corpus-run';
+import { caseReplies, runWithClaude, type CaseRun } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 afterEach(() => vi.restoreAllMocks());
@@ -31,8 +31,11 @@ const reply = (intent: (shown: Shown) => unknown): ClaudeSpawn => async (call) =
 async function flatCase(): Promise<LoadedCase> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-keep-one-note');
   if (!c) throw new Error('no c05-keep-one-note case');
-  return { ...c, scope: 'all', questions: [], journal: [], inbox: [{ line: WORDS, files: [] }] };
+  return { ...c, scope: 'all', questions: [], journal: [], inbox: [{ line: WORDS, files: [] }], presses: undefined };
 }
+
+/** The accepted app's name-based question (legacy format); the corpus case asks a typed pair instead. */
+const LEGACY_Q = { id: 'q-merge-flat-3', text: '[[Flat 3 (second)]] looks like [[Flat 3, 12 Larkspur Lane]]. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1791300000000 };
 
 const idOf = async (run: CaseRun, path: string): Promise<string> => (await run.drive.listAll(run.root)).find((f) => run.drive.pathOf(f.id, run.root) === path)?.id ?? '';
 const questionsOf = (run: CaseRun): Array<{ id: string; text: string; yes: string; no: string }> => (JSON.parse(run.after['.bower/questions.json'] ?? '{"questions":[]}') as { questions: Array<{ id: string; text: string; yes: string; no: string }> }).questions;
@@ -102,8 +105,9 @@ describe('two notes for one thing (keep-one-not-asked)', () => {
   it('a yes to an older pair question whose note is in the Bin settles and names it', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // The accepted app's question, in its words (two links), answered yes; the other note went to the Bin since.
-    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-keep-one-note');
-    if (!c) throw new Error('no c05-keep-one-note case');
+    const loaded = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-keep-one-note');
+    if (!loaded) throw new Error('no c05-keep-one-note case');
+    const c: LoadedCase = { ...loaded, scope: 'instructions', inbox: [], presses: undefined, questions: [LEGACY_Q], journal: [{ kind: 'answer', text: 'yes', questionId: 'q-merge-flat-3' }] };
     const binOther = async (drive: Parameters<NonNullable<Parameters<typeof runWithClaude>[3]>>[0], root: string): Promise<void> => {
       const other = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === OTHER);
       if (other) await drive.trash(other.id);
@@ -117,5 +121,45 @@ describe('two notes for one thing (keep-one-not-asked)', () => {
     const report = (run.lastRun as { run: { report: { setAside: unknown[]; answered?: unknown[] } } }).run.report;
     expect(report.setAside).toEqual([]);
     expect(report.answered).toEqual([{ questionId: 'q-merge-flat-3', kind: 'pair', outcome: 'subject-gone', why: 'Not merged: Flat 3 (second) was already in the Bin.', note: KEPT }]);
+  });
+});
+
+describe('the checked-in merge cases (corpus-fix-c05-pairs)', () => {
+  beforeEach(() => {
+    const stored = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const L1 = 'Projects/Flat hunt/Larkspur Lane flat.md';
+  const L2 = 'Projects/Flat hunt/Larkspur Lane flat, second listing.md';
+  const PAIRS: Array<[string, [string, string]]> = [['c05-keep-one-note', [KEPT, OTHER]], ['c05-merge-answer-no', [L1, L2]], ['c05-merge-question-first', [L1, L2]]];
+
+  it('corpus-fix-c05-pairs AC1: merge fixtures generate a typed pair question before answering', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cases = await loadCorpus(ROOT);
+    for (const [id, pair] of PAIRS) {
+      const c = cases.find((x) => x.id === id);
+      if (!c) throw new Error(`no ${id} case`);
+      // No opaque preallocated identity: nothing seeded asks or answers before the first press.
+      expect(c.questions, id).toEqual([]);
+      expect(c.journal.filter((j) => j.questionId), id).toEqual([]);
+      if (id !== 'c05-merge-question-first') {
+        const answers = (c.presses ?? []).flatMap((p) => p.between ?? []).filter((s) => s.kind === 'answer');
+        expect(answers.map((s) => s.question), id).toEqual([{ kind: 'pair', notes: pair }]);
+      }
+      const run = await runWithClaude(c, caseReplies(id));
+      const first = [...(run.runs ?? []), run][0] ?? run;
+      const asked = questionsOf(first);
+      expect(asked, id).toHaveLength(1);
+      expect(asked[0]?.id, id).toMatch(/^q-pair-/);
+      expect(asked[0], id).toMatchObject({ yes: 'Yes, keep one', no: 'No, keep both' });
+      const ids = pair.map((path) => Object.entries(first.pathsById).find(([, p]) => p === path)?.[0] ?? `no ${path}`).sort();
+      expect(subjectOf(asked[0] ?? { id: '' }), id).toEqual({ kind: 'pair', by: 'id', notes: ids });
+    }
   });
 });

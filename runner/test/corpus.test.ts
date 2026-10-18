@@ -1,12 +1,22 @@
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CORPUS_CAPABILITIES, loadCase, loadCorpus, score, timelineOf, type Expected, type LoadedCase } from '../src/corpus';
 import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+// A case's answer step goes through the app's answer path, which keeps the device outbox.
+beforeEach(() => {
+  const stored = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+    removeItem: (key: string) => void stored.delete(key),
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 function assertNoBenchmarkSeed(meta: Pick<LoadedCase, 'id' | 'folderFrom'>): void {
   expect(meta.folderFrom, meta.id).toBeUndefined();

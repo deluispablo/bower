@@ -4,24 +4,33 @@
   "title": "Keep both notes when Alex declines the merge",
   "covers": "scripted",
   "source": "new (C05 preservation through scripted intent replies and the existing planner)",
-  "scope": "instructions",
+  "scope": "all",
   "allowWeb": false,
-  "inbox": [],
-  "journal": [
+  "inbox": [
     {
-      "kind": "answer",
-      "text": "no",
-      "questionId": "q-c05-larkspur-pair"
+      "line": "These two Larkspur Lane listings describe the same flat in Saltmere.",
+      "files": []
     }
   ],
-  "questions": [
+  "journal": [],
+  "questions": [],
+  "presses": [
     {
-      "id": "q-c05-larkspur-pair",
-      "text": "These notes describe the same Larkspur Lane flat. Keep one note?",
-      "yes": "Yes, keep one",
-      "no": "No, keep both",
-      "askedAt": 1791453600000
-    }
+      "between": [
+        {
+          "kind": "answer",
+          "question": {
+            "kind": "pair",
+            "notes": [
+              "Projects/Flat hunt/Larkspur Lane flat.md",
+              "Projects/Flat hunt/Larkspur Lane flat, second listing.md"
+            ]
+          },
+          "yes": false
+        }
+      ]
+    },
+    {}
   ],
   "bowerOwned": [
     "Projects/Flat hunt/Larkspur Lane flat.md",

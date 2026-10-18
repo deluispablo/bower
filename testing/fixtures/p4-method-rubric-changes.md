@@ -12,7 +12,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c04-offer-and-flat | changed | The photo is a real picture with nothing legible, so it waits on one question; the listing keeps no detail its link does not show, and only the offer updates the job hunt. |
 | c05-confirms-known-fact | agrees | New case for point 2: the value gate files the letter beside the plot note, adds a line, makes no note. |
 | c05-hub-lines | changed | It pinned the hubs' Current state untouched; point 3 has Bower rewrite it where the pile changes it. |
-| c05-keep-one-note | agrees | Facts move into the kept note's Current state or Timeline; the second note goes to the Bin. |
+| c05-keep-one-note | changed | The pair is asked by both notes first; the yes run carries the other note's facts into the kept note's Timeline and bins it once. |
 | c05-line-not-repeated | agrees | A line saying the same thing is not added twice: the Timeline only grows with new facts (points 2, 3). |
 | c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping's summary note with the comparison moves to C08. |
 | c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
@@ -141,6 +141,16 @@ record the method re-check, not an executed model result.
    unread, it waits on one yes-or-no question; the listing is filed under a plain name with no address; each hub gets a
    line only from its own evidence. `expected.json` is unchanged in all three cases. The garden and receipt sources say
    `new`: their PDFs are hand-built and were never the original benchmark's files.
+
+## Corpus clean changes (`corpus-fix-c05-pairs`)
+
+7. **c05-keep-one-note, c05-merge-answer-no and c05-merge-question-first, `case.json`, `expected.json`, `replies.json`
+   and `rubric.md`.** Reason: the corpus audit (old seeded merge questions with no typed subject; rubrics that waited on
+   a future driver). Was: keep-one-note and merge-answer-no started from a seeded question and its answer. Now: the first
+   press asks a typed pair question, the person answers through the app's answer path, and a later tidy-up with nothing
+   new changes nothing (`runs` scores each press). Keep-one-note is scripted now; its facts go to the kept note's
+   Timeline (the code's only place for them). The declined-pair re-ask claim is left to quality review: no mechanism
+   suppresses it. The old name-based question stays as a local seed in the tests of the legacy format.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

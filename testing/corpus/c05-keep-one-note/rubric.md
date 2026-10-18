@@ -1,2 +1,3 @@
-The person answered yes to "keep one note for Flat 3". The second note's facts (the twelve month lease) are carried into the kept note's Current state or Timeline.
-The person's own words in the kept note are untouched. The second note goes to the Bin, never hard-deleted. Links to the second note are rewritten to the kept one.
+Alex has two notes for Flat 3. The first tidy-up asks one keep-one-note question about the pair, by both notes, with Yes, keep one and No, keep both, and changes neither note.
+Alex answers Yes, keep one in the app. The run that follows carries the second note's facts (the twelve month lease) and its Timeline line into the kept note's Timeline, leaves Alex's own words in the kept note untouched, rewrites links to the second note to the kept one, and moves the second note to the Bin, never hard-deleted.
+A later tidy-up with nothing new changes nothing: the merge happens once. The pile of words about the second viewing waits in the inbox; this case is about the pair.

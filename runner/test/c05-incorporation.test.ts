@@ -5,13 +5,23 @@
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolve } from 'node:path';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { caseReplies, runWithClaude, scoreCase } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+// A case's answer step goes through the app's answer path, which keeps the device outbox.
+beforeEach(() => {
+  const stored = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+    removeItem: (key: string) => void stored.delete(key),
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 interface Shown { piles: Array<{ things: Array<{ fileId: string; name: string }> }> }
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
@@ -56,8 +66,6 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
       { note: JOB, text: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.', cites: id(OFFER) },
     ],
   })),
-  // The person said yes to keeping one note; nothing is in the inbox, so the model's only work is the merge.
-  'c05-keep-one-note': answering(() => ({ kind: 'tidy-intent', v: 1, things: [], keep: [{ kept: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', other: 'Projects/Flat hunt/Flat 3 (second).md' }] })),
 };
 
 describe('the C05 slice through the Claude provider', () => {
