@@ -21,6 +21,7 @@ const stopARun = async (page: Page): Promise<void> => {
 
 test("the panel's put away is Got it: one stopped run, one way to dismiss it", async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop side panel');
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await stopARun(page);
   const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
   const home = page.getByRole('alert').getByRole('heading', { name: 'The tidy-up stopped' });
@@ -33,6 +34,7 @@ test("the panel's put away is Got it: one stopped run, one way to dismiss it", a
 
 test("Home's Got it puts the panel's card away too", async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop side panel');
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await stopARun(page);
   const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
   await expect(panel.getByText(/tidy-up stopped/).first()).toBeVisible();

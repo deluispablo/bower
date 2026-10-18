@@ -42,6 +42,7 @@ test('after Delete the tree keeps its place, and Undo brings the row back to the
 
 test('focus after a stopped run is put away stays in the page', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop side panel');
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   for (const where of ['home', 'panel'] as const) {
     await open(page, '/', 'fail-run');
     await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
