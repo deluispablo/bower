@@ -139,6 +139,31 @@ describe('qa-live-claude F3: a request taken out is never acted on', () => {
     expect(archived(run, undo.id)).toBe(true);
   });
 
+  // The cap never changes what was taken back: the restored request is shown, answered and has its row, and both lines of the pair are archived.
+  const restoredAt = async (a: number, b: number, withText: boolean) => {
+    const kept = asked('press-000', DAY, KEPT);
+    const others = Array.from({ length: 19 }, (_, i) => asked(`press-${String(i + 1).padStart(3, '0')}`, 0, `Tidy shelf ${i + 1}`));
+    const back = takenBack('press-w', 0, kept);
+    const undo: Line = withText ? { id: 'press-u', at: 0, what: 'Asked Bower: "Put it back"', text: 'Put it back', undoes: back.id } : takenBack('press-u', 0, back.id);
+    // The withdrawal comes after `a` of the other requests, its undo after `b` of them (b >= a).
+    const order = [kept, ...others.slice(0, a), back, ...others.slice(a, b), undo, ...others.slice(b)];
+    const { run, frames } = await press(order.map((l, i) => ({ ...l, at: DAY + i })));
+    const execution = frames.filter((f) => f.phase !== 'selection');
+    expect(execution.length, `a=${a} b=${b} text=${withText}`).toBeGreaterThan(0);
+    for (const f of execution) expect(((f.requests ?? []) as Array<{ text: string }>).map((r) => r.text), `a=${a} b=${b} text=${withText}`).toContain(KEPT);
+    expect(done(run).find((r) => r.id === kept.id)?.done, `a=${a} b=${b} text=${withText}`).toContain('[[Cobble Row flat]]');
+    expect(archived(run, back.id), `a=${a} b=${b} text=${withText}`).toBe(true);
+    expect(done(run).some((r) => r.id === back.id), `no row for the withdrawal a=${a} b=${b}`).toBe(false);
+  };
+
+  it('F3P-9 a withdrawal undone by a request with text, past the cap: the restored request stands with its row', async () => {
+    await restoredAt(19, 19, true);
+  });
+
+  it('F3P-9 sweep: the withdrawal and its undo, with and without text, at every position around the cap', async () => {
+    for (const withText of [false, true]) for (const a of [0, 9, 18, 19]) for (const b of [a, 10, 18, 19].filter((x) => x >= a)) await restoredAt(a, b, withText);
+  }, 120_000);
+
   it.each([
     ['an unpaired withdrawal', (): Line[] => [takenBack('press-3', DAY + 2, 'earlier-run-request')]],
     ['a request and its withdrawal', (): Line[] => { const out = asked('press-2', DAY + 1, TAKEN_OUT); return [out, takenBack('press-3', DAY + 2, out)]; }],

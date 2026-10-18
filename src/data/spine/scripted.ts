@@ -3950,8 +3950,13 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
   // A request taken back and every withdrawal line (a line undoing one too) are always captured, never counted toward the 20:
   // the cap must not cut an undo from its withdrawal, or what was taken back would change (qa-live-claude F3).
   const back = takenBack(lines.map((l) => l.rec));
-  const requests = lines.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id) && !isWithdrawal(l.rec)).slice(0, REQUESTS_PER_RUN);
-  return lines.filter((l) => l.rec.kind !== 'request' || back.has(l.rec.id) || isWithdrawal(l.rec) || requests.includes(l));
+  // Every line that undoes a withdrawal, text or not, stays beside it for the same reason.
+  const withdrawals = new Set(lines.filter((l) => isWithdrawal(l.rec)).map((l) => l.rec.id));
+  const beside = (l: JournalLine): boolean => isWithdrawal(l.rec) || (l.rec.undoes !== undefined && withdrawals.has(l.rec.undoes));
+  // A restoring request with text is a request: it takes a slot of the 20 first, the others fill what is left, oldest first.
+  const restoring = lines.filter((l) => l.rec.kind === 'request' && l.rec.text !== undefined && beside(l)).length;
+  const requests = lines.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id) && !beside(l)).slice(0, Math.max(0, REQUESTS_PER_RUN - restoring));
+  return lines.filter((l) => l.rec.kind !== 'request' || back.has(l.rec.id) || beside(l) || requests.includes(l));
 }
 
 type RulesWording = Extract<Change, { kind: 'rules-wording' }>;
