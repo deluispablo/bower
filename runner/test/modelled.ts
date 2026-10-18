@@ -1,3 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { vi } from 'vitest';
+import { RunnerDrive } from '../src/drive';
+import type { FencedCall } from '../../src/data/drive/drive-api';
 import { resolve } from 'node:path';
 import { setTimeout as realSleep } from 'node:timers/promises';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
@@ -16,10 +20,27 @@ export interface Call {
   path: string;
   /** The run's modelled clock when the call was made, in ms. */
   at: number;
+  end?: number;
+  /** Identity of the adapter invocation that owns this attempt/read/send. */
+  fence?: number;
+  target?: string;
+  parent?: string;
   /** For a write, the name of the file it made or changed (known once Drive answered). */
   name?: string;
   /** For a create: whether the folder it goes into was made by an earlier write of this run. */
   intoMade?: boolean;
+}
+
+/** Observe invocation ownership without changing the adapter's fence or scheduling. */
+export function traceWrites() {
+  const context = new AsyncLocalStorage<{ id: number; call: FencedCall }>();
+  const prototype = RunnerDrive.prototype as unknown as { fenced: RunnerDrive['fenced'] };
+  const original = prototype.fenced;
+  let id = 0;
+  const spy = vi.spyOn(prototype, 'fenced').mockImplementation(function (this: RunnerDrive, ...args) {
+    return context.run({ id: ++id, call: args[0] }, () => original.apply(this, args));
+  });
+  return { current: () => context.getStore(), restore: () => spy.mockRestore() };
 }
 
 /**
@@ -49,17 +70,20 @@ export async function modelled(before?: Before, env?: Record<string, string>): P
     if (typeof args[0] === 'string' && args[0].startsWith('timing: ')) logged.push(args[0]);
     log(...args);
   };
+  const trace = traceWrites();
   const running = runScripted(c, (inner) => async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const method = (init?.method ?? 'GET').toUpperCase();
     const worker = url.origin === API;
     const kind = worker ? (url.pathname.endsWith('/token') ? 'token' : url.pathname.endsWith('/attempt') ? 'attempt' : 'status') : method === 'GET' ? 'read' : 'write';
     const call: Call = { kind, method, path: `${url.pathname}${url.search}`, at: clock };
+    const fence = trace.current()?.id;
+    if (fence !== undefined) call.fence = fence;
     calls.push(call);
     if (method === 'POST' && !worker) {
       const sent = await new Response(init?.body).clone().text();
       const parent = /"parents":\["([^"]+)"\]/.exec(sent)?.[1];
-      if (parent !== undefined) call.intoMade = made.has(parent);
+      if (parent !== undefined) { call.parent = parent; call.intoMade = made.has(parent); }
     }
     if (method === 'POST' && url.searchParams.get('uploadType') === 'multipart') {
       const text = await new Response(init?.body).text();
@@ -67,9 +91,13 @@ export async function modelled(before?: Before, env?: Record<string, string>): P
     }
     await new Promise<void>((wake) => due.push({ at: clock + (worker ? WORKER_MS : DRIVE_MS), wake }));
     const res = await inner(input, init);
+    call.end = clock;
+    const parent = url.searchParams.get('addParents');
+    if (parent) call.parent = parent;
     if (kind === 'write') {
       const id = url.pathname.split('/').pop() ?? '';
       const body = (await res.clone().json().catch(() => null)) as { id?: string; name?: string } | null;
+      call.target = body?.id ?? id;
       if (body?.id && body.name) names.set(body.id, body.name);
       if (method === 'POST' && body?.id) made.add(body.id);
       const named = names.get(body?.id ?? id);
@@ -80,6 +108,7 @@ export async function modelled(before?: Before, env?: Record<string, string>): P
     }
     return res;
   }, true, before, env).finally(() => {
+    trace.restore();
     settled = true;
     console.log = log;
   });

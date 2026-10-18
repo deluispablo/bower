@@ -13,6 +13,7 @@ import { scriptedProvider } from '../../src/data/demo/script';
 import { listedPiles } from '../../src/data/spine/scripted';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { main } from '../src/main';
+import { traceWrites } from './modelled';
 import { RunnerDrive } from '../src/drive';
 import { withMaintenance } from '../src/index';
 import { RunnerToken } from '../src/token';
@@ -251,8 +252,18 @@ describe('the runner process under a rate limit', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const { wire, root } = await wired();
     const patched: string[] = [];
+    const trace = traceWrites();
+    const attempts = new Map<number, number>();
+    const sent: Array<number | undefined> = [];
     const fetchFn: typeof fetch = async (input, init) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const owner = trace.current()?.id;
+      if (url.origin === API && url.pathname.endsWith('/attempt')) {
+        const answer = await wire.fetch(input, init);
+        if (owner !== undefined) attempts.set(owner, (await answer.clone().json() as { attempt: number }).attempt);
+        return answer;
+      }
+      if (url.origin === 'https://www.googleapis.com' && (init?.method ?? 'GET').toUpperCase() !== 'GET') sent.push(owner === undefined ? undefined : attempts.get(owner));
       if (url.origin === 'https://www.googleapis.com' && (init?.method ?? 'GET').toUpperCase() === 'PATCH') {
         patched.push(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
         if (patched.length === 1) {
@@ -265,7 +276,11 @@ describe('the runner process under a rate limit', () => {
     };
     const before = await wire.drive.listAll(root);
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: fetchFn, pacing: { baseMs: 0, sleep: async () => {} } });
-    expect(patched).toHaveLength(1);
+    // Siblings whose own fences already passed may land; no target is resent after takeover.
+    expect(patched.length).toBeGreaterThan(0);
+    expect(new Set(patched).size).toBe(patched.length);
+    expect(sent.every((attempt) => attempt === 1)).toBe(true);
+    expect([...attempts.values()]).toContain(2);
     const target = patched[0] ?? '';
     const after = await wire.drive.listAll(root);
     expect(after.find((f) => f.id === target)).toEqual(before.find((f) => f.id === target));

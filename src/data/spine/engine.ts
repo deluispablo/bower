@@ -152,7 +152,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
   if (!head || headHash === null) {
     head = firstCheckpoint(manifest, manifestHash, mark, run.clock());
     const c = await canonical(head);
-    await run.records.put(await run.batch(), where, checkpointName(0, c.hash), c.text);
+    await run.records.put(run.fenced?.() ?? (await run.batch()), where, checkpointName(0, c.hash), c.text);
     chain = [head];
     headHash = c.hash;
     run.onChain?.(chain);

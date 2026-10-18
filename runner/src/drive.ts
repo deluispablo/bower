@@ -12,7 +12,7 @@
  *   with what this run read (`SeenFiles`).
  *   Drive v3 has no conditional write on files, so another client can still
  *   change the file in the window between that read and the write; the
- *   window is kept short (writes go one at a time) but it is not closed.
+ *   window is kept short (each write has its own fence) but it is not closed.
  * - Attempt: at each write batch (`batch()`) and again right before each
  *   fenced write, the token route is asked again and its `attempt` must equal
  *   this runner's (TL-P3-23). An old attempt woken after a takeover sends no
@@ -27,13 +27,15 @@
  * request once, as the fake's `FaultHook` does (`refuse`: nothing is sent;
  * `lose-reply`: the write lands, then its answer is lost).
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { POOL } from '../../src/data/spine/schedule';
 import { BowerError } from '../../src/data/types';
 import type { DriveFile, DrivePatch, FaultAction, Fence, FaultHook, FencedCall, FencedDrive, RunDrive, StoredEvidence } from '../../src/data/drive/drive-api';
 import type { Pacing } from '../../src/data/drive/transport';
 import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/drive/drive-http';
 import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
-import { admissionRead, type AdmissionRead } from '../../src/data/spine/read';
+import { admissionRead, limiter, type AdmissionRead } from '../../src/data/spine/read';
 import { sha256 } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
 import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
@@ -71,14 +73,12 @@ export class RunnerDrive implements RunDrive {
   private readonly seen = new SeenFiles();
   private readonly writes: FencedDrive;
   /** The fenced write whose request is in flight, and what the fault hook said of it. */
-  private current: { call: FencedCall; action: FaultAction | null } | null = null;
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly current = new AsyncLocalStorage<{ call: FencedCall; action: FaultAction | null; answered: boolean }>();
+  private readonly limit = limiter(POOL);
   /** Rises when a fenced write is about to be sent and again when it ends: a listing read at one value is current at it. */
   generation = 0;
-  /** Whether a fenced write's request is out now. */
-  private writing = false;
-  /** The target of the fenced write in flight, as its fence saw it: a content write compares it instead of reading again. */
-  private peeked: DriveFile | null = null;
+  /** How many fenced writes have requests out now. */
+  private writing = 0;
   /** Each fenced write that ended, with the generation it ended at: what it did (null: not known, e.g. a lost answer). */
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
   /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
@@ -114,8 +114,8 @@ export class RunnerDrive implements RunDrive {
       update: (id: string, patch: DrivePatch) => this.fenced({ op: 'update', id, patch }, (fence) => this.http.update(id, patch, { fence })),
       trash: (id, appProperties) => this.fenced({ op: 'trash', id, ...(appProperties ? { appProperties } : {}) }, (fence) => this.http.trash(id, appProperties, { fence })),
       writeText: (id, text, ifModified, appProperties) =>
-        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, (fence) =>
-          this.http.writeText(id, text, ifModified, appProperties, { fence, ...(this.peeked?.id === id ? { current: this.peeked } : {}) })),
+        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, (fence, peeked) =>
+          this.http.writeText(id, text, ifModified, appProperties, { fence, ...(peeked?.id === id ? { current: peeked } : {}) })),
     };
   }
 
@@ -358,12 +358,12 @@ export class RunnerDrive implements RunDrive {
   }
 
   /**
-   * One fenced write: one at a time, after its still-as-seen read. A write to a file that exists gets the same fence
+   * One fenced write: at most POOL at once, each after its own still-as-seen read. A write to a file that exists gets the same fence
    * for the transport (`WriteOptions`), which runs it again right before any resend, so a takeover or a change during
    * a rate limit's wait sends nothing more (TL-P4-24 finding 1). A create by its reserved id is resent as it is.
    */
-  private fenced(call: FencedCall, write: (fence: Fence) => Promise<DriveFile>): Promise<DriveFile> {
-    const run = this.queue.then(async () => {
+  private fenced(call: FencedCall, write: (fence: Fence, peeked: DriveFile | null) => Promise<DriveFile>): Promise<DriveFile> {
+    return this.limit(() => this.current.run({ call, action: null, answered: false }, async () => {
       // The attempt again, right before this write: a runner that stalled after its batch began and woke after a
       // takeover sends nothing more (TL-P3-23).
       // and the target read again (still as seen). Both must pass before anything is sent; neither waits for the other.
@@ -371,22 +371,22 @@ export class RunnerDrive implements RunDrive {
       // Every read of the fence goes through the one cannot-read handling (`SeenFiles.read`): a read that gets no
       // answer is no change found, thrown as not read, so the attempt stops for recovery.
       const into = destinationOf(call);
+      let peeked: DriveFile | null = null;
       const fence: Fence = async () => {
         const { now, intoNow } = await this.seen.read(this.fenceReads(target, into));
         if (into) this.seen.assert(into, intoNow);
         this.seen.assert(target, now);
-        this.peeked = now?.file ?? null;
+        peeked = now?.file ?? null;
       };
       await fence();
-      this.current = { call, action: null };
       this.generation++;
-      this.writing = true;
+      this.writing++;
       let change: Change | null = null;
       try {
-        const answer = await write(fence);
+        const answer = await write(fence, peeked);
         change = call.op === 'trash' ? { gone: call.id } : { file: answer };
         if (call.op !== 'trash') {
-          // Noted here too, before the next queued write asks: the wrap notes it only after this promise has resolved.
+          // Noted here too, before a later write asks: the wrap notes it only after this promise has resolved.
           this.seen.note(answer);
           // A record folder this run made (a folder with no create key of the person's), kept by the version its create answered.
           if (call.op === 'create-folder' && call.appProperties?.bowerItem === undefined) {
@@ -396,15 +396,11 @@ export class RunnerDrive implements RunDrive {
         }
         return answer;
       } finally {
-        this.writing = false;
+        this.writing--;
         this.generation++;
         this.ended.push({ end: this.generation, change });
-        this.current = null;
-        this.peeked = null;
       }
-    });
-    this.queue = run.catch(() => undefined);
-    return run;
+    }));
   }
 
   /**
@@ -429,16 +425,16 @@ export class RunnerDrive implements RunDrive {
 
   /** The fetch `DriveHttp` uses: a fenced write's own request meets the fault hook once. */
   private async hooked(url: string, init?: RequestInit): Promise<Response> {
-    const now = this.current;
+    const now = this.current.getStore();
     // Reads, and writes outside a fence, go as they are: the transport bounds, retries and words them (`transport.ts`).
-    if ((init?.method ?? 'GET').toUpperCase() === 'GET' || !now) return this.fetchFn(url, init);
+    if ((init?.method ?? 'GET').toUpperCase() === 'GET' || !now || now.answered) return this.fetchFn(url, init);
     now.action ??= this.fault?.before?.(now.call) ?? 'pass';
     // A TypeError is how fetch fails with no network; the transport reads it as no answer (`isNoAnswer`).
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
     const res = await this.fetchFn(url, init);
     // Any refusal goes back as Drive gave it: the transport's one table tells its kind (a 5xx write is unconfirmed).
     if (!res.ok) return res;
-    this.current = null;
+    now.answered = true;
     this.fault?.applied?.(now.call);
     if (now.action === 'lose-reply') throw new TypeError('A fault lost the answer to this write.');
     return res;

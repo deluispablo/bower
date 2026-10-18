@@ -43,6 +43,8 @@ export type RunManifest = Omit<Manifest, 'v' | 'operations'> & { v: 1 | 2; opera
 /** Where a record lives: one run's folder, or the pile records. */
 export type Where = { runId: string } | 'piles';
 
+export interface RecordItem { name: string; text: string; stamp?: Record<string, string> }
+
 /** What the records read: everything under a folder that is not in the Bin, a file's stored bytes, and a file by its id. */
 export interface RecordReads extends Gets {
   listAll(rootId: string): Promise<DriveFile[]>;
@@ -165,17 +167,38 @@ export class RunRecords {
 
   /** Writes an immutable record once: already there with these bytes is done; other bytes refuse. */
   async put(w: FencedDrive, where: Where, name: string, text: string, stamp?: Record<string, string>): Promise<void> {
-    const found = await this.folders(where);
-    const stored = await this.readIn(found, name);
-    if (stored && !same(stored, new TextEncoder().encode(text))) {
-      console.error(`Run record ${name} is there with other bytes`);
-      throw new BowerError('conflict', SAVE_FAILED);
+    return this.putAll(w, where, [{ name, text, ...(stamp ? { stamp } : {}) }]);
+  }
+
+  /** Reads and checks the whole group before making its missing records together. */
+  async putAll(w: FencedDrive, where: Where, items: readonly RecordItem[]): Promise<void> {
+    const names = new Set<string>();
+    for (const { name } of items) {
+      if (names.has(name)) {
+        console.error(`Run record ${name} is repeated in one write group`);
+        throw new BowerError('conflict', SAVE_FAILED);
+      }
+      names.add(name);
     }
-    if (stored) return;
+    const found = await this.folders(where);
+    const missing: RecordItem[] = [];
+    for (const item of items) {
+      const stored = await this.readIn(found, item.name);
+      if (stored && !same(stored, new TextEncoder().encode(item.text))) {
+        console.error(`Run record ${item.name} is there with other bytes`);
+        throw new BowerError('conflict', SAVE_FAILED);
+      }
+      if (!stored) missing.push(item);
+    }
+    if (!missing.length) return;
     const parent = await this.ensure(w, where, found);
     this.placed.set(this.placeOf(where), parent);
-    const props = markOf(where, stamp, text);
-    await makeText(w, this.reads, { parent, name, ...(props ? { props } : {}) }, text);
+    const results = await Promise.allSettled(missing.map(({ name, text, stamp }) => {
+      const props = markOf(where, stamp, text);
+      return makeText(w, this.reads, { parent, name, ...(props ? { props } : {}) }, text);
+    }));
+    const failed = results.find((r) => r.status === 'rejected');
+    if (failed) throw failed.reason;
   }
 
   /**
@@ -287,13 +310,8 @@ export class RunRecords {
 
   /** Writes a consumed disposition after checking it against its pile's full key set. */
   async putDisposition(w: FencedDrive, value: Disposition): Promise<void> {
-    const c = await canonical(value);
-    const parsed = await parsePileDisposition(c.bytes, this.rootId, value.memberKeys);
-    if (!parsed.ok || parsed.sha256 !== c.hash) {
-      console.error(`A disposition of pile ${value.pileId} was refused (${parsed.ok ? 'hash' : parsed.reason})`);
-      throw new BowerError('unknown', SAVE_FAILED);
-    }
-    await this.put(w, 'piles', dispositionName(c.hash), c.text, recordStamp(value.pileId));
+    const item = await dispositionRecord(value, this.rootId);
+    await this.put(w, 'piles', item.name, item.text, item.stamp);
   }
 
   /**
@@ -321,6 +339,17 @@ function markOf(where: Where, stamp: Record<string, string> | undefined, text: s
     || (Array.isArray(m.operations) && m.operations.some((o) => object(o) && object(o.effect) && o.effect.kind === 'edit-text'
       && Array.isArray(o.effect.changes) && o.effect.changes.some((c) => object(c) && c.kind === 'timeline-append' && object(c.consent)))));
   return { ...stamp, [PROP.run]: where.runId, ...(appends ? { [APPENDS_RECORD_KEY]: '1' } : {}) };
+}
+
+/** A consumed disposition, checked before any write in its group starts. */
+export async function dispositionRecord(value: Disposition, rootId: string): Promise<RecordItem> {
+  const c = await canonical(value);
+  const parsed = await parsePileDisposition(c.bytes, rootId, value.memberKeys);
+  if (!parsed.ok || parsed.sha256 !== c.hash) {
+    console.error(`A disposition of pile ${value.pileId} was refused (${parsed.ok ? 'hash' : parsed.reason})`);
+    throw new BowerError('unknown', SAVE_FAILED);
+  }
+  return { name: dispositionName(c.hash), text: c.text, stamp: recordStamp(value.pileId) };
 }
 
 function broken(why: string): Found {

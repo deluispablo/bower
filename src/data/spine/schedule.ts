@@ -6,12 +6,9 @@
  * when one of them makes something there (so a name taken there is seen). Two moves into one folder share nothing.
  * An operation kind this file does not know claims everything, so it runs alone and in plan order.
  *
- * How many at once: `POOL`. Drive's usage limits are per user, 12,000 requests a minute
- * (https://developers.google.com/workspace/drive/api/guides/limits), and a burst past them answers 403/429 `rateLimitExceeded`,
- * which the adapter already retries with exponential backoff
- * (https://developers.google.com/workspace/drive/api/guides/handle-errors). Four reads at once is well inside that
- * and under the six connections a browser opens per host, the usual size of a small pool; the writes themselves still
- * go through the adapter's queue one at a time, which also keeps sustained writes near the rate Google advises.
+ * How many at once: `POOL`, shared with the runner adapter's write limiter. Each write has its own fence.
+ * Drive edits cost 50 quota units; four concurrent writes are well inside the per-user quota, and the transport
+ * retries 403/429 rate limits with backoff (https://developers.google.com/workspace/drive/api/guides/limits).
  */
 import type { OperationV2 } from '../contracts/run-manifest';
 

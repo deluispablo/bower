@@ -3,6 +3,7 @@
  * interrupted, over the adapter's contract test (Drive v3 faked over fetch, `drive-v3.ts`), with the real scripted
  * provider and the real Drive effects. No app call: the runner and the faked Worker alone complete the run.
  */
+import { traceWrites } from './modelled';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Checkpoint, Outcome } from '../../src/data/contracts/run-checkpoint';
@@ -674,17 +675,23 @@ describe('recovery without the browser', () => {
   it('a fence whose attempt check cannot read stops the attempt for recovery', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const w = await world();
-    // Right after the first operation's intent is committed, the Worker's attempt route gives no answer for a few asks
-    // (more than the transport retries): the fence cannot read the attempt. Drive answers throughout. Nothing is
-    // refused as offline; the attempt stops, and the next one reads back what it opened and sends each once.
-    let left = -1;
+    // Fail one invocation through all retries, without spending its failures on concurrent siblings.
+    const trace = traceWrites();
+    let armed = false;
+    let failing: number | undefined;
+    let failures = 0;
     const first = await tidy(w, 1, {
-      afterIntent: async () => {
-        if (left < 0) left = 4;
+      afterIntent: async () => { armed = true; },
+      failAttempt: () => {
+        const owner = trace.current()?.id;
+        if (!armed || owner === undefined) return false;
+        failing ??= owner;
+        if (owner !== failing) return false;
+        failures++;
+        return true;
       },
-      failAttempt: () => left > 0 && left-- > 0,
     });
-    expect(left).toBe(0);
+    expect(failures).toBe(4);
     expect(first.phase).toBe('saving');
     const stopped = (await chainOf(w.wire, w.root)).at(-1);
     expect(stopped?.outcomes.some((o) => o.state === 'rejected' && o.failure.code === 'offline')).toBe(false);

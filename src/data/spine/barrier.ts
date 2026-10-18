@@ -20,7 +20,7 @@ import { BowerError, type Question, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile, type RunnerFiles } from '../vault/layout';
 import type { Checkpoint } from '../contracts/run-checkpoint';
 import type { AdmissionManifest } from './admission';
-import { canonical, checkpointName, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from './records';
+import { canonical, checkpointName, dispositionRecord, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from './records';
 import { makeFolder, makeText, updateByStamp } from './write-once';
 import { dispositionsFor, itemDispositions, materialize, reportContradictions, type ItemDisposition } from './report';
 
@@ -39,7 +39,7 @@ export interface ReportSave {
 
 type ReportFile = typeof SYSTEM.questions | typeof SYSTEM.suggestions | typeof SYSTEM.requests | typeof SYSTEM.hashes;
 
-/** The report files, in the order they are written; `last-run.json` comes after them all. */
+/** The report files, in returned order; `last-run.json` is written after them all. */
 export const REPORT_FILES: readonly ReportFile[] = [SYSTEM.questions, SYSTEM.suggestions, SYSTEM.requests, SYSTEM.hashes];
 
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
@@ -60,19 +60,21 @@ export function lastRunText(body: LastRunFile): string {
 /** Brings the report files up to date, then writes `last-run.json` last; gives the paths written, in order. */
 export async function saveReport(save: ReportSave): Promise<string[]> {
   const written: string[] = [];
-  // What is stored of each file is read together (reads only, of different files); the writes then go one at a time,
-  // in order, each on what it read of its own file.
+  // Read and resolve the folder before any sibling write can invalidate the shared listing.
   const paths: readonly string[] = [...(save.report ? REPORT_FILES : []), SYSTEM.lastRun];
   const before = new Map(await Promise.all(paths.map(async (path) => [path, await stored(save, path)] as const)));
-  if (save.report) {
-    for (const path of REPORT_FILES) {
-      const found = before.get(path) ?? null;
-      const text = nextText(path, found ? found.text : null, save.report);
-      if (text === null) continue;
-      await write(save, path, found, text);
-      written.push(path);
-    }
-  }
+  const report = save.report;
+  const changed = report ? REPORT_FILES.flatMap((path) => {
+    const found = before.get(path) ?? null;
+    const text = nextText(path, found ? found.text : null, report);
+    return text === null ? [] : [{ path, found, text }];
+  }) : [];
+  const needsParent = changed.some((c) => !c.found) || !before.get(SYSTEM.lastRun);
+  const parent = needsParent ? await system(save, await save.batch()) : '';
+  const results = await Promise.allSettled(changed.map(({ path, found, text }) => write(save, path, found, text, parent)));
+  const failed = results.find((r) => r.status === 'rejected');
+  if (failed) throw failed.reason;
+  written.push(...changed.map((c) => c.path));
   const view = before.get(SYSTEM.lastRun) ?? null;
   // Already there (a restarted run): nothing more to write.
   if (view && sameView(view.text, save.view)) return written;
@@ -80,7 +82,7 @@ export async function saveReport(save: ReportSave): Promise<string[]> {
     console.error(`${SYSTEM.lastRun} shows another run; it is not saved over`);
     throw new BowerError('conflict', SAVE_FAILED);
   }
-  await write(save, SYSTEM.lastRun, view, save.view);
+  await write(save, SYSTEM.lastRun, view, save.view, parent);
   written.push(SYSTEM.lastRun);
   return written;
 }
@@ -190,9 +192,9 @@ async function stored(save: Pick<ReportSave, 'rootId' | 'reads'>, path: string):
  * Writes one file with the modifiedTime it read (or makes it by its reserved id), stamped by the version it replaces
  * and its bytes, and confirmed by its answer's checksum (`write-once.ts`).
  */
-async function write(save: ReportSave, path: string, found: Stored | null, text: string): Promise<void> {
+async function write(save: ReportSave, path: string, found: Stored | null, text: string, parent: string): Promise<void> {
   const w = await save.batch();
-  if (!found) await makeText(w, save.reads, { parent: await system(save, w), name: nameIn(path) }, text);
+  if (!found) await makeText(w, save.reads, { parent, name: nameIn(path) }, text);
   else await updateByStamp(save.reads, found.file, { text }, (op) => w.writeText(found.file.id, text, found.file.modifiedTime, op));
 }
 
@@ -241,8 +243,8 @@ export interface BarrierRun {
   /** The fenced writes of the next batch (the adapter's `batch()`, which checks the attempt first). */
   batch(): Promise<FencedDrive>;
   /**
-   * The same fenced writes with no attempt read of their own, for a write right after a `batch()`: each fenced write
-   * reads the attempt again right before it is sent. Without it, every write asks `batch()`.
+   * The same fenced writes with no separate attempt read: each fenced write reads the attempt right before
+   * it is sent. Without it, every write asks `batch()`.
    */
   fenced?(): FencedDrive;
   /** What the run was admitted to take; null when the Worker kept none. */
@@ -306,7 +308,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     if (!head) throw new BowerError('unknown', SAVE_FAILED);
     const next = nextCheckpoint(head, (await canonical(head)).hash, mark, patch);
     const c = await canonical(next);
-    await run.records.putNew(await run.batch(), where, checkpointName(next.revision, c.hash), c.text);
+    await run.records.putNew(run.fenced?.() ?? (await run.batch()), where, checkpointName(next.revision, c.hash), c.text);
     chain = [...chain, next];
     return next;
   };
@@ -333,17 +335,14 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     throw new BowerError('unknown', SAVE_FAILED);
   }
 
-  // The attempt is asked once for the report's writes; every fenced write asks it again right before it is sent.
-  let asked = false;
-  const writes = async (): Promise<FencedDrive> => {
-    if (asked && run.fenced) return run.fenced();
-    asked = true;
-    return run.batch();
-  };
+  const writes = async (): Promise<FencedDrive> => run.fenced?.() ?? run.batch();
 
   // 2. The report record, confirmed by its answer, and the consumed dispositions.
   await run.records.put(await writes(), where, reportName(r.hash), r.text);
-  for (const d of dispositionsFor(manifest, at.outcomes, r.hash)) await run.records.putDisposition(await writes(), d);
+  const [first, ...rest] = dispositionsFor(manifest, at.outcomes, r.hash);
+  // The first disposition creates .bower/piles alone; the others share one listing before their writes.
+  if (first) await run.records.putDisposition(await writes(), first);
+  if (rest.length) await run.records.putAll(await writes(), 'piles', await Promise.all(rest.map((d) => dispositionRecord(d, run.rootId))));
   if ((await run.records.read(where, DISPOSITIONS)) === null) {
     const file: DispositionsFile = { v: 1, runId: run.runId, items: dispositions(at.outcomes) };
     // A fenced create, confirmed by its answer; a reply lost after it landed is not a second file.
