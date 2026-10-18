@@ -123,6 +123,22 @@ describe('qa-live-claude F3: a request taken out is never acted on', () => {
     for (const o of others) expect(archived(run, o.id), `${o.id} is archived`).toBe(true);
   });
 
+  it('F3P-8 a withdrawal undone past the cap: the cap never changes what was taken back, the restored request stands and is answered', async () => {
+    const kept = asked('press-00', DAY, KEPT);
+    const others = Array.from({ length: 18 }, (_, i) => asked(`press-${String(i + 1).padStart(2, '0')}`, DAY + 1 + i, `Tidy shelf ${i + 1}`));
+    const back = takenBack('press-98', DAY + 50, kept);
+    const undo = takenBack('press-99', DAY + 51, back.id);
+    const { run, frames } = await press([kept, ...others, back, undo]);
+    const execution = frames.filter((f) => f.phase !== 'selection');
+    expect(execution.length).toBeGreaterThan(0);
+    for (const f of execution) expect(((f.requests ?? []) as Array<{ text: string }>).map((r) => r.text)).toContain(KEPT);
+    // Only requests have rows: a withdrawal, standing or undone, has none.
+    expect(done(run).map((r) => r.id).sort()).toEqual([kept.id, ...others.map((o) => o.id)].sort());
+    expect(done(run).find((r) => r.id === kept.id)?.done).toContain('[[Cobble Row flat]]');
+    expect(archived(run, back.id)).toBe(true);
+    expect(archived(run, undo.id)).toBe(true);
+  });
+
   it.each([
     ['an unpaired withdrawal', (): Line[] => [takenBack('press-3', DAY + 2, 'earlier-run-request')]],
     ['a request and its withdrawal', (): Line[] => { const out = asked('press-2', DAY + 1, TAKEN_OUT); return [out, takenBack('press-3', DAY + 2, out)]; }],

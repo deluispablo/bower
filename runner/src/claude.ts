@@ -36,7 +36,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
-import { type JournalRecord, isJournalRecord, takenBack } from '../../src/data/contracts/journal-record';
+import { type JournalRecord, isJournalRecord, isWithdrawal, takenBack } from '../../src/data/contracts/journal-record';
 import { formulaInstalled, MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName, WAITING_WHY } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
 import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, propertyKeyOk, sameJson, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
@@ -2365,7 +2365,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const held = new Set([...asked.held, ...records.filter((r) => withdrawn.has(r.rec.id) && r.rec.undoes !== undefined && heldIds.has(r.rec.undoes)).map((r) => r.fileId)]);
     const took: Admitted = { ...admitted, taken: { ...admitted.taken, journal: admitted.taken.journal.filter((l) => !held.has(l.fileId)) } };
     const backIds = takenBack(records.filter((r) => !held.has(r.fileId)).map((r) => r.rec));
-    const back = new Set(records.filter((r) => backIds.has(r.rec.id) && !held.has(r.fileId)).map((r) => r.fileId));
+    // A withdrawal a later line undid is no request either; it and that line fold as a pair, never shown.
+    const back = new Set(records.filter((r) => (backIds.has(r.rec.id) || isWithdrawal(r.rec)) && !held.has(r.fileId)).map((r) => r.fileId));
     const { model, maxTurns } = claudeLimits(setup.env);
     // The model never sees a thing already saved: the plan bins it (`duplicates.ts`).
     const itemCount = took.taken.piles.reduce((n, p) => n + Math.max(1, thingsOf(p).length), 0);

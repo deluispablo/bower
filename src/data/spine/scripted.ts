@@ -19,7 +19,7 @@ import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal, type ViewDefinition, type ViewHome } from '../types';
-import { isJournalRecord, pairsOf, takenBack, type JournalRecord } from '../contracts/journal-record';
+import { isJournalRecord, isWithdrawal, pairsOf, takenBack, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows, type HashesFile, type QuestionsFile, type Recent, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
@@ -1067,7 +1067,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const { editCap, held } = attempt;
   // A request the person took back is no request: every reader below takes `lines` without it, and only `journal` keeps
   // both lines, to archive them (qa-live-claude F3).
-  const back = takenBack(everyLine.map((l) => l.rec));
+  // A withdrawal that a later line undid is no request either: it and that line fold as a pair, with no row.
+  const back = new Set([...takenBack(everyLine.map((l) => l.rec)), ...everyLine.filter((l) => isWithdrawal(l.rec)).map((l) => l.rec.id)]);
   const lines = everyLine.filter((l) => !back.has(l.rec.id));
   const grownTags = growTags(opts.decisions.newTags, snapshot.tagList);
   if (!grownTags) return refused('invalid new tags');
@@ -3946,10 +3947,11 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
   }
   lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
   if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);
-  // A request taken back and its withdrawal are always captured (to archive) and never count toward the 20.
+  // A request taken back and every withdrawal line (a line undoing one too) are always captured, never counted toward the 20:
+  // the cap must not cut an undo from its withdrawal, or what was taken back would change (qa-live-claude F3).
   const back = takenBack(lines.map((l) => l.rec));
-  const requests = lines.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id)).slice(0, REQUESTS_PER_RUN);
-  return lines.filter((l) => l.rec.kind !== 'request' || back.has(l.rec.id) || requests.includes(l));
+  const requests = lines.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id) && !isWithdrawal(l.rec)).slice(0, REQUESTS_PER_RUN);
+  return lines.filter((l) => l.rec.kind !== 'request' || back.has(l.rec.id) || isWithdrawal(l.rec) || requests.includes(l));
 }
 
 type RulesWording = Extract<Change, { kind: 'rules-wording' }>;
