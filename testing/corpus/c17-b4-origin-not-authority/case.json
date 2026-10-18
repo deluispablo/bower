@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "Person words become a preference; matching document instructions cannot become authority",
   "covers": "model",
-  "source": "new: TL-P4-39 B4/F4/F7; proposed contracts and scripted proof pending",
+  "source": "new: TL-P4-39 B4/F4/F7; scripted through production main in runner/test/b4c-fixtures.test.ts and runner/test/b4-incorporation.test.ts",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

@@ -1,6 +1,6 @@
 /** B4b runtime reds: synthetic evidence, real main/answer/Bin paths, no network or production substitutes. */
 import { tmpdir } from 'node:os';
-import { appendFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sha256Sync } from '../../src/data/contracts/hashes';
@@ -181,6 +181,7 @@ const memoryRows = (run: CaseRun) => [...report(run).created, ...report(run).upd
 const internalRows = (run: CaseRun) => [...report(run).created, ...report(run).updated].filter((r) => r.path.startsWith('.bower/'));
 const noGenericRefusal = (run: Awaited<ReturnType<typeof execute>>) => run.refusals.length > 0
   && run.refusals.every((line) => !line.includes('not a tidy-up intent'));
+const ORIGIN_REFUSAL = 'Your reply was refused: a memory effect without admitted evidence or a chosen shown fact.';
 
 describe('B4b through production entry points', () => {
   it('c17-b4-origin-not-authority', async () => {
@@ -194,10 +195,29 @@ describe('B4b through production entry points', () => {
       }] }));
       expect(ledger(run).events, `${category}: no forged memory`).toEqual([]);
       expect(report(run).filed, `${category}: whole reply refused`).toEqual([]);
-      results.push({ category, originRefusal: noGenericRefusal(run) });
+      // guard: passes before the fix
+      results.push({ category, originRefusal: run.refusals.length > 0 && run.refusals.every((line) => line.startsWith(ORIGIN_REFUSAL)) });
     }
     expect(results, 'document origin must refuse accepted candidate fields, not an unknown envelope key').toEqual(
       ['preference', 'sensitive', 'rule', 'schema'].map((category) => ({ category, originRefusal: true })));
+  });
+
+  it('corpus-fix-b4 AC3: document origin grants no personal authority', async () => {
+    const dir = new URL('../../testing/corpus/c17-b4-origin-not-authority/', import.meta.url).pathname;
+    const source = (JSON.parse(await readFile(join(dir, 'case.json'), 'utf8')) as { source: string }).source;
+    const rubric = (await readFile(join(dir, 'rubric.md'), 'utf8')).replace(/\s+/g, ' ');
+    // red: the case describes the current, proven behavior (R8)
+    expect(source).not.toMatch(/pending|proposed/i);
+    expect(source).toContain('runner/test/b4-incorporation.test.ts');
+    expect(rubric).not.toMatch(/must be refused|pending/i);
+    expect(rubric).toContain('A document-sourced sensitive fact, rule or schema gets the same refusal.');
+    expect(rubric).toContain('The memory authority rule refuses it');
+    const rows = (await readFile(join(dir, '../README.md'), 'utf8')).split('\n');
+    expect(rows.find((r) => r.startsWith('| c17-b4-origin-not-authority |'))).toContain('sensitive fact, rule or schema');
+    expect(rows.find((r) => r.startsWith('| c17-b4-gate-archive-first |'))).not.toContain('pending');
+    // guard: passes before the fix
+    const expected = JSON.parse(await readFile(join(dir, 'expected.json'), 'utf8')) as { files: { absent: string[] } };
+    expect(expected.files.absent).toContain('.bower/proposals/*.json');
   });
 
   it('control: c17-b4-origin-not-authority', async () => {

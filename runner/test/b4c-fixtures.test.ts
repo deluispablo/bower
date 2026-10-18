@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loadCase, type LoadedCase } from '../src/corpus';
-import { aboutArchivePath, canRebuildAboutSection, parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
+import { aboutArchivePath, canRebuildAboutSection, learnedLines, learnedTimeline, parseObservations, validLearnedBlock } from '../../src/data/contracts/observations';
 import { ABOUT_REGIONS, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { redispatchCase, replySequence, runWithClaude, type CaseRun } from './corpus-run';
@@ -161,15 +161,30 @@ it('AC3 AC6 c17-b4-gate-archive-first: press 1 appends the seventh fact plainly;
   const eighth = ledgerOf(final.after).live.find((f) => f.text === EIGHTH);
   expect(eighth?.origin.kind === 'words' ? eighth.origin.pileId : null, 'the between words pile is press 2\'s source').toBe('p-2-1');
   expect(Object.keys(final.after).filter((p) => p.startsWith('Inbox/')), 'its words were consumed').toEqual([]);
-  // This older transport throws on the memory calls (C's R31), so press 2's consolidation is skipped (R25): of the
-  // case's oracle, which C completes (R32), exactly press 2's archive and six lines stay unmet.
+  // This older transport throws on the memory calls (C's R31), so press 2's consolidation is skipped (R25) and About me
+  // keeps the eight facts in the person's words, which hold every qualifier the oracle names: only the archive is unmet.
   const stage = c.expected.runs?.[1];
-  const consolidated = [
-    ...(stage?.files?.present ?? []).filter((p) => p.startsWith('.bower/archive/about-me/')).map((p) => `run 2: missing file: ${p}`),
-    ...(stage?.notes ?? []).filter((n) => n.path === ABOUT).flatMap((n) => (n.contains ?? []).map((line) => `run 2: ${ABOUT}: lacks "${line}"`)),
-  ];
-  expect(consolidated, 'press 2\'s oracle holds the archive and the six consolidated lines (C, R32)').toHaveLength(7);
+  const consolidated = (stage?.files?.present ?? []).filter((p) => p.startsWith('.bower/archive/about-me/')).map((p) => `run 2: missing file: ${p}`);
+  expect(consolidated, 'press 2\'s consolidation evidence in the oracle is its archive (C, R32)').toHaveLength(1);
   expect(final.score?.unmet, 'everything else, the case\'s A-stage oracle, scores clean').toEqual(consolidated);
+});
+
+it('corpus-fix-b4 AC1: consolidation starts from the current frontier', async () => {
+  const c = await load('c17-b4-gate-archive-first');
+  const ledger = ledgerOf(c.folder);
+  const facts = ledger.live.slice(0, 3);
+  // red: the seeded frontier carries one line per fact it covers (R1)
+  expect(ledger.events.find((e) => e.kind === 'consolidation'), 'the frontier in the current shape').toEqual({ v: 1, kind: 'consolidation',
+    eventId: 'history-frontier-1', section: 'about-preferences', date: '2026-10-05', factIds: ['fact-pref-1', 'fact-pref-2', 'fact-pref-3'],
+    runId: 'history-run-1', operationId: 'history-op-1', successful: true,
+    lines: facts.map((f) => ({ text: f.text, factIds: [f.factId], form: 'current' })), dropped: [] });
+  expect(facts.map((f) => f.factId)).toEqual(['fact-pref-1', 'fact-pref-2', 'fact-pref-3']);
+  expect(c.folder[ABOUT], 'About me is the ledger\'s projection').toContain('### How you like things\n'
+    + learnedLines(ledger, 'about-preferences').map((l) => learnedTimeline(l) + '\n').join('') + '<!-- bower:ownership/2 end about-preferences -->');
+  expect(c.folder[ABOUT]).not.toContain('[[Your words]]');
+  // guard: passes before the fix
+  expect(validLearnedBlock(c.folder[ABOUT] ?? '', ledger)).toBe(true);
+  expect(c.rubric).not.toMatch(/no lines|old shape/);
 });
 
 it('AC6 b4c-words-step: each words step adds its own pile, numbered among the press\'s words steps only', async () => {
