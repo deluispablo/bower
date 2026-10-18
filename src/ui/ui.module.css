@@ -211,8 +211,6 @@ textarea.field { padding: 12px 14px; resize: vertical; }
 .fieldBox :is(input, textarea):focus-visible { outline: none; }
 .fieldBox.stack { flex-direction: column; align-items: stretch; gap: 0; padding: 12px 14px; }
 .pill { border-radius: 999px; }
-.field::placeholder,
-.fieldBox ::placeholder { color: var(--text-muted); opacity: 1; }
 .field:focus-visible,
 .fieldBox:focus-visible,
 .fieldBox:has(input:focus-visible, textarea:focus-visible) { border-color: var(--text-muted); }

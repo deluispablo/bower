@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { shortDay } from '@/app/words';
 import { report, undoToast } from '@/ui/report';
 import { useStartRun } from '@/features/tidy/start-run';
@@ -52,6 +52,7 @@ export function BowerScreen() {
   const { data: requests } = requestsState;
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
+  const emptyId = useId();
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
@@ -163,7 +164,7 @@ export function BowerScreen() {
           ref={composerRef}
           rows={3}
           aria-label={kind === 'rule' ? 'The rule' : 'Your request'}
-          placeholder={kind === 'rule' ? 'Receipts go to Money, by month' : 'Put my visa papers together and tell me what is missing'}
+          placeholder={kind === 'rule' ? 'For example, receipts go to Money, by month' : 'For example, put my visa papers together and tell me what is missing'}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onFocus={() => setTyping(true)}
@@ -210,10 +211,11 @@ export function BowerScreen() {
           ) : (
             <span />
           )}
-          <Button size="sm" type="submit" disabled={busy || !text.trim()}>
+          <Button size="sm" type="submit" disabled={busy || !text.trim()} aria-describedby={!busy && !text.trim() ? emptyId : undefined}>
             <Icon name="send" size={16} /> {busy ? 'Sending…' : kind === 'rule' ? 'Keep this rule' : 'Send'}
           </Button>
         </div>
+        {!busy && !text.trim() && <p id={emptyId} className="muted">Write what you want first.</p>}
       </form>
 
       <LoadError state={requestsState} />
