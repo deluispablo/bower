@@ -78,11 +78,6 @@ describe('the swept replies still score', () => {
 
   it.each(CASES)('AC1 c06-sweep-a: %s still scores clean on its scripted replies', async (id) => {
     const c = await loadCase(join(CORPUS, id));
-    if (id === 'b23-hot-question-answer') { // The same setup as b23-hot-context's answer test: the case alone is not runnable scripted.
-      const visits = 'Resources/Housing/Home visits.md';
-      c.folder[visits] = (c.folder[visits] ?? '').replace('appointments', 'an appointment');
-      c.questions.push({ id: 'q-folder', text: 'Keep the garden notes together?', yes: 'Yes', no: 'No', askedAt: AT - 1 });
-    }
     const run = await runScripted(c);
     expect({ code: run.code, presses: (run.runs ?? []).map((r) => r.code) }).toEqual({ code: 0, presses: (run.runs ?? []).map(() => 0) });
     expect({ id, unmet: (run.score?.unmet ?? []).filter((line) => !line.startsWith('index.md: lacks "- [[')) }).toEqual({ id, unmet: [] });

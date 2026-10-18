@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
-import { AT, caseReplies, replySequence, type CaseRun } from './corpus-run';
+import { AT, caseReplies, replySequence, scoreCase, type CaseRun } from './corpus-run';
 import { HOT, empty, manifests, observe, pacing, redispatchCase, runOnDrive, setup, writes,
   type Observation } from './b23-hot-observe';
 
@@ -112,4 +112,32 @@ it('B3b hot: a lost maintain reply resumes the same manifest and writes hot once
   const done = await redispatchCase(c, resumed, 3, { pacing, claude: spawn, around: observe(drive, root, events) });
   expect(done.code).toBe(0);
   expect(writes(events, HOT)).toEqual([]);
+});
+
+it('corpus-fix-b23-hot AC2: hot refresh and recovery report actual effects', async () => {
+  const { c, drive, root } = await setup('b23-hot-evidence-only');
+  expect(c.rubric).not.toMatch(/report row is created|^Pending:/m);
+  expect(c.rubric).toContain("Bower's health note");
+  expect(c.expected.report?.created).toEqual(['Bower health.md']);
+  expect(c.folder[HOT]).toContain('Evergreen launch');
+  const events: Observation[] = [];
+  const spawn = vi.fn(caseReplies(c.id));
+  const first = await runOnDrive(c, drive, root, { pacing, claude: spawn, around: observe(drive, root, events) }, 1);
+  expect(first.code).toBe(0);
+  expect(writes(events, HOT)).toHaveLength(1);
+  expect(events.filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method) && !e.path.startsWith('.bower/'))
+    .map((e) => e.path)).toEqual(['Bower health.md']);
+  expect((first.lastRun as { run: { report: { created: Array<{ path: string }> } } }).run.report.created
+    .map((r) => r.path)).toEqual(['Bower health.md']);
+  expect(scoreCase(c, first).unmet).toEqual([]);
+  const calls = spawn.mock.calls.length;
+  events.length = 0;
+  const done = await redispatchCase(c, first, 2, { pacing, claude: spawn, around: observe(drive, root, events) });
+  expect(done.code).toBe(0);
+  expect(spawn).toHaveBeenCalledTimes(calls);
+  expect(events.filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method))).toEqual([]);
+  expect(done.after[HOT]).toBe(first.after[HOT]);
+  expect(done.after['.bower/last-run.json']).toBe(first.after['.bower/last-run.json']);
+  expect(manifests(done)).toEqual(manifests(first));
+  expect(scoreCase(c, done).unmet).toEqual([]);
 });

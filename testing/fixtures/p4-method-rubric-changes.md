@@ -153,7 +153,7 @@ Semantic review only: covers:model cases are not executed by the existing C04–
 | b23-summary-person-lint | agrees | Generated summaries are valid scalar metadata; personal missing summaries stay missing, with report-only lint deferred to B8 (R2, F2, F7). |
 | b23-hot-question-answer | agrees | The actual app answer settles the question identity; hot reflects that state and actual effects before done, never owns pending work (F3, F5, F10). |
 | b23-summary-words | agrees | A words-only note preserves primary prose while adding a one-line scalar summary; unrelated personal metadata is never adopted (F2, F7, R2). |
-| b23-hot-evidence-only | agrees | An instruction-only run rebuilds .bower/hot.md from primary evidence and settled outcomes, dropping unsupported claims without focus or report rows; script views have no archive (F3, F7, F10; TL-P4-42 Q5/Q8, TL-P4-45). |
+| b23-hot-evidence-only | agrees | An instruction-only run rebuilds .bower/hot.md from primary evidence and settled outcomes, dropping unsupported claims without focus or knowledge notes, with Bower's health note as the only report row; script views have no archive (F3, F7, F10; TL-P4-42 Q5/Q8, TL-P4-45). |
 
 ## B4 preparation verdicts — 2026-10-10
 

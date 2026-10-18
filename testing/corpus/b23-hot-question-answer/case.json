@@ -15,7 +15,15 @@
     }
   ],
   "journal": [],
-  "questions": [],
+  "questions": [
+    {
+      "id": "q-folder",
+      "text": "Keep the garden notes together?",
+      "yes": "Yes",
+      "no": "No",
+      "askedAt": 1791363599999
+    }
+  ],
   "bowerOwned": [
     "Projects/Flat hunt/Flat hunt.md"
   ],

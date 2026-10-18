@@ -6,7 +6,9 @@
       ".bower/hot.md"
     ],
     "absent": [
-      "Inbox/*"
+      "Inbox/*",
+      "index.md",
+      "hot.md"
     ]
   },
   "unchanged": [
@@ -52,7 +54,9 @@
           ".bower/hot.md"
         ],
         "absent": [
-          "Projects/Flat hunt/Appointment letter.txt"
+          "Projects/Flat hunt/Appointment letter.txt",
+          "index.md",
+          "hot.md"
         ]
       },
       "unchanged": [
@@ -75,9 +79,6 @@
       "report": {
         "filed": 0,
         "questionsExactly": 1,
-        "questions": [
-          "q-ask-f18"
-        ],
         "questionSubjects": [
           {
             "kind": "inbox",
@@ -94,7 +95,9 @@
           ".bower/hot.md"
         ],
         "absent": [
-          "Inbox/*"
+          "Inbox/*",
+          "index.md",
+          "hot.md"
         ]
       },
       "unchanged": [

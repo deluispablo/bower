@@ -329,16 +329,25 @@ it('B3b hot: hidden-only feed drains its cursor and leaves hot untouched', async
     .filter((op) => op.effect.kind === 'maintain')).toHaveLength(1); // Only bootstrap's maintain; cursor-only on press 2.
 });
 
-it('B3b hot: a Home answer removes only its settled Open thread', async () => {
+it('corpus-fix-b23-hot AC1: hot question lifecycle runs without allocation-dependent repairs', async () => {
   const { c } = await setup('b23-hot-question-answer');
-  const visits = 'Resources/Housing/Home visits.md';
-  c.folder[visits] = (c.folder[visits] ?? '').replace('appointments', 'an appointment');
-  c.questions.push({ id: 'q-folder', text: 'Keep the garden notes together?', yes: 'Yes', no: 'No', askedAt: AT - 1 });
+  expect(c.folder['index.md']).toBeUndefined();
+  expect(c.folder['hot.md']).toBeUndefined();
+  expect(c.folder['.bower/index.md']).toBeDefined();
+  expect(c.folder['.bower/hot.md']).toBeDefined();
+  expect(c.questions.map((q) => q.id)).toEqual(['q-folder']);
+  expect(c.expected.runs?.[0]?.report?.questions).toBeUndefined();
+  expect(c.expected.runs?.[0]?.report?.questionSubjects).toEqual([{ kind: 'inbox', path: 'Inbox/Please file this letter./Letter.txt' }]);
   const run = await runScripted(c);
   const first = run.runs?.[0];
   // Positive control: Home's real answer loop filed the letter and removed the authoritative question.
   expect(first?.code).toBe(0);
   expect(run.code).toBe(0);
+  expect(run.score?.unmet).toEqual([]);
+  for (const x of [first, run]) {
+    expect(x?.after['index.md']).toBeUndefined();
+    expect(x?.after['hot.md']).toBeUndefined();
+  }
   const firstQuestions = (JSON.parse(first?.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string }> }).questions;
   const letterId = Object.entries(first?.pathsById ?? {}).find(([, path]) => path === 'Inbox/Please file this letter./Letter.txt')?.[0];
   expect(letterId).toBeDefined();
@@ -346,12 +355,14 @@ it('B3b hot: a Home answer removes only its settled Open thread', async () => {
   expect(JSON.parse(run.after['.bower/questions.json'] ?? '{}') as unknown).toMatchObject({ questions: [expect.objectContaining({ id: 'q-folder' })] });
   expect(run.after['Projects/Flat hunt/Appointment letter.txt']).toBe(c.inboxFiles['Letter.txt']);
   const question = 'Is this appointment for the flat hunt?';
-  expect.soft(section(first?.after[HOT], 'Open threads').join('\n')).toContain(question);
-  expect.soft(run.after[HOT] ?? '').toContain('# Hot');
+  expect(section(first?.after[HOT], 'Open threads').join('\n')).toContain(question);
+  expect(run.after[HOT] ?? '').toContain('# Hot');
   expect(section(run.after[HOT], 'Open threads').join('\n')).not.toContain(question);
-  expect.soft(section(first?.after[HOT], 'Open threads').join('\n')).toContain('Keep the garden notes together?');
-  expect.soft(section(run.after[HOT], 'Open threads').join('\n')).toContain('Keep the garden notes together?');
-  expect.soft(section(run.after[HOT], 'Recent changes').join('\n')).toContain('Appointment letter');
+  expect(section(first?.after[HOT], 'Open threads').join('\n')).toContain('Keep the garden notes together?');
+  expect(section(run.after[HOT], 'Open threads').join('\n')).toContain('Keep the garden notes together?');
+  expect(section(run.after[HOT], 'Recent changes').join('\n')).toContain('Appointment letter');
+  expect(run.after['.bower/index.md']).toContain('- [[Home visits]] — Reference for an appointment when looking for a home.');
+  expect(run.after['.bower/index.md']).toContain('- [[Appointment letter]] — An appointment confirmed for Alex in Saltmere.');
 });
 
 it.each(['unused-baseline.json', 'unused-production-baseline.json'])(
