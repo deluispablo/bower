@@ -189,6 +189,7 @@ for (const how of ['Escape', 'Close'] as const) {
 
 test('a stopped tidy-up can be put away', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop side panel');
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await open(page, '/', 'fail-run');
   await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
