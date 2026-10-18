@@ -5,6 +5,7 @@ import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
 import { isRoot, thingName, findNode, parentOf, sortNodes } from '@/data/tree';
 import type { Note, TreeNode, TypeRow } from '@/data/types';
+import { PARA_ROOTS } from '@/data/contracts/types';
 import { plainLinks } from '@/data/contracts/links';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
@@ -31,6 +32,7 @@ export function FolderScreen() {
       return (
         <div className={s.filesPage}>
           <h1 className={s.pageTitle}>Files</h1>
+          <ParaEmpty />
           <PhoneBookmarks />
           <Explorer variant="page" />
         </div>
@@ -49,12 +51,24 @@ function InboxRedirect({ path }: { path: string }) {
   return <Navigate to={pile ? `/pile/${pile.id}` : '/'} replace />;
 }
 
+/** At the Files root, while the four main folders hold nothing: what each one is for. */
+function ParaEmpty() {
+  const { data: tree } = useTree();
+  if (!tree) return null;
+  const empty = PARA_ROOTS.filter((r) => r !== 'Inbox').every((r) => {
+    const node = tree.find((n) => n.path === r);
+    return !node || folderCount(node) === 0;
+  });
+  return empty ? <p className="muted">Bower files things here after a tidy-up. Projects have an end, Areas go on, Resources are for later, Archive is done.</p> : null;
+}
+
 function RootOverview() {
   const { data: tree } = useTree();
   return (
     <div className={s.page}>
       <h1 className={s.title}>Your Bower folder</h1>
       <p className="muted">In My Drive. Everything Bower files lives here.</p>
+      <ParaEmpty />
       <ul className={s.roots}>
         {(tree ?? []).filter((n) => n.type === 'folder').map((n) => (
           <li key={n.path}>

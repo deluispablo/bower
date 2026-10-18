@@ -176,7 +176,7 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: NOTE })).toBeVisible();
   await expect(timeline(page).filter({ hasText: MERGE_LINE })).toHaveCount(0);
   // A rule, kept: it waits for the next tidy-up at once, in your words.
-  await page.getByRole('link', { name: /^(Bower|Talk to Bower)$/ }).first().click();
+  await page.getByRole('link', { name: /^Ask$/ }).first().click();
   await page.getByRole('radio', { name: 'A rule' }).click();
   await page.getByRole('button', { name: RULE }).click();
   await page.getByRole('button', { name: 'Keep this rule' }).click();
@@ -201,9 +201,10 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   await home(page);
   await expect(page.getByRole('heading', { level: 1, name: /G'day/ })).toBeVisible();
   await expect(page.getByText('Keep one note for both?')).toHaveCount(0);
-  await page.getByRole('link', { name: /^(Bower|Talk to Bower)$/ }).first().click();
+  await page.getByRole('link', { name: /^Ask$/ }).first().click();
   const worded = page.getByRole('main').getByRole('listitem').filter({ hasText: WORDED });
-  await expect(worded).toContainText(`You wrote: "${RULE}"`);
+  await expect(worded).toContainText(`: '${RULE}'`);
+  await expect(worded).toContainText('From what you wrote on ');
   await expect(page.getByText('Waiting for the next tidy-up, where Bower words it clearly.')).toHaveCount(0);
 });
 

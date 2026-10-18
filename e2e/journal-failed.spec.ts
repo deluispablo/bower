@@ -25,6 +25,6 @@ test('a journal line refused in the background shows once in what failed on a ph
   await expect(main.getByText("Bower couldn't keep that rule.")).toHaveCount(0);
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  await expect(page.getByRole('heading', { name: 'Tell Bower' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ask Bower' })).toBeVisible();
   await expect(main.getByText("Bower couldn't keep that rule.")).toHaveCount(0);
 });

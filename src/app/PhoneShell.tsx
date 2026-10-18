@@ -61,7 +61,7 @@ export function PhoneShell() {
         </NavLink>
         <NavLink to="/bower" className={s.tb}>
           <BowerHead size={26} />
-          <span>Bower</span>
+          <span>Ask</span>
         </NavLink>
       </nav>
       <Sheet

@@ -85,7 +85,7 @@ test('focus: every route lands the keyboard on its h1, or on the control that na
     expect(await active(page), label).not.toMatch(/^BODY/);
   };
   // By keyboard through the top bar where a link exists.
-  for (const name of ['Add a pile', 'Talk to Bower', 'Settings', 'Home']) {
+  for (const name of ['Add a pile', 'Ask', 'Settings', 'Home']) {
     const link = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name }).first();
     if (!(await link.isVisible())) continue;
     const before = new URL(page.url()).pathname;

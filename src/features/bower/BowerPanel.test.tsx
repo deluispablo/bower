@@ -88,7 +88,7 @@ describe('what failed is found once on a note', () => {
     // A line is refused in the background: the panel turns to Bower, where it shows.
     failed = [{ id: 'L1', what: 'Moved Cooking to Archive', sentence: "Your change was made, but Bower couldn't make a note of it." }];
     listeners.forEach((l) => l());
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true'));
     expect(await screen.findByText("Your change was made, but Bower couldn't make a note of it.")).toBeInTheDocument();
     // Once: the person goes back to the links, and the panel stays there.
     fireEvent.click(screen.getByRole('tab', { name: 'Linked notes' }));
@@ -137,7 +137,7 @@ describe('what failed is found once, and focus stays with the person', () => {
     });
     failed = [{ id: 'L2', what: 'Moved Cooking to Archive', sentence: "Your change was made, but Bower couldn't make a note of it." }];
     changed();
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true'));
     // Turned once, then marked seen where what failed is kept, so the next page load knows.
     await waitFor(() => expect(seen).toEqual(['L2']));
     // A failure already turned to on an earlier load (seen) does not turn the panel again.
@@ -158,8 +158,8 @@ describe('what failed is found once, and focus stays with the person', () => {
     expect(document.activeElement).toBe(link);
     failed = [{ id: 'L4', what: 'Moved Taxes to Money', sentence: "Your change was made, but Bower couldn't make a note of it." }];
     changed();
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Bower' })));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Activity' })));
     expect(document.activeElement).not.toBe(document.body);
   });
 });

@@ -130,6 +130,7 @@ function NoteView({ path }: { path: string }) {
         </p>
       )}
       <h1 className={s.title}>{note.title}</h1>
+      {path === 'About me.md' && <p className="muted">Bower reads this note to understand you.</p>}
       {note.summary && (
         <p className={s.summary}>
           <Inline text={note.summary} link={link} />
