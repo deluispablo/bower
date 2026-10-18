@@ -196,6 +196,15 @@ record the method re-check, not an executed model result.
     its pile, and nothing waits; the current source's venue line reaches the model and the filed source keeps its
     bytes. Covers stays model in every case.
 
+## Corpus clean changes (`corpus-fix-b4`)
+
+13. **c17-b4-gate-archive-first and c17-b4-origin-not-authority.** Reason: the corpus audit (a seeded frontier in an
+    old shape with no lines, a six-sentence oracle tied to one reply, a reply that dropped a preference, and an origin
+    case described as unproven). Now: the frontier shows its three facts as lines and About me matches the ledger; press
+    2 archives the section before the ledger write, keeps all eight facts in the ledger and each qualifier in its line,
+    and is scored on its archive, the ledger and short qualifier phrases. A document-sourced preference, sensitive
+    fact, rule or schema is refused by the origin rule. Covers stays model in both cases.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.
@@ -227,7 +236,7 @@ No existing rubric, expectation or threshold changes. C17 is still outside the m
 | --- | --- | --- |
 | c17-b4-forget-no-return | agrees | Points 1–8 agree: reuse About me, remove only the identified derived fact through a durable tombstone, preserve immutable sources/history, no irrelevant links/type proposals, bounded reads and actual update rows; TL-P4-39 F4 supersedes append-only treatment of this derived memory region. |
 | c17-b4-origin-not-authority | agrees | Points 1–8 agree: trusted words supply one qualified preference, clear offer fits Job hunt with immutable source and a relevant hub link; no document-created preference, sensitive inference, rule or schema, no redundant memory note, bounded reads and truthful rows (F7). |
-| c17-b4-gate-archive-first | agrees | Points 1–8 agree under TL-P4-39 addendum 2: record observations immediately, consolidate only over budget and at five new observations, preserve primary facts/conditions and archive first; the proposed 200-word section budget awaits the lead and is not a changed method threshold. |
+| c17-b4-gate-archive-first | changed | Points 1–8 agree under TL-P4-39 addendum 2: record observations immediately, consolidate only over the section's 200-word budget (set by `ABOUT_SECTIONS`) and at five new observations, keep every primary fact and its conditions, and archive first. The budget is a section bound, not a method threshold. |
 
 B4c refresh (2026-10-14, b4c-fixtures): the three cases are rewritten in the landed ledger grammar with made-up seeded
 history; their verdicts stand. The own-text deletion case was dropped (TL-P4-48 Q3) with its verdict row.

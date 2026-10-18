@@ -854,8 +854,40 @@ describe('B4c-c through production main', () => {
     }, undefined, true);
     const final = await runWithClaude(c, spawn);
     const first = final.runs?.[0];
+    const prefs = ledgerOf(final).live.filter((x) => x.section === 'about-preferences');
+    const live = prefs.map((x) => x.factId);
+    const event = consolidationsOf(final)[0] as { lines?: Array<{ text: string; factIds: string[] }>; operationId?: string } | undefined;
+    // red: every qualified fact keeps its qualifier in the line citing it and in About me (R4)
+    const QUALIFIERS: Array<[string, number]> = [
+      ['except when a role offers regular mentoring', 1],
+      ['amber gate', 4],
+      ['I do not want tools left on the path', 8],
+      ['never guess a new serving size', 5],
+      ['never treat a maybe plan as a booked trip', 6],
+      ['keep each source apart', 7],
+      ['stays not sure until I add the words that settle it', 7],
+    ];
+    for (const [q, n] of QUALIFIERS) {
+      expect(event?.lines?.find((l) => l.factIds.includes(live[n - 1] ?? '-'))?.text, `the line citing fact ${n} keeps "${q}"`).toContain(q);
+      expect(region(final.after[ABOUT], 'about-preferences').payload, `About me keeps "${q}"`).toContain(q);
+    }
+    const reply7 = (JSON.parse(await readFile(join(dir, 'consolidation-reply.json'), 'utf8')) as { lines: Line[] }).lines[5];
+    expect(reply7?.text, 'line 6 is fact 7 word for word').toBe(PREFS[6]);
+    expect(prefs.map((x) => x.text), 'the ledger keeps the eight facts word for word').toEqual(PREFS);
+    for (const text of PREFS) expect(final.after[LEDGER]).toContain(JSON.stringify(text));
+    expect(consolidationsOf(final)).toHaveLength(1);
+    expect(event).toMatchObject({ kind: 'consolidation', section: 'about-preferences', successful: true, factIds: live, dropped: [] });
+    expect(event?.lines?.flatMap((l) => l.factIds).sort(), 'each live fact cited exactly once').toEqual([...live].sort());
     expect(calls).toEqual(['selection', 'execution', ...CONSOLIDATING]);
     expect(archives(final).map((p) => final.after[p])).toEqual([region(first?.after[ABOUT], 'about-preferences').payload]);
+    // guard: passes before the fix
+    const ops = manifestOf(final).operations;
+    const archiveAt = ops.findIndex((op) => op.effect.kind === 'create-text' && op.effect.purpose === 'about-archive');
+    const ledgerAt = ops.findIndex((op) => op.effect.kind === 'write-runner-json' && op.effect.path === LEDGER);
+    expect(archiveAt).toBeGreaterThanOrEqual(0);
+    expect(archiveAt, 'the archive comes before the ledger write').toBeLessThan(ledgerAt);
+    expect(ops[ledgerAt]?.dependsOn).toContain(ops[archiveAt]?.operationId);
+    expect(event?.operationId, 'the consolidation names the archive').toBe(ops[archiveAt]?.operationId);
     expect(region(final.after[ABOUT], 'about-preferences').lines).toHaveLength(6);
     expect(final.score?.unmet).toEqual([]);
     const done = await redispatchCase(c, final, 2, { claude: () => { throw new Error('A done redispatch must not call a model.'); } });

@@ -1,7 +1,7 @@
 # Gate and archive before replacement
 
 How you like things holds six of Alex's preferences, over the 200-word budget. A successful consolidation frontier
-follows the first three (B4a's old shape, with no lines), so three facts are newer than it.
+follows the first three and shows each of them as its own line, so three facts are newer than it.
 
 Press 1 takes Alex's words from the Inbox and records the seventh preference as an ordinary learned line: four facts
 newer than the frontier do not open the gate, so About me shows seven plain lines in Alex's words and no archive is
@@ -13,7 +13,8 @@ into six shorter lines, each naming its facts by number (`consolidation-reply.js
 one judge call on another tier supports each of them against only its own facts (`judge-reply.json`). The section as
 press 1 left it is archived under `.bower/archive/about-me/about-preferences/` first, then the run's one ledger write
 ends with the consolidation naming that archive, and About me shows the six lines. Keep every live fact and its
-qualifications (the mentoring exception, the amber gate, the maybe plan); an archive is never authority.
+qualifications (the mentoring exception, the amber gate and the tools on the path, the serving size never guessed, the
+maybe plan, each source kept apart); an archive is never authority.
 
 Method points 1–8 agree under TL-P4-39's narrowed derived-memory method, without changing sources or app surfaces.
 

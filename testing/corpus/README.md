@@ -159,8 +159,8 @@ ids that are never admitted. Case 4 (own text deletion) was dropped (TL-P4-48 Q3
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
 | c17-b4-forget-no-return | C17 / B4 | model | TL-P4-39; F4: trusted Forget by quote, one tombstone, no return from the same source or an archive |
-| c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; a document-sourced preference is refused |
-| c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five; words added between presses; consolidation stage pending |
+| c17-b4-origin-not-authority | C17 / B4 | model | TL-P4-39; F7: qualified person preference versus instruction-shaped offer; a document-sourced preference, sensitive fact, rule or schema is refused by the origin rule |
+| c17-b4-gate-archive-first | C17 / B4 | model | TL-P4-39; F4: over-budget gate at four/five; words added between presses; press 2 archives the section first, then consolidates |
 
 ## B11 preparation cases — 2026-10-10
 
