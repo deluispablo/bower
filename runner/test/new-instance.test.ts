@@ -182,7 +182,8 @@ describe('tidy.yml', () => {
     const cache = at(/uses: actions\/cache@[0-9a-f]{40}\b/);
     const step = steps[cache] ?? '';
     expect(step).toMatch(/\n {8}id: cache-claude-cli\n/);
-    expect(step).toMatch(/\n {8}if: vars\.BOWER_PROVIDER == 'claude'\n/);
+    // F10-region R2: a self-hosted runner keeps ~/claude-cli in its home, so the cache step runs only on GitHub's runners.
+    expect(step).toMatch(/\n {8}if: vars\.BOWER_PROVIDER == 'claude' && runner\.environment == 'github-hosted'\n/);
     expect(step).toMatch(/\n {10}path: ~\/claude-cli\n/);
     expect(step).toMatch(/\n {10}key: claude-code-\$\{\{ runner\.os \}\}-\$\{\{ env\.CLAUDE_CODE_VERSION \}\}(\n|$)/);
     // Installed only on a miss, into the folder the cache keeps; on the path either way.
@@ -233,5 +234,10 @@ describe('tidy.yml', () => {
     expect(step).toContain('BOWER_RUNNER_REGION=');
     // It cannot fail the job.
     expect(step).toMatch(/\n {8}continue-on-error: true\n/);
+    // F10-region R1: Azure's metadata service exists only on GitHub's runners; a self-hosted one skips the probe.
+    expect(step).toMatch(/\n {8}if: runner\.environment == 'github-hosted'\n/);
+    // R7: the header says both steps are skipped on a self-hosted runner.
+    const header = tidy.slice(0, tidy.indexOf('\nname: '));
+    expect(header).toMatch(/self-hosted runner[^.]*skip/);
   });
 });
