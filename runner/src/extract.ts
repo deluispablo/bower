@@ -29,7 +29,7 @@ const TEXT = new Set(['.md', '.markdown', '.txt', '.text', '.csv', '.url']);
 const PICTURE = new Set(['.jpg', '.jpeg', '.png', '.gif', '.heic', '.heif', '.webp', '.tif', '.tiff', '.bmp']);
 
 /** A file name's extension, lower case, with its dot; '' when it has none. */
-const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
+export const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
 
 /**
  * Whether the runner reads this thing's text at all, by its name and its listed size (`size`, when Drive gives one),

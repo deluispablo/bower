@@ -5,6 +5,7 @@ import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
 import { isRoot, thingName, findNode, parentOf, sortNodes } from '@/data/tree';
 import type { Note, TreeNode, TypeRow } from '@/data/types';
+import { plainLinks } from '@/data/contracts/links';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
 import { ago, plural, agoInSentence } from '@/app/words';
@@ -184,9 +185,6 @@ function Folder({ path }: { path: string }) {
     </div>
   );
 }
-
-/** Inside a link card, wikilinks read as their names. */
-const plainLinks = (t: string): string => t.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, a: string, b?: string) => b ?? a);
 
 function PhoneBookmarks() {
   const bookmarks = useBookmarks();

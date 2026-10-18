@@ -47,7 +47,7 @@ import { failureKind } from '../../src/data/drive/transport';
 import { inSetFolder, setMembers, type SetNote } from './views';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../../src/data/contracts/note-templates';
 import { markerText, parseTimelineLine } from '../../src/data/contracts/timeline-line';
-import { formerNames, linkTarget } from '../../src/data/contracts/links';
+import { WIKI_LINK, formerNames, linkTarget } from '../../src/data/contracts/links';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
@@ -55,13 +55,13 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
-import { B_FAILURE, SHORTEN_SKIPPED, WIKI_LINK, assignedTags, authoredLinks, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, authoredLinks, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RECENT, RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, recentRows } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { DriveFile } from '../../src/data/drive/drive-api';
-import { extract, readable } from './extract';
+import { extensionOf, extract, readable } from './extract';
 import { sha256Sync } from '../../src/data/contracts/hashes';
 import { outsideAdmitted } from './spine/admitted';
 import { LedgerExhausted, RunTiming, type CallKind, type ModelStats } from './timing';
@@ -981,9 +981,6 @@ async function forModel(read: ScriptedRead, run: ScriptedRun, all: Admitted, asi
 
 /** A pile's things: its admitted files, but a pile folder's notes (its words). */
 const thingsOf = (p: Admitted['taken']['piles'][number]): Admitted['taken']['piles'][number]['items'] => p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE));
-
-/** A file name's extension, lower case, with its dot; '' when it has none. */
-const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
 
 /**
  * Bidi controls and invisible characters (Unicode UAX #9 explicit formatting; Trojan Source, CVE-2021-42574): a name
