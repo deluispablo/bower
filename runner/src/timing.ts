@@ -59,6 +59,8 @@ export interface SelectionFacts {
   cut: number;
   wants: readonly string[];
   required: number;
+  /** The source's selection limit (`SELECTION_NOTES`: 5, or 10 for a request). */
+  limit: number;
   destination: string | null;
   of: number | null;
   isNew: boolean;
@@ -128,7 +130,7 @@ export class RunTiming {
   /** The accepted selection's row for one source (called only after the whole reply validated). */
   addSelection(f: SelectionFacts): void {
     this.selections.push(`selection: source=${six(f.source)} candidates=${f.candidates.map((c) => `${six(c.id)}:${c.tag}`).join(',') || 'none'} cut=${f.cut}`
-      + ` wants=${f.wants.map(six).join(',') || 'none'} required=${f.required}/5 destination=${f.destination === null ? 'none' : six(f.destination)}`
+      + ` wants=${f.wants.map(six).join(',') || 'none'} required=${f.required}/${f.limit} destination=${f.destination === null ? 'none' : six(f.destination)}`
       + ` of=${f.of ?? 'none'} new=${f.isNew ? 1 : 0}`);
   }
   /** B1d's one ledger (B12 R23): 200 ordinary operations, and 1,000 in all with a map's (`mapped` of the `count`). */

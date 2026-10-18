@@ -82,7 +82,7 @@ Bower marks what it wrote with `appProperties.by = bower`, and what the latest t
 
 ## What carries over from the second brain
 
-PARA folders; three layers (immutable original, source note, compiled notes); one-line `summary:` in every note feeding `index.md`; `hot.md` as the short focus file; `log.md` append-only; tiered reading (hot, index, summaries, then at most five notes per source); classify before reading; the value gate (a document that only confirms a fact updates a line, not a new note); fit, create, ask; contradictions kept as callouts; never write ID numbers; one report with numbered yes/no questions, asked again until answered; a manifest per run so a tidy-up can be undone.
+PARA folders; three layers (immutable original, source note, compiled notes); one-line `summary:` in every note feeding `index.md`; `hot.md` as the short focus file; `log.md` append-only; tiered reading (hot, index, summaries, then at most five notes per source, ten for a request); classify before reading; the value gate (a document that only confirms a fact updates a line, not a new note); fit, create, ask; contradictions kept as callouts; never write ID numbers; one report with numbered yes/no questions, asked again until answered; a manifest per run so a tidy-up can be undone.
 
 ## UI that follows from this
 

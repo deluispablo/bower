@@ -1,7 +1,7 @@
 /**
  * qa-prod-2-diag: the timing output says, per source, what the provider offered the model and what it picked, as
  * hashed ids only (OWASP Logging Cheat Sheet, "data to exclude": no path, name, request word or token reaches a log).
- * Row: `selection: source=<h> candidates=<h:tag,...|none> cut=<n> wants=<h,...|none> required=<n>/5 destination=<h|none> of=<i|none> new=<0|1>`.
+ * Row: `selection: source=<h> candidates=<h:tag,...|none> cut=<n> wants=<h,...|none> required=<n>/<5, or 10 for a request> destination=<h|none> of=<i|none> new=<0|1>`.
  * `cut` counts only the provider's own final cut of its merged list (`VaultIndex.neighbourhood` already bounds itself at 12).
  * Made-up folders only.
  */
@@ -23,7 +23,7 @@ const h = (id: string): string => sha256Sync(id).slice(0, 6);
 type Printed = { consoleLines: string[] };
 const lines = (r: Printed): string[] => r.consoleLines.flatMap((l) => l.split('\n'));
 const selections = (r: Printed): string[] => lines(r).filter((l) => l.startsWith('selection:'));
-const SHAPE = /^selection: source=([0-9a-f]{6}) candidates=(none|[0-9a-f]{6}:(?:p|f|n\d+)(?:,[0-9a-f]{6}:(?:p|f|n\d+))*) cut=(\d+) wants=(none|[0-9a-f]{6}(?:,[0-9a-f]{6})*) required=(\d)\/5 destination=([0-9a-f]{6}|none) of=(\d+|none) new=([01])$/;
+const SHAPE = /^selection: source=([0-9a-f]{6}) candidates=(none|[0-9a-f]{6}:(?:p|f|n\d+)(?:,[0-9a-f]{6}:(?:p|f|n\d+))*) cut=(\d+) wants=(none|[0-9a-f]{6}(?:,[0-9a-f]{6})*) required=(\d+)\/(?:5|10) destination=([0-9a-f]{6}|none) of=(\d+|none) new=([01])$/;
 interface Row { ids: string[]; tags: string[]; cut: number; wants: string[]; required: number; destination: string; of: string; isNew: string }
 /** The row for one source: its fixed syntax is itself asserted. */
 function rowFor(r: Printed, source: string): Row {

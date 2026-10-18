@@ -152,7 +152,7 @@ describe('c09-answers', () => {
   // Figures (2026-10-16 prior-art audit): a count, total or difference computed from the linked sources is allowed; a figure
   // stated as coming from one source must appear in it.
   const COMPUTED = '[[Cobble Row flat]] costs 130 more a month than [[Larkspur Lane flat]], 3,030 for the two together.';
-  const bad: Array<{ name: string; kind: string; why: string; words?: string; wants?: string[]; entry: (ctx: Ctx) => Promise<unknown> | unknown; good?: string }> = [
+  const bad: Array<{ name: string; kind: string; why: string; words?: string; wants?: string[]; entry: (ctx: Ctx) => Promise<unknown> | unknown; good?: string; done?: string }> = [
     { name: 'an unknown key', kind: 'answerKeys', why: KEYS, entry: (ctx) => ({ requestId: ctx.asked[COMMUTE], text: GOOD, uses: [] }) },
     { name: 'no text', kind: 'answerKeys', why: KEYS, entry: (ctx) => ({ requestId: ctx.asked[COMMUTE] }) },
     { name: 'a request that is not one of this run\'s', kind: 'answerBinding', why: BINDING, entry: async (ctx) => ({ requestId: await ctx.id(LARK), text: GOOD }) },
@@ -196,9 +196,11 @@ describe('c09-answers', () => {
       entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] says its rent is £1580 a month.' }), good: COMPUTED },
     { name: 'a figure past the shown cut', kind: 'numbers', why: numbers('1,999'), words: DEPOSIT, wants: [LONG],
       entry: (ctx) => ({ requestId: ctx.asked[DEPOSIT], text: '[[Letting agent notes]] says the deposit is 1,999.' }),
-      good: 'Bower found no deposit in the part of [[Letting agent notes]] it read.' },
+      good: 'Bower found no deposit in the part of [[Letting agent notes]] it read.',
+      // brain-14 R3-1: its wanted note was cut and three other candidates stayed unread, so code adds Bower's limit line.
+      done: 'Bower found no deposit in the part of [[Letting agent notes]] it read. Bower read 1 of the 4 notes that may matter here, so some may be missing.' },
   ];
-  it.each(bad)('AC2 c09-answers-refusals: $name is refused once with its own kind and reason; the corrected reply applies', async ({ kind, why, words = COMMUTE, wants = SHOWN_BOTH, entry, good = GOOD }) => {
+  it.each(bad)('AC2 c09-answers-refusals: $name is refused once with its own kind and reason; the corrected reply applies', async ({ kind, why, words = COMMUTE, wants = SHOWN_BOTH, entry, good = GOOD, done = good }) => {
     const f = await folder();
     const run = await press(f, [words], wants, async (ctx, attempt) => {
       if (attempt > 0) return answer(ctx.asked[words] ?? '', good);
@@ -206,7 +208,7 @@ describe('c09-answers', () => {
       return { ...empty, answers: Array.isArray(value) ? value : [value] };
     });
     expect(refusals().slice(0, 2)).toEqual([kind, why]);
-    expect(doneFor(run, words)).toEqual([good]);
+    expect(doneFor(run, words)).toEqual([done]);
   });
 
   // Ruling 18: a sentence with no link takes the links of the nearest earlier sentence, so a total after two links is computed.
