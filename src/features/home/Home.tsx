@@ -20,7 +20,7 @@ import { Button } from '@/ui/Button';
 import { FieldError, fieldBox, Textarea } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
+import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, RUNNING_WAITS, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -76,7 +76,10 @@ export function Home() {
   const pilesState = usePiles();
   const { data: read } = pilesState;
   const { data: listed } = usePilesListed();
-  const piles = pilesState.error ? undefined : read ?? listed ?? undefined;
+  // A full read kept from before a pile was added does not hide it: the newer listing adds the piles that read lacks.
+  const piles = pilesState.error ? undefined : read && listed
+    ? [...read, ...listed.filter((l) => !read.some((p) => p.id === l.id))].sort((a, b) => b.createdAt - a.createdAt)
+    : read ?? listed ?? undefined;
   // Which piles are ready is known only from the full read: the listed Inbox shows without a count, and the Tidy up
   // button and its number wait for that read, so neither can drop or move once the person can press it.
   const ready = !pilesState.error && read !== undefined;
@@ -277,7 +280,7 @@ function YourChanges({ running }: { running: boolean }) {
         Since the last tidy-up
       </h2>
       <p className="muted" style={{ fontSize: 15 }}>
-        Bower reads {list.length === 1 ? 'this change' : `these ${list.length} changes`} in the next tidy-up, so it knows what you changed and where to look.
+        {running ? RUNNING_WAITS : `Bower reads ${list.length === 1 ? 'this change' : `these ${list.length} changes`} in the next tidy-up, so it knows what you changed and where to look.`}
       </p>
       <ul className={s.changes}>
         {list.slice(-5).reverse().map((c) => (
