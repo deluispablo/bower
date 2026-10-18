@@ -4,7 +4,7 @@ import { resize } from './viewport';
  * entry of the QA list with "task": "qa-10", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -19,9 +19,8 @@ test('a situation opened by its address starts clean: no earlier tabs, main fold
   await page.getByRole('menuitem', { name: 'Open in a new tab' }).click();
   await expect(page.locator('[data-tab]')).toHaveCount(2);
   await open(page, '/', 'first');
-  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
-  await page.getByRole('button', { name: 'Skip' }).click();
-  await expect(page.locator('[data-tab]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click({ timeout: 10_000 });
+  await expect(page.locator('[data-tab]')).toHaveCount(1, { timeout: 15_000 });
   for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) {
     await expect(tree.getByRole('treeitem', { name: new RegExp(`^${name}`) }), name).toHaveAttribute('aria-expanded', 'false');
   }
@@ -188,13 +187,25 @@ test('no Remove while a tidy-up runs: the menu says to wait', async ({ page, isM
   await expect(page.getByRole('menuitem', { name: /after the tidy-up/ })).toBeVisible();
 });
 
-test('coming back says welcome back: the folder is still there', async ({ page }) => {
+test('coming back asks first, then says welcome back: the folder is still there', async ({ page }) => {
   await open(page, '/settings');
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await page.getByRole('dialog', { name: 'Delete your Bower account?' }).getByRole('button', { name: 'Delete my account' }).click();
   await page.getByRole('button', { name: 'Continue with Google' }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText(/Your Bower folder is still in your Drive/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where Bower keeps things' })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Your Bower folder is still in My Drive, with everything in it.')).toBeVisible();
+  await page.getByRole('button', { name: 'Open Bower' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  // The old folder is found, never made twice: one Bower folder in the pretend Drive's root, with its contents.
+  if (isFake) {
+    const kept = await page.evaluate(() => {
+      const files = (JSON.parse(sessionStorage.getItem('bower:fake:default') ?? '{"files":[]}') as { files: Array<{ meta: { name: string; folder?: boolean; parents: string[] }; trashed: boolean }> }).files;
+      return files.filter((f) => f.meta.folder && f.meta.name === 'Bower' && f.meta.parents[0] === 'root' && !f.trashed).length;
+    });
+    expect(kept).toBe(1);
+  }
 });
 
 test('a link that is not one is said so, next to the box', async ({ page }) => {
@@ -215,13 +226,6 @@ test('words agree: a stopped run is "The tidy-up stopped" everywhere', async ({ 
   await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
   await page.keyboard.press('Escape');
   await expect(page.getByText(/Tidy-up stopped/)).toHaveCount(0);
-});
-
-test('words agree: the tour says Press, which fits a click and a tap', async ({ page }) => {
-  await open(page, '/', 'first');
-  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
-  await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByRole('heading', { name: 'Press Tidy up' })).toBeVisible();
 });
 
 test('words agree: a rename says so, and says why a slash became a dash', async ({ page, isMobile }) => {

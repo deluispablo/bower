@@ -1,164 +1,170 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router';
+import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
-import { BowerError, PARA_ROOTS, type ParaRoot } from '@/data/types';
-import { paraColor } from '@/app/paths';
-import { PoseBower } from '@/bird/Bower';
+import { BowerError } from '@/data/types';
 import { Button } from '@/ui/Button';
-import { Icon } from '@/ui/Icon';
 import { toHeading } from '@/ui/focus';
-import { LoadError } from '@/ui/LoadError';
+import { SetupScene } from './SetupScene';
 import s from './welcome.module.css';
 
-const MEANING: Record<ParaRoot, string> = {
-  Inbox: 'Where new things wait for a tidy-up',
-  Projects: 'Things with an end, like a flat hunt',
-  Areas: 'Things that go on: home, money, health',
-  Resources: 'Things for later: recipes, manuals',
-  Archive: 'Things that are done',
-};
+type View = 'checking' | 'unread' | 'ask' | 'creating' | 'found';
+type Fail = { kind: 'look' | 'make' | 'out'; message: string };
+type Target = 'title' | 'retry' | 'consent';
 
-const STEPS = [
-  { title: 'Throw it in', text: 'Add photos, PDFs, links and notes as they come. Group the ones that belong together and say what they are.' },
-  { title: 'Press Tidy up', text: 'Bower reads each one, names it, writes what matters into your notes and files it. About 5 minutes; close the app if you like.' },
-  { title: 'Find it later', text: 'Everything lives in your own Drive, in folders you can open anywhere, in any notes app.' },
-];
-
-const TOURED = 'bower:toured';
-function markToured(): void {
-  cameBack = false;
-  try {
-    sessionStorage.setItem(TOURED, '1');
-  } catch {
-    // expected: Without storage, Back may show the tour once more.
-  }
-}
-function toured(): boolean {
-  try {
-    return sessionStorage.getItem(TOURED) === '1';
-  } catch {
-    // expected: storage may be blocked (a private window); the default holds.
-    return false;
-  }
-}
+const MADE = 'Your Bower folder could not be made. Try again.';
+const OPENED = 'Your Bower folder could not be opened. Try again.';
+const OUT = 'Bower could not sign you out. Try again.';
 
 /**
- * First sign-in: Bower makes the folder, then shows the three ideas. Once
- * toured, Welcome goes Home, but only while the folder exists: with no
- * folder, Home would send back here (a loop), so the folder is made again.
+ * First sign-in: Bower says what it will make and makes it only when asked. Reading the folder never makes it;
+ * a press makes it (`Session.createFolder` also finds an old folder again). Reading, making and signing out each
+ * retry on their own, one action at a time.
  */
-/** The folder was found, not made: kept while the welcome remounts once the folder is ready. */
-let cameBack = false;
-
-export function Welcome({ missing = false }: { missing?: boolean }) {
-  if (toured() && !missing) return <Navigate to="/" replace />;
-  return <WelcomeSteps />;
-}
-
-function WelcomeSteps() {
+export function Welcome() {
   const { session } = useSources();
   const nav = useNavigate();
-  const [made, setMade] = useState<ParaRoot[]>([]);
-  const [ready, setReady] = useState(false);
-  const [back, setBack] = useState(cameBack);
-  // Each step is a history entry, so the phone's back button goes back a step.
-  const [params, setParams] = useSearchParams();
-  const step = Math.min(STEPS.length - 1, Math.max(-1, Number(params.get('step') ?? -1)));
-  // Finishing replaces the entry and marks the tour done, so Back after it does not show it again.
-  const setStep = (n: number): void => setParams({ step: String(n) });
+  const [params] = useSearchParams();
+  const legacy = useRef(params.has('step'));
+  const [view, setView] = useState<View>('checking');
+  const [fail, setFail] = useState<Fail | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const errorId = useId();
+  /** An action is under way: checked at once, before React shows it, so a second press does nothing. */
+  const busy = useRef(false);
   const started = useRef(false);
-  const [error, setError] = useState<BowerError | null>(null);
-  const progressId = useId();
-  // A step change (not the first render of a deep link) puts the keyboard on the new heading.
-  const title = useRef<HTMLHeadingElement>(null);
-  const shownStep = useRef(step);
-  useEffect(() => {
-    if (shownStep.current === step) return;
-    shownStep.current = step;
-    if (title.current) toHeading(title.current);
-  }, [step]);
 
-  // One attempt at a time: the mount starts it once, and LoadError's Try again starts it again after a failure.
-  const attempt = useCallback(() => {
-    setError(null);
+  // Keyboard targets, applied after the change shows, and only while focus is still on what was pressed or
+  // what this moved it to (or has fallen away): focus the person placed elsewhere stays there.
+  const title = useRef<HTMLHeadingElement>(null);
+  const retry = useRef<HTMLButtonElement>(null);
+  const consent = useRef<HTMLButtonElement>(null);
+  const mine = useRef<Element | null>(null);
+  const want = useRef<Target | null>(null);
+  useEffect(() => {
+    const to = want.current;
+    if (!to) return;
+    want.current = null;
+    const el = { title: title.current, retry: retry.current, consent: consent.current }[to];
+    const at = document.activeElement;
+    if (!el || (at && at !== document.body && at.isConnected && at !== mine.current)) return;
+    mine.current = el;
+    if (to === 'title') toHeading(el);
+    else el.focus({ preventScroll: true });
+  });
+  const act = (e: MouseEvent<HTMLButtonElement>, then: () => void): void => {
+    if (busy.current) return;
+    mine.current = e.currentTarget;
+    then();
+  };
+
+  /** Reads only. `again`: the person asked again, so the keyboard follows the answer. */
+  const look = useCallback((again: boolean) => {
+    busy.current = true;
+    setFail(null);
+    setView('checking');
     void session
       .folderState()
-      .then(async (st) => {
-        if (st === 'ready') {
-          setMade([...PARA_ROOTS]);
-          setReady(true);
+      .then((st) => {
+        if (st === 'ready' && legacy.current) {
+          nav('/', { replace: true });
           return;
         }
-        const { found } = await session.createFolder((r) => setMade((m) => [...m, r]));
-        cameBack = found;
-        setBack(found);
-        setReady(true);
+        if (again) want.current = st === 'ready' ? 'title' : 'consent';
+        setView(st === 'ready' ? 'found' : 'ask');
       })
       .catch((e: unknown) => {
         console.error(e);
-        setError(e instanceof BowerError ? e : new BowerError('unknown', 'Your Bower folder could not be opened. Try again.'));
+        if (again) want.current = 'retry';
+        setFail({ kind: 'look', message: e instanceof BowerError ? e.message : OPENED });
+        setView('unread');
+      })
+      .finally(() => {
+        busy.current = false;
       });
-  }, [session]);
+  }, [session, nav]);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    attempt();
-  }, [attempt]);
+    look(false);
+  }, [look]);
 
-  if (step >= 0) {
-    const st = STEPS[step];
-    return (
-      <main className={s.page}>
-        <p id={progressId} className="sr-only">{`Step ${step + 1} of ${STEPS.length}`}</p>
-        <div className={s.dots} aria-hidden="true">
-          {STEPS.map((_, i) => (
-            <span key={i} className={i === step ? s.dotOn : ''} />
-          ))}
-        </div>
-        <PoseBower pose={(['carry', 'read', 'proud'] as const)[step] ?? 'idle'} size={150} />
-        <h1 ref={title} aria-describedby={progressId} className={s.title}>{st?.title}</h1>
-        <p className={s.text}>{st?.text}</p>
-        <div className={s.foot}>
-          <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : (markToured(), nav('/add', { replace: true })))}>
-            {step + 1 < STEPS.length ? 'Next' : 'Add your first pile'}
-          </Button>
-          <Button variant="ghost" block onClick={() => (markToured(), nav('/', { replace: true }))}>
-            {step + 1 < STEPS.length ? 'Skip' : 'Look around first'}
-          </Button>
-        </div>
-      </main>
-    );
-  }
+  const make = (): void => {
+    busy.current = true;
+    // Making again after a failure: the retry button leaves, so the keyboard goes to the heading.
+    if (fail) want.current = 'title';
+    setFail(null);
+    setView('creating');
+    void session
+      .createFolder(() => undefined)
+      .then(({ found }) => {
+        if (!found) {
+          nav('/', { replace: true });
+          return;
+        }
+        want.current = 'title';
+        setView('found');
+      })
+      .catch((e: unknown) => {
+        console.error(e);
+        want.current = 'retry';
+        setFail({ kind: 'make', message: MADE });
+        setView('ask');
+      })
+      .finally(() => {
+        busy.current = false;
+      });
+  };
+
+  const leave = (): void => {
+    busy.current = true;
+    if (fail) want.current = 'title';
+    setFail(null);
+    setLeaving(true);
+    void session
+      .signOut()
+      .then(() => nav('/sign-in', { replace: true }))
+      .catch((e: unknown) => {
+        console.error(e);
+        want.current = 'retry';
+        setFail({ kind: 'out', message: OUT });
+        setLeaving(false);
+        busy.current = false;
+      });
+  };
+
+  const blocked = leaving || fail?.kind === 'out';
+  const again = fail?.kind === 'look' ? () => look(true) : fail?.kind === 'make' ? make : leave;
+  const heading = { checking: 'Checking your Drive', unread: 'Where Bower keeps things', ask: 'Where Bower keeps things', creating: 'Where Bower keeps things', found: 'Welcome back' }[view];
 
   return (
     <main className={s.page}>
-      <div className={s.head}>
-        <PoseBower pose={ready ? 'proud' : 'carry'} size={96} />
-        <div>
-          <h1 ref={title} className={s.title}>{back ? 'Welcome back' : ready ? 'Your folder is ready' : 'Making your Bower folder'}</h1>
-          <p className="muted">{back ? 'Your Bower folder is still in your Drive, with everything in it.' : ready ? 'It is called Bower, in My Drive.' : 'In your Google Drive. A few seconds.'}</p>
+      <SetupScene pose={view === 'creating' ? 'carry' : view === 'found' ? 'proud' : 'idle'} />
+      <h1 ref={title} className={s.title}>{heading}</h1>
+      {(view === 'ask' || view === 'creating') && (
+        <p className={s.text}>
+          Bower makes one new folder called Bower in My Drive. Everything it files goes in there, and you can open it in Drive any time. Nothing outside it moves.
+        </p>
+      )}
+      {view === 'found' && <p className={s.text}>Your Bower folder is still in My Drive, with everything in it.</p>}
+      {fail && (
+        <div role="alert" className={s.error}>
+          <p id={errorId}>{fail.message}</p>
+          <Button ref={retry} variant="ghost" aria-describedby={errorId} onClick={(e) => act(e, again)}>Try again</Button>
         </div>
-      </div>
-      <ul className={s.folders} aria-live="polite">
-        {PARA_ROOTS.map((r) => (
-          <li key={r} className={made.includes(r) ? s.in : s.out}>
-            <span className={s.ftile} style={{ color: paraColor(r) }}>
-              <Icon name="folder" size={20} />
-            </span>
-            <span className={s.fmain}>
-              <span className={s.fname}>{r}</span>
-              <span className="muted">{MEANING[r]}</span>
-            </span>
-            {made.includes(r) && <Icon name="check" size={20} stroke={2.4} className={s.check} />}
-          </li>
-        ))}
-      </ul>
+      )}
       <div className={s.foot}>
-        <LoadError state={{ error, reload: attempt }} />
-        <Button block disabled={!ready} onClick={() => setStep(0)}>
-          Show me around
-        </Button>
+        {view === 'found' && <Button ref={consent} block onClick={(e) => act(e, () => nav('/', { replace: true }))}>Open Bower</Button>}
+        {(view === 'ask' || view === 'creating') && fail?.kind !== 'make' && (
+          <Button ref={consent} block disabled={view === 'creating' || blocked} onClick={(e) => act(e, make)}>
+            {view === 'creating' ? 'Making it…' : 'Make my Bower folder'}
+          </Button>
+        )}
+        {view !== 'found' && (
+          <Button variant="ghost" block disabled={view === 'checking' || view === 'creating' || blocked} onClick={(e) => act(e, leave)}>
+            Not now, sign out
+          </Button>
+        )}
       </div>
     </main>
   );

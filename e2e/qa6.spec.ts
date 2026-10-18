@@ -146,15 +146,15 @@ test('signing out and in sticks', async ({ page }) => {
 
 test('first sign-in can be chosen again', async ({ page }) => {
   await open(page, '/', 'first');
-  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Make my Bower folder' }).click({ timeout: 10_000 });
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   await page.getByRole('button', { name: 'Demo situations' }).click();
   await page.getByLabel('Alex, with piles waiting').click();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await page.getByRole('button', { name: 'Demo situations' }).click();
   await page.getByLabel('First sign-in: no Bower folder yet').click();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  await expect(page.getByRole('heading', { name: 'Your folder is ready' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Make my Bower folder' })).toBeVisible({ timeout: 10_000 });
 });
 
 test('the bookmark toast says where bookmarks are', async ({ page, isMobile }) => {
