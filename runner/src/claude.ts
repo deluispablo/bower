@@ -57,7 +57,7 @@ import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
 import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, authoredLinks, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
-import { MAX_NAME, NAME_BREAKERS } from '../../src/data/contracts/tree';
+import { MAX_NAME, NAME_BREAKERS, nameOf } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RECENT, RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, recentRows } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -2004,6 +2004,21 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }
     return null;
   };
+  // prod1-answer-links (R2): a shown note's path (with or without .md), its <name>.md or a shown original's whole path,
+  // standing alone in the answer's words outside links and not in the request's own words: it must be cited by a link.
+  const pathInWords = (a: AnswerIn): boolean => {
+    const words = replaceLinks(a.text, () => ' ').toLowerCase();
+    const request = (seen.requests?.get(a.requestId)?.text ?? '').toLowerCase();
+    const alone = (c: string): boolean => {
+      for (let i = words.indexOf(c); i >= 0; i = words.indexOf(c, i + 1)) {
+        if (!/[\p{L}\p{N}]$/u.test(words.slice(0, i)) && !/^[\p{L}\p{N}]/u.test(words.slice(i + c.length))) return true;
+      }
+      return false;
+    };
+    return [...seen.notes].flatMap((p) => [p, ...(p.includes('/') ? [p.replace(/\.md$/, '')] : []), nameOf(p)])
+      .concat([...seen.fileTexts?.keys() ?? []].filter((p) => p.includes('/')))
+      .map((c) => c.toLowerCase()).some((c) => !request.includes(c) && alone(c));
+  };
   const Answer = AnswerShape.superRefine(inOrder<AnswerIn>([
     rule('answerBinding', (a) => seen.requests?.has(a.requestId) === true),
     rule('answerBinding', (a) => !answered.has(seen.requests?.get(a.requestId)?.id ?? '') && !bound.has(a.requestId)),
@@ -2020,6 +2035,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       }
       return null;
     },
+    rule('noteLink', (a) => !pathInWords(a) || "a note or file path written in the answer's words: link each note or file you used as [[its name]], or [[its whole path]] when the name is shared"),
     rule('numbers', (a) => {
       const n = figureIn(a.text, a.requestId);
       return !n || quoting(`a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
