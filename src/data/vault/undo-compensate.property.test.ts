@@ -296,7 +296,7 @@ async function oracle(m: Model, r: Real): Promise<void> {
   const things = new Map<string, string | null>(r.baselineThings);
   const rules = new Set(r.baselineRules);
   // TL-P4-27 addendum 4(7): independent Drive-only replay in at order.
-  // Addendum 3: pairsOf affects rows/counts ONLY; replay must apply BOTH lines.
+  // Addendum 3: for moves and Bin restores pairsOf affects rows/counts only and replay applies both lines; rule lines cancel (addendum 6, qa4-undo-remove-rule).
   for (const line of lines) {
     if (line.kind === 'rule') {
       if (line.removes) rules.delete(line.removes);

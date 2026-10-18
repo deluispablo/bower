@@ -34,15 +34,19 @@ export function isJournalRecord(v: unknown): v is JournalRecord {
 
 /**
  * The ids of the lines that fold as pairs among `lines` (TL-P4-27 addenda 3 and 4 (2)): every line whose `undoes` names a
- * line in the set, and that line. Two inverses of one original fold with it as one pair. The one home for pairing, used
- * by "Since the last tidy-up" and by the run report; presentation and counting only, never a cancellation: a run still
- * applies both lines in order. An inverse whose original is not among `lines` (taken by an earlier run) is ordinary.
+ * line in the set, and that line, while the inverse stands: an inverse undone in turn pairs nothing, so its original
+ * stands (qa4-undo-remove-rule R3, R10). Two inverses of one original fold with it as one pair. The one home for
+ * pairing, used by "Since the last tidy-up" and by the run report. For moves and Bin restores it is presentation and
+ * counting only: a run still applies both lines in order. Rule lines that pair cancel (R2): the rule list and the run's
+ * rules wording leave them out, since a removal and its re-add are not the identity on Rules.md. An inverse whose
+ * original is not among `lines` (taken by an earlier run) is ordinary.
  */
 export function pairsOf(lines: readonly JournalRecord[]): Set<string> {
   const ids = new Set(lines.map((l) => l.id));
+  const undone = new Set(lines.flatMap((l) => (l.undoes === undefined ? [] : [l.undoes])));
   const out = new Set<string>();
   for (const l of lines) {
-    if (l.undoes === undefined || !ids.has(l.undoes)) continue;
+    if (l.undoes === undefined || !ids.has(l.undoes) || undone.has(l.id)) continue;
     out.add(l.id).add(l.undoes);
   }
   return out;
