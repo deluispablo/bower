@@ -47,6 +47,16 @@ describe('F11 public log', () => {
     expect(seen.mock.calls[1]?.[1]).toBe(3);
   });
 
+  it('string arguments get the path rewrite too', () => {
+    const seen = vi.fn();
+    vi.spyOn(console, 'error').mockImplementation(seen);
+    const restore = installPublicLog();
+    console.error(`x ENOENT ${home}/a`);
+    restore();
+    expect(seen.mock.calls[0]).toEqual(['x ENOENT …/a']);
+    expect(publicLine(`y ${home}/b`)).toBe('y …/b');
+  });
+
   it('a run end why and error print with no stack', () => {
     const seen = vi.fn();
     vi.spyOn(console, 'error').mockImplementation(seen);

@@ -394,7 +394,7 @@ function hidePaths(text: string): string {
 
 /** One public log line for an Error: the sentence, ` (code)`, `: cause sentence`; never a stack or an absolute path. Other values pass through. */
 export function publicLine(x: unknown): string {
-  if (!(x instanceof Error)) return typeof x === 'string' ? x : String(x);
+  if (!(x instanceof Error)) return typeof x === 'string' ? hidePaths(x) : String(x);
   const code = x instanceof BowerError ? ` (${x.code})` : '';
   const cause = x.cause instanceof Error ? `: ${x.cause.message}` : '';
   return hidePaths(`${x.message}${code}${cause}`);
@@ -408,7 +408,7 @@ export function publicationFailedLine(error: unknown): string {
 /** Wraps `console.error` so an Error argument prints its `publicLine`; returns the restore. */
 export function installPublicLog(): () => void {
   const original = console.error;
-  console.error = (...args: unknown[]) => original(...args.map((a) => (a instanceof Error ? publicLine(a) : a)));
+  console.error = (...args: unknown[]) => original(...args.map((a) => (a instanceof Error || typeof a === 'string' ? publicLine(a) : a)));
   return () => {
     console.error = original;
   };
