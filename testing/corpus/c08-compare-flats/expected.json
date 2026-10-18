@@ -17,8 +17,23 @@
   "notes": [
     {
       "path": "Projects/Flat hunt/Flats on the shortlist, compared.md",
+      "contains": [
+        "| Flat | Rent | Commute | Status |",
+        "## Sources\n\n- [[Flat 3, 12 Larkspur Lane]]\n- [[Flat 7, Cobble Row]]\n- [[Flat 2, 40 Tanners Walk]]\n<!-- bower:ownership/2 end document -->"
+      ],
       "timeline": [
         "Written for a request you made."
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "path": "Projects/Flat hunt/Flats on the shortlist, compared.md",
+      "header": ["Flat", "Rent", "Commute", "Status"],
+      "rows": [
+        ["[[Flat 3, 12 Larkspur Lane]]", "£1,450 a month", "24 min", "viewing done"],
+        ["[[Flat 7, Cobble Row]]", "£1,580 a month", "18 min", "viewing booked"],
+        ["[[Flat 2, 40 Tanners Walk]]", "£1,390 a month", "35 min", "maybe"]
       ]
     }
   ],

@@ -1,4 +1,5 @@
 /** C08a through production main: a request answered by a new document note, written once in a shown folder (c08-documents AC1-AC8). */
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,9 +10,9 @@ import { fakeRead } from '../../src/data/spine/read';
 import { B_FAILURE, listedPiles, planScripted, resultNoteKey, runKeys, type Decisions, type RequestPlan } from '../../src/data/spine/scripted';
 import { SYSTEM } from '../../src/data/vault/layout';
 import type { ClaudeSpawn } from '../src/claude';
-import { loadCase, type LoadedCase } from '../src/corpus';
+import { loadCase, score, type LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { frameOf, promptOf, runOnDrive, runScripted, seedCase, type CaseRun } from './corpus-run';
+import { caseReplies, frameOf, promptOf, runOnDrive, runScripted, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const DAY = Date.UTC(2026, 9, 7, 9);
@@ -197,6 +198,61 @@ describe('c08-documents', () => {
     const text = run.after[join(HUNT, 'Flats on the shortlist, compared.md')] ?? '';
     expect(bowerNoteRole(text)).toBe('document');
     expect(text).toContain('<!-- bower:ownership/2 begin document -->\n| Flat | Rent | Commute | Status |\n');
+  });
+
+  it('corpus-fix-c08 AC1: comparison checks factual cells missing values and citations', async () => {
+    const CORPUS = resolve(import.meta.dirname, '../../testing/corpus');
+    const P = `${HUNT}/Flats on the shortlist, compared.md`;
+    const c = await loadCase(join(CORPUS, 'c08-compare-flats'));
+    const run = await runScripted(c);
+    expect(run.code).toBe(0);
+    expect(run.score).toEqual({ pass: true, unmet: [] });
+    const t = run.after[P] ?? '';
+    const THREE = '| [[Flat 3, 12 Larkspur Lane]] |';
+    const SEVEN = '| [[Flat 7, Cobble Row]] |';
+    const TANNERS = '| [[Flat 2, 40 Tanners Walk]] | £1,390 a month | 35 min | maybe |';
+    const LAST = '- [[Flat 2, 40 Tanners Walk]]\n<!--';
+    const mutations: Array<[string, string, string]> = [
+      ['wrong', t.replace('| £1,580 a month |', '| £1,500 a month |'), `tables ${P}: rows`],
+      ['empty', t.replace('| 35 min |', '|  |'), `tables ${P}: rows`],
+      ['invented', t.replace(TANNERS, `${TANNERS}\n| [[Flat hunt]] | £1,400 a month | 20 min | maybe |`), `tables ${P}: rows`],
+      ['swapped', t.replace(THREE, '\0').replace(SEVEN, THREE).replace('\0', SEVEN), `tables ${P}: rows`],
+      ['extra source', t.replace(LAST, '- [[Flat 2, 40 Tanners Walk]]\n- [[Flat hunt]]\n<!--'), `${P}: lacks "## Sources`],
+      ['missing source', t.replace(LAST, '<!--'), `${P}: lacks "## Sources`],
+    ];
+    for (const [name, mutated, line] of mutations) {
+      expect(mutated, name).not.toBe(t);
+      expect(mutated, name).toContain('| Flat | Rent | Commute | Status |');
+      const s = score({ expected: c.expected, before: c.folder, after: { ...run.after, [P]: mutated }, lastRun: run.lastRun });
+      expect(s.pass, name).toBe(false);
+      expect(s.unmet.some((u) => u.startsWith(line)), `${name}: ${s.unmet.join('; ')}`).toBe(true);
+    }
+    // Guard: an invented value for a fact that is missing fails c08-compare-missing-fact's own oracle.
+    const m = await loadCase(join(CORPUS, 'c08-compare-missing-fact'));
+    const mr = await runWithClaude(m, caseReplies('c08-compare-missing-fact'));
+    expect(mr.score?.pass).toBe(true);
+    const MP = `${HUNT}/Shortlist comparison.md`;
+    const mt = mr.after[MP] ?? '';
+    for (const value of ['| 1,580 |', '| 0 |']) {
+      const mutated = mt.replace('| Not stated |', value);
+      expect(mutated, value).not.toBe(mt);
+      const s = score({ expected: m.expected, before: m.folder, after: { ...mr.after, [MP]: mutated }, lastRun: mr.lastRun });
+      expect(s.pass, value).toBe(false);
+      expect(s.unmet.some((u) => u.startsWith(`tables ${MP}: rows`)), `${value}: ${s.unmet.join('; ')}`).toBe(true);
+    }
+  });
+
+  it('corpus-fix-c08 AC3: revision is described as an unimplemented lifecycle', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c08-revise-keeps-personal-text'));
+    expect(c.covers).toBe('model');
+    expect(existsSync(join(c.dir, 'replies.json'))).toBe(false);
+    expect(c.rubric.startsWith('Unsupported today: Bower has no operation that revises a generated document')).toBe(true);
+    expect(c.rubric).toContain('Bower creates the comparison through the planner, Alex edits its personal text, Alex asks for the revision, and a replay with nothing new changes nothing');
+    expect(c.rubric).not.toMatch(/^Revise the existing|until the lead rules|prep's exact empty reply|future driver/m);
+    const log = readFileSync(resolve(import.meta.dirname, '../../testing/fixtures/p4-method-rubric-changes.md'), 'utf8');
+    const row = log.split('\n').find((l) => l.startsWith('| c08-revise-keeps-personal-text |')) ?? '';
+    expect(row).toMatch(/^\| c08-revise-keeps-personal-text \| changed \| .*unsupported/i);
+    expect(row).not.toContain('revise the same sourced comparison');
   });
 
   it('AC7 c08-documents-prompt: the execution prompt gives the documents grammar when the run took a request', async () => {

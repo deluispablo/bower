@@ -22,10 +22,10 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c07-dated-rent-change | changed | Points 1, 3, 7: the dated terms fit the flat note as one ordinary sourced line, with no marker and no question; Current state rewrites stay with C05's ownership rules. |
 | c07-same-period-rent | changed | Points 1, 3, 4, 7: one Contradiction line gives both figures, cites the later listing and links the earlier one; no winner, no question, no source note. |
 | c07-tentative-closure | changed | Points 1, 3, 4, 7: one Uncertain line keeps the condition, cites the notice and links the booking; no cancellation, no question, no source note. |
-| c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |
+| c08-compare-flats | changed | Every cell and the whole Sources list are scored, so a wrong, missing or invented value or source fails. |
 | c08-compare-missing-fact | agrees | Points 1, 3, 4 and 7: the requested comparison fits the existing project, links its hub and sources, states the missing deposit honestly, and its briefing changes no existing facts. |
 | c08-report-with-sources | changed | Points 3, 4 and 7: the sourced report links its hub, but the rubric must allow updating Bower-owned hub state where the briefing changes it; expected.json is unchanged and still pins the hub under this rubric-only scope. |
-| c08-revise-keeps-personal-text | agrees | Points 2, 3 and 4: revise the same sourced comparison, retain personal text and earlier history, append a truthful revision line, and preserve unchanged source notes. |
+| c08-revise-keeps-personal-text | changed | Revising a generated document is unsupported today; the case records create, personal edit, asked revision and replay as a requirement only. |
 | c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
 | c10-denied-keeps-prior-result | agrees | With web permission off there is no new evidence to change a note; saved sources stay immutable and the report explains the denial (points 3, 7, 8). |
@@ -169,6 +169,14 @@ record the method re-check, not an executed model result.
    the "repeat" was a line already in the seed. Now: each hub gets one line from its own evidence, and the repeat is a
    second arrival after the first run, whose line is already there. The scripted replies replace the demo plan for these
    two cases; the demo itself is unchanged.
+
+## Corpus clean changes (`corpus-fix-c08`)
+
+10. **c08-compare-flats, `expected.json` and `rubric.md`; c08-revise-keeps-personal-text, `rubric.md`.** Reason: the
+    corpus audit (a comparison oracle that checked only the header and the links; a revision case worded as supported).
+    Now: the comparison's exact rows and its whole Sources list are scored. The revision case says it is unsupported
+    today and keeps the create, personal edit, asked revision and replay lifecycle as a requirement; its expected.json is
+    that requirement, not a result. Covers stays model.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
