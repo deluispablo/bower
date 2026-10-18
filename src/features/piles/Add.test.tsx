@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { NewPile, Pile, FileKind } from '@/data/types';
+import { toast } from '@/ui/toast';
 import { loadingSources } from '@/testing/loading-sources';
 import { Add } from './Add';
 import { forget, get, keep } from './draft-files';
@@ -232,4 +233,102 @@ it('an Add draft with unavailable bytes keeps every member before saving (failed
   expect(get(laterKey)).toBeUndefined(); expect(get(readyKey)).toBeUndefined();
   expect(sessionStorage.getItem('bower:add-items')).toBeNull(); expect(sessionStorage.getItem('bower:add-draft')).toBeNull();
   expect(screen.getByLabelText('Current route')).toHaveTextContent('/');
+});
+
+// Leaving Add while it saves: the save and the person's place (prod1-capture).
+let settle: (() => void) | undefined;
+// Hooks run last-in first-out, so this settles a held save before the first afterEach cleans up.
+afterEach(async () => { await act(async () => settle?.()); settle = undefined; });
+const failure = new Error('Synthetic admission refused.');
+function renderHeld(members: DraftFixture[], outcome: 'resolve' | 'reject') {
+  const addPile = vi.fn((input: NewPile) => new Promise<Pile>((ok, no) => { settle = outcome === 'resolve' ? () => ok(admitted(input)) : () => no(failure); }));
+  sessionStorage.setItem('bower:add-draft', context);
+  if (members.length) sessionStorage.setItem('bower:add-items', JSON.stringify(members));
+  const base = loadingSources();
+  const view = render(<MemoryRouter initialEntries={['/add']}><DataProvider sources={{ ...base, vault: { ...base.vault, addPile, duplicates: async () => [] } }}><CurrentRoute /><Link to="/elsewhere">Go elsewhere</Link><Link to="/add">Go to Add</Link><Routes><Route path="/add" element={<Add />} /><Route path="/" element={<p>Saved inbox page</p>} /><Route path="/elsewhere" element={<p>Somewhere else</p>} /></Routes></DataProvider></MemoryRouter>);
+  return { addPile, view };
+}
+const route = () => screen.getByLabelText('Current route');
+const press = (name: RegExp | string = /^Add .*to the inbox$/) => act(async () => { fireEvent.click(screen.getByRole('button', { name })); });
+const go = (name: string) => act(async () => { fireEvent.click(screen.getByRole('link', { name })); });
+const release = () => act(async () => settle?.());
+const wordsOnly: DraftFixture[] = [];
+const things = [readyMember, linkMember];
+const withBytes = (members: DraftFixture[]) => { if (members.includes(readyMember)) keep(readyKey, new Blob(['SYNTHETIC_READY_BYTES'])); };
+
+it.each([
+  { case: 'words only', members: wordsOnly, said: 'Your note is in the inbox' },
+  { case: 'a file and a link', members: things, said: '2 things in the inbox' },
+])('leaving_add_during_save_keeps_the_person_where_they_went ($case)', async ({ members, said }) => {
+  withBytes(members);
+  const { addPile } = renderHeld(members, 'resolve');
+  await press();
+  await go('Go elsewhere');
+  expect(route()).toHaveTextContent('/elsewhere');
+  await release();
+  expect(route()).toHaveTextContent('/elsewhere');
+  expect(addPile).toHaveBeenCalledOnce();
+  expect(vi.mocked(toast)).toHaveBeenCalledExactlyOnceWith(said, { label: 'Tidy up now', run: expect.any(Function) });
+  expect(sessionStorage.getItem('bower:add-draft')).toBeNull();
+  expect(sessionStorage.getItem('bower:add-items')).toBeNull();
+  expect(get(readyKey)).toBeUndefined();
+});
+
+it('returning_to_add_during_save_shows_it_still_saving', async () => {
+  withBytes(things);
+  const { addPile, view } = renderHeld(things, 'resolve');
+  await press();
+  await go('Go elsewhere');
+  await go('Go to Add');
+  expect(route()).toHaveTextContent('/add');
+  for (const name of ['What is this?', 'Paste a link']) expect(screen.getByRole('textbox', { name })).toBeDisabled();
+  const zone = screen.getByText('Saving this pile…').parentElement; if (!zone) throw new Error('The drop surface is missing.');
+  expect(zone).toHaveAttribute('aria-disabled', 'true');
+  for (const name of ['Saving…', 'Choose files', 'Take a photo', 'Add link', 'Take outline.txt out', 'Take source.example out']) expect(screen.getByRole('button', { name })).toBeDisabled();
+  for (const input of view.container.querySelectorAll('input[type="file"]')) expect(input).toBeDisabled();
+  const before = sessionStorage.getItem('bower:add-items');
+  await press('Saving…');
+  await act(async () => { fireEvent.drop(zone, { dataTransfer: { files: [new File(['x'], 'later.txt')] } }); });
+  expect(addPile).toHaveBeenCalledOnce();
+  expect(sessionStorage.getItem('bower:add-items')).toBe(before);
+  await release();
+  // The follower leaves Add for the inbox: nothing of the draft is left in the box or in storage.
+  expect(route()).toHaveTextContent('/');
+  expect(screen.queryByRole('textbox', { name: 'What is this?' })).toBeNull();
+  expect(sessionStorage.getItem('bower:add-draft')).toBeNull();
+  expect(sessionStorage.getItem('bower:add-items')).toBeNull();
+  expect(vi.mocked(toast)).toHaveBeenCalledOnce();
+});
+
+it('an_add_opened_after_the_save_settled_starts_fresh (guard)', async () => {
+  const { addPile } = renderHeld(wordsOnly, 'resolve');
+  await press();
+  await go('Go elsewhere');
+  await release();
+  await go('Go to Add');
+  expect(route()).toHaveTextContent('/add');
+  const box = screen.getByRole('textbox', { name: 'What is this?' });
+  expect(box).toHaveValue(''); expect(box).toBeEnabled();
+  await act(async () => { fireEvent.change(box, { target: { value: 'Second note' } }); });
+  expect(screen.getByRole('button', { name: 'Add to the inbox' })).toBeEnabled();
+  await press();
+  expect(addPile).toHaveBeenCalledTimes(2);
+  expect(route()).toHaveTextContent('/');
+});
+
+it.each([{ leave: true }, { leave: false }])('a_failed_save_after_leaving_says_so_and_keeps_the_words (guard, leave: $leave)', async ({ leave }) => {
+  const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const { addPile } = renderHeld(wordsOnly, 'reject');
+  await press();
+  if (leave) await go('Go elsewhere');
+  await release();
+  if (leave) await go('Go to Add');
+  expect(vi.mocked(toast)).toHaveBeenCalledExactlyOnceWith('That did not save. Try again.');
+  expect(diagnostic).toHaveBeenCalledExactlyOnceWith(failure);
+  expect(sessionStorage.getItem('bower:add-draft')).toBe(context);
+  expect(route()).toHaveTextContent('/add');
+  const box = screen.getByRole('textbox', { name: 'What is this?' });
+  expect(box).toBeEnabled(); expect(box).toHaveValue(context);
+  await press();
+  expect(addPile).toHaveBeenCalledTimes(2);
 });
