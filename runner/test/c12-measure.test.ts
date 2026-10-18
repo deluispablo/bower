@@ -23,6 +23,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); paging.size = oldPag
 const printed = (r: { consoleLines: string[] }): string[] => r.consoleLines.flatMap((l) => l.split('\n'));
 const runLine = (r: { consoleLines: string[] }): string => printed(r).find((l) => l.startsWith('timing:')) ?? '';
 const callLines = (r: { consoleLines: string[] }): string[] => printed(r).filter((l) => l.startsWith('model-call:'));
+const selectionLines = (r: { consoleLines: string[] }): string[] => printed(r).filter((l) => l.startsWith('selection:'));
 
 describe('model usage in the timing output (c12-measure)', () => {
   it('AC1 c12-measure-cache-split: ModelStats keeps cache reads and writes apart and the run line ends with cache=r/w', async () => {
@@ -68,7 +69,8 @@ describe('model usage in the timing output (c12-measure)', () => {
     const r = await run(b, [select(b), fileIntent(b)]);
     const logged = r.consoleLines.filter((l) => l.includes('model-call:'));
     expect(logged, 'printed once, with the run line').toHaveLength(1);
-    expect(logged[0]?.split('\n')).toEqual([runLine(r), ...callLines(r)]);
+    expect(selectionLines(r), 'the accepted selection\'s rows (qa-prod-2-diag), after the call lines').toHaveLength(b.sources.length);
+    expect(logged[0]?.split('\n')).toEqual([runLine(r), ...callLines(r), ...selectionLines(r)]);
     expect(callLines(r)).toHaveLength(2);
   });
 

@@ -2647,6 +2647,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     });
     for (const line of shownTook.taken.journal) items.push({ itemId: line.fileId, words: await read.readText(line.fileId) });
     const sources: Array<(typeof items)[number] & { ids: string[] }> = [];
+    // qa-prod-2-diag: each source's candidates with their tags and the provider's own cut, for the accepted selection's rows.
+    const offers = new Map<string, { candidates: Array<{ id: string; tag: string }>; cut: number }>();
     const pinsFor = (itemId: string): string[] => [...new Set([
       ...answers.filter((a) => a.sourceId === itemId || subjectKey(a.question) === itemId).flatMap(answerPins),
       ...shown.requestNotes?.[itemId] ?? [],
@@ -2690,8 +2692,15 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       // At most 12 notes a source: the pins first (never dropped), the profiles, then the neighbourhood and its maps' members.
       const pins = [...new Set([...pinned, ...Object.values(shown.requestNotes ?? {}).flat(), ...pinsFor(source.itemId)])].filter((id) => indexed[id]);
       const profiles = listing.filter((file) => !file.folder && file.appProperties?.profile && file.appProperties.by === 'bower').map((file) => file.id);
-      const kept = [...new Set([...pins, ...profiles, ...notes.filter((id) => !originals[id])])].filter((id) => indexed[id]).slice(0, Math.max(12, pins.length));
-      sources.push({ ...source, ids: [...kept, ...(waiting ? [] : nearOriginals())] });
+      const merged = [...new Set([...pins, ...profiles, ...notes.filter((id) => !originals[id])])].filter((id) => indexed[id]);
+      const kept = merged.slice(0, Math.max(12, pins.length));
+      const beside = waiting ? [] : nearOriginals();
+      sources.push({ ...source, ids: [...kept, ...beside] });
+      // nK: the one-based place in the expanded neighbourhood (maps before their members, then the originals), before the merge and the cut.
+      // shortcut: `cut` counts only this cut; `neighbourhood` already bounds itself at 12, so cut=0 is not exhaustive retrieval.
+      const rank = [...new Set([...notes.filter((id) => indexed[id] && !originals[id]), ...beside])];
+      offers.set(source.itemId, { cut: merged.length - kept.length, candidates: [...kept, ...beside].map((id) => ({ id,
+        tag: pins.includes(id) ? 'p' : profiles.includes(id) ? 'f' : `n${rank.indexOf(id) + 1}` })) });
     }
     await captureMaps(sources.flatMap((source) => source.ids));
     shown.sources = sources.map((source) => ({ itemId: source.itemId, candidates: source.ids }));
@@ -2739,7 +2748,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       candidates: [...cardIds, ...leftOut, ...Object.keys(originals)], folders: folders.map((f) => ({ id: f.id, hubId: hubId(f.id) })),
       pinned: Object.fromEntries(sources.map((s) => [s.itemId,
         answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
+    // The validator's own set size per item of the last check; only the accepted reply's is published.
+    const requiredBy = new Map<string, number>();
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
+      requiredBy.clear();
       const result = selectionOf(value, context);
       if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
       // A cut map cannot show that a new folder is needed: that item waits unplaced, nothing is created (TL-P4-47 Q6).
@@ -2756,6 +2768,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const profile = profileFor(rowFor(item))?.id;
         const required = [...new Set([...item.wants, ...context.pinned[item.itemId] ?? [], ...(hub ? [hub] : []),
           ...(profile ? [profile] : [])])];
+        requiredBy.set(item.itemId, required.length);
         if (required.length > 5) return no('selectionWants');
         if (typeof item.destination !== 'string') {
           const destination = item.destination;
@@ -2894,6 +2907,15 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       timing.setInputFingerprint(sha256Sync(normalizeModelInput(`${system}\n${inputSelection}`)).slice(0, 12));
       timing.setSectionHashes(calculateSectionHashes(shown));
       const selection = await twice(inputSelection, 'selection', selectionCheck);
+      // Published only now, once the whole reply validated: a refused attempt never reaches the timing output.
+      for (const source of sources) {
+        const item = selection.value.items.find((i) => i.itemId === source.itemId);
+        const offer = offers.get(source.itemId);
+        const to = item && (typeof item.destination === 'string' ? item.destination : item.destination.parentId);
+        const at = typeof item?.destination === 'string' ? offer?.candidates.findIndex((c) => ix.byId(c.id)?.parents.includes(to ?? '')) ?? -1 : -1;
+        timing.addSelection({ source: source.itemId, candidates: offer?.candidates ?? [], cut: offer?.cut ?? 0, wants: item?.wants ?? [],
+          required: item ? requiredBy.get(source.itemId) ?? 0 : 0, destination: to ?? null, of: at < 0 ? null : at + 1, isNew: typeof item?.destination === 'object' });
+      }
       await captureMaps(Object.values(selection.allowedTargets).flat());
       // Read profile bytes first so notesShown and the ordinary edit share the versioned read cache.
       for (const id of new Set(Object.values(selection.allowedTargets).flat())) {

@@ -1,10 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { sha256Sync } from '../../src/data/contracts/hashes';
 import { BowerError } from '../../src/data/types';
 
 /**
  * One timing line per run (TL-P4-01 addendum), as the original's `agent stats`
  * line and `agent_seconds`: where a tidy-up's time went, phase by phase, with the model's own numbers. Numbers and
- * phase names only: no path, no content, no credential.
+ * phase names only: no path, no content, no credential. The one exception is a `selection:` row per source
+ * (qa-prod-2-diag): Drive ids as six hex characters (a correlation hint that may collide), tags and numbers, never a
+ * name, path or word (OWASP Logging Cheat Sheet, "data to exclude").
  *
  * Each phase's time is its own: a phase timed inside another (a checkpoint written while operations apply, the model
  * while the plan is read) is taken out of the outer one, so the phases add up to the run's time.
@@ -43,6 +46,26 @@ function sentBytes(body: RequestInit["body"]): number {
   return 0;
 }
 
+/**
+ * What the provider offered the model for one source and what the accepted selection took, by raw id (hashed here).
+ * `tag`: p pinned, f profile, else nK, the one-based rank in the expanded neighbourhood (not a raw BM25 rank). `cut` counts
+ * only the provider's final cut of its merged list: `VaultIndex.neighbourhood` already bounds itself at 12, so cut=0 does not
+ * show retrieval was exhaustive. `of`: the lowest one-based candidate whose parents include the destination (folder
+ * coincidence, not the model's reasoning); `required` is the selection check's own count.
+ */
+export interface SelectionFacts {
+  source: string;
+  candidates: ReadonlyArray<{ id: string; tag: string }>;
+  cut: number;
+  wants: readonly string[];
+  required: number;
+  destination: string | null;
+  of: number | null;
+  isNew: boolean;
+}
+
+const six = (id: string): string => sha256Sync(id).slice(0, 6);
+
 export interface SectionHashes {
   prompt?: string;
   tree?: string;
@@ -70,6 +93,8 @@ export class RunTiming {
   model: ModelStats | null = null;
   /** One line per model call, in the order calls end. */
   private readonly calls: string[] = [];
+  /** One row per source of the accepted selection, printed after the call lines. */
+  private readonly selections: string[] = [];
   private inputFingerprint: string | null = null;
   private sectionHashes: SectionHashes | null = null;
   private readonly traffic = new Map<Phase, Traffic>();
@@ -99,6 +124,12 @@ export class RunTiming {
       outputTokens: previous.outputTokens + stats.outputTokens,
       cacheReadTokens: previous.cacheReadTokens + stats.cacheReadTokens, cacheWriteTokens: previous.cacheWriteTokens + stats.cacheWriteTokens,
     } : stats;
+  }
+  /** The accepted selection's row for one source (called only after the whole reply validated). */
+  addSelection(f: SelectionFacts): void {
+    this.selections.push(`selection: source=${six(f.source)} candidates=${f.candidates.map((c) => `${six(c.id)}:${c.tag}`).join(',') || 'none'} cut=${f.cut}`
+      + ` wants=${f.wants.map(six).join(',') || 'none'} required=${f.required}/5 destination=${f.destination === null ? 'none' : six(f.destination)}`
+      + ` of=${f.of ?? 'none'} new=${f.isNew ? 1 : 0}`);
   }
   /** B1d's one ledger (B12 R23): 200 ordinary operations, and 1,000 in all with a map's (`mapped` of the `count`). */
   requireOperations(count: number, items: number, mapped = 0): void { if (count - mapped > 200 || count > 1000) throw new LedgerExhausted(items); }
@@ -171,7 +202,7 @@ export class RunTiming {
   }
 
   /**
-   * The one run line, in whole milliseconds, then one line per model call (joined with `\n`, so a reader matching the
+   * The one run line, in whole milliseconds, then one line per model call, then one per source of the accepted selection (joined with `\n`, so a reader matching the
    * run line by its `timing:` prefix still finds it); `end` is how the run ended (done, saving, failed or stopped).
    */
   line(end: 'done' | 'saving' | 'failed' | 'stopped'): string {
@@ -190,7 +221,7 @@ export class RunTiming {
       // New fields go last: Drive calls/bytes per phase (`runner`: outside every phase), then the runner's region.
       `drive=${[...PHASES, 'runner' as const].map((p) => `${p}:${this.traffic.get(p)?.calls ?? 0}/${this.traffic.get(p)?.bytes ?? 0}`).join(',')} region=${this.region}`,
       `cache=${m?.cacheReadTokens ?? 0}/${m?.cacheWriteTokens ?? 0}`,
-    ].join(' ') + this.calls.map((c) => `\n${c}`).join('');
+    ].join(' ') + [...this.calls, ...this.selections].map((c) => `\n${c}`).join('');
   }
 
   private _formatSections(): string {
