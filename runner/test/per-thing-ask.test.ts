@@ -156,6 +156,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     nameChangesKind: edit((i) => ((offer(i).name = 'Offer.jpg'), i)),
     rawName: edit((i) => ((offer(i).name = 'Offer_letter_final(2).pdf'), i)),
     numbers: edit((i) => noted(i, { body: 'Keep to the 30-minute commute limit.' })),
+    quote: edit((i) => noted(i, { quotes: ['A passage the offer never says.'] })),
     newFolder: edit((i) => ((offer(i).to = 'Projects/Community garden'), i)),
     noteForNote: edit((i) => (((i.things[1] as Thing).note = { name: 'Flat.md', summary: 'A flat.', body: 'A flat.' }), i)),
     noteKeys: edit((i) => noted(i, { extra: 1 })),
