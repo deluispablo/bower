@@ -69,6 +69,8 @@ export class FakeWorker implements WorkerApi {
   private readonly states: readonly AuthoredState[] | undefined;
   /** The place this client last held the lease for, and its epoch: what the real Worker reads from the request. */
   private holder: { place: string; epoch: number } | null = null;
+  /** The ids reserved for a template still being made: a retry reuses them, so what landed is found again, not made twice. */
+  private templateIds: string[] | null = null;
 
   constructor(opts: FakeWorkerOptions) {
     this.drive = opts.drive;
@@ -155,7 +157,9 @@ export class FakeWorker implements WorkerApi {
     // folder and file, and each is made by its id (`write-once.ts`), so a lost answer is found again, never made twice.
     const files = FOLDER_TEMPLATE.filter((f) => !f.path.endsWith(`/${PLACEHOLDER_FILE}`) && f.path !== PLACEHOLDER_FILE);
     const paths = [...new Set(FOLDER_TEMPLATE.flatMap((f) => f.path.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))))];
-    const [rootId, ...rest] = await d.generateIds(1 + paths.length + files.length);
+    // shortcut: kept in memory only, a reload mid-creation reserves new ids (honest limit, no recovery UI).
+    this.templateIds ??= await d.generateIds(1 + paths.length + files.length);
+    const [rootId, ...rest] = this.templateIds;
     const ids = new Map([...paths, ...files.map((f) => f.path)].map((p, i) => [p, rest[i]]));
     const root = (await makeFolder(d, d, { parent: 'root', name: BOWER_FOLDER, ...(rootId ? { id: rootId } : {}) })).id;
     const folders = new Map<string, string>([['', root]]);
@@ -175,6 +179,7 @@ export class FakeWorker implements WorkerApi {
       if (file.path.slice(cut + 1) !== PLACEHOLDER_FILE) await makeText(d, d, { parent, name: file.path.slice(cut + 1), ...(file.appProperties ? { props: file.appProperties } : {}), ...(id ? { id } : {}) }, file.content);
     }
     this.rootId = root;
+    this.templateIds = null;
     return { id: root, found: false };
   }
 

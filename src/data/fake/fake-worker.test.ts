@@ -92,6 +92,32 @@ describe('the fake Worker', () => {
     expect(names).toEqual(['.bower', 'About me.md', 'Archive', 'Areas', 'Inbox', 'Projects', 'Resources', 'Rules.md']);
   });
 
+  it('fake_create_retry_reuses_reserved_ids', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { drive, worker } = await world('first');
+    const createText = drive.createText.bind(drive);
+    // The first template file fails once the root and its folders exist: the folder is half made.
+    vi.spyOn(drive, 'createText').mockImplementationOnce(async (...a) => {
+      drive.failNext('offline');
+      return createText(...a);
+    });
+    await expect(worker.createFolder()).rejects.toMatchObject({ code: 'offline' });
+    expect((await worker.me())?.folderId).toBeNull();
+    const roots = async () => (await drive.listAll('root')).filter((f) => f.name === BOWER_FOLDER && f.parents[0] === 'root');
+    const [half] = await roots();
+    expect(half && (await drive.listAll(half.id)).some((f) => f.parents[0] === half.id)).toBe(true);
+    const { id } = await worker.createFolder();
+    expect(id).toBe(half?.id);
+    expect((await worker.me())?.folderId).toBe(id);
+    expect(await roots()).toHaveLength(1);
+    const tree = await drive.listAll(id);
+    const keys = tree.map((f) => `${f.parents[0]}/${f.name}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    const clean = await world('first');
+    await clean.worker.createFolder();
+    expect(tree.length).toBe((await clean.drive.listAll((await clean.worker.me())?.folderId ?? '')).length);
+  });
+
   it('makes the Bower folder with the five main folders', async () => {
     const { drive, worker } = await world('first');
     expect((await worker.me())?.folderId).toBeNull();
