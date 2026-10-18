@@ -2409,7 +2409,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         continue;
       }
       const address = savedLinkAddress(linkText) ?? thing.item.name;
-      const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: `Saved from ${address}.`, timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
+      const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: '', timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
       const to = place.to;
       destination(to);
       const noteName = freeName(planned, to, title);
@@ -2516,7 +2516,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     const tags = assignedTags(authored.tags, grownTags, grownTags.declared);
     if (tags === null) return refused('invalid note tags');
-    const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags, currentState: [], body: authored.body,
+    const text = serializeNote({ template, typeRow, summary: authored.summary, properties, tags, currentState: [],
+      body: normalizedText(authored.body) === normalizedText(authored.summary) ? '' : authored.body,
       ...(template === 'source' ? { original: name } : {}),
       timeline: template && !NOTE_TEMPLATES[template].timeline ? [] : [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: [thing.file.id], pileId: null, aside: thing.file.name });
