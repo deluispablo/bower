@@ -142,7 +142,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   // One bad reply per refusal kind; the records make the compiler and the check below list every kind.
   type ViewKind = 'viewKeys' | 'viewBinding' | 'viewLimit';
   type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit';
-  type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText';
+  type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText' | 'neverKeys';
   type SelectionKind = 'selectionKeys' | 'selectionItem' | 'selectionKind' | 'selectionPlace' | 'selectionWants' | 'selectionBasis';
   type DocumentKind = 'documentKeys' | 'documentBinding' | 'documentPlace' | 'documentText';
   const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind | SelectionKind | DocumentKind | 'noteCut'>, (ctx: Context, id: Id) => string> = {
@@ -215,7 +215,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
 
   // C09 (c09-answers AC2): answers are refused through a request, which the offer-and-flat case has not; their bad replies are c09-answers.test.ts's table.
   // An answer's links take the one link rule's own kind (noteLink, C06), so there is no answer link kind.
-  const answerKinds: AnswerKind[] = ['answerKeys', 'answerBinding', 'answerText'];
+  const answerKinds: AnswerKind[] = ['answerKeys', 'answerBinding', 'answerText', 'neverKeys'];
   // C08 (c08-documents AC2): documents answer a request; their bad replies are c08-documents.test.ts's table.
   // A document's links take noteLink and its figures numbers, as an answer's (round 1 ruling 9).
   const documentKinds: DocumentKind[] = ['documentKeys', 'documentBinding', 'documentPlace', 'documentText'];
