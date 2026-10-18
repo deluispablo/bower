@@ -12,7 +12,7 @@ import { SYSTEM, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCase } from '../src/corpus';
-import { frameOf, AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, promptOf, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 
 const WATER = 'Resources/Rainwater/Rainwater.md';
@@ -63,7 +63,7 @@ async function setup(folder: Record<string, string> = { [WATER]: note(ARTICLE) }
   return { c, drive, root, ix, id, source, admission: admitted.manifest };
 }
 type Base = Awaited<ReturnType<typeof setup>>;
-type Frame = { input: string; selection?: unknown; sources?: Array<{ itemId: string; candidates: Array<{ id: string }> }>; index?: string };
+type Frame = { input: string; prompt: string; selection?: unknown; sources?: Array<{ itemId: string; candidates: Array<{ id: string }> }> };
 
 function select(b: Base, to: string, wants: string[] = [], name = 'Article.txt') {
   const destination = b.ix.file(to)?.folder ? b.id(to)
@@ -78,7 +78,7 @@ async function run(b: Base, selection: unknown, execution: unknown, retry = exec
   const errorsAt = vi.mocked(console.error).mock.calls.length;
   const claude: ClaudeSpawn = async (call: ClaudeCall) => {
     const frame = frameOf(call) as Frame;
-    frames.push({ ...frame, input: call.input });
+    frames.push({ ...frame, input: call.input, prompt: promptOf(call) });
     const isSelection = frame.sources !== undefined && frame.selection === undefined;
     const value = isSelection ? selection : /^Your reply was refused:/m.test(call.input) ? retry : execution;
     return { code: 0, stderr: '', cut: null, stdout: JSON.stringify({ type: 'result', subtype: 'success',
@@ -292,14 +292,14 @@ it('b6-cut-index-no-create control: a complete index creates normally', async ()
   const b = await setup({ 'Resources/Paper craft/Paper craft.md': note('Alex folds paper.') });
   const r = await run(b, select(b, 'Resources/Rainwater'), filing(b, 'Resources/Rainwater', 'Rainwater'));
   done(r, 1);
-  expect(r.frames[0]?.index).not.toContain('index cut:');
+  expect(r.frames[0]?.prompt).not.toContain('folders cut');
   expect(r.after[WATER]).toContain(ARTICLE);
 });
 
-/** B1's 150-folder fixture shape: the production projection is cut by the index's own folder cut. */
+/** B1's 150-folder fixture shape: each note is its folder's hub (named as the folder), so the folder map passes its bound and is cut. */
 async function cutWorld(inbox?: Parameters<typeof setup>[1], inboxFiles?: Parameters<typeof setup>[2], extra: Record<string, string> = {}) {
   const folder = Object.fromEntries(Array.from({ length: 140 }, (_, i) => [
-    `Resources/Group ${String(i).padStart(3, '0')}/Note ${String(i).padStart(3, '0')}.md`,
+    `Resources/Group ${String(i).padStart(3, '0')}/Group ${String(i).padStart(3, '0')}.md`,
     note(`Evidence ${i} ${'x'.repeat(199 - `Evidence ${i} `.length)}.`),
   ]).concat(Object.entries(extra)));
   const b = await setup(folder, inbox, inboxFiles);
@@ -313,12 +313,12 @@ async function cutWorld(inbox?: Parameters<typeof setup>[1], inboxFiles?: Parame
   }
   await b.drive.createText(b.id(SYSTEM.dir), 'retrieval.json', JSON.stringify({ v: 1, folderId: b.root,
     account: 'ACCOUNT_ID', cursor: String(Number(await b.drive.getStartPageToken()) + 1), files }));
-  b.drive.touch(b.id('Resources/Group 000/Note 000.md'));
+  b.drive.touch(b.id('Resources/Group 000/Group 000.md'));
   return { b, folder };
 }
 
 function nothingCreated(r: Awaited<ReturnType<typeof run>>, folder: Record<string, string>, source: string) {
-  expect(r.frames[0]?.index, 'the production candidate projection is actually cut').toMatch(/index cut: (\d+ folders omitted|context omitted)/);
+  expect(r.frames[0]?.prompt, 'the production folder map is actually cut').toContain('folders cut');
   expect(r.code, r.errors).toBe(0);
   expect.soft(visibleNotes(r), 'a cut index never authorizes new note creation').toEqual(Object.keys(folder).sort());
   expect.soft(r.pathsById[source], 'the original stays in the inbox when creation cannot be justified').toMatch(/^Inbox\//);
@@ -352,7 +352,7 @@ it('b6-cut-index-no-create: a note for words alone is blocked', async () => {
   const pile = b.admission.piles[0]?.pileId ?? '';
   const selected = { items: [{ itemId: pile, kind: 'unknown', destination: b.id('Resources/Group 000'), wants: [] }], asks: [] };
   const execution = { ...empty, notes: [{ pileId: pile, to: 'Resources/Group 000', name: 'Rainwater.md',
-    basis: 'Resources/Group 000/Note 000.md', responsibility: 'Rainwater collection' }] };
+    basis: 'Resources/Group 000/Group 000.md', responsibility: 'Rainwater collection' }] };
   const r = await run(b, selected, execution, empty);
   nothingCreated(r, folder, b.admission.piles[0]?.items.find((i) => i.name === PILE_NOTE)?.fileId ?? '');
 });

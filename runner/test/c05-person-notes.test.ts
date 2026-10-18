@@ -49,13 +49,13 @@ function reply(make: (ctx: Context, source: string) => unknown, shown: Context[]
   return phaseAwareClaude(async (call, _step, _attempt, phase) => {
     const ctx = frameOf(call) as Context & {
       sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
-      foldersById: Record<string, string>;
+      map: Array<{ id: string; path: string }>;
     };
     if (phase === 'execution') shown.push(ctx);
     const source = ctx.piles.flatMap((p) => p.things).find((t) => t.name === SOURCE)?.fileId ?? 'previously-filed-source';
     const intent = phase === 'selection' && wants.length ? {
       items: ctx.sources.map((item) => ({ itemId: item.itemId, kind: 'unknown',
-        destination: Object.entries(ctx.foldersById).find(([, path]) => path === 'Areas/Home')?.[0],
+        destination: ctx.map.find((row) => row.path === 'Areas/Home')?.id,
         wants: item.candidates.filter((candidate) => wants.includes(candidate.path)).map((candidate) => candidate.id),
       })), asks: [],
     } : make(ctx, source);

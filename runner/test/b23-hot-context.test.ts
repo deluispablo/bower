@@ -9,7 +9,7 @@ import { RUNNER_WRITES } from '../../src/data/vault/layout';
 import { isJournalRecord, type JournalRecord } from '../../src/data/contracts/journal-record';
 import { parseRules, serializeRules } from '../../src/data/contracts/rules-format';
 import * as hotModule from '../src/hot';
-import { AT, caseReplies, promptOf, replySequence, runScripted } from './corpus-run';
+import { AT, caseReplies, dataOf, promptOf, replySequence, runScripted } from './corpus-run';
 import { HOT, empty, manifests, observe, pacing, requiredFunction, runOnDrive, section, setup, writes,
   type Observation } from './b23-hot-observe';
 
@@ -71,14 +71,18 @@ it('B3b hot: filing writes hot once and the next prompt puts it at position 6', 
   const input = (prompts[0] ?? '').replace(/\\n/g, '\n');
   // Pin serialized prefix position by content, leaving the builder's wire shape to B1d.
   const beforeHot = [input.indexOf('Kinds of document'), input.indexOf('Rules control.'),
-    input.indexOf('Alex keeps a quiet garden.'), input.indexOf('[[Mulch notice]]')];
+    input.indexOf('Alex keeps a quiet garden.')];
   const atHot = input.indexOf('# Hot');
   expect.soft(atHot, 'next production prompt contains the persisted hot').toBeGreaterThanOrEqual(0);
   for (const at of beforeHot) {
-    expect.soft(at, 'instructions/types, Rules, About me and index precede hot').toBeGreaterThanOrEqual(0);
+    expect.soft(at, 'instructions/types, Rules and About me precede hot').toBeGreaterThanOrEqual(0);
     expect.soft(atHot, 'hot occupies prefix slot 6').toBeGreaterThan(at);
   }
-  expect.soft(input.indexOf('Alex asks for the next garden step.'), 'request/items follow slot 6').toBeGreaterThan(atHot);
+  // c12-map-cards: the folder map (L1) replaces the index and follows the standing context (L0, with hot) in the prefix.
+  const garden = dataOf<{ map?: Array<{ path: string }> }>(prompts[0] ?? '').map?.find((row) => row.path === 'Resources/Gardening');
+  const atMap = garden ? input.indexOf(JSON.stringify(garden).replace(/\\n/g, '\n')) : -1;
+  expect.soft(atMap, 'the map row of the filed folder follows hot').toBeGreaterThan(atHot);
+  expect.soft(input.indexOf('Alex asks for the next garden step.'), 'request/items follow slot 6 and the map').toBeGreaterThan(Math.max(atHot, atMap));
   if (first.after[HOT]) expect.soft(input).toContain(first.after[HOT]);
   const hotRead = events.findIndex((e) => e.path === HOT && e.method === 'GET' && e.media);
   expect.soft(hotRead, 'main reads persisted hot').toBeGreaterThanOrEqual(0);

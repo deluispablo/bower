@@ -38,7 +38,7 @@ interface ShownThing { fileId: string; name: string; kind: string; text: string 
 interface Context {
   piles: Array<{ pileId: string; words: string; things: ShownThing[] }>;
   notes: Array<{ path: string; text: string; cut: number }>;
-  indexed?: Record<string, { path: string; summary: string; version: string; coverage: unknown }>;
+  cards?: Array<{ id: string; path: string; summary: string }>;
 }
 
 /** The prepared context: the JSON line at the end of the input. */
@@ -130,7 +130,7 @@ describe('what the model is shown (P4-3)', () => {
 
     // Selection has metadata; picked full-note evidence is bounded in execution, never Alex's unpicked note.
     expect(ctx.notes).toEqual([]);
-    expect(ctx.indexed?.[hubFile.id]).toMatchObject({ path: 'Areas/Garden/Garden.md', summary: '(no summary)', version: hubFile.modifiedTime, coverage: { kind: 'prefix', bytes: 4096 } });
+    expect(ctx.cards?.find((card) => card.id === hubFile.id)).toEqual({ id: hubFile.id, path: 'Areas/Garden/Garden.md', summary: '(no summary)' });
     expect(input).not.toContain('Plot 14. '.repeat(20));
     const execution = contextOf(calls[1]?.input ?? '');
     expect(execution.notes.map((n) => n.path)).toEqual(['Areas/Garden/Garden.md']);

@@ -221,12 +221,12 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   const documentKinds: DocumentKind[] = ['documentKeys', 'documentBinding', 'documentPlace', 'documentText'];
 
   // F5 (round 1 ruling 5): one bad selection per selection kind, over the sources and folders the selection call lists.
-  type Frame = Context & { sources: Array<{ itemId: string }>; foldersById: Record<string, string> };
-  const folderOf = (f: Frame, path: string): string => Object.entries(f.foldersById).find(([, p]) => p === path)?.[0] ?? `no ${path}`;
+  type Frame = Context & { sources: Array<{ itemId: string }>; map: Array<{ id: string; path: string }> };
+  const folderOf = (f: Frame, path: string): string => f.map.find((r) => r.path === path)?.id ?? `no ${path}`;
   /** A selection the good reply fits: each thing to the folder it files into (a new Resources/Pay for the payslip), wanting no note. */
   const fits = (f: Frame, id: Id) => ({ asks: [], items: f.sources.map((s) => {
     const to = filed(id).things.find((t) => t.fileId === s.itemId)?.to ?? 'Resources';
-    return { itemId: s.itemId, kind: 'unknown', wants: [], destination: f.foldersById[folderOf(f, to)] ? folderOf(f, to) : { parentId: folderOf(f, 'Resources'), name: to.split('/').at(-1) } };
+    return { itemId: s.itemId, kind: 'unknown', wants: [], destination: f.map.some((r) => r.path === to) ? folderOf(f, to) : { parentId: folderOf(f, 'Resources'), name: to.split('/').at(-1) } };
   }) });
   const first = (f: Frame, id: Id, change: Record<string, unknown>) => {
     const s = fits(f, id);
@@ -272,14 +272,14 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     it('F5: a noteCut refusal (a new note while the folder list is cut) is retried once with its reason', async () => {
       vi.spyOn(console, 'log').mockImplementation(() => {});
       const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-      // A folder whose index is cut at its bound, warm, as b1-cut-index-no-new-destination has it.
+      // A folder whose map is cut at its bound (each note is its folder's hub), warm, as b1-cut-index-no-new-destination has it.
       const b = await setup({ folder: { ...folder, ...Object.fromEntries(Array.from({ length: 155 }, (_, n) => [
-        `Resources/Group ${String(n).padStart(3, '0')}/Evidence.md`, note(`Remote offer ${n} ${'x'.repeat(180)}.`)])) } });
+        `Resources/Group ${String(n).padStart(3, '0')}/Group ${String(n).padStart(3, '0')}.md`, note(`Remote offer ${n} ${'x'.repeat(180)}.`)])) } });
       await seedState(b);
       // The selection wants no note for the offer and asks about it; the retry asks that, as frozen, instead of a new note.
       const asks = b.sources.map((s) => ({ fileId: s.itemId, text: 'Is this the remote offer?', yes: 'Yes', no: 'No' }));
       const r = await planningRun(b, [{ ...select(b), asks }, fileIntent(b), { ...empty, asks }]);
-      expect(r.frames[0]?.prompt, 'the index is cut').toContain('index cut:');
+      expect(r.frames[0]?.prompt, 'the folder map is cut').toContain('folders cut');
       const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
       expect(retried).toContain(`(noteCut): ${REFUSALS.noteCut};`);
       expect(r.frames.filter((f) => f.prompt.includes(`Your reply was refused: ${REFUSALS.noteCut}. Reply again`))).toHaveLength(1);

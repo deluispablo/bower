@@ -9,7 +9,7 @@ import { normalizeModelInput } from '../src/model-input';
 import { AT } from './corpus-run';
 import { paging } from './drive-v3';
 import { candidates, completed, empty, fileIntent, folder, HUB, manifest, media, note,
-  run, seedState, select, setup, type Base } from './b1-planning-support';
+  run, seedState, select, setup, type Base, type Frame } from './b1-planning-support';
 
 const pageSize = paging.size;
 beforeEach(() => {
@@ -21,6 +21,9 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); paging.size = pageSi
 
 const words = [{ line: 'Remote developer offer', files: [] }];
 const sourceId = (b: Base) => b.sources[0]?.itemId ?? '';
+/** The ids of the folder map's rows, and of the cards, a call showed (c12-map-cards). */
+const mapIds = (f: Frame | undefined): string[] => ((f?.value.map ?? []) as Array<{ id: string }>).map((row) => row.id);
+const cardIds = (f: Frame | undefined): string[] => ((f?.value.cards ?? []) as Array<{ id: string }>).map((card) => card.id);
 const evidence = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [
   `Projects/Remote search/Offer evidence ${i + 1}.md`, note('Remote developer offer evidence.', `EVIDENCE_${i + 1}\n`),
 ]));
@@ -68,15 +71,15 @@ it('b1d-fr4 1 shown candidates bound notes and parents', async () => {
     destination: { parentId: child.id('Projects/Remote search'), name: 'Developer offers' } }));
   const childControl = await run(child, [proposal, fileIntent(child, 'Projects/Remote search/Developer offers')]);
   completed(childControl);
-  expect(candidates(childControl.frames[0], sourceId(child))).toContain(child.id('Projects/Remote search'));
+  expect(mapIds(childControl.frames[0]), 'the parent is a row of the folder map').toContain(child.id('Projects/Remote search'));
 
   const unrelated = 'Resources/Gardening/Garden plans.md';
   const b = await setup({ inbox: words }); await seedState(b);
   const bad = select(b, [b.id(unrelated)]);
   const r = await run(b, [bad, empty]);
   expect(candidates(r.frames[0], sourceId(b))).not.toContain(b.id(unrelated));
-  expect(r.frames[0]?.value.indexed).toHaveProperty(b.id(unrelated));
-  expect.soft(r.code, 'an indexed but unshown note cannot authorize execution').toBe(1);
+  expect(cardIds(r.frames[0]), 'an unrelated note is not shown as a card').not.toContain(b.id(unrelated));
+  expect.soft(r.code, 'an unshown note cannot authorize execution').toBe(1);
   expect.soft(media(r, b.id(unrelated)), 'unshown evidence receives no full read').toHaveLength(0);
 
   const many = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [
@@ -85,12 +88,12 @@ it('b1d-fr4 1 shown candidates bound notes and parents', async () => {
   const cap = await setup({ folder: { ...folder, ...many }, inbox: words }); await seedState(cap);
   const capped = select(cap);
   capped.items = capped.items.map((item) => ({ ...item,
-    destination: { parentId: cap.id('Resources/Gardening'), name: 'Developer offers' } }));
+    destination: { parentId: cap.id('Inbox'), name: 'Developer offers' } }));
   const cappedRun = await run(cap, [capped, empty]);
-  // c12-map: 31 matches give 12 notes, so every shown note's folder fits; a folder no shown note sits in stays unseen.
+  // c12-map: 31 matches give 12 notes; a new folder's parent is visible when it is a map row, and the Inbox folder is not one.
   expect(candidates(cappedRun.frames[0], sourceId(cap)).filter((id) => (cap.ix.pathOf(id) ?? '').endsWith('.md'))).toHaveLength(12);
-  expect(candidates(cappedRun.frames[0], sourceId(cap))).not.toContain(cap.id('Resources/Gardening'));
-  expect.soft(cappedRun.code, 'a parent no shown note sits in is not visible').toBe(1);
+  expect(mapIds(cappedRun.frames[0])).not.toContain(cap.id('Inbox'));
+  expect.soft(cappedRun.code, 'a parent that is not a map row is refused').toBe(1);
 });
 
 it('b1d-fr4 2 destination hub counts within five', async () => {
@@ -189,11 +192,10 @@ it('b1d-fr4 5 real link changes alter the fingerprint', async () => {
     b.admission.id = `fr4-fingerprint-${i}`;
     const r = await run(b, [{ items: [], asks: [] }, empty], { press: i + 1 });
     expect(r.code).toBe(0);
-    const first = r.frames[0]; expect(first?.prompt).toContain('index cut:');
+    const first = r.frames[0];
     const target = b.id(`Resources/Gardening/${link}.md`);
     expect(candidates(first, sourceId(b))).toContain(target);
-    const sources = first?.value.sources as Array<{ candidates: Array<Record<string, unknown>> }>;
-    expect(sources[0]?.candidates.find((row) => row.id === target)).toEqual({ id: target });
+    expect(cardIds(first), 'the target is a card').toContain(target);
     inputs.push(first?.prompt ?? '');
     const timing = r.consoleLines.find((line) => line.startsWith('timing:')) ?? '';
     const fingerprint = /\binput=([a-f0-9]{12})\b/.exec(timing)?.[1];
@@ -214,7 +216,7 @@ it('b1d-fr4 6 near names collapse internal whitespace', async () => {
     selection.items = selection.items.map((item) => ({ ...item,
       destination: { parentId: b.id('Projects/Remote search'), name } }));
     const r = await run(b, [selection, fileIntent(b, `Projects/Remote search/${name}`)]);
-    expect(candidates(r.frames[0], sourceId(b))).toContain(b.id('Projects/Remote search'));
+    expect(mapIds(r.frames[0])).toContain(b.id('Projects/Remote search'));
     if (name === 'Developer applications') completed(r);
     else {
       expect.soft(r.code, 'collapsed-whitespace sibling name must be refused').toBe(1);

@@ -8,10 +8,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeModelInput } from '../src/model-input';
-import { AT, lastJson, splitPrompt } from './corpus-run';
-import { paging } from './drive-v3';
+import { tmpdir } from 'node:os';
+import { planAdmission } from '../../src/data/spine/plan';
+import { fakeRead } from '../../src/data/spine/read';
+import { SYSTEM } from '../../src/data/vault/layout';
+import type { LoadedCase } from '../src/corpus';
+import { AT, lastJson, runOnDrive, seedCase, splitPrompt } from './corpus-run';
+import { fixedDrive, paging } from './drive-v3';
 import * as support from './b1-planning-support';
-import { HUB, PERSONAL, candidates, fileIntent, folder, note, report, run, seedState, select, setup, type Frame, type Item } from './b1-planning-support';
+import { HUB, PERSONAL, candidates, phaseAwareClaude, reply, fileIntent, folder, note, report, run, seedState, select, setup, type Frame, type Item } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -166,5 +171,38 @@ describe('a map\'s members (c12-map-cards)', () => {
         .toEqual({ id: b.id(map), path: map, summary: 'Remote developer offers.', type: 'moc', members: [b.id(member)] });
       expect(cards.map((c) => c.id), `call ${i + 1}: the member is a card too`).toContain(b.id(member));
     }
+  }, 60_000);
+});
+
+describe('the cap of 12 candidates a source (c12-map-cards)', () => {
+  it('ruling 7: with more than 12 neighbours a pinned note is still a candidate, and the neighbour that would be 12th is not', async () => {
+    const PIN = 'Resources/Views/The Alex.md';
+    const offers = Object.fromEntries(Array.from({ length: 14 }, (_, i) => [`Projects/Offers/Offer ${String(i + 1).padStart(2, '0')}.md`, note(`Alex keeps remote offer record ${i + 1}.`)]));
+    const words = 'Remote offer records: what does the Alex note say?';
+    const c: LoadedCase = { id: 'c12-map-cards', capability: 'C09', title: 'Alex asks about offers', covers: 'model', source: 'new', scope: 'instructions',
+      allowWeb: false, dir: tmpdir(), folderBinary: {}, inboxBinary: {}, expected: {}, rubric: '', questions: [], journal: [], bowerOwned: [], inbox: [], inboxFiles: {},
+      folder: { [SYSTEM.requests]: JSON.stringify({ v: 1, done: [] }), 'Rules.md': '# Rules\n', ...offers, [PIN]: note('Alex has a quiet view.') } };
+    const drive = fixedDrive(); const root = await seedCase(drive, c);
+    const all = await drive.listAll(root); const idOf = (path: string): string => all.find((f) => drive.pathOf(f.id, root) === path)?.id ?? '';
+    await drive.createText(idOf(SYSTEM.changes), 'press-1.json', JSON.stringify({ v: 1, id: 'press-1', device: 'device-1', at: AT + 1, kind: 'request', what: `Asked Bower: "${words}"`, text: words }));
+    const admission = await planAdmission(fakeRead(drive), root, { scope: 'instructions', clock: () => AT + 2, newId: () => 'c12-map-cards-admission' });
+    if (admission.kind !== 'manifest') throw new Error(`Not admitted: ${admission.cause}`);
+    const seen: Array<Record<string, unknown>> = [];
+    const claude = phaseAwareClaude(async (spawned) => {
+      const text = lastJson(spawned.input);
+      seen.push(text);
+      const sources = (text.sources ?? []) as Array<{ itemId: string }>;
+      return reply({ items: sources.map((s) => ({ itemId: s.itemId, kind: 'unknown', destination: idOf('Projects/Offers'), wants: [] })), asks: [] });
+    }, () => ({ drive, root, admission: admission.manifest }), true);
+    await runOnDrive(c, drive, root, { claude, admission: admission.manifest, pacing: { baseMs: 0, sleep: async () => {} },
+      answerStart: { scope: 'instructions', requestId: 'c12-map-cards-run' } }, 1);
+    const first = seen[0] ?? {};
+    const sources = (first.sources ?? []) as Array<{ itemId: string; candidates: string[] }>;
+    const cards = (first.cards ?? []) as Card[];
+    const picked = (sources[0]?.candidates ?? []).flatMap((id) => cards.find((x) => x.id === id)?.path ?? []);
+    expect(sources, 'the request is the one source').toHaveLength(1);
+    expect(picked, 'at most 12 candidates').toHaveLength(12);
+    expect(picked, 'the pinned note is a candidate').toContain(PIN);
+    expect(picked.filter((p) => p.startsWith('Projects/Offers/')), 'the pin took a slot: 11 of the 14 neighbours').toHaveLength(11);
   }, 60_000);
 });

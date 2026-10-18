@@ -40,7 +40,7 @@ export const folder = {
  * folders, the first note of each folder its hub, and `things` loose text files in the inbox. Names are made up.
  */
 export function largeFolder(notes: number, folders: number, things: number) {
-  const topics = Array.from({ length: folders }, (_, f) => `${['Projects', 'Areas', 'Resources', 'Archives'][f % 4]}/Topic ${String(f + 1).padStart(2, '0')}`);
+  const topics = Array.from({ length: folders }, (_, f) => `${['Projects', 'Areas', 'Resources', 'Archive'][f % 4]}/Topic ${String(f + 1).padStart(2, '0')}`);
   const name = (at: string): string => at.slice(at.indexOf('/') + 1);
   const folder = Object.fromEntries(Array.from({ length: notes }, (_, i) => {
     const at = topics[i % folders] ?? '';

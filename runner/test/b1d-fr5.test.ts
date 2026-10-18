@@ -220,7 +220,8 @@ it('b1d-fr5 4 refreshed MOC members are selectable', async () => {
       expect(media(r, recordId)).toHaveLength(1);
     } else {
       expect(candidates(r.frames[0], sourceId(b)), 'the MOC itself matches without a stored member link').toContain(b.id(map));
-      expect(r.frames[0]?.value.index, 'refresh sees the newly added member in the folded index').toContain('→ [[Collection]] (1)');
+      expect((r.frames[0]?.value.map as Array<{ id: string; hub?: { id: string } }>).find((row) => row.hub?.id === b.id(map))?.id,
+        'the folder map names the map as the hub of its folder').toBe(b.id('Resources/Collection'));
       expect.soft(r.code, 'refreshed membership authorizes the selected member').toBe(0);
       expect.soft(r.wire?.statuses.at(-1)?.phase).toBe('done');
       for (const [turn, frame] of r.frames.entries()) {

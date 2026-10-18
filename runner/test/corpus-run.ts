@@ -52,7 +52,14 @@ export function splitPrompt(prompt: string): { instructions: string; data: strin
 
 /** The JSON lines of a prompt (`promptOf`), the run context's and the call's, as one record; what `frameOf` gives in the spawn. */
 export const dataOf = <T = Record<string, unknown>>(prompt: string): T =>
-  Object.assign({}, ...splitPrompt(prompt).data.split('\n').filter(Boolean).map((l) => JSON.parse(l) as object)) as T;
+  withCards(Object.assign({}, ...splitPrompt(prompt).data.split('\n').filter(Boolean).map((l) => JSON.parse(l) as object))) as T;
+
+/** The test view (c12-map-cards ruling 2): each `sources[].candidates` id is resolved to its card from `cards`. */
+function withCards<T extends object>(data: T): T {
+  const { cards, sources } = data as { cards?: Array<{ id: string }>; sources?: Array<{ candidates: unknown[] }> };
+  if (!Array.isArray(cards) || !Array.isArray(sources)) return data;
+  return { ...data, sources: sources.map((s) => ({ ...s, candidates: s.candidates.map((id) => cards.find((c) => c.id === id) ?? { id }) })) };
+}
 
 /** The last JSON line of a text, parsed: a retry note comes after it (c12-prefix). */
 export const lastJson = <T = Record<string, unknown>>(text: string): T =>
@@ -64,7 +71,7 @@ export const lastJson = <T = Record<string, unknown>>(text: string): T =>
  */
 export function frameOf<T = Record<string, unknown>>(call: ClaudeCall): T {
   const system = systemOf(call);
-  return { ...(system === null ? {} : lastJson<object>(system)), ...lastJson<object>(call.input) } as T;
+  return withCards({ ...(system === null ? {} : lastJson<object>(system)), ...lastJson<object>(call.input) }) as T;
 }
 
 /** The planner's two phases are told apart for `claude`; a synopsis call (B10) goes to it as it is, in no phase. */

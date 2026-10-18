@@ -83,7 +83,7 @@ describe('one cached prefix for every planning call (c12-prefix)', () => {
     expect(context, 'the run context follows the boundary').toContain(TABLE_HEADER);
     const shared = jsonLines(context);
     expect(shared, 'one JSON line of run context').toHaveLength(1);
-    expect(Object.keys(shared[0] ?? {})).toEqual(expect.arrayContaining(['index', 'hot', 'folders', 'indexed']));
+    expect(Object.keys(shared[0] ?? {})).toEqual(expect.arrayContaining(['map', 'hot']));
     expect(String(shared[0]?.hot)).toContain('Existing change.');
   });
 
@@ -165,9 +165,9 @@ describe('one cached prefix for every planning call (c12-prefix)', () => {
   it('AC5 c12-prefix-fingerprint: the run context and the call text normalize as one input (an id named in one, resolved in the other)', () => {
     const input = (id: string): string => [
       FIRST_LINE, BOUNDARY,
-      JSON.stringify({ indexed: { [id]: { path: 'Areas/Home/Garden plot.md', version: 'v1' } } }),
+      JSON.stringify({ map: [{ id: `folder-${id}`, path: 'Areas/Home', notes: 1 }] }),
       'Select context first.',
-      JSON.stringify({ runId: 'r', admission: 'a', piles: [], sources: [{ itemId: 'f1', candidates: [{ id }] }] }),
+      JSON.stringify({ runId: 'r', admission: 'a', piles: [], cards: [{ id, path: 'Areas/Home/Garden plot.md', summary: 'Alex grows beans.' }], sources: [{ itemId: 'f1', candidates: [id] }] }),
     ].join('\n');
     expect(normalizeModelInput(input('drive-id-1'))).toBe(normalizeModelInput(input('drive-id-2')));
     expect(normalizeModelInput(input('drive-id-1'))).toContain('Areas/Home/Garden plot.md');

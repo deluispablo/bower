@@ -733,7 +733,8 @@ it.each(['bootstrap', 'missing-index'] as const)(
     await base.drive.createFolder(runs.id, RUN_ID);
     const sent: Sent[] = [];
     const reads: number[] = [];
-    const shown: string[][] = [];
+    type Planned = { map?: Array<{ id: string; path: string; notes: number }> };
+    const shown: Planned[] = [];
     let mutations = 0;
     const writesAtPlan: number[] = [];
     const readsAtPlan: number[] = [];
@@ -748,9 +749,9 @@ it.each(['bootstrap', 'missing-index'] as const)(
         return fetch(input, init);
       }),
       claude: async (call) => {
-        const context: unknown = frameOf(call);
-        if ('selection' in (context as Record<string, unknown>)) return answer(call);
-        shown.push(snapshotStrings(context));
+        const context = frameOf<Planned & { selection?: unknown }>(call);
+        if ('selection' in context) return answer(call);
+        shown.push(context);
         writesAtPlan.push(mutations);
         readsAtPlan.push(reads.length);
         return answer(call);
@@ -759,7 +760,10 @@ it.each(['bootstrap', 'missing-index'] as const)(
     expect(result.code).toBe(0);
     expect(shown, 'positive control: real main called the planning provider').toHaveLength(1);
     const rows = '## Resources\n\n- [[Visible]] — Visible control.\n';
-    expect.soft(shown[0]?.some((text) => indexRows(text) === rows), 'provider receives the in-memory index projection').toBe(true);
+    // c12-map-cards: the index no longer reaches the model; planning sees the in-memory projection as the folder map.
+    const resources = before.find((f) => f.folder && base.drive.pathOf(f.id, base.root) === 'Resources');
+    expect.soft(shown[0]?.map?.filter((row) => row.path === 'Resources'), 'provider receives the in-memory map row')
+      .toEqual([expect.objectContaining({ id: resources?.id, path: 'Resources', notes: 1 })]);
     expect.soft(writesAtPlan, 'planning performs no Drive writes').toEqual([0]);
     expect.soft(readsAtPlan, 'projection reads the note before planning').toEqual([1]);
     expect(mutations, 'the trace accounts for every Drive mutation').toBe(sent.length);

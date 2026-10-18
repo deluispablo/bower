@@ -25,9 +25,9 @@ it("a case's between step runs between two runs", async () => {
     calls.push(call.input);
     const context = frameOf(call) as {
       selection?: unknown; sources: Array<{ itemId: string; candidates: Array<{ id: string; path: string }> }>;
-      foldersById: Record<string, string>;
+      map: Array<{ id: string; path: string }>;
     };
-    const destination = Object.entries(context.foldersById).find(([, path]) => path === 'Projects/Flat hunt')?.[0];
+    const destination = context.map.find((row) => row.path === 'Projects/Flat hunt')?.id;
     if (context.selection === undefined && calls.length > 1) {
       expect(context.sources.some((source) => source.candidates.some((candidate) => candidate.path === path)),
         'the between-step note is a listed candidate').toBe(true);
