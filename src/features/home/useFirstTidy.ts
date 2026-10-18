@@ -5,7 +5,7 @@ import type { VaultSource } from '@/data/sources';
 import { BowerError } from '@/data/types';
 
 /** The progress of the first tidy-up, from the folder; null when the source cannot say (a stub without the method). */
-export const useFirstTidy = () => useLoad(async (s) => (await s.vault.firstTidy?.()) ?? null, (s, cb) => s.vault.subscribe(cb));
+export const useFirstTidy = () => useLoad(async (s) => (await s.vault.firstTidy?.()) ?? null, (s, cb) => { return s.vault.subscribe(cb); });
 
 /** The one mark that could not be saved, shown by the checklist with its retry. */
 export const useFirstTidyFailure = create<{ failure: { step: FirstTidyStep; message: string } | null }>(() => ({ failure: null }));
