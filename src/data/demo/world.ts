@@ -1012,6 +1012,7 @@ export class DemoWorld {
         }),
       toggleTask: (path, index) =>
         change(() => {
+          if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
           const n = this.noteFor(path);
           let i = -1;
           let label = '';
