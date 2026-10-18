@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PoseBower } from '@/bird/Bower';
 import { BowerMark } from '@/ui/Icon';
+import { Button } from '@/ui/Button';
 import { Court } from '@/bird/Court';
 import s from './signin.module.css';
 
@@ -30,7 +31,8 @@ export function SignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Said once, then the parameter leaves the address so a reload does not repeat it.
-  const [returned] = useState(() => SIGNIN_SENTENCES[params.get('signin') ?? ''] ?? null);
+  const [returnedReason] = useState(() => params.get('signin') ?? '');
+  const returned = SIGNIN_SENTENCES[returnedReason] ?? null;
   useEffect(() => {
     if (!params.has('signin')) return;
     const next = new URLSearchParams(params);
@@ -53,6 +55,16 @@ export function SignIn() {
       // expected: no storage; nothing was kept.
     }
   }, []);
+  function signIn() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    session.signIn().catch((e: unknown) => {
+      console.error(e);
+      setBusy(false);
+      setError(SIGNIN_SENTENCES.failed ?? null);
+    });
+  }
   return (
     <div className={s.wrap}>
       <header className={s.art}>
@@ -77,31 +89,24 @@ export function SignIn() {
           type="button"
           className={s.google}
           disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError(null);
-            session.signIn().catch((e: unknown) => {
-              console.error(e);
-              setBusy(false);
-              setError('Google did not answer. Try again.');
-            });
-          }}
+          onClick={signIn}
         >
           <GoogleG />
           {busy ? 'Opening Google…' : 'Continue with Google'}
         </button>
         {(error ?? returned) && (
           <p role="alert" className={s.error}>
-            {error ?? returned}
+            <span>{error ?? returned}</span>
+            {returnedReason === 'not-invited' && (
+              <Button variant="ghost" size="sm" disabled={busy} onClick={signIn}>Use another account</Button>
+            )}
           </p>
         )}
-        <p className={s.small}>Bower makes one folder in your Drive and works only there. Only people invited to this Bower can sign in.</p>
+        <p className={s.small}>Google will ask to let Bower see and change your Drive. Bower keeps to its own folder. Only people invited to this Bower can sign in.</p>
         <nav aria-label="About" className={s.links}>
+          <a href="/landing/">See how Bower works</a>
           <Link to="/privacy">Privacy</Link>
           <Link to="/terms">Terms</Link>
-          <a href="https://github.com/deluispablo/bower" rel="noreferrer">
-            Run your own Bower
-          </a>
         </nav>
       </main>
     </div>

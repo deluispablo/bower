@@ -200,9 +200,12 @@ test('the landing page opens without console errors', async ({ page }) => {
   expect(await page.locator('path[d]').count()).toBeGreaterThan(5);
 });
 
-test('run your own Bower opens the repo', async ({ page }) => {
+test('sign-in offers landing and legal links', async ({ page }) => {
   await open(page, '/sign-in', 'signed-out');
-  await expect(page.getByRole('link', { name: /Run your own Bower/ })).toHaveAttribute('href', 'https://github.com/deluispablo/bower');
+  await expect(page.getByRole('link', { name: 'See how Bower works', exact: true })).toHaveAttribute('href', '/landing/');
+  await expect(page.getByRole('link', { name: 'Privacy', exact: true })).toHaveAttribute('href', '/privacy');
+  await expect(page.getByRole('link', { name: 'Terms', exact: true })).toHaveAttribute('href', '/terms');
+  await expect(page.getByRole('link', { name: /Run your own Bower/ })).toHaveCount(0);
 });
 
 test.describe('the side panel', () => {
