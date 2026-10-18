@@ -215,11 +215,11 @@ it('b6-clear-project-source-basis', async () => {
 
 async function ambiguous(count: number) {
   const folder = Object.fromEntries(Array.from({ length: count }, (_, i) => [
-    `Resources/Letters ${i + 1}/Letters ${i + 1}.md`, note('Alex keeps letters and words.'),
+    `Resources/Letters ${i + 1}/Letters ${i + 1}.md`, note('Alex files letters and words.'),
   ]));
   folder['Projects/Bicycle sale/Bicycle sale.md'] = note('Alex records bicycle repair.', 'project');
   const b = await setup(folder, [{ line: 'Alex has letters and bicycle material.', files: ['Letter.txt', 'Bicycle.txt'] }],
-    { 'Letter.txt': 'Alex keeps letters and words.', 'Bicycle.txt': 'Alex records bicycle repair.' });
+    { 'Letter.txt': 'Alex files letters and words.', 'Bicycle.txt': 'Alex records bicycle repair.' });
   const paths = Array.from({ length: count }, (_, i) => `Resources/Letters ${i + 1}`);
   const pile = b.admission.piles.find((p) => p.items.some((f) => f.fileId === b.source('Letter.txt')));
   expect(pile).toBeDefined();

@@ -4,7 +4,7 @@ import { ABOUT_REGIONS, type AboutRegion, MOC_REGIONS, createOwnershipContext, t
 import { sha256 } from './hashes';
 import { proposalOk, isAnsweredRow, type AnsweredRow, type ReportQuestion } from './questions';
 import { NOTE_TAGS_MAX, readTagList, TAG_LIST_MAX } from './tag-format';
-import { dateOk, LINT_EVIDENCE_VERSION, frontValues, parseNote, propertyValue, readTypeTable, scalarList, typeRowOk, typeTableOk } from './note-format';
+import { dateOk, LINT_EVIDENCE_VERSION, frontValues, parseNote, propertyValue, readTypeTable, scalarList, TERM_LENGTH_MAX, TERMS_MAX, typeRowOk, typeTableOk } from './note-format';
 import { VIEW_LIMITS, computedBy, viewFault } from './view-format';
 import { BowerError, type TypeRow, type UpdatedRow } from './types';
 import { parseObservations, canRebuildAboutSection, aboutArchivePath, validLearnedBlock, hasVerbatimQuote, consolidationOk } from './observations';
@@ -123,8 +123,10 @@ export type EditText = {
 };
 /** Stored lint facts or parser refusal; the version and appendix fields are absent only in older manifests. */
 export type LintEvidence = { links: string[]; tags: number; summary: boolean;
-  v?: typeof LINT_EVIDENCE_VERSION; status?: string | null; template?: string | null; active?: string[];
+  v?: 1 | 2; status?: string | null; template?: string | null; active?: string[];
   tagList?: string[]; original?: string | null; refused?: 'newer' | 'damaged' | null;
+  /** v2: the body's distinct search words, first appearance first (`searchTokens`, at most `TERMS_MAX`). */
+  terms?: string[];
 };
 export type MaintenanceNote = { path: string; version: string; summary: string; coverage: { kind: 'prefix'; bytes: number }; owner?: 'bower' | 'person'; type?: string | null; incomplete?: boolean; moc?: MocSnapshot; members?: string[]; lint?: LintEvidence | 'unreadable' };
 export type MaintenanceDeclaration = { at: string; sources: { path: string; file: SeenFile; text: string; content: VerifiedContent }[];
@@ -1246,8 +1248,12 @@ export function lintEvidenceOk(value: unknown): value is LintEvidence | 'unreada
   if (value === 'unreadable') return true;
   if (!record(value) || !list(value.links, text) || !integer(value.tags) || typeof value.summary !== 'boolean') return false;
   if (value.v === undefined) return closed(value, ['links', 'tags', 'summary']);
-  return value.v === LINT_EVIDENCE_VERSION
-    && closed(value, ['v', 'links', 'tags', 'summary', 'status', 'template', 'active', 'tagList', 'original', 'refused'])
+  // v1 stays valid (a manifest or state written before v2); only v2 carries the body's terms.
+  const v2 = value.v === LINT_EVIDENCE_VERSION;
+  return (value.v === 1 || v2)
+    && closed(value, ['v', 'links', 'tags', 'summary', 'status', 'template', 'active', 'tagList', 'original', 'refused', ...(v2 ? ['terms'] : [])])
+    && (!v2 || list(value.terms, (term) => text(term) && term.length >= 1 && term.length <= TERM_LENGTH_MAX)
+      && value.terms.length <= TERMS_MAX && unique(value.terms))
     && (value.status === null || text(value.status)) && (value.template === null || text(value.template))
     && list(value.active, (date) => text(date) && dateOk(date)) && list(value.tagList, text)
     && (value.original === null || text(value.original)) && (value.refused === null || value.refused === 'newer' || value.refused === 'damaged');

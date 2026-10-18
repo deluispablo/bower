@@ -11,6 +11,7 @@ import { displayName, extOf, kindOf, nameOf, type Entries, type Entry } from '..
 import { isHidden, PROP } from './layout';
 import { seenNow } from './seen';
 import { linkTarget } from '../contracts/links';
+import { searchTokens } from '../contracts/note-format';
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 
@@ -144,18 +145,18 @@ export class VaultIndex {
   }
 
   /**
-   * Script neighbourhood: notes ranked by BM25 over name, summary and tags, folder maps, then one resolved link hop, at
-   * most 12. `notes` may hold originals (C09 R14, with an empty summary): matched by their name, or reached by a link.
+   * Script neighbourhood: notes ranked by BM25 over name, summary, tags and body terms (lint evidence), folder maps, then
+   * one resolved link hop, the first `limit` (12 unless the caller says otherwise: a request's provider cut counts what
+   * it leaves out). `notes` may hold originals (C09 R14, with an empty summary): matched by their name, or reached by a link.
    * `at`, a request's run time (epoch ms): "before|by|until <month>" adds the month names from the run month (UTC) to it.
    */
-  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[]; tags?: readonly string[] }>>, at?: number): string[] {
-    const ignored = new Set(['a', 'an', 'the', 'is', 'has', 'for', 'and', 'of', 'to', 'alex', 'txt', 'md', 'pdf']);
+  neighbourhood(words: string, notes: Readonly<Record<string, { summary: string; type?: string | null; links?: readonly string[]; tags?: readonly string[]; terms?: readonly string[] }>>,
+    at?: number, limit = 12): string[] {
     const all = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-    const tokens = (text: string): string[] => all(text).filter((word) => !ignored.has(word));
-    const textOf = (id: string): string[] => tokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''} ${(notes[id]?.tags ?? []).join(' ')}`);
-    const own = new Set(tokens(words));
+    const textOf = (id: string): string[] => searchTokens(`${this.byId(id)?.name ?? ''} ${notes[id]?.summary ?? ''} ${(notes[id]?.tags ?? []).join(' ')} ${(notes[id]?.terms ?? []).join(' ')}`);
+    const own = new Set(searchTokens(words));
     // Temporal query expansion (Berberich et al., ECIR 2010): a dated request also matches notes dated inside its window.
-    // shortcut: only "before|by|until" with a full month name in the next three words (day numbers, "the", "of" between); numeric dates (28/11, 2026-11-28), abbreviations and relative spans ("next week") are not expanded, and a note with no month name in its name, summary or tags is still missed; upgrade with a date parser if requests miss dated notes.
+    // shortcut: only "before|by|until" with a full month name in the next three words (day numbers, "the", "of" between); numeric dates (28/11, 2026-11-28), abbreviations and relative spans ("next week") are not expanded, and a note with no month name in its name, summary, tags or body terms is still missed; upgrade with a date parser if requests miss dated notes.
     if (at !== undefined) {
       const start = new Date(at).getUTCMonth();
       const said = all(words);
@@ -197,7 +198,7 @@ export class VaultIndex {
     const neighbours = [...new Set([...matches, ...hubs].flatMap((id) => (notes[id]?.links ?? []).flatMap((link) => {
       const target = resolve(link); return target ? [target] : [];
     })))].sort(order);
-    return [...new Set([...matches, ...hubs, ...neighbours])].slice(0, 12);
+    return [...new Set([...matches, ...hubs, ...neighbours])].slice(0, limit);
   }
 
   /** Adds a file or takes in its new name and parent. */

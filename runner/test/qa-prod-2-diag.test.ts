@@ -2,7 +2,8 @@
  * qa-prod-2-diag: the timing output says, per source, what the provider offered the model and what it picked, as
  * hashed ids only (OWASP Logging Cheat Sheet, "data to exclude": no path, name, request word or token reaches a log).
  * Row: `selection: source=<h> candidates=<h:tag,...|none> cut=<n> wants=<h,...|none> required=<n>/<5, or 10 for a request> destination=<h|none> of=<i|none> new=<0|1>`.
- * `cut` counts only the provider's own final cut of its merged list (`VaultIndex.neighbourhood` already bounds itself at 12).
+ * `cut` counts what the provider left out of the source's list, which for a request is every ranked note past the first 12
+ * (pins never cut); for a pile or thing the ranking itself stops at 12.
  * Made-up folders only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

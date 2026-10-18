@@ -342,8 +342,19 @@ function linksIn(text: string): string[] {
   return out;
 }
 
-/** Bump when stored evidence needs another read; old manifests remain readable. */
-export const LINT_EVIDENCE_VERSION = 1;
+/** Bump when stored evidence needs another read; old manifests remain readable. 2 adds the body's `terms`. */
+export const LINT_EVIDENCE_VERSION = 2;
+
+/** Lucene's `EnglishAnalyzer.ENGLISH_STOP_WORDS_SET`, with the folder's own words that say nothing (alex, has, file kinds). */
+export const STOP_WORDS: ReadonlySet<string> = new Set(['a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'if', 'in',
+  'into', 'is', 'it', 'no', 'not', 'of', 'on', 'or', 'such', 'that', 'the', 'their', 'then', 'there', 'these', 'they', 'this',
+  'to', 'was', 'will', 'with', 'has', 'alex', 'txt', 'md', 'pdf']);
+/** The search's one tokenizer: lower-cased letter and digit runs, stop words left out, in order of appearance. */
+export const searchTokens = (text: string): string[] =>
+  (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((word) => !STOP_WORDS.has(word));
+// shortcut: 32 terms of at most 24 characters keep a 2,000-note folder's progress manifest (snapshot + retrieval.json) under 8 MiB; lower further or drop terms from the manifest snapshot if a real folder nears it.
+export const TERMS_MAX = 32;
+export const TERM_LENGTH_MAX = 24;
 
 /** Read facts, not generation rules. Other callers still receive null on parser refusal (their prefix fallback). */
 export function lintFacts(path: string, raw: string, diagnostics = false): LintEvidence | null {
@@ -351,13 +362,14 @@ export function lintFacts(path: string, raw: string, diagnostics = false): LintE
     const note = parseNote(path, raw);
     return { v: LINT_EVIDENCE_VERSION, links: note.links, tags: note.tags.length, summary: note.summary.trim() !== '',
       status: note.status ?? null, template: frontValues(raw)?.bower_template ?? null,
-      active: note.timeline.map((entry) => entry.date).filter(dateOk), tagList: note.tags, original: note.original ?? null, refused: null };
+      active: note.timeline.map((entry) => entry.date).filter(dateOk), tagList: note.tags, original: note.original ?? null, refused: null,
+      terms: [...new Set(searchTokens(note.body).filter((term) => term.length <= TERM_LENGTH_MAX))].slice(0, TERMS_MAX) };
   } catch (error) {
     const refused = noteRefusal(error);
     if (!refused) throw error;
     console.error(error);
     return diagnostics ? { v: LINT_EVIDENCE_VERSION, links: [], tags: 0, summary: false, status: null, template: null,
-      active: [], tagList: [], original: null, refused } : null;
+      active: [], tagList: [], original: null, refused, terms: [] } : null;
   }
 }
 

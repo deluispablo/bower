@@ -245,7 +245,7 @@ it('numeric consent retry preserves the approved change', async () => {
   delete c.presses; c.expected = {};
   c.inboxFiles[sourceName] += '\nReplacement capacity 900 litres.';
   const state = 'The replacement holds 900 litres.';
-  c.presses = [{ between: [{ kind: 'answer', question: { kind: 'state', note: path }, yes: true }] }, {}];
+  c.presses = [{ between: [{ kind: 'answer', question: { kind: 'state', note: path }, yes: true }] }, { request: { kind: 'tidy', text: 'Update Garden plot.' } }];
   const calls: string[] = [];
   const result = await runWithClaude(c, phaseAwareClaude((call, step, _attempt, phase) => {
     calls.push(`${step}:${phase}`);

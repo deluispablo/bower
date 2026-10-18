@@ -2680,7 +2680,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     }
     if (requests.size) shown.requests = [...requests].map(([requestId, r]) => ({ requestId, text: r.text }));
     const indexed: Record<string, MaintenanceNote> = { ...setup.retrieval };
-    const metadata: Record<string, { summary: string; type?: string | null; links?: string[]; tags?: string[] }> = {};
+    const metadata: Record<string, { summary: string; type?: string | null; links?: string[]; tags?: string[]; terms?: string[] }> = {};
     // A note Drive refuses to give for good is left out of every read of this run (discovery names it); retries and waits still stop the run.
     const leftOut = new Set<string>();
     const refusedRead = <T>(id: string, got: () => Promise<T>): Promise<T | undefined> => got().catch((error: unknown) => {
@@ -2705,10 +2705,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
       const entry = indexed[file.id];
       if (front?.incomplete && entry) entry.incomplete = true;
-      // Links and tags are the version's lint evidence; without it, the kept prefix's links (nothing is fetched for them).
+      // Links, tags and body terms are the version's lint evidence; without it, the kept prefix's links (nothing is fetched for them).
       const lint = entry?.lint === 'unreadable' ? undefined : entry?.lint;
       metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', type: front?.type ?? indexed[file.id]?.type,
-        ...(lint ? { links: lint.links, ...(lint.tagList?.length ? { tags: lint.tagList } : {}) } : prefix ? { links: indexedFront(prefix, true).links } : {}) };
+        ...(lint ? { links: lint.links, ...(lint.tagList?.length ? { tags: lint.tagList } : {}), ...(lint.terms?.length ? { terms: lint.terms } : {}) }
+          : prefix ? { links: indexedFront(prefix, true).links } : {}) };
     }
     // C09 (R14, R25): an original (a file under a main folder, not a note, that Bower reads by its listed name and size) is
     // a candidate for a request only, matched by its name or reached by a link; nothing of it is read to find it.
@@ -2723,7 +2724,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       return things.length ? things.map((thing) => ({ itemId: thing.fileId, words: `${thing.name} ${p?.words ?? ''} ${p?.things.find((t) => t.fileId === thing.fileId)?.text ?? ''}` }))
         : [{ itemId: pile.pileId, words: p?.words ?? '' }];
     });
-    for (const line of shownTook.taken.journal) items.push({ itemId: line.fileId, words: await read.readText(line.fileId) });
+    // A request ranks by its words, never its record's JSON keys ("text", "kind"…), which body terms would match.
+    // shortcut: non-request journal lines rank on their record JSON; rank them on their what/text/path if a change line's candidates prove noisy.
+    for (const line of shownTook.taken.journal) items.push({ itemId: line.fileId, words: requests.get(line.fileId)?.text ?? await read.readText(line.fileId) });
     const sources: Array<(typeof items)[number] & { ids: string[] }> = [];
     // qa-prod-2-diag: each source's candidates with their tags and the provider's own cut, for the accepted selection's rows.
     const offers = new Map<string, { candidates: Array<{ id: string; tag: string }>; cut: number }>();
@@ -2753,13 +2756,19 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const source of items) {
       const waiting = ix.waitingRun(source.itemId) !== null;
       // Built at each use: captureMaps adds a matched map's links to metadata, and the hop must see them.
-      const near = (): string[] => ix.neighbourhood(source.words, metadata, requests.has(source.itemId) ? shownTook.taken.at : undefined);
-      // Originals (a request's) ride beside the 12 notes and do not count toward them (c12-map-cards ruling 7).
-      const nearOriginals = (): string[] => requests.has(source.itemId) ? ix.neighbourhood(source.words, { ...metadata, ...originals }, shownTook.taken.at).filter((id) => originals[id]) : [];
-      const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : near())])];
-      await captureMaps(matched);
+      // A request's ranking is whole, so the cut below counts what it leaves out; a pile or thing keeps the ranking's 12.
+      const near = (): string[] => requests.has(source.itemId) ? ix.neighbourhood(source.words, metadata, shownTook.taken.at, Infinity) : ix.neighbourhood(source.words, metadata);
+      // Originals (a request's) ride beside the 12 notes and do not count toward them (c12-map-cards ruling 7); they rank
+      // among originals only (by name), so notes' body terms never push them out.
+      const nearOriginals = (): string[] => requests.has(source.itemId)
+        ? ix.neighbourhood(source.words, { ...metadata, ...originals }, shownTook.taken.at, Infinity).filter((id) => originals[id]).slice(0, 12) : [];
+      // Maps are read among the pins and the first 12 ranked only: a map further down is one id, never read.
+      const pinsHere = pinsFor(source.itemId);
+      const captureFirst = (ids: readonly string[]): Promise<void> => captureMaps([...pinsHere, ...ids.filter((id) => !pinsHere.includes(id)).slice(0, 12)]);
+      const matched = [...new Set([...pinsHere, ...(waiting ? [] : near())])];
+      await captureFirst(matched);
       const neighbourhood = waiting ? matched : near();
-      await captureMaps(neighbourhood);
+      await captureFirst(neighbourhood);
       const membership = mocMembership(indexed);
       const notes = [...new Set(neighbourhood.flatMap((id) => {
         const note = indexed[id];
@@ -2775,7 +2784,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const beside = waiting ? [] : nearOriginals();
       sources.push({ ...source, ids: [...kept, ...beside] });
       // nK: the one-based place in the expanded neighbourhood (maps before their members, then the originals), before the merge and the cut.
-      // shortcut: `cut` counts only this cut; `neighbourhood` already bounds itself at 12, so cut=0 is not exhaustive retrieval.
+      // `cut` counts what this cut left out of the source's list: for a request every ranked note past the first 12 (pins
+      // never cut); for a pile or thing the ranking itself stops at 12.
       const rank = [...new Set([...notes.filter((id) => indexed[id] && !originals[id]), ...beside])];
       offers.set(source.itemId, { cut: merged.length - kept.length, candidates: [...kept, ...beside].map((id) => ({ id,
         tag: pins.includes(id) ? 'p' : profiles.includes(id) ? 'f' : `n${rank.indexOf(id) + 1}` })) });
@@ -3129,11 +3139,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const limited = new Map((shown.sources ?? []).flatMap((source) => {
           const item = selection.value.items.find((i) => i.itemId === source.itemId);
           if (!item || !requests.has(source.itemId)) return [];
-          const of = source.candidates.filter((id) => !originals[id]);
-          const unread = of.filter((id) => !whole.has(ix.pathOf(id) ?? ''));
+          // Ruling 6 (qa-prod-5-F2): the notes the provider cut count as unread too, so the line and the `selection:` row agree.
+          const cut = offers.get(source.itemId)?.cut ?? 0;
+          const kept = source.candidates.filter((id) => !originals[id]);
+          const unread = kept.filter((id) => !whole.has(ix.pathOf(id) ?? ''));
           const cutWanted = unread.filter((id) => item.wants.includes(id));
-          const short = requiredBy.get(source.itemId) === SELECTION_NOTES.request || (cutWanted.length > 0 && unread.length > cutWanted.length);
-          return short && unread.length ? [[source.itemId, { read: of.length - unread.length, of: of.length }] as const] : [];
+          const short = requiredBy.get(source.itemId) === SELECTION_NOTES.request || (cutWanted.length > 0 && unread.length > cutWanted.length) || cut > 0;
+          const of = kept.length + cut;
+          return short && unread.length + cut ? [[source.itemId, { read: of - unread.length - cut, of }] as const] : [];
         }));
         const seen: Seen = { limited, types: shown.types, tagList, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
           suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
