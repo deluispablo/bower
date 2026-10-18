@@ -4,7 +4,7 @@
  * a document that only confirms a known fact, and the C04-C15 corpus rubrics agree with the method. No live call:
  * `claude` is answered by scripted proposals in the intent shape, scored by the corpus scorer.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { intentOf, type ClaudeCall, type ClaudeSpawn } from '../src/claude';
@@ -173,6 +173,29 @@ describe('the second-brain method (TL-P4-08)', () => {
         expect({ id: c.id, asked: (c.expected.report?.questions?.length ?? 0) > 0 }).toEqual({ id: c.id, asked: true });
       }
     }
+  });
+
+  it('corpus-inventory AC3: method agreement is current and is not semantic judging', () => {
+    const log = readFileSync(LOG, 'utf8');
+    const readme = readFileSync(resolve(ROOT, 'README.md'), 'utf8');
+    const ROW = /^\| ([a-z0-9][a-z0-9-]*) \|/;
+    const lines = log.split('\n');
+    const rows = lines.filter((l) => ROW.test(l));
+    const ids = rows.map((l) => l.match(ROW)?.[1] ?? '');
+    const dirs = readdirSync(ROOT, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(resolve(ROOT, d.name, 'case.json'))).map((d) => d.name);
+    // (i) One verdict row per retained case; verdicts are agreement words, never pass, fail or a score.
+    expect([...new Set(ids)].sort()).toEqual([...dirs].sort());
+    expect(ids.length).toBe(dirs.length);
+    expect(rows.filter((l) => !/^\| [a-z0-9-]+ \| (agrees|changed) \| .{10,}/.test(l))).toEqual([]);
+    // (ii) Every row continues a table.
+    expect(lines.filter((l, i) => ROW.test(l) && !(ROW.test(lines[i - 1] ?? '') || /^\| ---/.test(lines[i - 1] ?? '')))).toEqual([]);
+    // (iii) Agreement is not judgment.
+    expect(log).toContain('it is never a run result or a semantic judgment of model output');
+    // (iv) No stale status; the replay outcome is matched only quoted, since "a restored inbox source" is undo prose.
+    const stale = /await the lead's packet|pending contracts\/driver work|rejected today|already-active|"restored"|same-year seal|1024 events|Bounds await the lead|\.bower\/log\.md/;
+    expect(log).not.toMatch(stale);
+    expect(readme).not.toMatch(stale);
   });
 });
 
