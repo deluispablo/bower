@@ -683,7 +683,6 @@ export function leavingLetsGo<T extends Pick<Session, 'signOut' | 'deleteAccount
 }
 
 /** Every Drive write is fenced; a method the table does not know is too (fail closed). */
-export const needsFence = isDriveWrite;
 
 /** The guard's check before one Drive call, and what the call answered (to learn upload sessions). */
 export interface DrivePolicy {
@@ -701,7 +700,7 @@ export function drivePolicy(guard: PlaceGuard, fresh: () => boolean = () => fals
   const mark = (session: string): string => `${guard.epoch() ?? '-'}:${session}`;
   return {
     before(key, args) {
-      if (!needsFence(key)) return null;
+      if (!isDriveWrite(key)) return null;
       if (key === 'openResumable') return guard.verify(true);
       if (key === 'putChunk') {
         const session = String(args[0]);
@@ -724,7 +723,7 @@ export function fenceDrive<T extends object>(drive: T, guard: PlaceGuard): T {
   return new Proxy(drive, {
     get(target, key, receiver) {
       const value: unknown = Reflect.get(target, key, receiver);
-      if (typeof value !== 'function' || !needsFence(key)) return value;
+      if (typeof value !== 'function' || !isDriveWrite(key)) return value;
       return async (...args: unknown[]): Promise<unknown> => {
         await policy.before(key, args);
         const result: unknown = await Reflect.apply(value, target, args);

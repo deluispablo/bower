@@ -320,7 +320,6 @@ describe('c3-reservation-home: the id kept on the outbox line', () => {
     expect(kept.map((w) => w.line.id)).toEqual([one.id]);
     expect(kept[0]?.reserved).toBe(sentWith[0]);
     // The page is reloaded: a new journal knows only what this device kept.
-    journal.dispose();
     const ids = vi.spyOn(drive, 'generateIds');
     const reloaded = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
     await expect(reloaded.flush()).resolves.toBeUndefined();
@@ -367,7 +366,6 @@ describe('c4-create-landed: the intent kept on the outbox line', () => {
     expect(kept()[0]?.sent).toMatchObject({ parent: changes, name: `${one.id}.json` });
     expect(kept()[0]?.sent?.content?.sha256).toMatch(/^[0-9a-f]{64}$/);
     // After a reload the changes folder is looked up as another one: the line still goes where it went, and is found there.
-    journal.dispose();
     const other = (await drive.createFolder(root, 'elsewhere')).id;
     const reloaded = new Journal(drive, { owner: async () => root, folder: async () => other, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
     await expect(reloaded.flush()).resolves.toBeUndefined();
@@ -388,7 +386,6 @@ describe('c4-create-landed: the intent kept on the outbox line', () => {
       if (!line?.reserved) throw new Error('no kept id');
       // The outbox as an earlier build kept it: the line and its id, no intent (or one this build cannot read).
       localStorage.setItem(`bower:outbox:${root}`, JSON.stringify([{ line: line.line, reserved: line.reserved, ...(stored === 'unreadable' ? { sent: { parent: 7 } } : {}) }]));
-      journal.dispose();
       const reloaded = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
       await expect(reloaded.flush()).resolves.toBeUndefined();
       expect(sends.map((x) => x.id)).toEqual([line.reserved, line.reserved]);

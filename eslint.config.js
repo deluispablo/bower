@@ -7,7 +7,7 @@ import { testRulesConfig } from './scripts/eslint-test-rules.mjs';
 import { syntaxConfig } from './scripts/eslint-syntax.mjs';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'scripts', 'api', 'runner', 'e2e/_explore-*'] },
+  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'scripts', 'api', 'runner', 'e2e/_explore-*', '_AgentMethod'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.strict],
     files: ['**/*.{ts,tsx}'],

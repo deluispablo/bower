@@ -216,7 +216,6 @@ export class DriveVault implements VaultSource {
     this.ix = null;
     this.notes.clear();
     this.making.clear();
-    this.journal.dispose();
     this.listeners.clear();
   }
 
