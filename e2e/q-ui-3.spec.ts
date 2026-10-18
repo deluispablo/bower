@@ -14,7 +14,7 @@ for (const source of ['demo', 'fake']) {
     const names = Array.from({ length: 24 }, (_, i) => `Garden idea ${i + 1}`);
     for (const name of names) {
       await inbox.getByRole('button', { name: 'Add a pile', exact: true }).click();
-      await page.getByRole('textbox', { name: 'What is this?', exact: true }).fill(name);
+      await page.getByRole('textbox', { name: 'What is this? (optional)', exact: true }).fill(name);
       await page.getByRole('button', { name: 'Add to the inbox', exact: true }).click();
       await expect(inbox.getByRole('link', { name: new RegExp(`^${name}\\b`) })).toBeVisible();
     }

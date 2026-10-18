@@ -27,7 +27,7 @@ async function open(page: Page, path = '/add', scenario = 'empty'): Promise<void
 }
 
 async function addNote(page: Page): Promise<Locator> {
-  await page.getByRole('textbox', { name: 'What is this?', exact: true }).fill(NOTE);
+  await page.getByRole('textbox', { name: 'What is this? (optional)', exact: true }).fill(NOTE);
   await page.getByRole('button', { name: 'Add to the inbox', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Inbox' }).getByRole('link', { name: new RegExp(`^${NOTE}`) })).toBeVisible();
   const message = dockMessages(page).filter({ hasText: NOTE_MESSAGE });
@@ -222,7 +222,7 @@ test('MWS Sign out now after adding a pile reads whole', async ({ page }) => {
     } });
   });
   await open(page);
-  await page.getByRole('textbox', { name: 'What is this?', exact: true }).fill('Papers from Alex');
+  await page.getByRole('textbox', { name: 'What is this? (optional)', exact: true }).fill('Papers from Alex');
   await page.locator('input[type=file][multiple]').setInputFiles(['a.pdf', 'b.pdf'].map((name) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF ${name}`) })));
   await page.getByRole('button', { name: 'Add 2 things to the inbox', exact: true }).click();
   const message = dockMessages(page).filter({ hasText: '2 things in the inbox' });

@@ -65,7 +65,7 @@ it.each([
   expect.soft(sessionStorage.getItem('bower:add-draft')).toBe(context);
   expect.soft(sessionStorage.getItem('bower:add-items')).toBe(storedMembers);
   expect.soft(screen.getByLabelText('Current route')).toHaveTextContent('/add');
-  expect.soft(screen.queryByRole('textbox', { name: 'What is this?' })).toHaveValue(context);
+  expect.soft(screen.queryByRole('textbox', { name: 'What is this? (optional)' })).toHaveValue(context);
   const list = screen.queryByRole('list', { name: 'In this pile' });
   expect.soft(list).not.toBeNull();
   expect.soft(list?.querySelectorAll('li').length ?? 0).toBe(members.length);
@@ -145,7 +145,7 @@ it('a rejected Add admission retains context, all rows and complete bytes for re
   expect(sessionStorage.getItem('bower:add-items')).toBe(storedItems); expect(sessionStorage.getItem('bower:add-draft')).toBe(context);
   expect(get(readyKey)).toBe(body); expect(screen.getByLabelText('Current route')).toHaveTextContent('/add');
   expect(within(screen.getByRole('list', { name: 'In this pile' })).getAllByRole('listitem')).toHaveLength(2);
-  expect(screen.getByRole('textbox', { name: 'What is this?' })).toHaveValue(context);
+  expect(screen.getByRole('textbox', { name: 'What is this? (optional)' })).toHaveValue(context);
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect(addPile).toHaveBeenCalledTimes(2); expect(addPile.mock.calls[1]).toEqual(addPile.mock.calls[0]);
   expect(get(readyKey)).toBeUndefined(); expect(screen.getByLabelText('Current route')).toHaveTextContent('/');
@@ -164,12 +164,12 @@ it('an Add draft with unavailable bytes keeps every member before saving (pendin
   expect.soft(zone).toHaveTextContent('Saving this pile…');
   expect(addPile).toHaveBeenCalledOnce();
   const request = addPile.mock.calls[0]?.[0]; if (!request) throw new Error('The admission request is missing.');
-  expect.soft(screen.getByRole('textbox', { name: 'What is this?' })).toBeDisabled();
+  expect.soft(screen.getByRole('textbox', { name: 'What is this? (optional)' })).toBeDisabled();
   expect.soft(screen.getByRole('textbox', { name: 'Paste a link' })).toBeDisabled();
-  for (const name of ['Choose files', 'Take a photo', 'Add link', 'Take outline.txt out', 'Take source.example out']) expect.soft(screen.getByRole('button', { name })).toBeDisabled();
+  for (const name of ['Choose files', 'Add a photo', 'Add link', 'Take outline.txt out', 'Take source.example out']) expect.soft(screen.getByRole('button', { name })).toBeDisabled();
   for (const input of view.container.querySelectorAll('input[type="file"]')) expect.soft(input).toBeDisabled();
   // Model edits only where the actual rendered native control is enabled; never force a disabled change.
-  const contextInput = screen.getByRole('textbox', { name: 'What is this?' });
+  const contextInput = screen.getByRole('textbox', { name: 'What is this? (optional)' });
   if (contextInput instanceof HTMLTextAreaElement && !contextInput.disabled) await act(async () => { fireEvent.change(contextInput, { target: { value: 'Synthetic later context' } }); });
   const linkInput = screen.getByRole('textbox', { name: 'Paste a link' });
   if (linkInput instanceof HTMLInputElement && !linkInput.disabled) {
@@ -206,7 +206,7 @@ it('an Add draft with unavailable bytes keeps every member before saving (failed
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add 2 things to the inbox' })); });
   expect.soft(zone).toHaveAttribute('aria-disabled', 'true');
   expect.soft(zone).toHaveTextContent('Saving this pile…');
-  expect(screen.getByRole('textbox', { name: 'What is this?' })).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: 'What is this? (optional)' })).toBeDisabled();
   expect(screen.getByRole('textbox', { name: 'Paste a link' })).toBeDisabled();
   await act(async () => { fireEvent.drop(zone, { dataTransfer: { files: [later] } }); });
   expect(sessionStorage.getItem('bower:add-items')).toBe(before);
@@ -215,13 +215,13 @@ it('an Add draft with unavailable bytes keeps every member before saving (failed
   expect(diagnostic).toHaveBeenCalledExactlyOnceWith(failure);
   expect(sessionStorage.getItem('bower:add-items')).toBe(before); expect(sessionStorage.getItem('bower:add-draft')).toBe(context);
   expect(screen.getByLabelText('Current route')).toHaveTextContent('/add');
-  expect(screen.getByRole('textbox', { name: 'What is this?' })).toBeEnabled();
+  expect(screen.getByRole('textbox', { name: 'What is this? (optional)' })).toBeEnabled();
   expect(screen.getByRole('textbox', { name: 'Paste a link' })).toBeEnabled();
   expect(zone).not.toHaveAttribute('aria-disabled');
   expect(zone).toHaveTextContent('Drop files here');
-  for (const name of ['Choose files', 'Take a photo', 'Take outline.txt out', 'Take source.example out']) expect(screen.getByRole('button', { name })).toBeEnabled();
+  for (const name of ['Choose files', 'Add a photo', 'Take outline.txt out', 'Take source.example out']) expect(screen.getByRole('button', { name })).toBeEnabled();
   for (const input of view.container.querySelectorAll('input[type="file"]')) expect(input).toBeEnabled();
-  await act(async () => { fireEvent.change(screen.getByRole('textbox', { name: 'What is this?' }), { target: { value: 'Synthetic retry context' } }); });
+  await act(async () => { fireEvent.change(screen.getByRole('textbox', { name: 'What is this? (optional)' }), { target: { value: 'Synthetic retry context' } }); });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Take source.example out' })); fireEvent.drop(zone, { dataTransfer: { files: [later] } }); });
   const rows = JSON.parse(sessionStorage.getItem('bower:add-items') ?? '[]') as DraftFixture[];
   const laterKey = rows.find((item) => item.name === later.name)?.key; if (!laterKey) throw new Error('The recovered member is missing.');
@@ -281,10 +281,10 @@ it('returning_to_add_during_save_shows_it_still_saving', async () => {
   await go('Go elsewhere');
   await go('Go to Add');
   expect(route()).toHaveTextContent('/add');
-  for (const name of ['What is this?', 'Paste a link']) expect(screen.getByRole('textbox', { name })).toBeDisabled();
+  for (const name of ['What is this? (optional)', 'Paste a link']) expect(screen.getByRole('textbox', { name })).toBeDisabled();
   const zone = screen.getByText('Saving this pile…').parentElement; if (!zone) throw new Error('The drop surface is missing.');
   expect(zone).toHaveAttribute('aria-disabled', 'true');
-  for (const name of ['Saving…', 'Choose files', 'Take a photo', 'Add link', 'Take outline.txt out', 'Take source.example out']) expect(screen.getByRole('button', { name })).toBeDisabled();
+  for (const name of ['Saving…', 'Choose files', 'Add a photo', 'Add link', 'Take outline.txt out', 'Take source.example out']) expect(screen.getByRole('button', { name })).toBeDisabled();
   for (const input of view.container.querySelectorAll('input[type="file"]')) expect(input).toBeDisabled();
   const before = sessionStorage.getItem('bower:add-items');
   await press('Saving…');
@@ -294,7 +294,7 @@ it('returning_to_add_during_save_shows_it_still_saving', async () => {
   await release();
   // The follower leaves Add for the inbox: nothing of the draft is left in the box or in storage.
   expect(route()).toHaveTextContent('/');
-  expect(screen.queryByRole('textbox', { name: 'What is this?' })).toBeNull();
+  expect(screen.queryByRole('textbox', { name: 'What is this? (optional)' })).toBeNull();
   expect(sessionStorage.getItem('bower:add-draft')).toBeNull();
   expect(sessionStorage.getItem('bower:add-items')).toBeNull();
   expect(vi.mocked(toast)).toHaveBeenCalledOnce();
@@ -307,7 +307,7 @@ it('an_add_opened_after_the_save_settled_starts_fresh (guard)', async () => {
   await release();
   await go('Go to Add');
   expect(route()).toHaveTextContent('/add');
-  const box = screen.getByRole('textbox', { name: 'What is this?' });
+  const box = screen.getByRole('textbox', { name: 'What is this? (optional)' });
   expect(box).toHaveValue(''); expect(box).toBeEnabled();
   await act(async () => { fireEvent.change(box, { target: { value: 'Second note' } }); });
   expect(screen.getByRole('button', { name: 'Add to the inbox' })).toBeEnabled();
@@ -327,7 +327,7 @@ it.each([{ leave: true }, { leave: false }])('a_failed_save_after_leaving_says_s
   expect(diagnostic).toHaveBeenCalledExactlyOnceWith(failure);
   expect(sessionStorage.getItem('bower:add-draft')).toBe(context);
   expect(route()).toHaveTextContent('/add');
-  const box = screen.getByRole('textbox', { name: 'What is this?' });
+  const box = screen.getByRole('textbox', { name: 'What is this? (optional)' });
   expect(box).toBeEnabled(); expect(box).toHaveValue(context);
   await press();
   expect(addPile).toHaveBeenCalledTimes(2);
