@@ -1,9 +1,9 @@
 {
-  "id": "c15-scanned-letter",
+  "id": "c15-image-only-pdf-asked",
   "capability": "C15",
-  "title": "A scan with no text to read",
+  "title": "An image-only PDF with no words is asked about",
   "covers": "model",
-  "source": "bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf)",
+  "source": "new (made-up one-page image-only PDF with no text layer, rebuilt 2026-10-08)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

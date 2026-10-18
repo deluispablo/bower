@@ -50,8 +50,8 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |
 | c13-manifest-partial-edited-note | agrees | Later personal text is protected and independent effects recover; point 8 requires the partial result, and point 1 permits an inbox return by undo without a question. |
 | c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
-| c15-more-context-bounded | agrees | The words ("papers for the move") establish fit; both supplied one-page PDFs are read whole and each gets a grounded source note. |
-| c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
+| c15-short-pdfs-read-whole | changed | The words ("papers for the move") establish fit; both one-page PDFs are shown whole with nothing cut, and each gets a grounded source note. |
+| c15-image-only-pdf-asked | changed | An image-only PDF with no words and no text layer is never placed by guess; it stays in the inbox with one question about its pile, and nothing waits. |
 | c05-person-edited-between-runs | changed | The edit happens between real runs; a later tidy-up with nothing new adds no news and no second question. |
 | c05-merge-question-first | agrees | Point 1 asks before combining near duplicates; pair identity binds both notes and neither changes before an answer. |
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
@@ -61,7 +61,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c17-b56-offer-job-search | agrees | Rechecked 2026-10-10: points 1/3/4/7/8; offer fits Job hunt with factual profile comparison, no shared-word decoy or score. B1 selects hub/profile ids within five; F13 forbids inventing currency/column authority from the source. |
 | c17-b56-clear-topic-templates | agrees | Rechecked 2026-10-10: points 1–4/8; clear trusted reference creates Source/Concept/MOC. TL-P4-41 cut-index rule, B2 scalar summary, marked evergreen MOC and immutable Source apply. Ambiguous variants use TL-P4-44 stored file-to/option ids, not this clear case. |
 | c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
-| c15-stale-package-rebuilt | agrees | Points 1, 2, 3, 7: current source evidence supplies the venue and sourced history; the runner reads the current letter and never invents the old venue. |
+| c15-current-admitted-evidence | changed | Points 1, 2, 3, 7: the current source supplies the venue and sourced history; the filed source keeps its bytes and no other venue is invented. |
 | c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
 
 C17 rows were reread with every delivered input, expected.json and rubric against TL-P4-08,
@@ -186,6 +186,15 @@ record the method re-check, not an executed model result.
     question is bound through its pile; the Saltmere note and the receipts rule are seeded; a later newsletter arrives
     in a second press; a real question stays open through a second press; the dentist letter keeps its bytes. Covers
     stays as it was in every case.
+
+## Corpus clean changes (`corpus-fix-c15`)
+
+12. **c15-more-context-bounded, c15-scanned-letter and c15-stale-package-rebuilt, now c15-short-pdfs-read-whole,
+    c15-image-only-pdf-asked and c15-current-admitted-evidence.** Reason: the corpus audit (two one-page PDFs named as
+    a bounded case, a one-pixel image named as a scan of a document, and a stale package that was never seeded). Now:
+    the short PDFs are shown whole with nothing cut; the image-only PDF stays in the inbox with one question bound to
+    its pile, and nothing waits; the current source's venue line reaches the model and the filed source keeps its
+    bytes. Covers stays model in every case.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

@@ -57,9 +57,9 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c13-manifest-move-and-create | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c13-manifest-partial-edited-note | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
 | c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
-| c15-more-context-bounded | C15 | model | new |
-| c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up) |
-| c15-stale-package-rebuilt | C15 | model | new (runner extraction of admitted source bytes) |
+| c15-short-pdfs-read-whole | C15 | model | new |
+| c15-image-only-pdf-asked | C15 | model | new (made-up one-page image-only PDF with no text layer, rebuilt 2026-10-08) |
+| c15-current-admitted-evidence | C15 | model | new (runner extraction of admitted source bytes) |
 | c15-context-budget-exhausted | C15 | model | new (runner extraction of admitted source bytes) |
 | b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture |
 | b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
@@ -234,13 +234,14 @@ entry gets an empty, refused synopsis. The execution turns skip these entries.
 
 ## C15 admitted-input cases
 
-The five `c15-*` cases have scripted `replies.json` and score through production `main` in
+The four `c15-*` cases have scripted `replies.json` and score through production `main` in
 `runner/test/c15-corpus.test.ts`, with selection and execution only and no synopsis. The app supplies
-the admission manifest; the runner extracts the current source bytes. The historical package case
-ids remain, but their letters prove current-source outcomes. The packing guide stays partial at
-the text limit; both supplied PDFs in `c15-more-context-bounded` are read whole and each gets a source
-note. The unread scan stays in the inbox with one question. Created-file expectations include the
-first run's health note. These cases do not assert repeated context exchanges or OCR.
+the admission manifest; the runner extracts the current source bytes. In `c15-current-admitted-evidence`
+the current source's venue line reaches the model and the filed source keeps its bytes. The packing guide
+stays partial at the text limit. Both one-page PDFs in `c15-short-pdfs-read-whole` are shown whole, with
+nothing cut, and each gets a source note. The image-only PDF in `c15-image-only-pdf-asked` has no text
+layer; it stays in the inbox with one question, and nothing waits. Created-file expectations include the
+first run's health note.
 
 ## C09 question cases
 
