@@ -68,6 +68,8 @@ export interface VaultSource {
   piles(): Promise<Pile[]>;
   /** Known unanchored piles from the full read; incomplete zero means unknown. Sources without declarations omit it. */
   orphanSummary?(): Promise<{ count: number; complete: boolean }>;
+  /** Lists the folder again; every read after it reads afresh. */
+  refresh?(): Promise<void>;
   /** The piles as the folder listing alone shows them, read before `piles()` finishes reading each one; only a source with a slow `piles()` has it. */
   pilesListed?(): Promise<Pile[]>;
   addPile(pile: NewPile): Promise<Pile>;
