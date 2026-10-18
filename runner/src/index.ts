@@ -743,7 +743,7 @@ function computedViews(drive: RunnerDrive, inputs: Maintain['inputs'], state: Re
  */
 async function snapshotNotes(drive: RunnerDrive, ix: VaultIndex, state: RetrievalState | undefined, drop: (id: string) => void, prefix = false,
   lints: Record<string, LintEvidence | 'unreadable'> = {}): Promise<{ snapshot: Notes; read: number; exhausted?: LedgerExhausted }> {
-  const limit = limiter(prefix ? READ_AHEAD : 1, (error) => error instanceof LedgerExhausted);
+  const limit = limiter(READ_AHEAD, (error) => error instanceof LedgerExhausted);
   let exhausted: LedgerExhausted | undefined;
   let read = 0;
   // A projection left by partial maintenance already has a listed snapshot; catch-up needs only Range reads.
