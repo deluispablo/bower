@@ -1,5 +1,4 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
 import { MemoryRouter } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
@@ -70,7 +69,7 @@ it('health_markdown_keeps_raw_html_inert', async () => {
 });
 
 it('health_legacy_quote_uses_markdown', async () => {
-  const raw = readFileSync('testing/corpus/c17-b9-legacy-readable/folder/Resources/Garden notes/Garden notes.md', 'utf8');
+  const raw = bowerNote('> [!contradiction] The amber notice and blue notice disagree.\nA quiet visit seems possible ^[inferred].');
   const { aside } = await shown(raw);
   const quote = aside.querySelector('blockquote');
   expect(quote?.textContent).toContain('[!contradiction] The amber notice and blue notice disagree.');
