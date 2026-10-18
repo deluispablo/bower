@@ -55,7 +55,7 @@ export function largeFolder(notes: number, folders: number, things: number) {
 export interface Item { itemId: string; kind: string; destination: string | { parentId: string; name: string }; wants: string[] }
 export interface Selection { items: Item[]; asks: unknown[] }
 /** A planning call: the JSON it reads (run context and call text as one record) and all it reads (`promptOf`). */
-export interface Frame { call: ClaudeCall; value: Record<string, unknown>; prompt: string; events: Observation[] }
+export interface Frame { call: ClaudeCall; value: Record<string, unknown>; prompt: string; events: Observation[]; attempt?: number }
 export interface Traffic { method: string; url: URL; range: string | null; sent: number; got: number }
 export type Base = Awaited<ReturnType<typeof setup>>;
 
@@ -75,7 +75,10 @@ export function phaseAwareClaude(
   explicit = false,
 ): ClaudeSpawn {
   if (phasedTransports.has(execution as ClaudeSpawn)) return execution as ClaudeSpawn;
-  let step = -1; let attempt = 0; let cwd: string | undefined;
+  let step = -1; let cwd: string | undefined;
+  // c12-fanout-parallel P9: a retry counts per call, by its phase and sorted source ids (none: the empty key), so the
+  // interleaved retries of groups called at once each count from 1; calls that do not overlap count as before.
+  const attempts = new Map<string, number>();
   let selected: ClaudeExit | undefined;
   const spawn: ClaudeSpawn = async (call) => {
     const { drive, root, admission } = fixture(call);
@@ -85,9 +88,12 @@ export function phaseAwareClaude(
     };
     const phase = context.selection === undefined ? 'selection' : 'execution';
     const retry = /^Your reply was refused:/m.test(call.input);
-    if (cwd !== call.cwd) { cwd = call.cwd; step++; selected = undefined; attempt = 0; }
-    else if (retry) attempt++;
-    else attempt = 0;
+    const ids = (context.sources ?? []).map((s) => s.itemId).sort();
+    const key = ids.length ? `${phase}:${ids.join()}` : '';
+    const fresh = cwd !== call.cwd;
+    if (fresh) { cwd = call.cwd; step++; selected = undefined; attempts.clear(); }
+    const attempt = !fresh && retry ? (attempts.get(key) ?? 0) + 1 : 0;
+    attempts.set(key, attempt);
     if (explicit) return execution(call, step, attempt, phase);
     if (phase === 'selection' && retry && selected) {
       await execution(call, step, attempt, phase);
@@ -254,6 +260,37 @@ function narrowed(value: unknown, call: Shown, run: { sources: ReadonlySet<strin
   return Object.fromEntries(Object.entries(value).map(([key, rows]) => [key, Array.isArray(rows) && key !== 'newTags' ? rows.filter(kept) : rows]));
 }
 
+export type Held = { frame: Frame; go: () => void };
+/**
+ * c12-fanout-parallel P5, P11: a `beforeReply` for writing calls. Each is held until the event loop drains (real
+ * setImmediate: leave it out of faked timers); then `pick` chooses which held calls answer, in the order it gives (at least
+ * one), and the transport drains again, until none is held. It never waits for a call that cannot come, so calls made one
+ * at a time never hang it. Selection and memory calls answer at once.
+ */
+export function gate(pick: (open: readonly Held[]) => readonly Held[]) {
+  const open: Held[] = [];
+  let arrivals = 0; let settling = false;
+  const drain = async (): Promise<void> => {
+    let seen: number;
+    do { seen = arrivals; for (let i = 0; i < 200; i++) await new Promise<void>((resolve) => { setImmediate(resolve); }); } while (seen !== arrivals);
+  };
+  const settle = async (): Promise<void> => {
+    settling = true;
+    while (open.length) {
+      await drain();
+      for (const h of pick([...open])) { open.splice(open.indexOf(h), 1); h.go(); }
+    }
+    settling = false;
+  };
+  return async (_turn: number, frame: Frame): Promise<void> => {
+    if (frame.value.selection === undefined) return;
+    arrivals++;
+    const held = new Promise<void>((go) => { open.push({ frame, go }); });
+    if (!settling) void settle();
+    await held;
+  };
+}
+
 /**
  * Each entry is one semantic call or validation retry. A retry is never hidden by the test driver. A writing call of a run
  * with several gets the reply narrowed to its own sources (`narrowed`); `narrow: false` sends every reply as it is.
@@ -270,8 +307,8 @@ export async function run(base: Base, replies: unknown[], options: {
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const frames: Frame[] = []; const events: Observation[] = []; const traffic: Traffic[] = [];
   const sources = { sources: new Set<string>(), first: undefined as string | undefined };
-  const claude = phaseAwareClaude(async (call) => {
-    const frame = { call, value: frameOf(call), prompt: promptOf(call), events: [...events] };
+  const claude = phaseAwareClaude(async (call, _step, attempt) => {
+    const frame = { call, value: frameOf(call), prompt: promptOf(call), events: [...events], attempt };
     frames.push(frame);
     const shown = frame.value as Shown;
     if (shown.selection === undefined && shown.sources) {

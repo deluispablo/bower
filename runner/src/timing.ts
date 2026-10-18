@@ -61,7 +61,7 @@ export class RunTiming {
   private checkpointWrites = 0;
   private readonly began: number;
   model: ModelStats | null = null;
-  /** One line per model call, in call order. */
+  /** One line per model call, in the order calls end. */
   private readonly calls: string[] = [];
   private inputFingerprint: string | null = null;
   private sectionHashes: SectionHashes | null = null;
