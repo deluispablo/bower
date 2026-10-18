@@ -113,6 +113,7 @@ test('no unnamed buttons: the tidy-up sheet and Add', async ({ page }) => {
 
 test('the side panel tabs are tabs: one Tab stop, arrows, a panel each; Outline goes to the heading', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop panels');
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   for (const name of ['Side panel', 'Right panel']) {
     const list = page.getByRole('tablist', { name });

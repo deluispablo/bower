@@ -11,6 +11,7 @@ const LONG = 'Alex would like every receipt from the flat move kept together wit
 
 test('qa5-panel-request-clamp: AC1 panel-request-two-lines: a long request is two lines at most in the panel', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the right panel exists on the desktop only');
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await page.goto('/bower?scenario=default&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   const main = page.getByRole('main');

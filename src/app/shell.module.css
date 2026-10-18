@@ -22,14 +22,21 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  align-content: center;
+  gap: 2px;
+  width: 48px;
+  min-height: 48px;
+  height: auto;
+  padding: 0;
   border: 0;
   border-radius: 10px;
   background: none;
   color: var(--text-muted);
   cursor: pointer;
 }
+.rbLabel { font-size: 11px; line-height: 1.2; white-space: nowrap; }
+/* Small text on the selected tint needs the heading colour for 4.5:1; the icon keeps the brand line. */
+.rb[aria-current='page'] .rbLabel { color: var(--heading); }
 .rb:hover { background: var(--hover); color: var(--heading); }
 .rb[aria-current='page'] { background: var(--select); color: var(--brand-line); }
 .grow { flex: 1; }

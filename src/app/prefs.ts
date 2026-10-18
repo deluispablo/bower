@@ -15,6 +15,8 @@ interface Prefs {
   rightWidth: number;
   leftOpen: boolean;
   rightOpen: boolean;
+  /** The right panel follows rightOpen: the person chose it, or the first tidy-up was done. */
+  rightSettled: boolean;
   set: (patch: Partial<Omit<Prefs, 'set'>>) => void;
 }
 
@@ -23,12 +25,16 @@ const KEY = 'bower:prefs';
 function load(): Partial<Prefs> {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Partial<Prefs>) : {};
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    // Anything but a plain object (null, a number, an array) holds no prefs.
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<Prefs>) : {};
   } catch {
     // expected: storage may be blocked (a private window); the default holds.
     return {};
   }
 }
+
+const stored = load();
 
 export const usePrefs = create<Prefs>((set, get) => ({
   theme: 'system',
@@ -39,8 +45,12 @@ export const usePrefs = create<Prefs>((set, get) => ({
   rightWidth: 320,
   leftOpen: true,
   rightOpen: true,
-  ...load(),
+  // Prefs stored before rightSettled existed always hold rightOpen: stored panel prefs win.
+  rightSettled: 'rightOpen' in stored,
+  ...stored,
   set: (patch) => {
+    // Every deliberate open or close is a stored choice.
+    if ('rightOpen' in patch) patch = { ...patch, rightSettled: true };
     set(patch);
     const { set: _omit, ...rest } = { ...get(), ...patch };
     void _omit;

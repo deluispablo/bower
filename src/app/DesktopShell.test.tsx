@@ -13,6 +13,7 @@ vi.mock('@/features/tidy/StatusBar', () => ({ StatusBar: () => null }));
 vi.mock('@/features/tidy/TidyButton', () => ({ TidyButton: () => null }));
 vi.mock('@/ui/Dock', () => ({ Dock: () => null }));
 vi.mock('@/ui/back', () => ({ useBackCloses: () => undefined }));
+vi.mock('@/features/home/useFirstTidy', () => ({ useFirstTidy: () => ({ data: null, error: null, loading: false, reload: () => undefined, settled: async () => undefined }) }));
 
 const defaults = { leftOpen: true, rightOpen: true, leftWidth: 300, rightWidth: 320 };
 let resize: (width: number) => void;

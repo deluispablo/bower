@@ -16,6 +16,7 @@ import { BookmarksPanel } from '@/features/files/BookmarksPanel';
 import { RightPanel } from '@/features/note/RightPanel';
 import { StatusBar } from '@/features/tidy/StatusBar';
 import { TidyButton } from '@/features/tidy/TidyButton';
+import { useFirstTidy } from '@/features/home/useFirstTidy';
 import s from './shell.module.css';
 
 const RIBBON = 52;
@@ -53,7 +54,10 @@ export function tabTitle(route: string): string {
 }
 
 export function DesktopShell() {
-  const { leftWidth, rightWidth, leftOpen, rightOpen, birdMoves, set } = usePrefs();
+  const { leftWidth, rightWidth, leftOpen, rightOpen, rightSettled, birdMoves, set } = usePrefs();
+  const progress = useFirstTidy();
+  // Until the first tidy-up is done (or still loading), an unsettled right panel stays collapsed; stored prefs are untouched.
+  const firstUse = !rightSettled && ((progress.data === undefined && !progress.error) || progress.data?.reviewed === false);
   const { leftTab, setLeftTab } = useUi();
   const loc = useLocation();
   const nav = useNavigate();
@@ -66,7 +70,17 @@ export function DesktopShell() {
   const rightToggle = useRef<HTMLButtonElement>(null);
   const [bounds, setBounds] = useState<{ width: number; left: number; top: number; height: number } | null>(null);
   const [overlay, setOverlay] = useState<{ side: Side; locationKey: string; open: boolean } | null>(null);
-  const prefs = { leftWidth, rightWidth, leftOpen, rightOpen };
+  const prefs = { leftWidth, rightWidth, leftOpen, rightOpen: firstUse ? false : rightOpen };
+  // measure() runs from the observer; it docks by what is shown, not by the stored prefs.
+  const shownPrefs = useRef(prefs);
+  useLayoutEffect(() => {
+    shownPrefs.current = prefs;
+  });
+  const reviewed = progress.data?.reviewed === true;
+  // Once this device has seen the first tidy-up done, later loads never hold the panel.
+  useEffect(() => {
+    if (reviewed && !rightSettled) set({ rightSettled: true });
+  }, [reviewed, rightSettled, set]);
   const shellWidth = bounds?.width ?? 0;
   const measured = bounds !== null;
   const shown = docked(shellWidth, prefs);
@@ -88,7 +102,7 @@ export function DesktopShell() {
     const measure = (observedWidth?: number): void => {
       const rect = node.getBoundingClientRect();
       const width = observedWidth ?? rect.width;
-      const next = docked(width, usePrefs.getState());
+      const next = docked(width, shownPrefs.current);
       if (!next.left && leftPanel.current?.contains(document.activeElement)) leftToggle.current?.focus();
       if (!next.right && rightPanel.current?.contains(document.activeElement)) rightToggle.current?.focus();
       setOverlay((open) => open && next[open.side] ? null : open);
@@ -105,7 +119,7 @@ export function DesktopShell() {
   const toggle = (side: Side): void => {
     const folded = side === 'left' ? leftFolded : rightFolded;
     if (folded) setOverlay(overlaySide === side ? null : { side, locationKey: loc.key, open: true });
-    else set(side === 'left' ? { leftOpen: !leftOpen } : { rightOpen: !rightOpen });
+    else set(side === 'left' ? { leftOpen: !shown.left } : { rightOpen: !shown.right });
   };
   useEffect(() => follow(route), [route, follow]);
   // The active tab stays in sight however many are open. Only the strip scrolls: scrollIntoView would move the
@@ -180,15 +194,19 @@ export function DesktopShell() {
         </NavLink>
         <NavLink to="/" end className={s.rb} aria-label="Home" title="Home">
           <Icon name="home" />
+          <span className={s.rbLabel}>Home</span>
         </NavLink>
         <NavLink to="/add" className={s.rb} aria-label="Add a pile" title="Add a pile">
           <Icon name="add" />
+          <span className={s.rbLabel}>Add</span>
         </NavLink>
         <NavLink to="/bower" className={s.rb} aria-label="Ask" title="Ask">
           <BowerHead size={22} />
+          <span className={s.rbLabel}>Ask</span>
         </NavLink>
-        <button type="button" className={s.rb} aria-label="Command palette" title="Command palette (⌘K)" onClick={() => useUi.getState().setPalette(true)}>
+        <button type="button" className={s.rb} aria-label="Search, command palette" title="Search (⌘K)" onClick={() => useUi.getState().setPalette(true)}>
           <Icon name="cmd" />
+          <span className={s.rbLabel}>Search</span>
         </button>
         <span className={s.grow} />
         <NavLink to="/settings" className={s.rb} aria-label="Settings" title="Settings">

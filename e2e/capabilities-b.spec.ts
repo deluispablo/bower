@@ -19,6 +19,11 @@ const goNote = async (page: Page, path: string): Promise<void> => {
 const timeline = (page: Page) => page.getByRole('region', { name: 'Timeline' });
 const lineOf = (page: Page, text: string) => timeline(page).getByRole('listitem').filter({ hasText: text });
 
+test.beforeEach(async ({ page }) => {
+  // Seed once: later loads keep the prefs a journey sets (C10 turns web lookups on).
+  await page.addInitScript(() => { if (!localStorage.getItem('bower:prefs')) localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })); });
+});
+
 /** The open note's links, both ways: the Linked notes section on a phone, the right panel's tab on a desktop. */
 async function linkedFrom(page: Page, isMobile: boolean) {
   if (isMobile) return page.getByRole('main').locator('section', { has: page.getByRole('heading', { name: 'Linked notes' }) });

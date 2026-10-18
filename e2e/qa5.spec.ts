@@ -212,6 +212,7 @@ test.describe('the side panel', () => {
   test.skip(({ isMobile }) => isMobile, 'the desktop side panel');
 
   test('the side panel shows what waits and what failed', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
     await open(page, '/bower', 'fail-run', 'instant');
     await page.getByRole('radio', { name: 'A rule' }).click();
     await page.getByRole('button', { name: 'anything from the dentist goes in health' }).click();
@@ -265,6 +266,7 @@ test('a folder counts what it shows', async ({ page }) => {
 });
 
 test("the outline lists Bower's sections and sources link", async ({ page, isMobile }) => {
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   const timeline = page.locator('section[aria-labelledby="tl"]');
   await timeline.getByRole('link', { name: 'Lease draft' }).click();

@@ -15,6 +15,7 @@ async function open(page: Page, path: string): Promise<void> {
 const mainNav = (page: Page) => page.getByRole('navigation', { name: 'Main', exact: true });
 
 test('AC1 destinations_say_ask', async ({ page, isMobile }) => {
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await open(page, '/?scenario=default&time=instant');
   const ask = mainNav(page).getByRole('link', { name: 'Ask', exact: true });
   await expect(ask).toBeVisible();
