@@ -38,7 +38,7 @@ import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE, ruleSequence } from '../contracts/note-edit';
 import { pairsOf } from '../contracts/journal-record';
-import { isRunnerPath, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
+import { isHidden, isRunnerPath, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type QuestionsFile, type LastRunFile } from './layout';
 import { md5Hex, sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { readTypeTable } from '../contracts/note-format';
@@ -306,7 +306,7 @@ export class DriveVault implements VaultSource {
     const names = [parsed.title, ...[...former].filter(([, now]) => now === path).map(([was]) => was)];
     const hits = (await Promise.all(names.map(async (n) => this.drive.fullText(await this.rootId(), `[[${n}`)))).flat();
     const wanted = new Set(names.map((n) => n.toLowerCase()));
-    const candidates = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md')))].slice(0, MAX_READS);
+    const candidates = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md') && !isHidden(p)))].slice(0, MAX_READS);
     const linking = await inBatches(candidates, async (p) => {
       const f = ix.file(p);
       const note = f ? await this.parsed(f, p, true) : null;
