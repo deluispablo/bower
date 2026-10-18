@@ -67,7 +67,8 @@
       "report": {
         "filed": 1,
         "created": [
-          "Resources/Gardening/Rain barrel guide.md"
+          "Resources/Gardening/Rain barrel guide.md",
+          "Bower health.md"
         ],
         "updated": [],
         "questionsExactly": 0
@@ -77,9 +78,7 @@
       "unchanged": [
         "Rules.md",
         "Resources/Gardening/Gardening.md",
-        "Resources/Gardening/Seed packet.md",
-        ".bower/tags.json",
-        "Resources/Gardening/Rain barrel guide.md"
+        "Resources/Gardening/Seed packet.md"
       ],
       "report": {
         "filed": 0,

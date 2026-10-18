@@ -1,5 +1,5 @@
 {
-  "id": "c17-b7-proposal-yes",
+  "id": "c17-b7-automatic-growth-replay",
   "capability": "C17",
   "title": "Rainwater grows automatically on first filing; an idle later run makes no change",
   "covers": "model",
