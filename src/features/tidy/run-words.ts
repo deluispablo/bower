@@ -131,7 +131,10 @@ export function runDetail(r: RunState): string {
       if (!rep) return '';
       if (rep.nothingReady && !rep.waiting && !rep.setAside.length) return 'Nothing in the inbox was ready yet, so it stays as it is.';
       const parts: string[] = [];
-      if (rep.updated.length) parts.push(`${plural(notesUpdated(rep), 'note')} brought up to date`);
+      const made = runLinkRows(rep).made.length;
+      if (made) parts.push(`${plural(made, 'new note')} made`);
+      const updated = notesUpdated(rep);
+      if (updated) parts.push(`${plural(updated, 'note')} brought up to date`);
       // Only this run's questions: "new", beside the total of open ones elsewhere (qa6).
       if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'new question')} for you`);
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
@@ -223,9 +226,9 @@ export function statusLine(run: RunState | null | undefined, waiting: number | u
 
 export type RunLinkRow = { path: string; what: string };
 
-/** How many notes a run brought up to date: one per note, however many of its lines the report lists. */
-export function notesUpdated(report: Pick<RunReport, 'updated'>): number {
-  return distinctPaths(report.updated).length;
+/** How many notes a run brought up to date: one per note, however many lines it lists, and never a new note. */
+export function notesUpdated(report: Pick<RunReport, 'created' | 'updated'>): number {
+  return runLinkRows(report).updated.length;
 }
 
 /** The notes a run made and brought up to date, in report order; a note listed as new is not listed again. */

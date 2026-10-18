@@ -83,12 +83,12 @@ it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omi
   expect(within(sheet).queryByText('Everything has its place.', { exact: true })).toBeNull();
 });
 
-it.each(['all', 'instructions'] as const)('request report: reopened %s sheet without leftAsWritten keeps fallback detail', async (scope) => {
+it.each(['all', 'instructions'] as const)('request report: reopened %s sheet without leftAsWritten names the new note', async (scope) => {
   const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] });
   fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   expect(within(sheet).queryByRole('list', { name: 'Left as you wrote them' })).toBeNull();
-  expect(within(sheet).getByText('Everything has its place.', { exact: true })).toBeVisible();
+  expect(within(sheet).getByText('1 new note made.', { exact: true })).toBeVisible();
 });
 
 it.each(['all', 'instructions'] as const)('request report: right panel Now for %s omits fallback detail with leftAsWritten', async (scope) => {
@@ -100,13 +100,13 @@ it.each(['all', 'instructions'] as const)('request report: right panel Now for %
   expect(within(now).queryByText('Everything has its place.', { exact: true })).toBeNull();
 });
 
-it.each(['all', 'instructions'] as const)('request report: right panel Now for %s without leftAsWritten keeps fallback detail', async (scope) => {
+it.each(['all', 'instructions'] as const)('request report: right panel Now for %s without leftAsWritten names the new note', async (scope) => {
   const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] }, [], true);
   const panel = screen.getByRole('tabpanel', { name: 'Bower' });
   const now = within(panel).getByRole('heading', { name: 'Now' }).closest('section');
   if (!now) throw new Error('Missing Now section');
   expect(within(now).getByText(runTitle(run), { exact: true })).toBeVisible();
-  expect(within(now).getByText('Everything has its place.', { exact: true })).toBeVisible();
+  expect(within(now).getByText('1 new note made.', { exact: true })).toBeVisible();
 });
 
 it('request report: all with filings retains Home replay and status bar replay', async () => {
@@ -174,11 +174,11 @@ it.each(['all', 'instructions'] as const)('request report: %s without replay omi
   expect(within(card).queryByText('Everything has its place.', { exact: true })).toBeNull();
 });
 
-it.each(['all', 'instructions'] as const)('request report: %s without leftAsWritten keeps fallback detail', async (scope) => {
+it.each(['all', 'instructions'] as const)('request report: %s without leftAsWritten names the new note', async (scope) => {
   const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] });
   const card = screen.getByRole('heading', { name: runTitle(run), level: 2 }).closest('section');
   if (!card) throw new Error('Missing report card');
-  expect(within(card).getByText('Everything has its place.', { exact: true })).toBeVisible();
+  expect(within(card).getByText('1 new note made.', { exact: true })).toBeVisible();
 });
 
 it('request report: leftAsWritten keeps a non-fallback detail on Home', async () => {
