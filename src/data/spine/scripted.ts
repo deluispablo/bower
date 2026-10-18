@@ -22,7 +22,7 @@ import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type R
 import { isJournalRecord, isWithdrawal, pairsOf, takenBack, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows, type HashesFile, type QuestionsFile, type Recent, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
-import { savedLinkAddress } from '../search-text';
+import { savedLinkAddress, savedLinkUrl } from '../search-text';
 import { md5Hex } from '../contracts/hashes';
 import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
@@ -2413,7 +2413,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         continue;
       }
       const address = savedLinkAddress(linkText) ?? thing.item.name;
-      const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: '', timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
+      const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: savedLinkUrl(linkText) ?? address }], tags: [], currentState: [], body: thing.words, timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
       const to = place.to;
       destination(to);
       const noteName = freeName(planned, to, title);
