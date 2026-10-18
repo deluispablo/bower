@@ -2678,9 +2678,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const source of items) {
       const waiting = ix.waitingRun(source.itemId) !== null;
       // Built at each use: captureMaps adds a matched map's links to metadata, and the hop must see them.
-      const near = (): string[] => ix.neighbourhood(source.words, metadata);
+      const near = (): string[] => ix.neighbourhood(source.words, metadata, requests.has(source.itemId) ? shownTook.taken.at : undefined);
       // Originals (a request's) ride beside the 12 notes and do not count toward them (c12-map-cards ruling 7).
-      const nearOriginals = (): string[] => requests.has(source.itemId) ? ix.neighbourhood(source.words, { ...metadata, ...originals }).filter((id) => originals[id]) : [];
+      const nearOriginals = (): string[] => requests.has(source.itemId) ? ix.neighbourhood(source.words, { ...metadata, ...originals }, shownTook.taken.at).filter((id) => originals[id]) : [];
       const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : near())])];
       await captureMaps(matched);
       const neighbourhood = waiting ? matched : near();
