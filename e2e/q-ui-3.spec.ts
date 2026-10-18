@@ -22,12 +22,14 @@ for (const source of ['demo', 'fake']) {
     await inbox.getByRole('button', { name: 'Tidy up 24 things', exact: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Tidy up 24 things?', exact: true });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole('listitem')).toHaveCount(24);
-    const pileTitles = sheet.getByRole('listitem').locator(':scope > span:first-of-type');
+    // The sheet also lists requests and pending rules (prod1-confirm-scope); the piles are their own list.
+    const piles = sheet.getByRole('list', { name: 'In the inbox', exact: true });
+    await expect(piles.getByRole('listitem')).toHaveCount(24);
+    const pileTitles = piles.getByRole('listitem').locator(':scope > span:first-of-type');
     for (const name of names) await expect(pileTitles.filter({ hasText: new RegExp(`^${name}$`) })).toHaveCount(1);
     await animationsEnd(page);
 
-    const content = await sheet.getByRole('list').boundingBox();
+    const content = await piles.boundingBox();
     expect(content).not.toBeNull();
     if (!content) throw new Error('The pile list needs a bounding box.');
     // Positive control: the list alone is taller than the entire window.
