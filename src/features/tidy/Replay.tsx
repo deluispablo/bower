@@ -10,6 +10,7 @@ import { BowerLayer, type BowerController } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { useIsDesktop } from '@/ui/media';
+import { keepFirstTidyStep } from '@/features/home/useFirstTidy';
 import { report } from '@/ui/report';
 import { landedSummary, notesUpdated, unfinishedWords } from './run-words';
 import { SetAsideRows } from './RunLinks';
@@ -27,8 +28,13 @@ import s from './replay.module.css';
 export function Replay() {
   const { replayRunId, startReplay } = useUi();
   const { data: run } = useRun();
-  const { runs } = useSources();
+  const { runs, vault } = useSources();
   const showing = !!replayRunId && !!run && run.id === replayRunId && !!run.report;
+  // Watching what a finished tidy-up did is the first tidy-up's step 3.
+  const runId = run?.id;
+  useEffect(() => {
+    if (showing) void keepFirstTidyStep(vault, 'reviewed');
+  }, [showing, runId, vault]);
   useBackCloses(showing, () => {
     if (run) void runs.markSeen(run.id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
     startReplay(null);
