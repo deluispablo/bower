@@ -46,7 +46,7 @@ import { readTypeTable } from '../contracts/note-format';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { managedRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
-import { VaultIndex } from './vault-index';
+import { VaultIndex, type IndexWrite } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, createUploadQueue, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
 import { memoryUploadStore } from '../upload-store';
 import { CHANGED_ELSEWHERE, checkStillAsSeen, notAsSeen, notAsSeenError, notAsSeenReason, notRead, openFolder, readForFence, type Landing, type SeenExpectation } from '../contracts/still-as-seen';
@@ -109,6 +109,18 @@ function deviceId(): string {
 /** The pretend Drive stored no digest for a file: not an error, and not kept. */
 class NoDigest extends Error {}
 
+/** A write applied to a listing without being heard as a new one. */
+function applyQuietly(ix: VaultIndex, op: IndexWrite): void {
+  const heard = ix.onWrite;
+  ix.onWrite = undefined;
+  try {
+    if ('put' in op) ix.put(op.put);
+    else ix.drop(op.drop);
+  } finally {
+    ix.onWrite = heard;
+  }
+}
+
 export class DriveVault implements VaultSource {
   readonly driveLinks: boolean;
   protected readonly drive: DriveApi;
@@ -149,6 +161,13 @@ export class DriveVault implements VaultSource {
   /** Pile notes Bower refused to parse, by file id and modified time, already logged: once until they change. */
   private refusalsLogged = new Set<string>();
   private ix: Promise<VaultIndex> | null = null;
+  /**
+   * This page's writes no listing has confirmed yet, by file id (`file: null` is a drop), with the listing count when
+   * made: a listing that began before a write never hides it (read-your-writes, Terry et al. 1994).
+   */
+  private own = new Map<string, { file: DriveFile | null; seq: number }>();
+  /** Listings begun on this page. */
+  private listingSeq = 0;
   private listeners = new Set<() => void>();
   /** Parsed notes by file id, with the raw text they were parsed from (front matter included). */
   private notes = new Map<string, { modified: string; note: ParsedNote; text: string }>();
@@ -217,6 +236,7 @@ export class DriveVault implements VaultSource {
     this.bin.clear();
     this.removing.clear();
     this.ix = null;
+    this.own.clear();
     this.notes.clear();
     this.making.clear();
     this.listeners.clear();
@@ -1813,12 +1833,19 @@ export class DriveVault implements VaultSource {
   protected async index(): Promise<VaultIndex> {
     this.checkCurrent();
     if (!this.ix) {
-      const p = (async () => {
+      const s = ++this.listingSeq;
+      const p: Promise<VaultIndex> = (async () => {
         const root = await this.rootId();
-        const ix = VaultIndex.build(root, await this.drive.listAll(root, { checksums: true }));
-        if (this.current()) this.listed = ix;
+        return VaultIndex.build(root, await this.drive.listAll(root, { checksums: true }));
+      })().then((ix) => {
+        // A listing another one replaced still serves its callers with this page's writes, but decides nothing.
+        const counts = this.ix === p;
+        this.replay(ix, s, counts);
+        ix.onWrite = (op) => this.wrote(ix, op);
+        // A replaced listing still keys the reads when none has landed yet (no read twice at one version on a cold start).
+        if ((counts || !this.listed) && this.current()) this.listed = ix;
         return ix;
-      })();
+      });
       this.ix = p;
       // expected: the caller hears the error; this only forgets the failed listing, so the next call lists again.
       p.catch(() => {
@@ -1828,6 +1855,31 @@ export class DriveVault implements VaultSource {
     const ix = await this.ix;
     this.checkCurrent();
     return ix;
+  }
+
+  /** A write to any listing is kept until a listing confirms it, and reaches the latest listing too. */
+  private wrote(at: VaultIndex, op: IndexWrite): void {
+    this.own.set('put' in op ? op.put.id : op.drop, { file: 'put' in op ? op.put : null, seq: this.listingSeq });
+    if (this.listed && this.listed !== at) applyQuietly(this.listed, op);
+  }
+
+  /** This page's unconfirmed writes over a listing that just landed (`s`: when it began), before anyone reads it. */
+  private replay(ix: VaultIndex, s: number, counts: boolean): void {
+    for (const [id, e] of this.own) {
+      const there = ix.byId(id);
+      const confirmed = e.file ? there !== undefined && Date.parse(there.modifiedTime) >= Date.parse(e.file.modifiedTime) : there === undefined;
+      if (confirmed) {
+        if (counts) this.own.delete(id);
+        continue;
+      }
+      if (e.seq < s) {
+        // The listing began after the write, so its answer stands.
+        // shortcut: a listing that lags our own write can briefly hide it until the next listing; add grace only if a recorded finding shows it.
+        if (counts) this.own.delete(id);
+        continue;
+      }
+      applyQuietly(ix, e.file ? { put: e.file } : { drop: id });
+    }
   }
 
   protected emit(): void {
@@ -2228,8 +2280,12 @@ export class DriveVault implements VaultSource {
   /** `f` to the Bin, once; the answer is what Undo takes back out (`fromBin`), once too. */
   private toBin = (f: DriveFile): Promise<DriveFile> => this.once(f, 'bin', (op, fence) => this.drive.trash(f.id, op, { fence }));
   /** Out of the Bin; with `name` (a free name other than its own), under it in the same write. */
-  private fromBin = (f: DriveFile, name: string = f.name): Promise<DriveFile> =>
-    name === f.name ? this.once(f, 'unbin', (op, fence) => this.drive.untrash(f.id, op, undefined, { fence })) : this.once(f, `unbin:${name}`, (op, fence) => this.drive.untrash(f.id, op, name, { fence }));
+  // What comes back is listed at once: it replaces this page's own drop of it, which a relisting would otherwise replay.
+  private fromBin = async (f: DriveFile, name: string = f.name): Promise<DriveFile> => {
+    const back = await (name === f.name ? this.once(f, 'unbin', (op, fence) => this.drive.untrash(f.id, op, undefined, { fence })) : this.once(f, `unbin:${name}`, (op, fence) => this.drive.untrash(f.id, op, name, { fence })));
+    if (this.current()) this.listed?.put(back);
+    return back;
+  };
 
   /** Your own write changes the file's time; if you had seen it, it stays seen. */
   protected keepSeen(before: DriveFile, after: DriveFile): DriveFile {

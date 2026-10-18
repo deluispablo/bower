@@ -126,4 +126,29 @@ describe('audit-write-speed', () => {
     expect(ix.pathOf(`n${many - 1}`)).toBe(`Big/Note ${many - 1}.md`);
     expect(calls).toBeLessThan(many / 10);
   });
+
+  it('index_keeps_no_write_log (guard)', () => {
+    const start = [dir('p', 'Projects', 'R'), f('a', 'a.md', 'p'), f('b', 'b.md', 'R')];
+    const sizes = (ix: VaultIndex): Record<string, number> => Object.fromEntries(Object.entries(ix).flatMap(([k, v]: [string, unknown]) =>
+      (v instanceof Map || v instanceof Set ? [[k, v.size]] : Array.isArray(v) ? [[k, v.length]] : [])));
+    const ix = VaultIndex.build('R', start);
+    const was = sizes(ix);
+    for (let k = 0; k < 500; k++) {
+      ix.put(f(`k${k}`, `n${k}.md`, 'p'));
+      ix.drop(`k${k}`);
+    }
+    expect(Object.keys(ix).sort()).toEqual(['files', 'ids', 'onWrite', 'paths', 'rootId']);
+    for (const [k, n] of Object.entries(sizes(ix))) expect(n, k).toBeLessThanOrEqual(was[k] ?? 0);
+
+    const seen = VaultIndex.build('R', start);
+    const onWrite = vi.fn();
+    seen.onWrite = onWrite;
+    for (let k = 0; k < 500; k++) {
+      seen.put(f(`k${k}`, `n${k}.md`, 'p'));
+      seen.drop(`k${k}`);
+    }
+    expect(onWrite).toHaveBeenCalledTimes(1000);
+    expect(onWrite.mock.calls.filter(([op]) => 'put' in op)).toHaveLength(500);
+    expect(onWrite).toHaveBeenLastCalledWith({ drop: 'k499' });
+  });
 });
