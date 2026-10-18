@@ -204,9 +204,11 @@ it('AC8 f4-picture-budget: words leave 1500', async () => {
   expect(reads.mock.calls.some(([id]) => id === things(t.seen)[0]?.fileId)).toBe(false);
 });
 it('AC9 f4-c04-offer-photo', async () => {
-  const b = await seeded(await loadCase(resolve(ROOT, 'c04-offer-and-flat'))); const r = await press(b);
-  expect(things(r.seen).find((t) => t.name === 'IMG_2301.jpg')?.why).toBe(UNREAD);
-  expect(pics(r.seen)).toHaveLength(0); expect(r.seen.every((s) => !s.call.images)).toBe(true);
+  const c = await loadCase(resolve(ROOT, 'c04-offer-and-flat')); const b = await seeded(c); const r = await press(b);
+  expect(pics(r.seen)).toHaveLength(1);
+  expect(pics(r.seen)[0]?.call.images).toEqual([{ mediaType: 'image/jpeg', data: Buffer.from(c.inboxBinary['IMG_2301.jpg'] ?? []).toString('base64') }]);
+  expect(things(r.seen).find((t) => t.name === 'IMG_2301.jpg')?.text).toBe(LABEL + TEXT);
+  expect(r.seen.filter((s) => s.phase !== 'picture').every((s) => !s.call.images)).toBe(true);
 });
 it('AC10 f4-memory-calls-no-images', async () => {
   const c = await fixture({ 'Photo.png': PNG }, 'Remember this: I like short written updates.', { 'Long.txt': 'Alex labels trays. '.repeat(1100) });

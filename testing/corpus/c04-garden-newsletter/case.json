@@ -3,7 +3,7 @@
   "capability": "C04",
   "title": "A text PDF newsletter of no listed kind",
   "covers": "model",
-  "source": "bench:2-text-pdf, adapted (made-up garden and dates; the original PDF is in bench-2-text-pdf)",
+  "source": "new (made-up garden and dates; a hand-built text PDF)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

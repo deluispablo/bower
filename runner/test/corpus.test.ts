@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CORPUS_CAPABILITIES, loadCase, loadCorpus, score, timelineOf, type Expected, type LoadedCase } from '../src/corpus';
@@ -108,9 +108,19 @@ describe('the capability corpus', () => {
     for (const c of await loadCorpus(ROOT)) assertNoBenchmarkSeed(c);
   });
 
-  it('the benchmark seed guard accepts historical source provenance', async () => {
-    const receipt = await loadCase(join(ROOT, 'c04-hardware-receipt'));
-    expect(() => assertNoBenchmarkSeed(receipt)).not.toThrow();
+  it('corpus-fix-c04 AC3: current C04 fixtures pass unchanged through generic scoring', async () => {
+    const cases = (await loadCorpus(ROOT)).filter((c) => c.capability === 'C04');
+    expect(cases.map((c) => c.id).sort()).toEqual(['c04-garden-newsletter', 'c04-hardware-receipt', 'c04-offer-and-flat']);
+    for (const c of cases) {
+      expect({ id: c.id, expected: c.expected, folderFrom: c.folderFrom }).toEqual({ id: c.id, expected: JSON.parse(await readFile(join(ROOT, c.id, 'expected.json'), 'utf8')) as unknown, folderFrom: undefined });
+    }
+    const offer = cases.find((c) => c.id === 'c04-offer-and-flat');
+    if (!offer) throw new Error('no c04-offer-and-flat');
+    expect(offer.rubric).not.toMatch(/unread image/);
+    expect(offer.rubric).toContain('nothing legible in it');
+    expect(offer.rubric).toContain('The listing adds no line to the job hunt.');
+    const run = await runScripted(offer);
+    expect({ code: run.code, score: run.score }).toEqual({ code: 0, score: { pass: true, unmet: [] } });
   });
 
   it('corpus-delete-bench-areas AC1: legacy areas and root documents are absent', () => {
