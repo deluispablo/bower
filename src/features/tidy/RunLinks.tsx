@@ -15,12 +15,13 @@ import s from './tidy.module.css';
  * list named by its visible label (WAI-ARIA APG link pattern; WAI tutorials,
  * content structure: lists).
  */
-export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered' | 'leftAsWritten' | 'requests'>; onOpen?: () => void }) {
+export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered' | 'leftAsWritten' | 'requests'> & { setAside?: RunReport['setAside'] }; onOpen?: () => void }) {
   const { made, updated } = runLinkRows(report);
   const answered = report.answered ?? [];
   const left = report.leftAsWritten ?? [];
   const asked = [...new Set(report.requests ?? [])];
-  if (!made.length && !updated.length && !answered.length && !left.length && !asked.length) return null;
+  const aside = report.setAside ?? [];
+  if (!made.length && !updated.length && !answered.length && !left.length && !asked.length && !aside.length) return null;
   return (
     <div className={s.links}>
       <LinkList label="New notes" rows={made} {...(onOpen ? { onOpen } : {})} />
@@ -32,8 +33,27 @@ export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created'
         </li>)}
       </LabelledList>}
       {!!asked.length && <DoneRows words={asked} {...(onOpen ? { onOpen } : {})} />}
+      <SetAsideRows rows={aside} />
       <AnsweredRows rows={answered} />
     </div>
+  );
+}
+
+/**
+ * What the run set aside, one row per saved row, its name and reason as written (prod1-partial-results). The same
+ * name may be saved twice for different things: the row's place in the report keys it, never its name.
+ */
+export function SetAsideRows({ rows }: { rows: RunReport['setAside'] }) {
+  if (!rows.length) return null;
+  return (
+    <LabelledList label="Set aside">
+      {rows.map((r, i) => (
+        <li key={i}>
+          <span>{r.name}</span>
+          <span className="muted">{r.why}</span>
+        </li>
+      ))}
+    </LabelledList>
   );
 }
 

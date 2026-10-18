@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRun, useSources } from '@/data/provider';
-import type { FiledItem } from '@/data/types';
+import type { FiledItem, RunReport } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { crumbs, paraColor } from '@/app/paths';
 import { plural } from '@/app/words';
@@ -11,7 +11,8 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { useIsDesktop } from '@/ui/media';
 import { report } from '@/ui/report';
-import { landedSummary, notesUpdated } from './run-words';
+import { landedSummary, notesUpdated, unfinishedWords } from './run-words';
+import { SetAsideRows } from './RunLinks';
 import { useBackCloses } from '@/ui/back';
 import { returnFocusTo } from '@/ui/focus';
 import s from './replay.module.css';
@@ -37,7 +38,10 @@ export function Replay() {
     void runs.markSeen(run.id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
     startReplay(null);
   };
-  return createPortal(<Court items={run.report.filed} summary={landedSummary(run)} updated={notesUpdated(run.report)} onClose={close} />, document.body);
+  return createPortal(
+    <Court items={run.report.filed} summary={landedSummary(run)} updated={notesUpdated(run.report)} unfinished={unfinishedWords(run.report)} setAside={run.report.setAside} onClose={close} />,
+    document.body,
+  );
 }
 
 /** A small, stable pseudo-random number per index, so the heap looks the same every time. */
@@ -61,7 +65,9 @@ function Thing({ item }: { item: FiledItem }) {
   );
 }
 
-function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summary: string; updated: number; onClose: () => void }) {
+function Court({ items, summary, updated, unfinished, setAside, onClose }: {
+  items: FiledItem[]; summary: string; updated: number; unfinished: string; setAside: RunReport['setAside']; onClose: () => void;
+}) {
   const desktop = useIsDesktop();
   const bird = useRef<BowerController>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -154,16 +160,18 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
         <header className={s.head}>
           <div aria-live="polite">
             <h2 className={s.title}>{finished ? `${plural(items.length, 'thing')} filed` : 'What Bower did'}</h2>
-            <p className="muted">{finished ? `${summary} ${updated ? `${plural(updated, 'note')} brought up to date.` : ''}` : 'The tidy-up already ran. This is where everything went.'}</p>
+            <p className="muted">{finished ? [summary, updated ? `${plural(updated, 'note')} brought up to date.` : '', unfinished].filter(Boolean).join(' ') : 'The tidy-up already ran. This is where everything went.'}</p>
           </div>
           <Button variant={finished ? 'primary' : 'ghost'} size="sm" onClick={onClose}>
             {finished ? 'Done' : 'Skip'}
           </Button>
         </header>
+        <SetAsideRows rows={setAside} />
 
         <div className={s.court}>
-          <section className={s.heapBox} aria-label="Your inbox">
-            <h3 className={s.label}>Inbox{heapLeft ? `, ${heapLeft} left` : ''}</h3>
+          {/* Only the filed things: what was set aside or waits is not in this heap, so it is never called the inbox. */}
+          <section className={s.heapBox} aria-label="Filed from your inbox">
+            <h3 className={s.label}>Filed from your inbox{heapLeft ? `, ${heapLeft} left` : ''}</h3>
             <div className={s.heap} data-perch>
               {items.map((it, i) =>
                 inHeap.has(i) ? (
@@ -182,7 +190,7 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
                   </span>
                 ) : null,
               )}
-              {heapLeft === 0 && <p className={s.emptyHeap}>Empty. Everything has its place.</p>}
+              {heapLeft === 0 && <p className={s.emptyHeap}>All filed items reached their folders.</p>}
             </div>
           </section>
 
