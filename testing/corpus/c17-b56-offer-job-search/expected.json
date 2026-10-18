@@ -12,7 +12,7 @@
   },
   "unchanged": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Projects/Greenhouse repair/Greenhouse repair.md",
     "Areas/Career/Career profile.md"
   ],
@@ -28,8 +28,8 @@
     {
       "path": "Projects/Job hunt/Offers/Ferrowick offer.md",
       "contains": [
-        "[[Projects/Job hunt/Job hunt]]",
-        "[[Areas/Career/Career profile]]",
+        "See also [[Projects/Job hunt/Job hunt]]: the job search this offer belongs to.",
+        "See also [[Areas/Career/Career profile]]: the profile the role is compared with.",
         "TypeScript",
         "48000",
         "2026-10-12"
@@ -48,7 +48,8 @@
   "report": {
     "filed": 1,
     "created": [
-      "Projects/Job hunt/Offers/Ferrowick offer.md"
+      "Projects/Job hunt/Offers/Ferrowick offer.md",
+      "Bower health.md"
     ],
     "updated": [
       "Projects/Job hunt/Job hunt.md"

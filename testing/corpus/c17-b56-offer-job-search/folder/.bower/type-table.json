@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "cv",
+      "match": [
+        "cv"
+      ],
+      "template": "source",
+      "properties": {},
+      "table": [],
+      "profile": {
+        "template": "profile"
+      }
+    },
+    {
+      "id": "offer",
+      "match": [
+        "offer"
+      ],
+      "template": "source",
+      "properties": {},
+      "table": []
+    }
+  ]
+}

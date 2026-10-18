@@ -41,8 +41,8 @@ async function fixture(binary: Record<string, Uint8Array> = { 'Photo.png': PNG }
   c.folder['Areas/Home/Brightwater Heating.md'] = '---\nsummary: Brightwater Heating maintains boilers.\n---\nBrightwater Heating engineer.\n';
   return c;
 }
-async function seeded(c: LoadedCase) {
-  const drive = fixedDrive(); const root = await seedCase(drive, c);
+async function seeded(c: LoadedCase, props: Record<string, Record<string, string>> = {}) {
+  const drive = fixedDrive(); const root = await seedCase(drive, c, props);
   const a = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'f4-admission' });
   if (a.kind !== 'manifest') throw new Error('F4 fixture was not admitted');
   const files = await drive.listAll(root);
@@ -252,9 +252,8 @@ it('AC13 f4-no-picture-same-calls (guard)', async () => {
 it('F4R-13 picture text is neither offered nor stored as profile sentences', async () => {
   const c = await loadCase(resolve(ROOT, 'c17-b56-cv-profile'));
   c.inbox = [{ line: 'File my CV.', files: ['Alex CV.png'] }]; c.inboxFiles = {}; c.inboxBinary = { 'Alex CV.png': PNG };
-  const b = await seeded(c);
-  await b.drive.update(b.id('Areas/Career/Career profile.md'), { appProperties: { profile: 'cv' } });
-  await b.drive.createText(b.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [{ id: 'cv', match: ['cv'], template: 'source', properties: {}, table: [], profile: { template: 'profile' } }] }));
+  const b = await seeded(c, { 'Areas/Career/Career profile.md': { profile: 'cv' } });
+  expect((await b.drive.listAll(b.root)).filter((f) => f.name === 'type-table.json')).toHaveLength(1);
   const text = 'Alex built map tools. A photograph of a career document.';
   const r = await press(b, transport(b, { profile: true, picture: () => reply({ text }) }));
   expect(things(r.seen, 'execution')[0]?.sentences ?? []).toEqual([]);

@@ -13,7 +13,7 @@
   },
   "unchanged": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Projects/Job hunt/Job hunt.md"
   ],
   "protectedRanges": [
@@ -28,8 +28,7 @@
     {
       "path": "Areas/Career/Career profile.md",
       "contains": [
-        "begin profile",
-        "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor."
+        "<!-- bower:ownership/2 begin profile -->\nAchievement: shipped an offline map editor. [[Alex CV]]\n[[Career]]\n<!-- bower:ownership/2 end profile -->"
       ],
       "timeline": [
         "2026-10-02 \u00b7 Started the career profile."
@@ -39,8 +38,8 @@
     {
       "path": "Areas/Career/Originals/Alex CV.md",
       "contains": [
-        "[[Areas/Career/Career profile]]",
-        "[[Areas/Career/Career]]",
+        "See also [[Areas/Career/Career profile]]: the profile this CV updates.",
+        "See also [[Areas/Career/Career]]: the career record it belongs to.",
         "TypeScript and SQL",
         "shipped an offline map editor"
       ]
@@ -50,7 +49,8 @@
   "report": {
     "filed": 1,
     "created": [
-      "Areas/Career/Originals/Alex CV.md"
+      "Areas/Career/Originals/Alex CV.md",
+      "Bower health.md"
     ],
     "updated": [
       "Areas/Career/Career profile.md"
