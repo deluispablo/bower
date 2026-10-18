@@ -10,7 +10,7 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { PILE_NOTE } from '../../src/data/piles';
 import { checkCreationName } from '../../src/data/contracts/tree';
-import { indexedFront, parseNote } from '../../src/data/contracts/note-format';
+import { indexedFront, lintFacts, parseNote } from '../../src/data/contracts/note-format';
 import { mocEdit, mocMembership, mocSnapshot } from '../../src/data/contracts/note-edit';
 import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
@@ -380,6 +380,11 @@ export async function seedState(base: Base, settleMocs = false) {
   for (const [id, members] of mocMembership(files)) {
     const entry = files[id];
     if (entry?.moc) entry.members = members;
+  }
+  // A warm folder as maintenance leaves it: each entry holds the lint evidence of its version (c12-map ruling 3).
+  for (const [id, entry] of Object.entries(files)) {
+    const lint = lintFacts(entry.path, await base.drive.readText(id), true);
+    if (lint) entry.lint = lint;
   }
   const state: RetrievalFile & { files: Record<string, MaintenanceNote> } = { v: 1, folderId: base.root, account: 'ACCOUNT_ID',
     cursor: String(Number(await base.drive.getStartPageToken()) + 1), files };

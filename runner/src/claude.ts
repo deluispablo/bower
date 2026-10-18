@@ -2397,7 +2397,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     }
     if (requests.size) shown.requests = [...requests].map(([requestId, r]) => ({ requestId, text: r.text }));
     const indexed: Record<string, MaintenanceNote> = { ...setup.retrieval };
-    const metadata: Record<string, { summary: string; type?: string | null; links?: string[] }> = {};
+    const metadata: Record<string, { summary: string; type?: string | null; links?: string[]; tags?: string[] }> = {};
     // A note Drive refuses to give for good is left out of every read of this run (discovery names it); retries and waits still stop the run.
     const leftOut = new Set<string>();
     const refusedRead = <T>(id: string, got: () => Promise<T>): Promise<T | undefined> => got().catch((error: unknown) => {
@@ -2409,6 +2409,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     for (const file of listing) {
       const path = ix.pathOf(file.id);
       if (file.folder || !path?.endsWith('.md') || !MAIN_FOLDERS.includes(path.split('/')[0] ?? '')) continue;
+      // Discovery recorded this version as refused for good: it is left out as a refused read here would leave it.
+      if (indexed[file.id]?.lint === 'unreadable') { leftOut.add(file.id); Reflect.deleteProperty(indexed, file.id); continue; }
       const prefix = await refusedRead(file.id, async () => setup.prefixes?.(file, !!file.appProperties?.profile));
       const front = leftOut.has(file.id) ? undefined : await refusedRead(file.id, async () => read.indexedFront?.(file));
       if (leftOut.has(file.id)) continue;
@@ -2420,8 +2422,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         coverage: { kind: 'prefix', bytes: 4096 }, ...(front ? { owner: front.owner, type: front.type } : {}) };
       const entry = indexed[file.id];
       if (front?.incomplete && entry) entry.incomplete = true;
+      // Links and tags are the version's lint evidence; without it, the kept prefix's links (nothing is fetched for them).
+      const lint = entry?.lint === 'unreadable' ? undefined : entry?.lint;
       metadata[file.id] = { summary: indexed[file.id]?.summary ?? '', type: front?.type ?? indexed[file.id]?.type,
-        ...(prefix ? { links: indexedFront(prefix, true).links } : {}) };
+        ...(lint ? { links: lint.links, ...(lint.tagList?.length ? { tags: lint.tagList } : {}) } : prefix ? { links: indexedFront(prefix, true).links } : {}) };
     }
     // C09 (R14, R25): an original (a file under a main folder, not a note, that Bower reads by its listed name and size) is
     // a candidate for a request only, matched by its name or reached by a link; nothing of it is read to find it.
@@ -2460,21 +2464,13 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         }
       }
     };
-    // Ordinary links use bounded prefixes; candidate maps need complete ownership regions from the same cache.
+    // Ordinary links come from lint evidence (or a kept prefix); candidate maps need complete ownership regions from the same cache.
     for (const source of items) {
       const waiting = ix.waitingRun(source.itemId) !== null;
-      // Built at each use: discovery below adds a matched note's links to metadata, and the hop must see them.
+      // Built at each use: captureMaps adds a matched map's links to metadata, and the hop must see them.
       const pool = () => requests.has(source.itemId) ? { ...metadata, ...originals } : metadata;
       const matched = [...new Set([...pinsFor(source.itemId), ...(waiting ? [] : ix.neighbourhood(source.words, pool()))])];
       await captureMaps(matched);
-      for (const id of matched) {
-        const file = ix.byId(id); const path = ix.pathOf(id);
-        if (!file || !path || metadata[id]?.links || originals[id] || shown.suppressed?.has(path) || leftOut.has(id)) continue;
-        const text = await refusedRead(id, async () => setup.prefixes?.(file, true));
-        if (text) {
-          metadata[id] = { ...metadata[id], summary: metadata[id]?.summary ?? '', links: indexedFront(text, true).links };
-        }
-      }
       const neighbourhood = waiting ? matched : ix.neighbourhood(source.words, pool());
       await captureMaps(neighbourhood);
       const membership = mocMembership(indexed);
@@ -2494,7 +2490,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         : folder && originals[id] ? [{ id, path: ix.pathOf(id) ?? '', version: folder.modifiedTime }] : [];
     }) }));
     // Id/version coverage accompanies the cut projection; it is metadata, never complete L3 evidence.
-    shown.indexed = Object.fromEntries(Object.entries(indexed).map(([id, note]) => { const { moc: _moc, ...metadata } = note; return [id, metadata]; }));
+    shown.indexed = Object.fromEntries(Object.entries(indexed).map(([id, note]) => { const { moc: _moc, lint: _lint, ...metadata } = note; return [id, metadata]; }));
     // The index itself was cut (not merely bounded here): no match in it proves nothing, so no new note is justified by it.
     const indexCutAtSource = /index cut: \d+ folders omitted/.test(shown.index ?? '');
     boundIndexContext(shown);
