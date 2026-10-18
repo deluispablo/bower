@@ -463,7 +463,7 @@ export function serializeNote(n: NoteFile): string {
   if (n.status || n.template && n.byBower) front.push(`status: ${summaryScalar(n.status ?? (n.template === 'moc' ? 'evergreen' : 'active'))}`);
   if (n.tags.length || n.template) front.push(`tags: [${n.tags.map((tag) => !tag ? '""' : n.template || n.byBower ? summaryScalar(tag, true) : oneLine(tag)).join(', ')}]`);
   if (n.byBower) front.push('by: bower');
-  if (n.original) front.push(`original: ${summaryScalar(oneLine(n.original))}`);
+  if (n.original) front.push(`original: ${summaryScalar(n.original)}`);
   if (n.bowerNote) front.push(`bower_source: ${n.bowerNote.source}`);
   for (const p of n.properties) front.push(`${p.key}: ${n.template && n.byBower ? summaryScalar(p.link ? renderLink(p.link) : oneLine(p.value)) : p.link ? renderLink(p.link) : oneLine(p.value)}`);
   if (n.template && n.byBower) {

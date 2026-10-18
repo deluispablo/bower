@@ -2413,14 +2413,17 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         continue;
       }
       const address = savedLinkAddress(linkText) ?? thing.item.name;
-      const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: savedLinkUrl(linkText) ?? address }], tags: [], currentState: [], body: thing.words, timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
       const to = place.to;
       destination(to);
       const noteName = freeName(planned, to, title);
       plannedFile(join(to, noteName));
       const name = freeName(planned, to, thing.file.name);
       plannedFile(join(to, name));
-      filing.push({ thing, to, name, note: { name: noteName, key, text, what: 'A link you saved.' } });
+      const summary = `Saved from ${address}.`;
+      const text = serializeNote({ summary, properties: [{ key: 'source', label: 'Source', value: savedLinkUrl(linkText) ?? address }], tags: [], currentState: [], body: thing.words, original: name, timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
+      // The row says it in the person's own words (one line, cut at the summary bound), else the fixed sentence (the saved-link summary always names the address, qa6).
+      const spoken = thing.words.replace(/[\s\u0085]+/g, ' ').trim().slice(0, 200).replace(/[\ud800-\udbff]$/, '').trimEnd();
+      filing.push({ thing, to, name, note: { name: noteName, key, text, what: spoken || 'A link you saved.' } });
       continue;
     }
     const to = place.to;
@@ -2873,8 +2876,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     // The body keeps the person's words; the summary is the reply's own, never those words again.
-    const text = serializeNote({ summary: summary?.trim() || what, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
-    generated.push({ to, name, text, what, after: [], pileId, aside: folder.name });
+    const written = summary?.trim() || what;
+    const text = serializeNote({ summary: written, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
+    generated.push({ to, name, text, what: written, after: [], pileId, aside: folder.name });
   }
   // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written
   // from those words is there. The stored note is read now; one that cannot be read asks nothing.

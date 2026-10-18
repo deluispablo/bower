@@ -4538,7 +4538,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(filed[0]?.value.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', area: 'New folder Cooking in Resources', note: NOTE }]);
       expect(filed[0]?.requires).toEqual(expect.arrayContaining([create.operationId, move.operationId]));
       // TL-P2-40: the note it wrote is listed with the notes the run made.
-      expect(filed[0]?.value.created).toEqual([{ path: NOTE, what: 'A link you saved.' }]);
+      expect(filed[0]?.value.created).toEqual([{ path: NOTE, what: 'A recipe to keep' }]);
       expect(manifest.reportPlan).toContainEqual({ requires: [move.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: CURRY.name, why: AGAIN }], questions: [] } });
       expect(grounded(manifest)).toBe(true);
       expect(await groundedKeys(manifest)).toBe(true);
