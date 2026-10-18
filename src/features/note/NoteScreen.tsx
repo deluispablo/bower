@@ -18,6 +18,7 @@ import { useResolver } from './resolve';
 import { webSource } from './web-source';
 import { useFileActions } from '@/features/files/file-actions';
 import { AnsweredRows } from '@/features/tidy/RunLinks';
+import { isRunning } from '@/features/tidy/run-words';
 import { newLineIndexes } from './new-lines';
 import { LinkedList } from './RightPanel';
 import { inAppHistory } from '@/app/paths';
@@ -73,6 +74,7 @@ function PhoneBar({ folder, path }: { folder: string; path: string }) {
 
 function NoteView({ path }: { path: string }) {
   const act = useFileActions();
+  const { data: run } = useRun();
   const { data: note, error, loading } = useNote(path);
   const { data: tree } = useTree();
   const desktop = useIsDesktop();
@@ -161,7 +163,7 @@ function NoteView({ path }: { path: string }) {
           text={note.body}
           taskRegions={note.taskRegions}
           link={link}
-          onToggle={(i) =>
+          onToggle={isRunning(run) ? undefined : (i) =>
             void vault.toggleTask(path, i).catch((e: unknown) => report(e, 'That did not save. Try again.'))
           }
         />

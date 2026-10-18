@@ -404,7 +404,7 @@ export class DriveVault implements VaultSource {
       const top = path.split('/').slice(0, 2).join('/');
       const f = ix.file(top);
       if (!f || top === 'Inbox') throw new BowerError('not-found', 'That is no longer in the inbox.');
-      if (this.runningPiles().size) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+      this.refuseWhileRunning();
       // Things still on their way wait with the pile, and go on if Undo brings it back.
       const pileKey = f.appProperties?.[PROP.pile] ?? f.id;
       const declarations = await this.declarationCopiesOf(pileKey, f);
@@ -519,6 +519,7 @@ export class DriveVault implements VaultSource {
   }
 
   async toggleTask(path: string, index: number): Promise<void> {
+    this.refuseWhileRunning();
     if (isRunnerPath(path)) throw new BowerError('conflict', 'Bower keeps this file up to date.');
     const ix = await this.index();
     const f = this.mustFile(ix, path);
@@ -526,7 +527,7 @@ export class DriveVault implements VaultSource {
     const out = toggleTaskInText(await this.reads.text(f, () => this.drive.readText(f.id)), index);
     let written: DriveFile;
     try {
-      written = await this.once(f, { text: out.text }, (op, fence) => this.drive.writeText(f.id, out.text, f.modifiedTime, op, { fence }));
+      written = await this.once(f, { text: out.text }, (op, fence) => this.drive.writeText(f.id, out.text, f.modifiedTime, op, { fence }), () => this.refuseWhileRunning());
     } catch (e) {
       // Changed somewhere else: show the new version, write nothing.
       if (e instanceof BowerError && e.code === 'conflict') this.refreshAside();
@@ -2155,15 +2156,21 @@ export class DriveVault implements VaultSource {
    * changed or gone since, it is a change elsewhere. The write passes the same fence to the transport (`WriteOptions`),
    * which runs it again right before any resend (TL-P4-24 finding 1).
    */
-  private async once(f: DriveFile, intent: Intent, write: (op: Record<string, string>, fence: Fence) => Promise<DriveFile>): Promise<DriveFile> {
+  private async once(f: DriveFile, intent: Intent, write: (op: Record<string, string>, fence: Fence) => Promise<DriveFile>, beforeWrite?: () => void): Promise<DriveFile> {
     const seen: SeenExpectation = { ...seenPlace(f), ...(typeof intent !== 'string' ? { modifiedTime: f.modifiedTime } : {}), ...(unbins(intent) ? { trashed: true } : {}) };
     const landed = await this.fence(seen, f.id, landing(f, intent));
     if (landed) return landed;
     // Before a resend: still as seen, or that very write already there (the resend is then the same write, by its stamp).
-    const fence: Fence = async () => void (await this.fence(seen, f.id, landing(f, intent)));
+    const fence: Fence = async () => {
+      await this.fence(seen, f.id, landing(f, intent));
+      beforeWrite?.();
+    };
     let now: DriveFile | null | undefined;
     try {
-      return await updateByStamp(this.drive, f, intent, (op) => write(op, fence), (read) => (now = read));
+      return await updateByStamp(this.drive, f, intent, (op) => {
+        beforeWrite?.();
+        return write(op, fence);
+      }, (read) => (now = read));
     } catch (e) {
       if (!isNoAnswer(e) && !isUnconfirmedWrite(e)) throw e;
       if (now === undefined) throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
