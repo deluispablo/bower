@@ -50,7 +50,6 @@ import { normalizeTag, NOTE_TAGS_MAX, TAG_LIST_MAX, readTagList } from '../contr
 
 export { SET_ASIDE, listedPiles };
 
-
 /** A leading list marker ("-", "*", "+", "1." or "1)") of a Markdown line, after any indentation. */
 const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])(?=\s|$)/u;
 

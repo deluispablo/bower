@@ -186,8 +186,6 @@ function Folder({ path }: { path: string }) {
   );
 }
 
-/** Inside a link card, wikilinks read as their names. */
-
 function PhoneBookmarks() {
   const bookmarks = useBookmarks();
   const { data: tree } = useTree();
