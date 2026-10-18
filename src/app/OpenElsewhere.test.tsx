@@ -12,6 +12,7 @@ afterEach(() => {
   cleanup();
   history.replaceState(null, '', '/');
   vi.restoreAllMocks();
+  delete (navigator as Navigator & { standalone?: boolean }).standalone;
 });
 
 const ALEX: User = { name: 'Alex', email: 'you@example.com' };
@@ -180,6 +181,7 @@ describe('Bower is open in another window', () => {
   });
 
   it('signed out, nothing starts until someone signs in; a later sign-in starts the place again', async () => {
+    Object.assign(navigator, { standalone: true });
     const p = placeOf('starting');
     const session = sessionOf(p.calls, null);
     app({ session, place: p.place });
@@ -298,6 +300,7 @@ describe('Bower is open in another window', () => {
   });
 
   it('signed out while Use here works (the lease call says sign in again), the sign-in screen shows', async () => {
+    Object.assign(navigator, { standalone: true });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const p = placeOf('elsewhere');
     const session = sessionOf(p.calls, ALEX);

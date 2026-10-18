@@ -23,7 +23,7 @@ test('screens', async ({ page }, info) => {
   await page.waitForTimeout(150);
   await shot(page, '00-boot', p);
 
-  await go(page, '/', 'signed-out');
+  await go(page, '/sign-in', 'signed-out');
   await shot(page, '01-sign-in', p);
 
   await go(page, '/', 'first');
