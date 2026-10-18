@@ -30,6 +30,23 @@ export const extOf = (name: string): string => {
 /** The name people read: a note without `.md`. */
 export const displayName = (name: string): string => name.replace(/\.md$/, '');
 
+const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' });
+
+/** A folder in a sentence: a month or year folder reads with its parent, "September 2026 receipts", "2026 receipts". */
+export function folderWords(parts: string[]): string {
+  const last = parts.at(-1) ?? '';
+  const parent = parts.at(-2);
+  const m = /^(\d{4})(?:-(\d{2}))?$/.exec(last);
+  if (!m || !parent) return last;
+  const month = m[2] ? Number(m[2]) : 0;
+  // Not a real month: named as on Drive, with its parent.
+  if (m[2] && (month < 1 || month > 12)) return `${parent} ${last}`;
+  const when = month ? `${MONTH.format(Date.UTC(2000, month - 1))} ${m[1]}` : m[1];
+  // An acronym ("NHS") keeps its case: only a parent whose second letter is lower case reads in lower case.
+  const said = /^.\p{Ll}/u.test(parent) ? `${parent.charAt(0).toLowerCase()}${parent.slice(1)}` : parent;
+  return `${when} ${said}`;
+}
+
 /** A thing's name as people see it, wherever it shows: no extension (its kind shows beside it, as in the tree). */
 export const thingName = (name: string): string => name.replace(/\.[A-Za-z0-9]{1,5}$/, '');
 

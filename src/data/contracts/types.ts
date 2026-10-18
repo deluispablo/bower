@@ -271,7 +271,10 @@ export interface FiledItem {
   to: string;
   /** Its companion note, when Bower wrote one. */
   note?: string;
-  /** Why a new Area was made for it: "New area Money, for pay and tax records". */
+  /**
+   * Why a new folder was made, or that it is new: "New area Money, for pay and tax records", "New folder Garden in
+   * Projects". Every row filed into that folder carries it, and the card says it once.
+   */
   area?: string;
 }
 

@@ -1,7 +1,7 @@
 import { clock, elapsed, plural } from '@/app/words';
 import type { Pose } from '@/bird/Bower';
 import { RUN_STEPS, type RunPhase, type RunReport, type RunState } from '@/data/types';
-import { thingName } from '@/data/tree';
+import { folderWords, thingName } from '@/data/tree';
 import { distinctPaths } from '@/data/spine/report';
 
 /**
@@ -181,23 +181,6 @@ export function stepState(r: RunState, step: (typeof RUN_STEPS)[number]): 'done'
   return i < at ? 'done' : i === at ? 'now' : 'later';
 }
 
-const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' });
-
-/** A folder in a sentence: a month or year folder reads with its parent, "September 2026 receipts", "2026 receipts". */
-function folderWords(parts: string[]): string {
-  const last = parts.at(-1) ?? '';
-  const parent = parts.at(-2);
-  const m = /^(\d{4})(?:-(\d{2}))?$/.exec(last);
-  if (!m || !parent) return last;
-  const month = m[2] ? Number(m[2]) : 0;
-  // Not a real month: named as on Drive, with its parent.
-  if (m[2] && (month < 1 || month > 12)) return `${parent} ${last}`;
-  const when = month ? `${MONTH.format(Date.UTC(2000, month - 1))} ${m[1]}` : m[1];
-  // An acronym ("NHS") keeps its case: only a parent whose second letter is lower case reads in lower case.
-  const said = /^.\p{Ll}/u.test(parent) ? `${parent.charAt(0).toLowerCase()}${parent.slice(1)}` : parent;
-  return `${when} ${said}`;
-}
-
 /** Where things went, per folder: "Flat hunt got 3, Money got 2". */
 export function landedSummary(r: RunState): string {
   const per = new Map<string, number>();
@@ -210,7 +193,10 @@ export function landedSummary(r: RunState): string {
   const rest = all.slice(2);
   if (rest.length === 1) parts.push(`${rest[0]?.[0]} got ${rest[0]?.[1]}`);
   else if (rest.length > 1) parts.push(`${rest.length} other folders got the rest`);
-  const said = (r.report?.filed ?? []).flatMap((f) => (f.area ? [`${f.area}.`] : []));
+  // Each new folder once, by its sentence, in filed order: the first two, then how many more.
+  const areas = [...new Set((r.report?.filed ?? []).flatMap((f) => (f.area ? [f.area] : [])))];
+  const said = areas.slice(0, 2).map((a) => `${a}.`);
+  if (areas.length > 2) said.push(`${plural(areas.length - 2, 'more new folder')}.`);
   return parts.length ? [`${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`, ...said].join(' ') : '';
 }
 
