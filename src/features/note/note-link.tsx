@@ -5,14 +5,14 @@ import { useResolver } from './resolve';
 
 /**
  * A [[wikilink]] outside a note (a request's answer, a question): it opens the note it names, or reads as plain
- * words when no note has that name, as a note's own unresolved links do.
+ * words when no note has that name, as a note's own unresolved links do. `onClick` runs as a link opens (to close a sheet).
  */
-export function useNoteLink(): LinkFn {
+export function useNoteLink(onClick?: () => void): LinkFn {
   const resolve = useResolver();
   return (target, label, key) => {
     const path = resolve(target);
     return path ? (
-      <Link key={key} to={noteRoute(path)}>
+      <Link key={key} to={noteRoute(path)} onClick={onClick}>
         {label}
       </Link>
     ) : (

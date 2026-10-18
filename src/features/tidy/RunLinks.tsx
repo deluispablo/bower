@@ -1,6 +1,9 @@
 import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { RunReport } from '@/data/types';
+import { useRequests } from '@/data/provider';
+import { Inline } from '@/features/note/markdown';
+import { useNoteLink } from '@/features/note/note-link';
 import { displayName, nameOf } from '@/data/tree';
 import { noteRoute } from '@/app/paths';
 import { runLinkRows, type RunLinkRow as Row } from './run-words';
@@ -8,15 +11,16 @@ import s from './tidy.module.css';
 
 /**
  * The notes a finished tidy-up made and brought up to date, each a link to
- * its note, and the answers it could not act on: each kind of row in its own
+ * its note, what Bower did for each request, and the answers it could not act on: each kind of row in its own
  * list named by its visible label (WAI-ARIA APG link pattern; WAI tutorials,
  * content structure: lists).
  */
-export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered' | 'leftAsWritten'>; onOpen?: () => void }) {
+export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created' | 'updated' | 'answered' | 'leftAsWritten' | 'requests'>; onOpen?: () => void }) {
   const { made, updated } = runLinkRows(report);
   const answered = report.answered ?? [];
   const left = report.leftAsWritten ?? [];
-  if (!made.length && !updated.length && !answered.length && !left.length) return null;
+  const asked = [...new Set(report.requests ?? [])];
+  if (!made.length && !updated.length && !answered.length && !left.length && !asked.length) return null;
   return (
     <div className={s.links}>
       <LinkList label="New notes" rows={made} {...(onOpen ? { onOpen } : {})} />
@@ -27,8 +31,33 @@ export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created'
           <span className="muted">{r.why}</span>
         </li>)}
       </LabelledList>}
+      {!!asked.length && <DoneRows words={asked} {...(onOpen ? { onOpen } : {})} />}
       <AnsweredRows rows={answered} />
     </div>
+  );
+}
+
+/**
+ * Each distinct request's words with the newest done line of a request with those words (plan F3-F9 ruling 1, FA-R4);
+ * words with no done line have no row. Loading or a load error shows no list: Tell Bower shows that error (FA-R5).
+ */
+function DoneRows({ words, onOpen }: { words: string[]; onOpen?: () => void }) {
+  const { data } = useRequests();
+  const link = useNoteLink(onOpen);
+  const rows = words.flatMap((text) => {
+    const done = (data ?? []).filter((r) => r.text === text && r.done).sort((a, b) => b.at - a.at)[0]?.done;
+    return done ? [{ text, done }] : [];
+  });
+  if (!rows.length) return null;
+  return (
+    <LabelledList label="Done for you">
+      {rows.map((r) => (
+        <li key={r.text}>
+          <span>{r.text}</span>
+          <span className="muted"><Inline text={r.done} link={link} /></span>
+        </li>
+      ))}
+    </LabelledList>
   );
 }
 
