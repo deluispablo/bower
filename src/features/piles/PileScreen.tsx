@@ -13,7 +13,8 @@ import { inAppHistory } from '@/app/paths';
 import { isRunning } from '@/features/tidy/run-words';
 import { PileStack } from './PileStack';
 import { normaliseLink } from './link';
-import { itemLine, pileLine } from './item-words';
+import { headingOrigin, itemLine, pileLine } from './item-words';
+import { PilePreview } from './PilePreview';
 import { FieldError, fieldBox, Input, Textarea } from '@/ui/Field';
 import { useSessionDraft } from '@/ui/session-draft';
 import s from './piles.module.css';
@@ -40,6 +41,7 @@ export function PileScreen() {
   // A pile with no things is a note only when it has words; with none it is an empty pile (TL-P2-22).
   const empty = isEmptyPile(pile);
   const onlyNote = !pile.items.length && !empty;
+  const origin = headingOrigin(pile.items);
   return (
     <div className={s.page}>
       <div className={s.bar}>
@@ -53,7 +55,7 @@ export function PileScreen() {
         <div>
           <h1 className={s.title}>{empty ? 'An empty pile' : onlyNote ? 'Your note' : pile.text || pile.items[0]?.name}</h1>
           <p className="muted">
-            {pileLine({ things: thingsIn(pile), onlyNote, createdAt: pile.createdAt })}
+            {pileLine({ things: thingsIn(pile), onlyNote, createdAt: pile.createdAt, origin })}
           </p>
         </div>
       </div>
@@ -69,17 +71,18 @@ export function PileScreen() {
 
       {pile.items.length > 0 && (
         <ul className={s.items} aria-label="In this pile">
-          {pile.items.map((it) => (
-            <li key={it.id}>
-              <span className={s.tile}>
-                <Icon name={it.kind === 'image' ? 'image' : it.kind === 'link' ? 'link' : 'file'} />
-              </span>
-              <span className={s.itemMain}>
-                <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>{itemLine(it)}</span>
-              </span>
-            </li>
-          ))}
+          {pile.items.map((it) => {
+            const line = itemLine(it, origin !== null);
+            return (
+              <li key={it.id}>
+                <PilePreview pileId={pile.id} item={it} />
+                <span className={s.itemMain}>
+                  <span className={`mono ${s.fullName}`}>{it.name}</span>
+                  {line !== null && <span className={s.itemSub}>{line}</span>}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
       {pile.setAside ? (

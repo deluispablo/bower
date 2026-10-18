@@ -79,6 +79,9 @@ import { sha256, sha256Sync } from '../vault/hashes';
 
 type Listener = () => void;
 
+/** Every demo picture: a 1 x 1 PNG, made up. */
+const TINY_PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+
 export interface WorldOptions {
   scenario: Scenario;
   scale: TimeScale;
@@ -821,6 +824,11 @@ export class DemoWorld {
           if (e?.isNew) this.entries.set(path, { ...e, isNew: false });
         }),
       uploadNotice: async () => this.uploads ? (await this.uploads).queue.notice() : null,
+      imagePreview: async (pileId, itemId) => {
+        const item = (await this.fixturePiles()).find((p) => p.id === pileId)?.items.find((it) => it.id === itemId);
+        if (item?.kind !== 'image' || item.upload !== undefined) throw new BowerError('not-found', 'That picture is no longer in this pile.');
+        return new Blob([TINY_PNG], { type: 'image/png' });
+      },
       piles: async () => {
         const piles = await this.fixturePiles();
         return this.wait(() =>

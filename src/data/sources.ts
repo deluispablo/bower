@@ -86,6 +86,8 @@ export interface VaultSource {
    * Only a source with pile declarations has it.
    */
   chooseAgain?(pileId: string, itemId: string, chosen: ChosenAgain): Promise<void>;
+  /** The bytes of an arrived image of a pile in this folder's Inbox; any other id is refused (`not-found`). */
+  imagePreview?(pileId: string, itemId: string): Promise<Blob>;
   /**
    * One plain sentence about keeping uploads on this device, or null. Only a
    * source with an upload queue has it; behind the live door it answers as a promise.

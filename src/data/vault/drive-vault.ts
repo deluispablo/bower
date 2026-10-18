@@ -644,6 +644,23 @@ export class DriveVault implements VaultSource {
     return ix.file(SYSTEM.questions) ? this.projectQuestions(out, ix, true) : out;
   }
 
+  /**
+   * The bytes of an arrived image of a pile in this folder's Inbox, found as `pilesListed` finds it: the loose file
+   * itself, or a file in the pile's folder. Any other id is refused before Drive is asked; the bytes come from the
+   * one read cache (`readBytesOnce`).
+   */
+  async imagePreview(pileId: string, itemId: string): Promise<Blob> {
+    const ix = await this.index();
+    const entry = ix.filesIn('Inbox').find((f) => (f.appProperties?.[PROP.pile] ?? f.id) === pileId);
+    const path = entry?.folder ? ix.pathOf(entry.id) : undefined;
+    const things = !entry ? [] : !entry.folder ? [entry] : path ? ix.filesIn(path).filter((k) => !k.folder && k.name !== PILE_NOTE) : [];
+    const file = things.find((k) => k.id === itemId);
+    if (!file || itemOf(file).kind !== 'image') throw new BowerError('not-found', 'That picture is no longer in this pile.');
+    // The type Drive gave, when the listing kept it; the browser reads the picture's own bytes either way.
+    const type = 'mimeType' in file && typeof file.mimeType === 'string' ? file.mimeType : '';
+    return new Blob([(await this.readBytesOnce(file.id)).slice()], { type });
+  }
+
   /** A pile's things still on its way from this page or a reload, minus those whose file already shows (listed once). */
   private sendingRows(ix: VaultIndex, pileId: string): PileItem[] {
     const listed = (id: string | null): boolean => id !== null && ix.pathOf(id) !== undefined;
