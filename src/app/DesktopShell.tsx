@@ -184,7 +184,7 @@ export function DesktopShell() {
         <NavLink to="/add" className={s.rb} aria-label="Add a pile" title="Add a pile">
           <Icon name="add" />
         </NavLink>
-        <NavLink to="/bower" className={s.rb} aria-label="Talk to Bower" title="Talk to Bower">
+        <NavLink to="/bower" className={s.rb} aria-label="Ask" title="Ask">
           <BowerHead size={22} />
         </NavLink>
         <button type="button" className={s.rb} aria-label="Command palette" title="Command palette (⌘K)" onClick={() => useUi.getState().setPalette(true)}>

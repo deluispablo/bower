@@ -135,7 +135,7 @@ export function BowerScreen() {
       <div className={s.hero}>
         <PoseBower pose={pose} size={120} />
         <div>
-          <h1 className={s.title}>Tell Bower</h1>
+          <h1 className={s.title}>Ask Bower</h1>
           <p className="muted">Ask for something in the next tidy-up, or give it a rule to keep.</p>
         </div>
       </div>
@@ -262,6 +262,9 @@ export function BowerScreen() {
           Bower follows these in every tidy-up. They are kept with your notes, in your Bower folder.
         </p>
         <LoadError state={rulesState} />
+        {!rulesState.error && prose === '' && rules?.length === 0 && (
+          <p className="muted">No rules yet. A rule is something Bower does in every tidy-up, like 'Receipts go to Money, by month'.</p>
+        )}
         {prose && (
           <>
             <h3 id="rules-written" className={s.label}>
@@ -283,13 +286,10 @@ export function BowerScreen() {
           {(rules ?? []).map((r) => (
             <li key={r.id} className={r.pending ? s.pending : undefined} aria-busy={removing.has(r.id) || undefined}>
               <span className={s.ruleText}>{r.pending ? `"${r.text}"` : r.text}</span>
-              {r.pending ? (
-                <span className={s.pendingNote}>Waiting for the next tidy-up, where Bower words it clearly.</span>
-              ) : (
-                r.yourWords && <span className="muted">You wrote: "{r.yourWords}"</span>
-              )}
+              {r.pending && <span className={s.pendingNote}>Waiting for the next tidy-up, where Bower words it clearly.</span>}
               <span className={s.ruleFoot}>
-                <span className="muted">Added {shortDay(r.since)}</span>
+                {/* A settled rule with the person's words gives its day there, so the date shows once, beside Remove. */}
+                <span className="muted">{!r.pending && r.yourWords ? `From what you wrote on ${shortDay(r.since)}: '${r.yourWords}'` : `Added ${shortDay(r.since)}`}</span>
                 <Button size="sm" variant="ghost" aria-label={`Remove the rule: ${r.text}`} aria-disabled={removing.has(r.id) || undefined} onClick={() => void removeRule(r.id)}>
                   {removing.has(r.id) ? 'Removing…' : 'Remove'}
                 </Button>

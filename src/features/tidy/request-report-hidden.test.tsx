@@ -93,7 +93,7 @@ it.each(['all', 'instructions'] as const)('request report: reopened %s sheet wit
 
 it.each(['all', 'instructions'] as const)('request report: right panel Now for %s omits fallback detail with leftAsWritten', async (scope) => {
   const { run } = await open(scope, left(), [], true);
-  const panel = screen.getByRole('tabpanel', { name: 'Bower' });
+  const panel = screen.getByRole('tabpanel', { name: 'Activity' });
   const now = within(panel).getByRole('heading', { name: 'Now' }).closest('section');
   if (!now) throw new Error('Missing Now section');
   expect(within(now).getByText(runTitle(run), { exact: true })).toBeVisible();
@@ -102,7 +102,7 @@ it.each(['all', 'instructions'] as const)('request report: right panel Now for %
 
 it.each(['all', 'instructions'] as const)('request report: right panel Now for %s without leftAsWritten names the new note', async (scope) => {
   const { run } = await open(scope, { ...empty(), created: [{ path: PATH, what: 'Made from 1 thing' }] }, [], true);
-  const panel = screen.getByRole('tabpanel', { name: 'Bower' });
+  const panel = screen.getByRole('tabpanel', { name: 'Activity' });
   const now = within(panel).getByRole('heading', { name: 'Now' }).closest('section');
   if (!now) throw new Error('Missing Now section');
   expect(within(now).getByText(runTitle(run), { exact: true })).toBeVisible();
