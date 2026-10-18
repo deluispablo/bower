@@ -9,7 +9,7 @@ import { runScripted } from './corpus-run';
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 
 function assertNoBenchmarkSeed(meta: Pick<LoadedCase, 'id' | 'folderFrom'>): void {
-  expect(meta.folderFrom, meta.id).not.toBe('_bench-vault');
+  expect(meta.folderFrom, meta.id).toBeUndefined();
 }
 
 async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
@@ -21,6 +21,31 @@ async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
 }
 
 describe('the capability corpus', () => {
+  it('corpus-delete-bench-areas AC1: legacy areas and root documents are absent', () => {
+    for (const name of ['2-Areas', '2-Areas/Home/Home insurance policy 2026.pdf', 'README.md', 'About-Me.md', 'Rules.md', 'index.md', 'log.md']) {
+      const path = join(ROOT, '_bench-vault', name);
+      expect.soft(existsSync(path), path).toBe(false);
+    }
+  });
+
+  it('corpus-delete-bench-areas AC2: current cases load without legacy root context', async () => {
+    const cases = await loadCorpus(ROOT);
+    const dirs = (await readdir(ROOT, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, 'case.json')))
+      .map((entry) => entry.name).sort();
+    expect(cases.length).toBeGreaterThan(0);
+    expect(cases.map((c) => c.id).sort()).toEqual(dirs);
+    for (const c of cases) {
+      expect(c.dir, c.id).toBe(join(ROOT, c.id));
+      assertNoBenchmarkSeed(c);
+    }
+    for (const id of ['c11-saltmere-question', 'c15-more-context-bounded', 'c15-scanned-letter']) {
+      const c = cases.find((c) => c.id === id);
+      expect(c?.folder, id).toEqual({});
+      expect(c?.folderBinary, id).toEqual({});
+    }
+  });
+
   it('corpus-delete-bench-projects AC1: legacy project and auxiliary trees are absent', async () => {
     for (const name of ['1-Projects', '4-Archives', 'Clippings', 'Answers', '0-Inbox']) {
       const path = join(ROOT, '_bench-vault', name);
