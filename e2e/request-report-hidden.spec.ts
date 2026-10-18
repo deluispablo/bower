@@ -128,7 +128,7 @@ for (const source of ['demo', 'fake'] as const) {
         }
         const sheet = page.getByRole('dialog');
         if (shape === 'empty') {
-          await expect(sheet).toHaveAccessibleName('Nothing to tidy');
+          await expect(sheet).toHaveAccessibleName('Nothing in the inbox');
           await expect(sheet.getByRole('list', { name: 'Left as you wrote them' })).toHaveCount(0);
         } else {
           await expect(sheet).toHaveAccessibleName(title);
@@ -137,7 +137,7 @@ for (const source of ['demo', 'fake'] as const) {
           } else {
             await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
           }
-          await expect(sheet.getByText('Nothing to tidy', { exact: true })).toHaveCount(0);
+          await expect(sheet.getByText('Nothing in the inbox', { exact: true })).toHaveCount(0);
           const rows = sheet.getByRole('list', { name: 'Left as you wrote them' });
           if (hasLeft) {
             await expect(rows.getByText(WHY, { exact: true })).toBeVisible();

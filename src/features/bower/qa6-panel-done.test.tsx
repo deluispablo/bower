@@ -1,6 +1,6 @@
 /**
  * qa6-panel-done (designer qa-6 P1): the desktop right panel's card for a finished tidy-up the person has not seen
- * opens that run's report in the tidy-up sheet, as the status bar does, never "Nothing to tidy".
+ * opens that run's report in the tidy-up sheet, as the status bar does, never "Nothing in the inbox".
  */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -34,12 +34,12 @@ it('AC1 qa6-panel-done-report: the Done card of an unseen tidy-up that filed thi
   const run = await panel(filed());
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${runTitle(run)}`) }));
   expect(screen.getByRole('dialog', { name: runTitle(run) })).toBeVisible();
-  expect(screen.queryByText('Nothing to tidy')).toBeNull();
+  expect(screen.queryByText('Nothing in the inbox')).toBeNull();
 });
 
-it('AC2 qa6-panel-done-no-rows: the Done card of an unseen run with nothing to list opens that run, not "Nothing to tidy"', async () => {
+it('AC2 qa6-panel-done-no-rows: the Done card of an unseen run with nothing to list opens that run, not "Nothing in the inbox"', async () => {
   const run = await panel({ ...empty(), yourChanges: 1 }, 'instructions');
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${runTitle(run)}`) }));
   expect(screen.getByRole('dialog', { name: runTitle(run) })).toBeVisible();
-  expect(screen.queryByText('Nothing to tidy')).toBeNull();
+  expect(screen.queryByText('Nothing in the inbox')).toBeNull();
 });

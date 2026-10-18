@@ -59,18 +59,18 @@ it('request report: Home shows instructions leftAsWritten with today’s words a
   expect(markSeen).toHaveBeenCalledWith(run.id);
 });
 
-it('request report: status bar reopens unseen instructions leftAsWritten instead of Nothing to tidy', async () => {
+it('request report: status bar reopens unseen instructions leftAsWritten instead of Nothing in the inbox', async () => {
   const { run, markSeen } = await open('instructions', { ...left(), yourChanges: 1 });
   fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   assertLeft(sheet);
   expect(within(sheet).getByText(runDetail(run), { exact: true })).toBeVisible();
-  expect(within(sheet).queryByText('Nothing to tidy')).toBeNull();
+  expect(within(sheet).queryByText('Nothing in the inbox')).toBeNull();
   expect(within(sheet).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
   fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
   await waitFor(() => expect(markSeen).toHaveBeenCalledWith(run.id));
   fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
-  expect(screen.getByRole('dialog', { name: 'Nothing to tidy' })).toBeVisible();
+  expect(screen.getByRole('dialog', { name: 'Nothing in the inbox' })).toBeVisible();
 });
 
 it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omits fallback detail with leftAsWritten', async (scope) => {
@@ -78,7 +78,7 @@ it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omi
   fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
   const sheet = screen.getByRole('dialog', { name: runTitle(run) });
   assertLeft(sheet);
-  expect(within(sheet).queryByText('Nothing to tidy', { exact: true })).toBeNull();
+  expect(within(sheet).queryByText('Nothing in the inbox', { exact: true })).toBeNull();
   expect(within(sheet).getByRole('button', { name: 'Done' })).toBeVisible();
   expect(within(sheet).queryByText('Everything has its place.', { exact: true })).toBeNull();
 });
@@ -127,13 +127,13 @@ it('request report: all with filings retains Home replay and status bar replay',
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-it.each(['all', 'instructions'] as const)('request report: %s with no rows has no Home card and opens Nothing to tidy', async (scope) => {
+it.each(['all', 'instructions'] as const)('request report: %s with no rows has no Home card and opens Nothing in the inbox', async (scope) => {
   const { run } = await open(scope, empty());
   const button = within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ });
   expect(screen.queryByRole('heading', { name: runTitle(run) })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Got it' })).toBeNull();
   fireEvent.click(button);
-  expect(screen.getByRole('dialog', { name: 'Nothing to tidy' })).toBeVisible();
+  expect(screen.getByRole('dialog', { name: 'Nothing in the inbox' })).toBeVisible();
 });
 
 it.each([

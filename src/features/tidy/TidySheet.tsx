@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { report } from '@/ui/report';
 import { startRun } from './start-run';
 import { pileName, thingsIn, waitingIn } from '@/data/piles';
-import { usePiles, useRun, useSources } from '@/data/provider';
+import { usePiles, useRequests, useRules, useRun, useSources, type Loaded } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
@@ -36,7 +36,7 @@ export function TidySheet() {
   const pilesState = usePiles();
   const { data: piles } = pilesState;
   const waiting = waitingIn(piles);
-  const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing to tidy';
+  const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing in the inbox';
   const onOpenChange = (open: boolean): void => {
     // Closing a finished run with nothing to replay: it has been seen. A stopped one stays on Home
     // (with Try again) until "Got it", however the sheet was closed.
@@ -83,24 +83,29 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
       </div>
       {/* The dialog's own title says this to screen readers. */}
       <p className={s.title} aria-hidden="true">
-        {count ? `Tidy up ${plural(count, 'thing')}?` : 'Nothing to tidy'}
+        {count ? `Tidy up ${plural(count, 'thing')}?` : 'Nothing in the inbox'}
       </p>
       <p className={s.detail}>
         {count
           ? 'Bower reads each one, names it, writes what matters into your notes and files it in your Drive. About 5 minutes; you can close the app.'
-          : 'Add something and it waits in the inbox until the next tidy-up.'}
+          : 'Add something to the inbox to start a tidy-up here.'}
       </p>
       {count > 0 && (
-        <ul className={s.piles}>
-          {piles.map((p) => (
-            <li key={p.id}>
-              <Icon name={!p.items.length ? 'note' : p.text ? 'pile' : p.items[0]?.kind === 'link' ? 'link' : 'file'} size={18} />
-              <span>{pileName(p)}</span>
-              <span className="muted">{thingsIn(p)}</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className={s.linksLabel}>In the inbox: {plural(piles.length, 'pile')}, {plural(count, 'thing')}</p>
+          <ul className={s.piles} aria-label="In the inbox">
+            {piles.map((p) => (
+              <li key={p.id}>
+                <Icon name={!p.items.length ? 'note' : p.text ? 'pile' : p.items[0]?.kind === 'link' ? 'link' : 'file'} size={18} />
+                <span>{pileName(p)}</span>
+                <span className="muted">{plural(thingsIn(p), 'thing')}</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
+      <Journal />
+      {count > 0 && <p className={s.detail}>Bower will consider these requests and pending rules too. Some work may wait for another tidy-up.</p>}
       {error && (
         <p role="alert" className={s.error}>
           {error}
@@ -124,6 +129,39 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Pending requests and rules the tidy-up also considers, counted from the readers' live data. Each says it is checking
+ * or failed instead of a count it does not know: an error hides a retained count until a read succeeds again.
+ */
+function Journal() {
+  const requests = useRequests();
+  const rules = useRules();
+  const rows: Array<{ label: string; icon: 'send' | 'list'; state: Loaded<unknown>; n: number | undefined; one: string; many: string }> = [
+    { label: 'Requests', icon: 'send', state: requests, n: requests.data?.filter((r) => !r.done).length, one: 'request', many: 'requests' },
+    { label: 'Pending rules', icon: 'list', state: rules, n: rules.data?.filter((r) => r.pending === true).length, one: 'pending rule', many: 'pending rules' },
+  ];
+  return (
+    <>
+      <ul className={s.piles} aria-label="Requests and pending rules">
+        {rows.map((r) => (
+          <li key={r.label}>
+            <Icon name={r.icon} size={18} />
+            <span>{r.label}</span>
+            <span className="muted">
+              {r.state.error ? `${r.label} could not be checked` : r.n === undefined ? `Checking ${r.many}…` : plural(r.n, r.one, r.many)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {rows.map((r) => r.state.error && (
+        <div key={r.label} role="group" aria-label={r.label} className={s.error}>
+          <LoadError state={r.state} />
+        </div>
+      ))}
+    </>
   );
 }
 
