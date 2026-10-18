@@ -23,8 +23,8 @@ const HUB = 'Projects/Job hunt/Job hunt.md';
 const FLAT = 'Projects/Flat hunt/Flat hunt.md';
 const MADE = 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md';
 const NEW_STATE = ['One application open.', 'An offer from Ferrowick to answer.'];
-/** TL-P4-10 point 3, word for word. */
-const ADOPT_QUESTION = 'Bower found summaries it did not write. May it keep them up to date?';
+/** TL-P4-10 point 3, word for word, naming the notes that raised it (prod1-adoption-targets). */
+const ADOPT_QUESTION = 'Bower found summaries it did not write, for example in [[Flat hunt]] and [[Job hunt]]. May it keep every summary it did not write up to date?';
 /** Drive's `md5Checksum`: the MD5 of the stored bytes, hex (RFC 1321). */
 const md5 = (text: string): string => createHash('md5').update(Buffer.from(text, 'utf8')).digest('hex');
 /** A hub whose Current state carries Bower's mark of what it holds: Bower's own. */

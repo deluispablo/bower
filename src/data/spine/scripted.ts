@@ -12,7 +12,7 @@
  */
 import { createOwnershipContext, parseOwnership, type AboutRegion, type OwnershipContext } from '../contracts/ownership-format';
 import { UNCONFIRMED_WRITE_MESSAGE, type DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, frontLine, sameJson, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal, relinkEntry } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_RULE, adoptStatesQuestion, STATE_UPDATED, applyChanges, frontLine, sameJson, viewsDeclared, viewsInstalled,profileTextOk, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate, personalTimelineRefusal, relinkEntry } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { formulaInstalled, parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
@@ -1969,7 +1969,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   /** Granted sections the person changed again since they were asked: nothing is written, and they are asked again. */
   const reasked: Question[] = [];
   /** Unmarked Current states Bower may not adopt: a line each, and one question for the whole folder (TL-P4-10). */
-  const unmarkedStates: WantedLine[] = [];
+  const unmarkedStates: Array<{ line: WantedLine; file: DriveFile; path: string }> = [];
   /** Whether a rule lets Bower keep up to date the Current states it did not write: Rules.md, read once, when needed. */
   let adoptRule: Promise<boolean> | null = null;
   const adopting = (): Promise<boolean> => (adoptRule ??= (async () => {
@@ -2200,14 +2200,14 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         const cited = w.state.thing === null ? undefined : w.lines.find((l) => l.after === w.state?.thing && l.entry.source !== null);
         // The person is still asked, once that line is there.
         if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
-        if (cited && now?.owner === 'unmarked') unmarkedStates.push(cited);
+        if (cited && now?.owner === 'unmarked') unmarkedStates.push({ line: cited, file: f, path: w.path });
         const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], now?.owner === 'person' ? await lastWritten(f.id, mark) : []);
         if (text !== null) {
           const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
           w.lines.push(line);
           lineState.set(line, 'refused');
           if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path, seen: stateMark(now.lines), shown: asRead(w.state.lines) });
-          if (now?.owner === 'unmarked') unmarkedStates.push(line);
+          if (now?.owner === 'unmarked') unmarkedStates.push({ line, file: f, path: w.path });
           if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
         }
       }
@@ -2299,10 +2299,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     stateAsks.set(p.file.id, q);
   }
   // Summaries Bower did not write: one question for the folder, however many there are (TL-P4-10 point 3); a yes
-  // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them.
-  if (unmarkedStates.some((l) => lineState.get(l) === 'planned' || lineState.get(l) === 'present')) {
-    askedPiles.push({ id: ADOPT_STATES_ID, text: ADOPT_STATES_QUESTION, yes: 'Keep them up to date', no: 'Leave them', askedAt: opts.requestedAt });
-  }
+  // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them. Each note whose line is written (or there) once, by
+  // path; the question names some as links, pushed before `toAsk` once the plan's titles are known.
+  const adoptNotes = [...new Map(unmarkedStates.filter((u) => lineState.get(u.line) === 'planned' || lineState.get(u.line) === 'present')
+    .map((u) => [u.file.id, ix.pathOf(u.file.id) ?? u.path] as const)).values()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   // A pile of words a line carries goes to the Bin only with every such line written (or there already); otherwise it
   // waits whole for the next run, its words untouched, and its lines are not written now either.
   // At least one of them written now, so the pile is filed as the note it went into; with every one there already, it
@@ -2974,6 +2974,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     let room = 10 - open - asks.filter((q) => !q.request).length;
     return asks.filter((q) => !q.request || room-- > 0);
   };
+  if (adoptNotes.length) {
+    const { titles: adoptTitles } = countTitles();
+    askedPiles.push({ id: ADOPT_STATES_ID, text: adoptStatesQuestion(adoptNotes.map((path) => requestNoteLink(path, adoptTitles))), yes: 'Keep them up to date', no: 'Leave them', askedAt: opts.requestedAt });
+  }
   let toAsk = [...first, ...asking.values(), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles, ...(first.length ? [] : suggested), ...requestAsks]
     .filter((q, i, all) => (subjectOf(q).kind === 'inbox' || again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   // Immutable artifacts retain payload identity after a card closes, including declines.
