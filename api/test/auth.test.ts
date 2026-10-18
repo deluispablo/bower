@@ -143,6 +143,7 @@ async function errorCode(response: Response): Promise<string> {
 }
 
 const FAILED = `${env.APP_ORIGIN}/sign-in?signin=failed`;
+const NOT_INVITED = `${env.APP_ORIGIN}/sign-in?signin=not-invited`;
 const CANCELLED = `${env.APP_ORIGIN}/sign-in?signin=cancelled`;
 
 /** A callback answer is a redirect to the app's sign-in: never JSON, the OAuth cookie cleared. */
@@ -262,7 +263,7 @@ describe('GET /auth/callback', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const { response } = await signIn((nonce) => ({ sub, nonce }));
-      expectSignInRedirect(response, FAILED);
+      expectSignInRedirect(response, NOT_INVITED);
       // Nothing is kept for someone who was not invited.
       expect(await person(sub).account()).toBeNull();
       expect(await person(sub).encryptedRefreshToken()).toBeNull();
@@ -270,8 +271,14 @@ describe('GET /auth/callback', () => {
       // An unverified address is not trusted against the allowlist either.
       await kv.put(allowKey(EMAIL), '1');
       const unverified = await signIn((nonce) => ({ sub, nonce, email_verified: false }));
-      expectSignInRedirect(unverified.response, FAILED);
+      expectSignInRedirect(unverified.response, NOT_INVITED);
       expect(await person(sub).account()).toBeNull();
+      expect(await person(sub).encryptedRefreshToken()).toBeNull();
+      expect(log.mock.calls).toHaveLength(2);
+      for (const call of log.mock.calls) {
+        expect(call).toEqual([expect.stringContaining('sign-in not-invited:'), expect.any(Error)]);
+      }
+      expect(logged(log)).not.toContain(EMAIL);
     } finally {
       log.mockRestore();
     }
@@ -355,7 +362,7 @@ describe('GET /auth/callback', () => {
       expect(upper.response.headers.get('location')).toBe(env.APP_ORIGIN);
       // The Kelvin sign (U+212A) lowercases to "k" under Unicode rules: it must not match.
       const kelvin = await signIn((nonce) => ({ sub: newSub(), nonce, email: '\u212Aim@example.com' }));
-      expectSignInRedirect(kelvin.response, FAILED);
+      expectSignInRedirect(kelvin.response, NOT_INVITED);
     } finally {
       log.mockRestore();
     }
