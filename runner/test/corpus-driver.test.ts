@@ -1,7 +1,25 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadCase, score, type Expected } from '../src/corpus';
+import { loadCase, loadCorpus, score, type Expected } from '../src/corpus';
 import { frameOf, runWithClaude } from './corpus-run';
+
+it('corpus-delete-revision-undo AC2: inventory removal does not claim revision or undo execution', async () => {
+  const cases = await loadCorpus(resolve(import.meta.dirname, '../../testing/corpus'));
+  const retained = ['c08-revise-keeps-personal-text', 'c13-manifest-move-and-create',
+    'c13-manifest-partial-edited-note', 'c13-manifest-state-with-personal-edit'];
+  // Instruction-run success, exit zero and a structural score do not prove these flows.
+  const assertNoUnsupportedSuccess = (successful: string[]): void => {
+    for (const id of retained) expect(successful, id).not.toContain(id);
+  };
+  const scripted = cases.filter((c) => c.covers === 'scripted').map((c) => c.id);
+  assertNoUnsupportedSuccess(scripted);
+  for (const id of retained) {
+    expect(cases.find((c) => c.id === id)?.covers, id).toBe('model');
+    expect(() => assertNoUnsupportedSuccess([...scripted, id])).toThrow(id);
+    const promoted = cases.map((c) => c.id === id ? { ...c, covers: 'scripted' } : c);
+    expect(() => assertNoUnsupportedSuccess(promoted.filter((c) => c.covers === 'scripted').map((c) => c.id))).toThrow(id);
+  }
+});
 
 it("the scorer counts questions exactly and checks a pair's subject", () => {
   const pairSubject = { kind: 'pair' as const, notes: ['Projects/A.md', 'Projects/B.md'] as [string, string] };
