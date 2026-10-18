@@ -22,7 +22,7 @@
  * (https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/). The Worker admits it as any press:
  * the daily quota, one run at a time (a run going is answered with `waits`, and the answer's run starts at its end).
  */
-import { sha256Hex } from './contracts/hashes';
+import { sha256Sync } from './contracts/hashes';
 import { checkedAnswer, type QuestionAnswer, subjectOf } from './contracts/questions';
 import type { RunSource, VaultSource } from './sources';
 import type { Question, RunState } from './types';
@@ -44,10 +44,12 @@ export function answerRun(q: Question, yes: QuestionAnswer): AnswerRun | null {
   return null;
 }
 
-/** The request id of the run an answer starts: the same for every answer to one asking of one question. */
-export async function answerRequestId(q: Pick<Question, 'id' | 'askedAt'>): Promise<string> {
-  const hex = await sha256Hex(`${q.id}\n${q.askedAt}`);
-  return `answer-${hex.slice(0, 40)}`;
+/**
+ * The request id of the run an answer starts: the same for every answer to one asking of one question. Hashed
+ * synchronously, so the run is asked for in the same task as the answer, without waiting on Web Crypto.
+ */
+export function answerRequestId(q: Pick<Question, 'id' | 'askedAt'>): string {
+  return `answer-${sha256Sync(`${q.id}\n${q.askedAt}`).slice(0, 40)}`;
 }
 
 /**
@@ -77,7 +79,7 @@ export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'ans
   await vault.answer(id, yes);
   const plan = answerRun(question, yes);
   if (!plan) return { question, outcome: { kind: 'next' } };
-  const requestId = await answerRequestId(question);
+  const requestId = answerRequestId(question);
   try {
     // The Worker decides, in one step: a run of its own now, or, while a run is going, at that run's end (`waits`).
     const run = await runs.start(plan.scope, { allowWeb: opts.allowWeb, requestId, ...(plan.scope === 'all' ? { subject: plan.subject } : {}), answer: true });
