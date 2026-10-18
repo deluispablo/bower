@@ -27,7 +27,7 @@ import { md5Hex } from '../contracts/hashes';
 import { proposalOk, requestQuestionId, isQuestionOption, answeredAskings, answersAsking, journalAnswer, roundFor, relatedSubjects, sameSubjectContent, subjectMembers, subjectPile, type QuestionRound, ASK_GONE, STATE_ASK, STATE_ASK_AGAIN, answeredGone, answeredState, askId, stateNotWritten, binnedPairNote, openQuestions, pairQuestionId, reportRowOf, stateQuestionId, subjectKey, subjectLeft, subjectOf, type InboxSeen, type NotesSeen } from '../contracts/questions';
 import { sha256 } from '../vault/hashes';
 import { indexedFront, parseNote, serializeNote, timelineBullets, type ParsedNote } from '../vault/note-format';
-import { WIKI_LINK, linkTarget, renderLink } from '../contracts/links';
+import { scanLinks, replaceLinks, linkTarget, renderLink } from '../contracts/links';
 import { fenceAfter, type Fence } from '../contracts/ownership-format';
 import { markerText, parseTimelineLine, splitCitation } from '../contracts/timeline-line';
 import { managedRules, serializeRules } from '../vault/rules-format';
@@ -72,8 +72,8 @@ function* unfenced(text: string): Generator<string> {
 export function authoredLinks(text: string): Array<{ target: string; reason: boolean }> {
   const out: Array<{ target: string; reason: boolean }> = [];
   for (const line of unfenced(text)) {
-    const links = [...line.matchAll(WIKI_LINK)];
-    const rest = line.replace(WIKI_LINK, ' ').replace(LIST_MARKER, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
+    const links = [...scanLinks(line)];
+    const rest = replaceLinks(line, () => ' ').replace(LIST_MARKER, ' ').replace(/\b(?:see also|related|sources?|links?|and)\b/giu, ' ');
     const reason = /[\p{L}\p{N}]/u.test(rest);
     for (const m of links) {
       const target = linkTarget(m[1] ?? '').replace(/\.md$/, '');
@@ -99,7 +99,7 @@ export function linkReasons(body: string): Array<{ target: string; reason: strin
 }
 
 /** C09 (review ruling 19): a [[link]] whose target is empty ("[[ ]]"), which `authoredLinks` leaves out: it names nothing. */
-export const hasEmptyLink = (text: string): boolean => [...text.matchAll(WIKI_LINK)].some((m) => !linkTarget(m[1] ?? '').replace(/\.md$/, ''));
+export const hasEmptyLink = (text: string): boolean => [...scanLinks(text)].some((m) => !linkTarget(m[1] ?? '').replace(/\.md$/, ''));
 
 // The one link rule's home is vault-index.ts (the neighbourhood's link hop uses it too, C09 ruling 11).
 export { linkIdentity };
@@ -2566,7 +2566,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
     if (!span || !parseNote(path, new TextDecoder().decode(bytes), fetched(target.id)).byBower) continue;
     const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
-    const history = [...previous.matchAll(WIKI_LINK)].map(([link]) => link).filter((link) => link !== '[[]]');
+    const history = [...scanLinks(previous)].map(([link]) => link).filter((link) => link !== '[[]]');
     const retained = [...new Set(history)].filter((link) => !citations.includes(link));
     const text = body + (retained.length ? `${retained.join(' ')}\n` : '');
     if (!profileTextOk(text)) return refused('a profile beyond its 400 word bound');
@@ -4293,7 +4293,7 @@ const citedAsWords = (text: string): string => {
 const asLineText = (text: string): string => {
   const clean = text.replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' || c === '\u2028' || c === '\u2029' ? ' ' : c)).join('');
   const { text: words, citation } = splitCitation(clean);
-  return words.replace(WIKI_LINK, (_m, target: string, alias?: string) => (alias ?? target).trim())
+  return replaceLinks(words, (_m, target: string, alias?: string) => (alias ?? target).trim())
     .replace(/^#+\s*|^[-*+]\s+/, '').trim() + citation;
 };
 
