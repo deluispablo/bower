@@ -607,7 +607,7 @@ export class DemoWorld {
         if (!this.entries.has(folder)) this.entries.set(folder, { path: folder, type: 'folder', modified: at, created: at });
         const name = freeName(this.entries, folder, plan.title);
         const path = join(folder, name);
-        this.entries.set(path, { path, type: 'file', kind: kindOf(name), modified: at, created: at, isNew: true, byBower: kindOf(name) === 'note' });
+        this.entries.set(path, { path, type: 'file', kind: kindOf(name), modified: at, created: at, isNew: true, byBower: item.kind === 'link' && kindOf(name) === 'note' });
         if (item.kind === 'link') this.links.set(path, `https://${item.name}`);
         // A saved link filed as a note is a note this run wrote, as over Drive.
         if (item.kind === 'link' && kindOf(name) === 'note') created.push({ path, what: 'A link you saved.' });
