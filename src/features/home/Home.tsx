@@ -135,7 +135,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
       )}
       <p className="muted">Tidy-up finished {ago(end).toLowerCase()}</p>
       <h2 id="away" className={s.cardTitle}>
-        {replay ? <>{filedWords(run.report)}{run.report?.updated.length ? `, ${plural(notesUpdated(run.report), 'note')} brought up to date` : ''}.</> : runTitle(run)}
+        {replay ? <>{filedWords(run.report)}{run.report && notesUpdated(run.report) ? `, ${plural(notesUpdated(run.report), 'note')} brought up to date` : ''}.</> : runTitle(run)}
       </h2>
       {detail && <p className="muted">{detail}</p>}
       {/* The destination summary says only what was filed; what was not has its own sentence beside it. */}

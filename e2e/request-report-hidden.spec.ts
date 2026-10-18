@@ -83,7 +83,7 @@ for (const source of ['demo', 'fake'] as const) {
         const run = await openFixture(page, source, shape);
         const title = run.scope === 'instructions' ? 'Done. Bower read your changes.' : shape === 'all' ? 'Done. 1 thing filed.' : 'Done. 0 things filed.';
         const homeTitle = shape === 'all' ? '1 thing filed.' : title;
-        const detail = shape === 'left-detail' ? '1 change of yours read.' : 'Everything has its place.';
+        const detail = shape === 'left-detail' ? '1 change of yours read.' : shape === 'created' ? '1 new note made.' : 'Everything has its place.';
         const hasLeft = !!run.report?.leftAsWritten?.length;
         const home = page.getByRole('main');
         const heading = home.getByRole('heading', { level: 2, name: homeTitle, exact: true });

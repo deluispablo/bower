@@ -44,7 +44,7 @@ describe('AC1 a run that changed nothing says so', () => {
 
   it('AC1 design8-run-words-rows-unchanged: a run with something to say keeps its words (positive control)', () => {
     expect(runDetail(done('instructions', { ...empty(), yourChanges: 1 }))).toBe('1 change of yours read.');
-    expect(runDetail(done('instructions', { ...empty(), created: [{ path: 'Areas/Home/Allotment diary.md', what: 'Made from 1 thing' }] }))).toBe('Everything has its place.');
+    expect(runDetail(done('instructions', { ...empty(), created: [{ path: 'Areas/Home/Allotment diary.md', what: 'Made from 1 thing' }] }))).toBe('1 new note made.');
     expect(runDetail(done('all', empty()))).toBe('Everything has its place.');
     expect(runDetail(done('instructions', { ...empty(), leftAsWritten: [{ name: 'Areas/Home/Allotment diary.md', fileId: 'a', why: "Bower didn't add the line." }] }))).toBe('');
   });
