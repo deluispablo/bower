@@ -2416,8 +2416,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => cut(p.anchor?.name ?? thingsOf(p)[0]?.name ?? p.items[0]?.name ?? p.pileId)),
       ...took.taken.journal.filter((l) => dropped.has(l.fileId)).map((l) => cut(requestText(l.fileId)?.trim() || l.name)),
     ].map((name) => ({ name, why: WAITING_WHY }));
-    const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, journal = took.taken.journal): Promise<RunManifest> => {
-      const t = { ...took.taken, journal };
+    const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, t = took.taken): Promise<RunManifest> => {
       const waiting = dropped.size ? new Set([...held ?? [], ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => p.pileId)]) : held;
       const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context, tagList }, undefined, waiting);
       const manifest: RunManifest = dropped.size ? { ...plan.manifest, waiting: waitingRows((id) => requests.get(id)?.text) } : plan.manifest;
@@ -2771,16 +2770,6 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       for (const id of new Set(Object.values(selection.allowedTargets).flat())) {
         if (listing.find((file) => file.id === id)?.appProperties?.profile && indexed[id]?.owner === 'bower') await read.readBytes(id);
       }
-      const wanted = new Set(Object.values(selection.allowedTargets).flat()
-        .filter((id) => indexed[id] && (indexed[id]?.type !== 'moc' || selection.value.items.some((item) => item.wants.includes(id)))));
-      const readable = new Set([...wanted].filter((id) => !shown.suppressed?.has(ix.pathOf(id) ?? '')));
-      shown.notes = await notesShown(read, listing, ix, pinned, readable, readable);
-      // C09 (R15, ruling 5): the originals requests want, in the room the notes left (one room for both).
-      const files = await originalsShown(read, ix, selection.value.items.flatMap((item) => item.wants.filter((id) => originals[id])),
-        CONTEXT_BOUNDS.notesPerRun - shown.notes.reduce((sum, n) => sum + n.text.length, 0));
-      if (files.length) shown.files = files;
-      shown.presentLines = presentLinesOf(shown.notes, listing, ix, run);
-      shown.selection = selection.value; shown.allowedTargets = selection.allowedTargets;
       const tagFile = ix.file(SYSTEM.tags);
       tagList = readTagList(tagFile ? await read.readText(tagFile.id) : null);
       shown.tags = tagList.tags;
@@ -2790,40 +2779,58 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           thing.sentences = profileSentences(shown.originals?.get(thing.fileId) ?? thing.text, thing.name).map((text, i) => ({ sentence: i + 1, text }));
         }
       }
-      const input = prepared(run, shownTook, shown);
-      const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
-      const { sets: mapSets, noteTypes, prepare: prepareMaps, skipped: mapSkipped } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? [], await recentKeys(read, ix, shownTook.taken.at));
-      // Whose note it is reads the whole note (one read per version, already cached), never the cut shown to the model.
-      const bowerNotes = new Set<string>();
-      for (const n of shown.notes) {
-        const file = ix.file(n.path);
-        if (!file || file.folder) continue;
-        try {
-          if (parseNote(n.path, await read.readText(file.id), run.context ? { context: run.context, fileId: file.id } : undefined).byBower) bowerNotes.add(n.path);
-        } catch (e) { console.error(e); }
-      }
-      const seen: Seen = { types: shown.types, tagList, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
-        suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
-        noteTexts: new Map(shown.notes.map((n) => [n.path, n.text])), fileTexts: new Map((shown.files ?? []).map((f) => [f.path, f.text])), moves: shown.moves ?? [], bowerNotes,
-        fileNames: new Map(listing.flatMap((f) => (f.folder ? [] : [[f.id, f.name] as const]))),
-        files: new Map(listing.flatMap((f) => { const path = f.folder ? undefined : ix.pathOf(f.id); return path === undefined ? [] : [[path, f.id] as const]; })),
-        names: shown.names ?? new Set(), texts, originals: shown.originals, folders: new Set(shown.folders),
-        mocFolders: new Set(shown.notes.filter((n) => indexed[ix.idOf(n.path) ?? '']?.type === 'moc' && indexed[ix.idOf(n.path) ?? '']?.owner === 'bower').map((n) => n.path.slice(0, n.path.lastIndexOf('/')))),
-        folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'), pileWords: new Map(shown.piles.map((p) => [p.pileId, p.words])),
-        shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
-        merges: mergesOf(answers, shown.notes.map((n) => n.path)), requests,
-        requestNotes: new Map(Object.entries(shown.requestNotes ?? {}).map(([id, notes]) => [id, new Set(notes.flatMap((n) => ix.pathOf(n) ?? []))])), maps: new Set(Object.entries(indexed)
-          .flatMap(([id, note]) => (note.type === 'moc' && note.owner === 'bower' ? [id] : []))),
-        sets: mapSets, noteTypes, skipped: mapSkipped, shownIds: new Set([...cardIds, ...(shown.map ?? []).flatMap((row) => row.hub?.id ?? [])]) };
-      let validatedPlan: RunManifest | undefined;
+      const recent = await recentKeys(read, ix, shownTook.taken.at);
+      // c12-fanout S2: the sources in groups, each its own writing call; a run of one group is shown and checked as one call was.
+      const groups = groupsOf([
+        ...shownTook.taken.piles.map((p) => ({ id: p.pileId, size: Math.max(1, thingsOf(p).length), items: thingsOf(p).length ? thingsOf(p).map((i) => i.fileId) : [p.pileId] })),
+        ...shownTook.taken.journal.map((l) => ({ id: l.fileId, size: requests.has(l.fileId) ? 1 : 0, items: [l.fileId], notes: shown.requestNotes?.[l.fileId] ?? [] })),
+      ], selection.allowedTargets);
+      const single = groups.length < 2;
+      const admittedIds = new Set([...shownTook.taken.piles.flatMap((p) => [p.pileId, ...thingsOf(p).map((i) => i.fileId)]), ...shownTook.taken.journal.map((l) => l.fileId)]);
+      /**
+       * S3: what one group's call is shown and checked against, its own sources only: its piles and journal lines, its part of
+       * the selection (an ask naming no source goes with the first group), targets, cards, requests, answers, profiles and the
+       * retry sources no other group holds. The prompt file, tags, map, types, rules and About me are the run's.
+       */
+      const scoped = (group: readonly string[], firstGroup: boolean) => {
+        if (single) return { shown: { ...shown }, shownTook, selection, requests, answers };
+        const ids = new Set(group);
+        const piles = shownTook.taken.piles.filter((p) => ids.has(p.pileId));
+        const journal = shownTook.taken.journal.filter((l) => ids.has(l.fileId));
+        const own = new Set([...piles.flatMap((p) => [p.pileId, ...thingsOf(p).map((i) => i.fileId)]), ...journal.map((l) => l.fileId)]);
+        const allowedTargets = Object.fromEntries(Object.entries(selection.allowedTargets).filter(([id]) => own.has(id)));
+        const targetIds = new Set(Object.values(allowedTargets).flat());
+        const sources = (shown.sources ?? []).filter((s) => own.has(s.itemId));
+        const candidates = new Set(sources.flatMap((s) => s.candidates));
+        const groupAnswers = answers.filter((a) => own.has(a.sourceId) || own.has(subjectKey(a.question) ?? ''));
+        const groupPiles = shown.piles.filter((p) => ids.has(p.pileId));
+        const profiles = Object.entries(shown.profileSources ?? {}).filter(([id]) => targetIds.has(id));
+        const groupShown: Shown = { ...shown, piles: groupPiles, sources,
+          cards: shown.cards?.filter((c) => candidates.has(c.id)).map(({ members, ...card }) => {
+            const shownMembers = members?.filter((m) => candidates.has(m));
+            return shownMembers?.length ? { ...card, members: shownMembers } : card;
+          }),
+          requests: shown.requests?.filter((q) => own.has(q.requestId)),
+          requestNotes: Object.fromEntries(Object.entries(shown.requestNotes ?? {}).filter(([id]) => own.has(id))),
+          answers: answersShown(groupAnswers, groupPiles),
+          profileSources: profiles.length ? Object.fromEntries(profiles) : undefined,
+          retrySources: new Set([...shown.retrySources ?? []].filter((id) => own.has(id) || !admittedIds.has(id))),
+          personalNotes: new Set([...targetIds].flatMap((id) => { const path = ix.pathOf(id); return path && shown.personalNotes?.has(path) ? [path] : []; })) };
+        return {
+          shown: groupShown, shownTook: { ...shownTook, taken: { ...shownTook.taken, piles, journal } },
+          selection: { ...selection, allowedTargets, value: { items: selection.value.items.filter((i) => own.has(i.itemId)),
+            asks: selection.value.asks.filter((a) => { const id = a.pileId ?? a.fileId; return id === undefined ? firstGroup : own.has(id); }) } },
+          requests: new Map([...requests].filter(([id]) => own.has(id))), answers: groupAnswers,
+        };
+      };
       const targets = new Set(Object.values(selection.allowedTargets).flat());
       // The plan's journal, for every plan of a reply: a request whose targets were not selected stays in the inbox for a
       // later run; one a checked view or map installs or suggests, one it answers, or whose large question has its answer, is
       // taken. A reply with answers makes the plan take every request it is given, so there one the reply does not answer and
       // C05 does not settle (it names no note and waits from no run) is not given: it waits (C09 R7).
-      const finalJournal = (filing: Filing): typeof took.taken.journal => {
+      const finalJournal = (filing: Filing, lines = took.taken.journal): typeof took.taken.journal => {
         const installing = new Set([...filing.views ?? [], ...filing.suggestions?.views ?? [], ...filing.maps ?? []].map((v) => v.requestId));
-        return took.taken.journal.filter((line) => {
+        return lines.filter((line) => {
           const request = requests.get(line.fileId);
           if (dropped.has(line.fileId)) return false;
           if (asked.answered.has(line.fileId) || installing.has(request?.id ?? '') || filing.answers?.has(request?.id ?? '') || filing.documents?.has(request?.id ?? '') || filing.neverDo?.has(request?.id ?? '')) return true;
@@ -2844,7 +2851,6 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         return [id, ask.options || places.length < 2 || places.length > 4 ? ask : { ...ask, options: places }] as const;
       }));
       const yesList = await yesMaps();
-      const from = (section: string, row: unknown): string | undefined => sourceOf(section, row, shownTook.taken.piles, requests);
       // A pile with an answered place choice or a stored reask is planned whatever the reply says (the plan's `hasChoice`,
       // `reaskOf`), so it cannot wait: a refusal on it ends the run (ruling 19). Read once, when a drop first needs it.
       let choices: Set<string> | undefined;
@@ -2857,136 +2863,192 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           // An answer that chose an option is a place choice (the only options a question carries).
           ...taken.answers.flatMap((a) => (typeof a.value === 'object' && 'option' in a.value ? [subjectKey(a.question) ?? ''] : []))]);
       };
-      /** The reply without a source and every row naming it or a thing of it; null when no source goes or no row is left to do (ruling 1, PP-R6). */
-      const drop = async (value: unknown, refused: Refused): Promise<unknown> => {
-        const piles = shownTook.taken.piles;
-        const first = refused.source;
-        if (first === undefined || dropped.has(first) || !isRecord(value)) return null;
-        const pile = piles.find((p) => p.pileId === first);
-        if (pile && [...await choiceOf()].some((s) => s === pile.pileId || thingsOf(pile).some((i) => i.fileId === s))) return null;
-        const reply = structuredClone(value);
-        const pending = [first];
-        for (let source = pending.pop(); source !== undefined; source = pending.pop()) {
-          if (dropped.has(source)) continue;
-          dropped.set(source, refused.kind);
-          for (const section of ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps']) {
-            const rows: unknown = reply[section];
-            if (!Array.isArray(rows)) continue;
-            reply[section] = rows.filter((row) => {
-              if (sourceOf(section, row, piles, requests) !== source) return true;
-              // A request left with no line would be settled as "found nothing" (C05): the one a removed line's note names waits too.
-              if (isRecord(row) && typeof row.note === 'string') for (const [id, notes] of seen.requestNotes ?? []) if (notes.has(row.note)) pending.push(id);
-              return false;
-            });
+      const remembers = (filing: Filing): boolean => !!(filing.observations?.length || filing.forget?.length || filing.ends?.length || filing.profiles?.size);
+      /** One group's writing call, prepared before any call goes out (S11): its input, and its check and drop over its own data only (S3). */
+      const job = async (group: readonly string[], firstGroup: boolean) => {
+        const { shown, shownTook, selection, requests, answers } = scoped(group, firstGroup);
+        const wanted = new Set(Object.values(selection.allowedTargets).flat()
+          .filter((id) => indexed[id] && (indexed[id]?.type !== 'moc' || selection.value.items.some((item) => item.wants.includes(id)))));
+        const readable = new Set([...wanted].filter((id) => !shown.suppressed?.has(ix.pathOf(id) ?? '')));
+        shown.notes = await notesShown(read, listing, ix, pinned, readable, readable);
+        // C09 (R15, ruling 5): the originals requests want, in the room the notes left (one room for both).
+        const files = await originalsShown(read, ix, selection.value.items.flatMap((item) => item.wants.filter((id) => originals[id])),
+          CONTEXT_BOUNDS.notesPerRun - shown.notes.reduce((sum, n) => sum + n.text.length, 0));
+        if (files.length) shown.files = files;
+        shown.presentLines = presentLinesOf(shown.notes, listing, ix, run);
+        shown.selection = selection.value; shown.allowedTargets = selection.allowedTargets;
+        const input = prepared(run, shownTook, shown);
+        const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
+        const { sets: mapSets, noteTypes, prepare: prepareMaps, skipped: mapSkipped } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? [], recent);
+        // Whose note it is reads the whole note (one read per version, already cached), never the cut shown to the model.
+        const bowerNotes = new Set<string>();
+        for (const n of shown.notes) {
+          const file = ix.file(n.path);
+          if (!file || file.folder) continue;
+          try {
+            if (parseNote(n.path, await read.readText(file.id), run.context ? { context: run.context, fileId: file.id } : undefined).byBower) bowerNotes.add(n.path);
+          } catch (e) { console.error(e); }
+        }
+        const seen: Seen = { types: shown.types, tagList, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
+          suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
+          noteTexts: new Map(shown.notes.map((n) => [n.path, n.text])), fileTexts: new Map((shown.files ?? []).map((f) => [f.path, f.text])), moves: shown.moves ?? [], bowerNotes,
+          fileNames: new Map(listing.flatMap((f) => (f.folder ? [] : [[f.id, f.name] as const]))),
+          files: new Map(listing.flatMap((f) => { const path = f.folder ? undefined : ix.pathOf(f.id); return path === undefined ? [] : [[path, f.id] as const]; })),
+          names: shown.names ?? new Set(), texts, originals: shown.originals, folders: new Set(shown.folders),
+          mocFolders: new Set(shown.notes.filter((n) => indexed[ix.idOf(n.path) ?? '']?.type === 'moc' && indexed[ix.idOf(n.path) ?? '']?.owner === 'bower').map((n) => n.path.slice(0, n.path.lastIndexOf('/')))),
+          folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'), pileWords: new Map(shown.piles.map((p) => [p.pileId, p.words])),
+          shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
+          merges: mergesOf(answers, shown.notes.map((n) => n.path)), requests,
+          requestNotes: new Map(Object.entries(shown.requestNotes ?? {}).map(([id, notes]) => [id, new Set(notes.flatMap((n) => ix.pathOf(n) ?? []))])), maps: new Set(Object.entries(indexed)
+            .flatMap(([id, note]) => (note.type === 'moc' && note.owner === 'bower' ? [id] : []))),
+          sets: mapSets, noteTypes, skipped: mapSkipped, shownIds: new Set([...(shown.cards ?? []).map((c) => c.id), ...(shown.map ?? []).flatMap((row) => row.hub?.id ?? [])]) };
+        let validatedPlan: RunManifest | undefined;
+        const from = (section: string, row: unknown): string | undefined => sourceOf(section, row, shownTook.taken.piles, requests);
+        /** The reply without a source and every row naming it or a thing of it; null when no source goes or no row is left to do (ruling 1, PP-R6). */
+        const drop = async (value: unknown, refused: Refused): Promise<unknown> => {
+          const piles = shownTook.taken.piles;
+          const first = refused.source;
+          if (first === undefined || dropped.has(first) || !isRecord(value)) return null;
+          const pile = piles.find((p) => p.pileId === first);
+          if (pile && [...await choiceOf()].some((s) => s === pile.pileId || thingsOf(pile).some((i) => i.fileId === s))) return null;
+          const reply = structuredClone(value);
+          const pending = [first];
+          for (let source = pending.pop(); source !== undefined; source = pending.pop()) {
+            if (dropped.has(source)) continue;
+            dropped.set(source, refused.kind);
+            for (const section of ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps']) {
+              const rows: unknown = reply[section];
+              if (!Array.isArray(rows)) continue;
+              reply[section] = rows.filter((row) => {
+                if (sourceOf(section, row, piles, requests) !== source) return true;
+                // A request left with no line would be settled as "found nothing" (C05): the one a removed line's note names waits too.
+                if (isRecord(row) && typeof row.note === 'string') for (const [id, notes] of seen.requestNotes ?? []) if (notes.has(row.note)) pending.push(id);
+                return false;
+              });
+            }
           }
-        }
-        return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps', 'never'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
-      };
-      const intent = await twice(input, 'execution', async (value) => {
-        await prepareMaps(value);
-        const got = intentOf(value, shownTook, seen);
-        if (!got.ok) return got;
-        // A yes's part is the plan's, beside what the reply maps (B12d); one request is never both.
-        if (yesList.length) Object.assign(got.filing, { maps: [...got.filing.maps ?? [], ...yesList] });
-        Object.assign(got.filing, { ...(got.filing.asks ? { asks: offered(got.filing.asks) } : {}), ...(got.filing.thingAsks ? { thingAsks: offered(got.filing.thingAsks) } : {}) });
-        if (!isRecord(value)) return no('notIntent');
-        const rows = (key: string): Record<string, unknown>[] => Array.isArray(value[key]) ? value[key].filter(isRecord) : [];
-        const chosen = (id: unknown) => selection.value.items.find((item) => item.itemId === id);
-        for (const [key, row] of [...rows('things').map((r) => ['things', r] as const), ...rows('notes').map((r) => ['notes', r] as const)]) {
-          const item = chosen(row.fileId ?? row.pileId);
-          const source = from(key, row);
-          if (!item) return at(no('thingPlace'), source);
-          // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder, and a pile-word note has none (TL-P4-47 Q6; B1: a selected visible note backs a new one).
-          if (foldersCut && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return at(no('noteCut'), source);
-          const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
-            : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
-          if (row.to !== path) return at(no('thingPlace'), source);
-          if (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind) return at(no('thingType'), source);
-          // A note named like one of Bower's in that folder or shown is the same note: file into it, never beside it.
-          const named = isRecord(row.note) && typeof row.note.name === 'string' ? row.note.name : undefined;
-          const same = named === undefined ? undefined : [...ix.filesIn(path ?? ''), ...shown.notes.flatMap((n) => ix.file(n.path) ?? [])]
-            .find((f) => indexed[f.id]?.owner === 'bower' && nearName(f.name) === nearName(named))?.name;
-          if (same !== undefined) return at(no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`, true), source);
-        }
-        const canEdit = (row: Record<string, unknown>, line?: AuthoredLine): boolean => {
-          const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
-          // The scripted request verdict keeps these notes untouched and records why; no edit is granted.
-          if (typeof row.note === 'string' && shown.suppressed?.has(row.note)) return true;
-          // A line already there is found by its final text (R20).
-          if (id && line && Object.values(selection.allowedTargets).some((targets) => targets.includes(id))
-            && seen.presentLines?.has(JSON.stringify([row.note, decorated(line, seen), row.cites]))) return true;
-          return !!id && (chosen(row.cites) ? selection.allowedTargets[String(row.cites)]?.includes(id) === true
-            || Object.keys(shown.requestNotes ?? {}).some((requestId) => selection.allowedTargets[requestId]?.includes(id))
-            : wanted.has(id) && (row.cites === undefined || shown.retrySources?.has(String(row.cites))) && shownTook.taken.journal.length > 0
-              || row.cites === undefined && !shown.personalNotes?.has(String(row.note))
-                && Object.values(selection.allowedTargets).some((targets) => targets.includes(id)));
+          return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps', 'never'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
         };
-        for (const ask of rows('asks')) {
-          if (ask.notes !== undefined) continue;
-          const frozen = selection.value.asks.find((row) => row.fileId === ask.fileId && row.pileId === ask.pileId);
-          if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return at(no('askOptions'), from('asks', ask));
-        }
-        // A MOC lists its notes itself and never takes a Timeline line: refuse the line so the thing is filed bare.
-        if (rows('lines').some((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
-          && indexed[ix.idOf(row.note) ?? '']?.type === 'moc')) return no('lineNote', 'a line on a MOC, which takes none: file the thing into its folder without a note or line');
-        if (rows('keep').some((row) => !selection.value.items.some((item) => {
-          const targets = selection.allowedTargets[item.itemId] ?? [];
-          return [row.kept, row.other].every((path) => typeof path === 'string' && targets.includes(ix.idOf(path) ?? ''));
-        }))) return no('keepNote');
-        // Every reply line passed its rules, so the authored lines are the reply's, in order.
-        const unreachable = [...rows('lines').filter((row, i) => !canEdit(row, got.filing.lines?.[i])).map((row) => ['lines', row] as const),
-          ...rows('states').filter((row) => !canEdit(row)).map((row) => ['states', row] as const)][0];
-        if (unreachable) return at(no('lineTarget'), from(unreachable[0], unreachable[1]));
-        got.filing.kinds = new Map(selection.value.items.map((item) => [item.itemId, rowFor(item)?.id ?? item.kind]));
-        for (const row of rows('things')) {
-          const item = chosen(row.fileId);
-          if (!item || !/offer/iu.test(rowFor(item)?.id ?? '')) continue;
-          const own = seen.texts?.get(item.itemId) ?? '';
-          const note = isRecord(row.note) ? row.note : {};
-          const words = [note.summary, note.body, JSON.stringify(note.properties ?? {})].join('\n');
-          const addedCurrency = Intl.supportedValuesOf('currency').some((currency) => {
-            // ISO 4217 codes are upper case: "all" is a word, not ALL.
-            const token = new RegExp(`\\b${currency}\\b`, 'u');
-            return token.test(words) && !token.test(own);
-          }) || [...words.matchAll(/\p{Sc}/gu)].some(([currency]) => !own.includes(currency));
-          // Its [[links]] passed the reply's one link rule (C06 R3): own and sibling sources too.
-          if (addedCurrency || /\b(?:scores?|should|recommend|advice)\b/iu.test(words)
-            || bodyLinks(String(note.body ?? ''), own)) return at(no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link'), from('things', row));
-        }
-        // The limit counts what each map keeps once installed, its stored entries included (R22, R44).
-        const mapViews = (got.filing.views ?? []).filter((v) => v.kind === 'moc');
-        for (const home of new Set(mapViews.map((v) => v.home))) {
-          const declared = viewsDeclared(await read.readText(home));
-          const next = viewsInstalled(declared.value, mapViews.filter((v) => v.home === home).map((v) => v.definition));
-          if (next && (JSON.parse(next.text) as unknown[]).length > VIEW_LIMITS.perHome) return no('viewLimit');
-        }
-        got.filing.shownFactIds = shown.aboutMe?.learned.factIds ?? [];
-        if (got.filing.observations?.length || got.filing.forget?.length || got.filing.ends?.length || got.filing.profiles?.size) {
-          try { validatedPlan = await plannedWith(got.filing, got.held, shown.own, `with ${model}`, finalJournal(got.filing)); }
-          catch (error) {
-            if (!plannerRefusal(error)) throw error;
-            console.error(error);
-            return got.filing.profiles?.size ? no('noteBody', 'an ungrounded or overlong profile plan')
-              : no('memory', 'a memory effect without admitted evidence or a chosen shown fact');
+        const check = async (value: unknown): Promise<Extract<Intent, { ok: true }> | Refused> => {
+          await prepareMaps(value);
+          const got = intentOf(value, shownTook, seen);
+          if (!got.ok) return got;
+          // A yes's part is the plan's, beside what the reply maps (B12d); one request is never both. Several groups: added once at the merge.
+          if (single && yesList.length) Object.assign(got.filing, { maps: [...got.filing.maps ?? [], ...yesList] });
+          Object.assign(got.filing, { ...(got.filing.asks ? { asks: offered(got.filing.asks) } : {}), ...(got.filing.thingAsks ? { thingAsks: offered(got.filing.thingAsks) } : {}) });
+          if (!isRecord(value)) return no('notIntent');
+          const rows = (key: string): Record<string, unknown>[] => Array.isArray(value[key]) ? value[key].filter(isRecord) : [];
+          const chosen = (id: unknown) => selection.value.items.find((item) => item.itemId === id);
+          for (const [key, row] of [...rows('things').map((r) => ['things', r] as const), ...rows('notes').map((r) => ['notes', r] as const)]) {
+            const item = chosen(row.fileId ?? row.pileId);
+            const source = from(key, row);
+            if (!item) return at(no('thingPlace'), source);
+            // A cut index proves no fit, so with no selected note to fit it authorizes no new note, even under an existing folder, and a pile-word note has none (TL-P4-47 Q6; B1: a selected visible note backs a new one).
+            if (foldersCut && (key === 'notes' || isRecord(row.note) && item.wants.length === 0)) return at(no('noteCut'), source);
+            const path = typeof item.destination === 'string' ? ix.pathOf(item.destination)
+              : `${ix.pathOf(item.destination.parentId)}/${item.destination.name}`;
+            if (row.to !== path) return at(no('thingPlace'), source);
+            if (isRecord(row.note) && row.note.typeRow !== undefined && row.note.typeRow !== item.kind) return at(no('thingType'), source);
+            // A note named like one of Bower's in that folder or shown is the same note: file into it, never beside it.
+            const named = isRecord(row.note) && typeof row.note.name === 'string' ? row.note.name : undefined;
+            const same = named === undefined ? undefined : [...ix.filesIn(path ?? ''), ...shown.notes.flatMap((n) => ix.file(n.path) ?? [])]
+              .find((f) => indexed[f.id]?.owner === 'bower' && nearName(f.name) === nearName(named))?.name;
+            if (same !== undefined) return at(no('noteName', `a new note "${named}" for the note "${same}" that already exists: give a Timeline line on that note citing this thing instead of a new note`, true), source);
           }
-        }
-        return got;
-      }, drop);
+          const canEdit = (row: Record<string, unknown>, line?: AuthoredLine): boolean => {
+            const id = typeof row.note === 'string' ? ix.idOf(row.note) : undefined;
+            // The scripted request verdict keeps these notes untouched and records why; no edit is granted.
+            if (typeof row.note === 'string' && shown.suppressed?.has(row.note)) return true;
+            // A line already there is found by its final text (R20).
+            if (id && line && Object.values(selection.allowedTargets).some((targets) => targets.includes(id))
+              && seen.presentLines?.has(JSON.stringify([row.note, decorated(line, seen), row.cites]))) return true;
+            return !!id && (chosen(row.cites) ? selection.allowedTargets[String(row.cites)]?.includes(id) === true
+              || Object.keys(shown.requestNotes ?? {}).some((requestId) => selection.allowedTargets[requestId]?.includes(id))
+              : wanted.has(id) && (row.cites === undefined || shown.retrySources?.has(String(row.cites))) && shownTook.taken.journal.length > 0
+                || row.cites === undefined && !shown.personalNotes?.has(String(row.note))
+                  && Object.values(selection.allowedTargets).some((targets) => targets.includes(id)));
+          };
+          for (const ask of rows('asks')) {
+            if (ask.notes !== undefined) continue;
+            const frozen = selection.value.asks.find((row) => row.fileId === ask.fileId && row.pileId === ask.pileId);
+            if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return at(no('askOptions'), from('asks', ask));
+          }
+          // A MOC lists its notes itself and never takes a Timeline line: refuse the line so the thing is filed bare.
+          if (rows('lines').some((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
+            && indexed[ix.idOf(row.note) ?? '']?.type === 'moc')) return no('lineNote', 'a line on a MOC, which takes none: file the thing into its folder without a note or line');
+          if (rows('keep').some((row) => !selection.value.items.some((item) => {
+            const targets = selection.allowedTargets[item.itemId] ?? [];
+            return [row.kept, row.other].every((path) => typeof path === 'string' && targets.includes(ix.idOf(path) ?? ''));
+          }))) return no('keepNote');
+          // Every reply line passed its rules, so the authored lines are the reply's, in order.
+          const unreachable = [...rows('lines').filter((row, i) => !canEdit(row, got.filing.lines?.[i])).map((row) => ['lines', row] as const),
+            ...rows('states').filter((row) => !canEdit(row)).map((row) => ['states', row] as const)][0];
+          if (unreachable) return at(no('lineTarget'), from(unreachable[0], unreachable[1]));
+          got.filing.kinds = new Map(selection.value.items.map((item) => [item.itemId, rowFor(item)?.id ?? item.kind]));
+          for (const row of rows('things')) {
+            const item = chosen(row.fileId);
+            if (!item || !/offer/iu.test(rowFor(item)?.id ?? '')) continue;
+            const own = seen.texts?.get(item.itemId) ?? '';
+            const note = isRecord(row.note) ? row.note : {};
+            const words = [note.summary, note.body, JSON.stringify(note.properties ?? {})].join('\n');
+            const addedCurrency = Intl.supportedValuesOf('currency').some((currency) => {
+              // ISO 4217 codes are upper case: "all" is a word, not ALL.
+              const token = new RegExp(`\\b${currency}\\b`, 'u');
+              return token.test(words) && !token.test(own);
+            }) || [...words.matchAll(/\p{Sc}/gu)].some(([currency]) => !own.includes(currency));
+            // Its [[links]] passed the reply's one link rule (C06 R3): own and sibling sources too.
+            if (addedCurrency || /\b(?:scores?|should|recommend|advice)\b/iu.test(words)
+              || bodyLinks(String(note.body ?? ''), own)) return at(no('noteBody', 'an offer with ungrounded currency, advice, score or unrelated link'), from('things', row));
+          }
+          // The limit counts what each map keeps once installed, its stored entries included (R22, R44).
+          const mapViews = (got.filing.views ?? []).filter((v) => v.kind === 'moc');
+          for (const home of new Set(mapViews.map((v) => v.home))) {
+            const declared = viewsDeclared(await read.readText(home));
+            const next = viewsInstalled(declared.value, mapViews.filter((v) => v.home === home).map((v) => v.definition));
+            if (next && (JSON.parse(next.text) as unknown[]).length > VIEW_LIMITS.perHome) return no('viewLimit');
+          }
+          got.filing.shownFactIds = shown.aboutMe?.learned.factIds ?? [];
+          // S7: the memory check plans only what this group took; with several groups that plan is only a check.
+          if (remembers(got.filing)) {
+            const scope = single ? took.taken : shownTook.taken;
+            try { validatedPlan = await plannedWith(got.filing, got.held, shown.own, `with ${model}`, { ...scope, journal: finalJournal(got.filing, scope.journal) }); }
+            catch (error) {
+              if (!plannerRefusal(error)) throw error;
+              console.error(error);
+              return got.filing.profiles?.size ? no('noteBody', 'an ungrounded or overlong profile plan')
+                : no('memory', 'a memory effect without admitted evidence or a chosen shown fact');
+            }
+          }
+          return got;
+        };
+        return { input, check, drop, plan: (): RunManifest | undefined => validatedPlan };
+      };
+      // Every group's input is made, in group order, before the first writing call goes out (S11); the calls go one at a time.
+      const jobs: Array<Awaited<ReturnType<typeof job>>> = [];
+      for (const [i, group] of (groups.length ? groups : [[]]).entries()) jobs.push(await job(group, i === 0));
+      const intents: Array<Extract<Intent, { ok: true }>> = [];
+      for (const j of jobs) intents.push(await twice(j.input, 'execution', j.check, j.drop));
+      const intent = mergedFiling(intents);
+      if (!single && yesList.length) Object.assign(intent.filing, { maps: [...intent.filing.maps ?? [], ...yesList] });
       // Told once the run goes on without them, never for a run the dropping could not save.
       for (const [source, why] of dropped) console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
+      const whole = (filing: Filing): typeof took.taken => ({ ...took.taken, journal: finalJournal(filing) });
+      // S7: the merged filing is planned once; a refusal there fails the run, and over 200 operations holds it (LedgerExhausted).
+      const validatedPlan = single ? jobs[0]?.plan()
+        : remembers(intent.filing) ? await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, whole(intent.filing)) : undefined;
       // A memory plan may also consolidate a section; a consolidation the planner cannot add is skipped, the plan kept.
       if (validatedPlan) {
         const shortened = await consolidation(validatedPlan);
         if (!shortened) return validatedPlan;
         try {
-          return await plannedWith(Object.assign(intent.filing, { consolidation: shortened }), intent.held, shown.own, `with ${model}`, finalJournal(intent.filing));
+          return await plannedWith(Object.assign(intent.filing, { consolidation: shortened }), intent.held, shown.own, `with ${model}`, whole(intent.filing));
         } catch (error) {
           if (!plannerRefusal(error)) throw error;
           skipped(error.message);
           return validatedPlan;
         }
       }
-      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, finalJournal(intent.filing));
+      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, whole(intent.filing));
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };
@@ -3023,4 +3085,82 @@ export function selectionOf(value: unknown, context: SelectionContext):
     allowedTargets[item.itemId] = [...new Set([...wants, folder.id, ...(folder.hubId ? [folder.hubId] : [])])];
   }
   return { ok: true, value: parsed.data, allowedTargets };
+}
+
+/** The things one writing call takes at most (c12-fanout ruling 1); the owner may tune it on staging. */
+export const GROUP_THINGS = 8;
+
+/**
+ * c12-fanout S2: the run's sources (`units`: piles in admission order, then journal lines, each with its size and its
+ * selection items) in groups, by id. Units sharing a target (the items' `allowedTargets`, a request's named `notes` too)
+ * are one component (union-find); components, in the order of their first unit, are packed first fit (Johnson 1974) up
+ * to `GROUP_THINGS`; one larger is a group of its own, never split. A unit with no item and no notes is its own component;
+ * a unit with no selection item counts 0 (S20), so it rides in the first group with room and makes no call of its own.
+ */
+export function groupsOf(units: ReadonlyArray<{ id: string; size: number; items: readonly string[]; notes?: readonly string[] }>,
+  allowedTargets: Readonly<Record<string, readonly string[]>>): string[][] {
+  const parent = units.map((_, i) => i);
+  const root = (i: number): number => { let r = i; while (parent[r] !== r) r = parent[r] ?? r; return r; };
+  const first = new Map<string, number>();
+  units.forEach((unit, i) => {
+    for (const key of [...unit.items.flatMap((id) => allowedTargets[id] ?? []), ...unit.notes ?? []]) {
+      const j = first.get(key);
+      if (j === undefined) first.set(key, i); else parent[root(i)] = root(j);
+    }
+  });
+  const components = new Map<number, { ids: string[]; size: number }>();
+  units.forEach((unit, i) => {
+    const c = components.get(root(i)) ?? { ids: [], size: 0 };
+    c.ids.push(unit.id); c.size += unit.items.some((id) => allowedTargets[id]) ? unit.size : 0; components.set(root(i), c);
+  });
+  const groups: Array<{ ids: string[]; size: number }> = [];
+  for (const c of components.values()) {
+    const room = groups.find((g) => g.size + c.size <= GROUP_THINGS);
+    if (room) { room.ids.push(...c.ids); room.size += c.size; } else groups.push({ ids: [...c.ids], size: c.size });
+  }
+  return groups.map((g) => g.ids);
+}
+
+/**
+ * c12-fanout S6: the groups' checked replies, in group order, as the one filing the run plans. A placement is the first
+ * group's that has one; lists are joined; maps and sets united (their keys are disjoint: each source and each target note
+ * is in one group); a fact is forgotten or ended once, by its first group; new tags once, in order (the planner keeps the
+ * first additions and drops the rest from their notes, as for one reply). One group's filing is the plan's as it is.
+ */
+export function mergedFiling(intents: ReadonlyArray<{ filing: Filing; held: Set<string> }>): { filing: Filing; held: Set<string> } {
+  const [only] = intents;
+  if (only && intents.length === 1) return only;
+  const fs = intents.map((i) => i.filing);
+  const has = (key: keyof Filing): boolean => fs.some((f) => f[key] !== undefined);
+  const firstOf = <A extends unknown[], R>(at: (f: Filing) => ((...args: A) => R | null) | undefined) => (...args: A): R | null =>
+    fs.reduce<R | null>((got, f) => got ?? at(f)?.(...args) ?? null, null);
+  const joined = <T>(at: (f: Filing) => readonly T[] | undefined): T[] => fs.flatMap((f) => at(f) ?? []);
+  const united = <K, V>(at: (f: Filing) => ReadonlyMap<K, V> | undefined): Map<K, V> => new Map(fs.flatMap((f) => [...at(f) ?? []]));
+  const once = <T extends { factId: string }>(rows: T[]): T[] => rows.filter((r, i) => rows.findIndex((x) => x.factId === r.factId) === i);
+  const suggested = fs.find((f) => f.suggestions)?.suggestions;
+  return { held: new Set(intents.flatMap((i) => [...i.held])), filing: {
+    thing: firstOf((f) => f.thing), words: firstOf((f) => f.words),
+    ...(has('note') ? { note: firstOf((f) => f.note) } : {}),
+    ...(has('askAfter') ? { askAfter: firstOf((f) => f.askAfter) } : {}),
+    ...(has('lines') ? { lines: joined((f) => f.lines) } : {}),
+    ...(has('states') ? { states: joined((f) => f.states) } : {}),
+    ...(has('keep') ? { keep: joined((f) => f.keep) } : {}),
+    ...(has('pairAsks') ? { pairAsks: joined((f) => f.pairAsks) } : {}),
+    ...(has('views') ? { views: joined((f) => f.views) } : {}),
+    ...(has('maps') ? { maps: joined((f) => f.maps) } : {}),
+    ...(has('observations') ? { observations: joined((f) => f.observations) } : {}),
+    ...(has('asks') ? { asks: united((f) => f.asks) } : {}),
+    ...(has('thingAsks') ? { thingAsks: united((f) => f.thingAsks) } : {}),
+    ...(has('areas') ? { areas: united((f) => f.areas) } : {}),
+    ...(has('kinds') ? { kinds: united((f) => f.kinds) } : {}),
+    ...(has('profiles') ? { profiles: united((f) => f.profiles) } : {}),
+    ...(has('answers') ? { answers: united((f) => f.answers) } : {}),
+    ...(has('documents') ? { documents: united((f) => f.documents) } : {}),
+    ...(has('neverDo') ? { neverDo: new Set(fs.flatMap((f) => [...f.neverDo ?? []])) } : {}),
+    ...(has('forget') ? { forget: once(joined((f) => f.forget)) } : {}),
+    ...(has('ends') ? { ends: once(joined((f) => f.ends)) } : {}),
+    ...(has('newTags') ? { newTags: [...new Set(joined((f) => f.newTags))] } : {}),
+    ...(suggested ? { suggestions: { first: suggested.first, views: joined((f) => f.suggestions?.views) } } : {}),
+    ...(has('shownFactIds') ? { shownFactIds: fs.find((f) => f.shownFactIds)?.shownFactIds } : {}),
+  } };
 }

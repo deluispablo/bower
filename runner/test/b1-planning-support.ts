@@ -16,7 +16,7 @@ import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
-import { loadCase } from '../src/corpus';
+import { loadCase, type LoadedCase } from '../src/corpus';
 import { AT, frameOf, lastJson, promptOf, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive } from './drive-v3';
 import { planningIndex } from '../src/index';
@@ -178,12 +178,12 @@ export function phaseAwareClaude(
 
 export async function setup(options: {
   fixture?: string; folder?: Record<string, string>; inbox?: Array<{ line: string; files: string[] }>;
-  inboxFiles?: Record<string, string>;
+  inboxFiles?: Record<string, string>; journal?: LoadedCase['journal'];
 } = {}) {
   const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', options.fixture ?? 'b1-index-job-offer'));
   if (!options.fixture) {
     c.folder = options.folder ?? { ...folder }; c.folderBinary = {}; c.expected = {}; c.questions = [];
-    c.journal = []; c.scope = 'all'; c.presses = undefined; c.between = undefined;
+    c.journal = options.journal ?? []; c.scope = 'all'; c.presses = undefined; c.between = undefined;
     c.inbox = options.inbox ?? [{ line: 'Alex has a remote developer offer.', files: ['Offer.txt'] }];
     c.inboxFiles = { 'Offer.txt': 'Alex received a remote developer offer. Alex records applications and offers.\n',
       'Second.txt': 'Alex received another remote developer offer.\n' }; c.inboxBinary = {};
@@ -228,22 +228,59 @@ export function reply(value: unknown, n = 1): ClaudeExit {
     usage: { input_tokens: n * 11, cache_creation_input_tokens: n * 2, cache_read_input_tokens: n * 3, output_tokens: n * 5 } }) };
 }
 
-/** Each entry is one semantic call or validation retry. A retry is never hidden by the test driver. */
+type Shown = { selection?: unknown; sources?: Array<{ itemId: string }>; piles?: Array<{ pileId: string; things: Array<{ fileId: string }> }>; notes?: Array<{ path: string }> };
+const isRow = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * c12-fanout S9 and S18: a scripted tidy-intent as one writing call of a run with several gets it: the rows naming one of
+ * its sources (`fileId`, `pileId`, `cites`, `requestId`, an observation's `source`, a `never` id); a row naming none goes to
+ * the call showing its note, or else to the call holding the first admitted pile; `newTags` go to every call. A writing
+ * call holding every source of the run (the only one) gets the reply byte for byte, made-up ids and all.
+ */
+function narrowed(value: unknown, call: Shown, run: { sources: ReadonlySet<string>; first: string | undefined }): unknown {
+  const own = new Set((call.sources ?? []).map((s) => s.itemId));
+  for (const p of call.piles ?? []) { own.add(p.pileId); for (const t of p.things) own.add(t.fileId); }
+  if (!isRow(value) || value.kind !== 'tidy-intent' || [...run.sources].every((id) => own.has(id))) return value;
+  const notes = new Set((call.notes ?? []).map((n) => n.path));
+  const named = (row: unknown): unknown => typeof row === 'string' ? row : !isRow(row) ? undefined
+    : row.fileId ?? row.pileId ?? row.cites ?? row.requestId ?? (isRow(row.source) ? row.source.pileId ?? row.source.fileId : undefined);
+  const noted = (row: Record<string, unknown>): unknown => row.note ?? row.kept ?? (Array.isArray(row.notes) ? row.notes[0] : undefined);
+  const kept = (row: unknown): boolean => {
+    const id = named(row);
+    if (typeof id === 'string') return own.has(id);
+    const path = isRow(row) ? noted(row) : undefined;
+    return typeof path === 'string' ? notes.has(path) : run.first !== undefined && own.has(run.first);
+  };
+  return Object.fromEntries(Object.entries(value).map(([key, rows]) => [key, Array.isArray(rows) && key !== 'newTags' ? rows.filter(kept) : rows]));
+}
+
+/**
+ * Each entry is one semantic call or validation retry. A retry is never hidden by the test driver. A writing call of a run
+ * with several gets the reply narrowed to its own sources (`narrowed`); `narrow: false` sends every reply as it is.
+ */
 export async function run(base: Base, replies: unknown[], options: {
   beforeReply?: (turn: number, frame: Frame) => Promise<void>;
   admission?: AdmissionManifest; press?: number;
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
+  narrow?: false;
 } = {}) {
   const logStart = vi.mocked(console.log).mock.calls.length;
   const before = Object.fromEntries(await Promise.all((await base.drive.listAll(base.root))
     .map(async (file) => [file.id, await base.drive.evidence(file.id)] as const)));
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const frames: Frame[] = []; const events: Observation[] = []; const traffic: Traffic[] = [];
+  const sources = { sources: new Set<string>(), first: undefined as string | undefined };
   const claude = phaseAwareClaude(async (call) => {
     const frame = { call, value: frameOf(call), prompt: promptOf(call), events: [...events] };
     frames.push(frame);
+    const shown = frame.value as Shown;
+    if (shown.selection === undefined && shown.sources) {
+      sources.sources = new Set(shown.sources.map((s) => s.itemId));
+      sources.first = shown.piles?.[0]?.pileId ?? shown.sources[0]?.itemId;
+    }
     await options.beforeReply?.(frames.length, frame);
-    return reply(replies[Math.min(frames.length - 1, replies.length - 1)], frames.length);
+    const value = replies[Math.min(frames.length - 1, replies.length - 1)];
+    return reply(options.narrow === false || shown.selection === undefined ? value : narrowed(value, shown, sources), frames.length);
   }, () => ({ drive: base.drive, root: base.root, admission: options.admission ?? base.admission }), true);
   const around = (fetch: typeof globalThis.fetch): typeof globalThis.fetch => {
     const observed = observe(base.drive, base.root, events)(fetch);
