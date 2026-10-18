@@ -4,6 +4,7 @@
 .title { font-size: clamp(26px, 4vw, 34px); margin-bottom: 4px; }
 .what { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; }
 .what span { font-weight: 600; color: var(--heading); }
+.what .optional { font-weight: 400; color: var(--text-muted); }
 .zone { position: relative; margin-top: 52px; padding: 22px 18px 16px; border-radius: 20px; border: 2px dashed color-mix(in srgb, var(--brand) 40%, transparent); background: color-mix(in srgb, var(--brand) 5%, transparent); transition: background 0.2s, border-color 0.2s; }
 .over { background: color-mix(in srgb, var(--brand) 14%, transparent); border-color: var(--brand); }
 .zoneTitle { font-family: var(--font-display); font-weight: 700; color: var(--heading); font-size: 19px; }
