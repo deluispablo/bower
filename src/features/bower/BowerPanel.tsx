@@ -1,7 +1,6 @@
 import { LoadError } from '@/ui/LoadError';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { usePiles, useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
-import { waitingIn } from '@/data/piles';
+import { useInbox, useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
 import { noteRoute } from '@/app/paths';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
@@ -36,8 +35,8 @@ export function BowerPanel() {
   const onHome = pathname === '/';
   const onBower = pathname === '/bower';
   // Only an inbox that last read fine and holds nothing; a failed refresh keeps the usual line.
-  const pilesState = usePiles();
-  const inboxEmpty = !pilesState.error && pilesState.data !== undefined && waitingIn(pilesState.data) === 0;
+  const { waiting } = useInbox();
+  const inboxEmpty = waiting === 0;
   return (
     <div className={s.panel}>
       <section>

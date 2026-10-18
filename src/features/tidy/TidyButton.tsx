@@ -1,5 +1,4 @@
-import { usePiles, useRun } from '@/data/provider';
-import { waitingIn } from '@/data/piles';
+import { useInbox, useRun } from '@/data/provider';
 import { useUi } from '@/app/ui-store';
 import { replayWaiting, isRunning, runShort, stoppedUnseen, watchLine } from './run-words';
 import s from './tidy.module.css';
@@ -11,9 +10,8 @@ import s from './tidy.module.css';
  */
 export function TidyButton() {
   const { data: run } = useRun();
-  const { data: piles } = usePiles();
+  const { waiting } = useInbox();
   const { setTidy, startReplay } = useUi();
-  const waiting = waitingIn(piles);
   if (run && isRunning(run))
     return (
       <button type="button" className={`${s.tidyBtn} ${s.tidyBusy}`} onClick={() => setTidy(true)}>

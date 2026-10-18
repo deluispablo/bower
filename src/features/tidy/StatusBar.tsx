@@ -1,6 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { usePiles, useRun, useTree } from '@/data/provider';
-import { waitingIn } from '@/data/piles';
+import { useInbox, useRun, useTree } from '@/data/provider';
 import { countFiles } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
@@ -13,18 +12,17 @@ import s from './tidy.module.css';
 export function StatusBar() {
   const runState = useRun();
   const { data: run } = runState;
-  const { data: piles } = usePiles();
+  const { waiting } = useInbox();
   const { data: tree } = useTree();
   const { setTidy, startReplay } = useUi();
   const online = useOnline();
-  const waiting = waitingIn(piles);
   const total = (tree ?? []).reduce((n, r) => n + countFiles(r), 0);
   const running = isRunning(run);
   let left: string;
   if (running && run) left = runShort(run);
   else if (run && stoppedUnseen(run)) left = 'The tidy-up stopped. See why';
   else if (run && replayWaiting(run)) left = watchLine(run);
-  else left = statusLine(run, piles === undefined ? undefined : waiting);
+  else left = statusLine(run, waiting);
   return (
     <footer className={s.status}>
       {runState.error ? <LoadError state={runState} /> : <button type="button" className={s.statusBtn} onClick={() => (run && replayWaiting(run) ? startReplay(run.id) : setTidy(true, run && reportWaiting(run) ? run.id : undefined))}>

@@ -7,9 +7,9 @@ import { answerQuestion } from '@/data/answer-loop';
 import { askingKey, isQuestionSnapshot, subjectOf, type QuestionAnswer } from '@/data/contracts/questions';
 import { usePrefs } from '@/app/prefs';
 import { useStartRun } from '@/features/tidy/start-run';
-import { pileName, waitingIn } from '@/data/piles';
+import { pileName } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
-import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser, type Loaded } from '@/data/provider';
+import { useChanges, useInbox, useLoad, useQuestions, useRun, useSources, useSuggestions, useTree, useUser, type Loaded } from '@/data/provider';
 import type { Pile, Question, RunState, TreeNode } from '@/data/types';
 import { displayName, KIND_WORD, kindOf, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
@@ -73,19 +73,10 @@ export function Home() {
   const runState = useRun();
   const { data: run } = runState;
   // The Inbox draws from the folder listing at once; what each pile's note and filed things add fills in after it.
-  // When the full read fails, the listing and any earlier read cannot be vouched for (which are ready, held or on
-  // their way), so the Inbox lists nothing and says why (React: an error state of its own for each independent read).
-  const pilesState = usePiles();
-  const { data: read } = pilesState;
-  const { data: listed } = usePilesListed();
-  // A full read kept from before a pile was added does not hide it: the newer listing adds the piles that read lacks.
-  const piles = pilesState.error ? undefined : read && listed
-    ? [...read, ...listed.filter((l) => !read.some((p) => p.id === l.id))].sort((a, b) => b.createdAt - a.createdAt)
-    : read ?? listed ?? undefined;
-  // Which piles are ready is known only from the full read: the listed Inbox shows without a count, and the Tidy up
-  // button and its number wait for that read, so neither can drop or move once the person can press it.
-  const ready = !pilesState.error && read !== undefined;
-  const waiting = ready ? waitingIn(read) : 0;
+  // The count follows the rows shown, and there is none before the first full read.
+  const inbox = useInbox();
+  const ready = inbox.waiting !== undefined;
+  const waiting = inbox.waiting ?? 0;
   const away = reportWaiting(run);
   const stopped = stoppedUnseen(run);
   const running = isRunning(run);
@@ -107,7 +98,7 @@ export function Home() {
           <LoadError state={runState} />
           <FirstTidyChecklist run={run} progress={progress.data} />
           {running && run && <RunningCard run={run} />}
-          <Inbox piles={piles} error={pilesState} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} />
+          <Inbox piles={inbox.piles} error={inbox} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} />
           {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
               under the person's finger moves when it lands (progressive rendering: each part shows when its data is there). */}
           {stopped && run && <StoppedCard run={run} />}

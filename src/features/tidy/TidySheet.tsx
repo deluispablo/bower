@@ -2,8 +2,8 @@ import { LoadError } from '@/ui/LoadError';
 import { useEffect, useState } from 'react';
 import { report } from '@/ui/report';
 import { useStartRun } from './start-run';
-import { pileName, thingsIn, waitingIn } from '@/data/piles';
-import { usePiles, useRequests, useRules, useRun, useSources, type Loaded } from '@/data/provider';
+import { pileName, thingsIn } from '@/data/piles';
+import { useInbox, useRequests, useRules, useRun, useSources, type Loaded } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
@@ -35,9 +35,8 @@ export function TidySheet() {
   else if (tidyOpen && running && run && watched !== run.id) setWatched(run.id);
   const showRun = !!run && (running || (tidyReportRunId === run.id && run.phase === 'done') || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
-  const pilesState = usePiles();
-  const { data: piles } = pilesState;
-  const waiting = waitingIn(piles);
+  const inbox = useInbox();
+  const waiting = inbox.waiting ?? 0;
   const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing in the inbox';
   const onOpenChange = (open: boolean): void => {
     // Closing a finished run with nothing to replay: it has been seen. A stopped one stays on Home
@@ -47,18 +46,18 @@ export function TidySheet() {
   };
   return (
     <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={runState.error ? 'Latest update unavailable' : showRun && run ? runTitle(run) : ask} hideTitle className={s.sheet}>
-      {runState.error ? <LoadError state={runState} /> : showRun && run ? <RunView run={run} /> : <Confirm pilesState={pilesState} />}
+      {runState.error ? <LoadError state={runState} /> : showRun && run ? <RunView run={run} /> : <Confirm inbox={inbox} />}
     </Sheet>
   );
 }
 
-function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
-  const { data: piles } = pilesState;
+function Confirm({ inbox }: { inbox: ReturnType<typeof useInbox> }) {
+  const { piles, waiting } = inbox;
   // Waiting keeps the focus: aria-disabled, not disabled (as on the pile page).
   const { busy, start: begin } = useStartRun();
   const { vault } = useSources();
   const [error, setError] = useState<string | null>(null);
-  const count = waitingIn(piles);
+  const count = waiting ?? 0;
   const start = (): void => {
     const started = begin('all');
     if (!started) return;
@@ -70,8 +69,8 @@ function Confirm({ pilesState }: { pilesState: ReturnType<typeof usePiles> }) {
     });
   };
   // A failed read says why and can be asked again; the sheet is never left busy on it.
-  if (pilesState.error) return <LoadError state={pilesState} />;
-  if (!piles) return <div className={s.stage} aria-busy="true" />;
+  if (inbox.error) return <LoadError state={inbox} />;
+  if (waiting === undefined || !piles) return <div className={s.stage} aria-busy="true" />;
   return (
     <div>
       <div className={s.stage}>
