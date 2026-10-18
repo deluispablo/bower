@@ -76,6 +76,14 @@ describe('the capability corpus', () => {
     }
   });
 
+  it('corpus-delete-overlaps AC2: redundant cases disappear without weakening capability coverage', async () => {
+    const ids = (await loadCorpus(ROOT)).map((c) => c.id);
+    for (const id of ['c05-conflicting-fact-kept', 'c06-offer-and-listing-linked', 'c07-rent-disagrees']) {
+      expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
+      expect.soft(ids, id).not.toContain(id);
+    }
+  });
+
   it('every corpus capability has at least two cases', async () => {
     const cases = await loadCorpus(ROOT);
     for (const capability of CORPUS_CAPABILITIES) {
