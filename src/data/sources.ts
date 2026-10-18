@@ -1,4 +1,5 @@
 import type { QuestionAnswer } from './contracts/questions';
+import type { FirstTidy, FirstTidyStep } from './contracts/first-tidy';
 import type {
   ChangeEntry,
   ChosenAgain,
@@ -125,6 +126,10 @@ export interface VaultSource {
   markFailedSeen?(id: string): Promise<void>;
   /** Keeps a suggestion as a rule, or says no to it; gives back its Undo. */
   dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>>;
+  /** The first tidy-up's steps, as kept with the folder or shown by it; never writes. */
+  firstTidy(): Promise<FirstTidy>;
+  /** Keeps that step with the folder (once; a repeat writes nothing), then reads the progress again. */
+  markFirstTidy(step: FirstTidyStep): Promise<FirstTidy>;
   subscribe(cb: () => void): Unsubscribe;
 }
 
