@@ -81,8 +81,10 @@ async function expectUncovered(sheet: Locator): Promise<void> {
     }));
   });
   // Positive control: the text and controls supplied real hit-test points.
-  expect(samples.length).toBeGreaterThan(0);
-  expect(samples.every((p) => p.insideViewport && p.inSheet)).toBe(true);
+  // A tall sheet scrolls (prod1-pile-icons stacks): only points on screen can be covered.
+  const onScreen = samples.filter((p) => p.insideViewport);
+  expect(onScreen.length).toBeGreaterThan(0);
+  expect(onScreen.every((p) => p.inSheet)).toBe(true);
 }
 
 test.describe('messages wait for sheets', () => {
