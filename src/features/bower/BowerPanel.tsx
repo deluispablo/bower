@@ -8,7 +8,7 @@ import { focusMain } from '@/ui/focus';
 import { useUi } from '@/app/ui-store';
 import { countOr, plural } from '@/app/words';
 import { Button } from '@/ui/Button';
-import { isRunning, runDetail, runTitle } from '@/features/tidy/run-words';
+import { isRunning, RUNNING_WAITS, runDetail, runTitle } from '@/features/tidy/run-words';
 import { FailedChanges } from './FailedChanges';
 import s from './bower.module.css';
 
@@ -95,7 +95,7 @@ export function BowerPanel() {
             {asked.slice(0, 5).map((r) => (
               <li key={r.id}>
                 <span className={s.panelRuleText}>{r.text}</span>
-                <span className={s.waits}>Waits for the next tidy-up</span>
+                <span className={s.waits}>{isRunning(run) ? RUNNING_WAITS : 'Waits for the next tidy-up'}</span>
               </li>
             ))}
           </ul>

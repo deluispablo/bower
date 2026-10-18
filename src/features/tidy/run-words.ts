@@ -39,6 +39,9 @@ export const PHASE_POSE: Record<RunPhase, Pose> = {
   failed: 'alarm',
 };
 
+/** Neutral: which waiting changes and requests a running run took is unknown here (prod1-active-copy). */
+export const RUNNING_WAITS = 'A tidy-up is running. What it does not finish stays here.';
+
 export function isRunning(r: RunState | null | undefined): boolean {
   return !!r && r.phase !== 'done' && r.phase !== 'failed';
 }
