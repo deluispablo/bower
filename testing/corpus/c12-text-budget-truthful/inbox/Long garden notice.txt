@@ -324,4 +324,4 @@ Background: Alex grows garlic at the community garden.
 Background: Alex grows garlic at the community garden.
 Background: Alex grows garlic at the community garden.
 
-Late appendix: The shared bench delivery has been cancelled.
+Late appendix: The shared bench delivery is cancelled until 2026-11-02.

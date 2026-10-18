@@ -50,6 +50,8 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 | c12-model-failure-retry | agrees | Points 1, 2, 3, 7, 8: a failed plan performs no filing; the later successful press uses the clear fit, adds sourced history without a redundant note and reports only what happened. Transport failure is not unclear placement. |
 | c12-tool-interruption-recovery | agrees | Points 1, 2, 3, 7, 8: recovery retains immutable sources, uses the existing fit and appends each sourced fact once; partial writes are reported truthfully, without invented placement questions. |
 | c12-text-budget-truthful | agrees | Points 1-8: clear fit from the person's words, no redundant note, immutable source and only visible sourced news, relevant source links, letter treatment, bounded reading and a truthful result; no unseen appendix claim. |
+| c12-group-waits | agrees | Points 1, 2, 3, 7: both piles fit their folders by the person's words; the group that gets no valid reply waits whole and untouched with a plain row, no question, and the next press files it with one sourced line per receipt. |
+| c12-admission-waits | agrees | Points 1, 2, 3, 7: each notice fits the plot by the person's words; the pile past the run's room waits untouched, uncounted as a problem and unasked, and the next press files it with its sourced line once. |
 | c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
 | c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
 | c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |

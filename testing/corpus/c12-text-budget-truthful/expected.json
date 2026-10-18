@@ -27,14 +27,15 @@
       ],
       "timelineCount": 2,
       "excludes": [
-        "The shared bench delivery has been cancelled."
+        "The shared bench delivery has been cancelled.",
+        "2026-11-02"
       ]
     }
   ],
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "created": [],
+    "created": ["Bower health.md"],
     "updated": [
       "Areas/Home/Garden plot.md"
     ],

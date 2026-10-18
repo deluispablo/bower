@@ -1,0 +1,35 @@
+{
+  "id": "c12-admission-waits",
+  "capability": "C12",
+  "title": "A pile that does not fit one run waits untouched and is filed by the next tidy-up",
+  "covers": "model",
+  "source": "new (C12 lifecycle; the test shrinks the admission estimate to 2)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Update the garden plot from this notice.",
+      "files": [
+        "Water butt notice.txt"
+      ]
+    },
+    {
+      "line": "Update the garden plot from this delivery notice.",
+      "files": [
+        "Bench notice.txt"
+      ]
+    },
+    {
+      "line": "Update the garden plot from this compost notice.",
+      "files": [
+        "Compost notice.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md"
+  ],
+  "presses": [{}]
+}
