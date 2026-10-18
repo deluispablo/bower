@@ -366,11 +366,11 @@ export function completed(result: Awaited<ReturnType<typeof run>>, files = 1) {
 export function failedReply(result: Awaited<ReturnType<typeof run>>) {
   expect.soft(result.code, 'no valid reply after the retry fails the run').toBe(1);
   expect.soft(result.wire?.statuses.at(-1)?.phase, 'invalid reply exhaustion ends failed').toBe('failed');
+  expect.soft(report(result), 'a failed run has no report row').toEqual({ filed: [], setAside: [], questions: [] });
   untouchedInbox(result);
 }
 
 function untouchedInbox(result: Awaited<ReturnType<typeof run>>) {
-  expect.soft(report(result), 'exhausted items have no report row').toEqual({ filed: [], setAside: [], questions: [] });
   const sources = result.dispatch?.admission.piles.flatMap((p) => p.items) ?? [];
   for (const source of sources) {
     const path = Object.entries(result.pathsById).find(([id]) => id === source.fileId)?.[1] ?? '';
@@ -380,16 +380,23 @@ function untouchedInbox(result: Awaited<ReturnType<typeof run>>) {
   expect.soft(result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method) && !e.path.startsWith('.bower/')),
     'exhaustion never mutates source or personal evidence').toEqual([]);
   expect.soft(result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method)
-    && /(?:manifest-[^/]+\.json|\/changes\/)/.test(e.path)), 'no manifest change or request consumption').toEqual([]);
+    && /\/changes\//.test(e.path)), 'no request consumption').toEqual([]);
 }
 
 export function leavesForNextRun(result: Awaited<ReturnType<typeof run>>) {
   expect.soft(result.code, 'ledger exhaustion is a done run').toBe(0);
   expect.soft(result.wire?.statuses.at(-1)?.phase, 'exhaustion ends done').toBe('done');
+  const count = result.dispatch?.admission.piles.reduce((n, p) => n + Math.max(1, p.items.filter((i) => i.name !== PILE_NOTE).length), 0) ?? 0;
+  // c12-admit A9: a held run's own report has no row and counts the things it left in the inbox.
+  const held = (result.lastRun as { run?: { id?: string; report?: Record<string, unknown> } } | null)?.run;
+  expect.soft(held?.id, 'the held run leaves a report of its own').toBe(result.dispatch?.runId);
+  expect.soft(held?.report, 'exhausted items have no report row; the report counts what waits')
+    .toEqual({ filed: [], created: [], updated: [], setAside: [], questions: [], waiting: count });
+  expect.soft(manifest(result).operations.filter((op) => op.effect.kind !== 'write-runner-json' && op.effect.kind !== 'create-text'),
+    'a held run plans no effect').toEqual([]);
   untouchedInbox(result);
   const lines = result.consoleLines.filter((line) => /exhaust|next run|left.*inbox|wait/i.test(line) && !line.startsWith('timing:'));
   expect.soft(lines, 'one console line counts the items left for the next run').toHaveLength(1);
-  const count = result.dispatch?.admission.piles.reduce((n, p) => n + Math.max(1, p.items.filter((i) => i.name !== PILE_NOTE).length), 0) ?? 0;
   expect.soft(lines[0] ?? '').toMatch(new RegExp(`\\b${count}\\b`));
 }
 

@@ -82,7 +82,7 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 
 `repository_dispatch` with `{ run_id, vault_id, ticket, scope, allow_web }`. The runner fetches a Drive token with that ticket, reports each phase (`queued` → `reading` with `total` → `writing` → `saving` → `done` or `failed` with `failure`), and writes the run's report to the folder before it reports `done`:
 
-- `.bower/last-run.json`: `{ v: 1, run: <RunWire with report> }`, where `report` is the app's `RunReport` (`filed`, `created`, `updated`, `setAside`, `questions`, `yourChanges`, and `requests` done and `rulesWorded` when there were any; `nothingReady: true` when every admitted pile was held, so the report says "Nothing in the inbox was ready yet", TL-P3-26).
+- `.bower/last-run.json`: `{ v: 1, run: <RunWire with report> }`, where `report` is the app's `RunReport` (`filed`, `created`, `updated`, `setAside`, `questions`, `yourChanges`, and `requests` done and `rulesWorded` when there were any; `nothingReady: true` when every admitted pile was held, so the report says "Nothing in the inbox was ready yet", TL-P3-26; `waiting`: the number of things left in the inbox for the next tidy-up with no row of their own, never with `nothingReady`).
 - `.bower/questions.json`, `.bower/suggestions.json`, `.bower/requests.json`, `.bower/hashes.json` (shapes in `src/data/vault/layout.ts`).
 - `Rules.md` with the rules typed in the app worded (`src/data/vault/rules-format.ts`), and the rules a `rule` line `removes` (by their wording) taken out.
 - After a `rename` or `move` line (`from` → `path`), every `[[link]]` to the old name written with the new one, in every note (a label after `|` stays). Until then the app finds a note by the names it had (`src/data/links.ts`).

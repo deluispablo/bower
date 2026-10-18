@@ -4,14 +4,19 @@
  * selection's targets, packed first-fit in admission order (Johnson 1974); the writing calls map and one plan reduces
  * (Dean and Ghemawat 2004). Every run goes through production main over a made-up folder; only the model is replaced.
  */
+import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parseObservations } from '../../src/data/contracts/observations';
+import { askId } from '../../src/data/contracts/questions';
 import { WAITING_WHY } from '../../src/data/contracts/run-manifest';
+import { timelineLine } from '../../src/data/contracts/timeline-line';
 import type { Filing, Placement } from '../../src/data/spine/scripted';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { GROUP_THINGS, REFUSALS, groupsOf, mergedFiling } from '../src/claude';
+import { LedgerExhausted, RunTiming } from '../src/timing';
 import { AT } from './corpus-run';
 import { paging } from './drive-v3';
-import { folder, largeFolder, leavesForNextRun, manifest, note, report, run, seedState, setup, type Base, type Frame } from './b1-planning-support';
+import { folder, largeFolder, manifest, note, report, run, seedState, setup, waitsForNextRun, type Base, type Frame } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -341,15 +346,99 @@ describe('the fan-out through main (c12-fanout)', () => {
     expect(r.after[LEDGER]).toContain(BEES);
   }, 60_000);
 
-  it('AC6 c12-fanout-reduce: a merged plan over 200 operations holds the whole run for the next one', async () => {
-    const many = (tag: string, n: number) => ({ line: '', files: Array.from({ length: n }, (_, i) => `${tag} ${String(i + 1).padStart(2, '0')}.txt`) });
-    const b = await made({ inbox: [many('Plum', 60), many('Fern', 50)] }); await seedState(b);
+  // c12-admit A6, A10, A14: over 200 operations at the merge, the last group that can wait waits whole (the group wait).
+  const many = (tag: string, n: number) => ({ line: '', files: Array.from({ length: n }, (_, i) => `${tag} ${String(i + 1).padStart(2, '0')}.txt`) });
+  const PLUM_FERN = [many('Plum', 60), many('Fern', 50)];
+  const pileOf = (b: Base, tag: string): string => b.admission.piles.find((p) => p.items.some((i) => tagOf(i.name) === tag))?.pileId ?? 'missing pile';
+  /** Each thing filed with a note of its own: two operations a thing, so 110 things are over 200 and each group alone under. */
+  const noted = (b: Base, to: Record<string, string>) => ({ ...filing(b, to), things: filing(b, to).things.map((t) => ({ ...t,
+    note: { name: String(t.name).replace(/\.txt$/, '.md'), summary: 'Alex received a remote developer offer.', body: 'Alex received a remote developer offer.' } })) });
+  const waitingThings = (r: { after: Record<string, string> }): unknown => (JSON.parse(r.after[manifests(r)[0] ?? ''] ?? '{}') as { waitingThings?: unknown }).waitingThings;
+
+  it('AC6 c12-fanout-reduce: a merged plan over 200 operations: the last group waits whole and the first is filed', async () => {
+    const b = await made({ inbox: PLUM_FERN }); await seedState(b);
+    expect(b.admission.piles.map((p) => p.pileId), 'Plum, then Fern').toEqual([pileOf(b, 'Plum'), pileOf(b, 'Fern')]);
     const to = { Plum: X, Fern: Y };
-    const intent = { ...filing(b, to), things: filing(b, to).things.map((t) => ({ ...t,
-      note: { name: String(t.name).replace(/\.txt$/, '.md'), summary: 'Alex received a remote developer offer.', body: 'Alex received a remote developer offer.' } })) };
-    const r = await run(b, [placing(b, to), intent]);
+    const r = await run(b, [placing(b, to), noted(b, to)]);
     expect(writing(r), 'each group has its own call, each under 200 operations').toHaveLength(2);
-    leavesForNextRun(r);
-    expect(manifests(r), 'no plan').toEqual([]);
+    waitsForNextRun(r, [pileOf(b, 'Fern')], 60);
+    expect(manifests(r), 'one plan').toHaveLength(1);
+    expect(waitingThings(r), 'a group that waits has its row, not the count').toBeUndefined();
+  }, 120_000);
+
+  it('AC6 c12-fanout-reduce: when the last group holds a reasked pile, the other group waits instead (W1)', async () => {
+    const b = await made({ inbox: PLUM_FERN });
+    const fern = pileOf(b, 'Fern');
+    const reask = { id: askId(fern), subject: fern, text: 'Where does it go?', yes: 'Yes', no: 'No', askedAt: AT - 5000 };
+    const text = JSON.stringify({ v: 1, questions: [], rounds: [{ subject: fern, pileId: fern, words: 'Fern', count: 50, wordsOnly: true, reask }] });
+    const questions = b.ix.idOf(SYSTEM.questions);
+    if (questions) await b.drive.writeText(questions, text, (await b.drive.get(questions)).modifiedTime);
+    else await b.drive.createText(b.id(SYSTEM.dir), 'questions.json', text);
+    await seedState(b);
+    const to = { Plum: X, Fern: Y };
+    const r = await run(b, [placing(b, to), noted(b, to)]);
+    expect(writing(r)).toHaveLength(2);
+    waitsForNextRun(r, [pileOf(b, 'Plum')], 50);
+  }, 120_000);
+
+  it('AC6 c12-fanout-reduce: a trimmed group with a request waits whole with it: the request stays and gets one row (A14)', async () => {
+    const LINE = 'Alex sows basil in the spring.';
+    const b = await made({ inbox: PLUM_FERN, folder: { ...folder, [GARDEN]: note('Alex grows herbs.', '# Garden plans\n\n## Timeline\n- 2026-10-01 · Alex dug the herb bed.\n') },
+      journal: [{ kind: 'request', text: `Add to Garden plans: ${LINE}` }] });
+    await seedState(b);
+    const request = b.admission.journal[0]?.fileId ?? 'missing request';
+    const to = { Plum: X, Fern: Y };
+    const selection = placing(b, to);
+    selection.items.push({ itemId: request, kind: 'unknown', destination: b.id(Y), wants: [b.id(GARDEN)] });
+    const r = await run(b, [selection, { ...noted(b, to), lines: [{ note: GARDEN, text: LINE, cites: request }] }]);
+    expect(writing(r).map((f) => (f.value.requests as unknown[] | undefined)?.length ?? 0).sort(), 'the request rides with Fern').toEqual([0, 1]);
+    waitsForNextRun(r, [pileOf(b, 'Fern'), request], 60);
+    expect(r.after[GARDEN], 'the waiting request adds no line').not.toContain(LINE);
+  }, 120_000);
+
+  it('AC6 c12-fanout-reduce: a consolidation re-plan over 200 operations after trimming skips the consolidation and keeps the plan (A10)', async () => {
+    const sha = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+    const PREFS = Array.from({ length: 8 }, (_, i) => `I like garden habit ${i + 1}: I water the beds slowly at dawn, check the soil by hand, and write down what grew so I can plan.`);
+    const fact = (n: number, date: string) => ({ v: 1, kind: 'observation', eventId: `event-${n}`, factId: `pref-${n}`, date, section: 'about-preferences',
+      text: PREFS[n - 1], category: 'preference', source: { fileId: `words-${n}`, sha256: sha(`${PREFS[n - 1]}\n`) },
+      origin: { kind: 'words', runId: 'history-run', captureId: sha('history'), pileId: `pile-${n}` } });
+    const frontier = { v: 1, kind: 'consolidation', eventId: 'frontier-1', section: 'about-preferences', date: '2026-10-05',
+      factIds: ['pref-1', 'pref-2', 'pref-3'], runId: 'history-run', operationId: 'history-op', successful: true };
+    const events = [fact(1, '2026-10-05'), fact(2, '2026-10-05'), fact(3, '2026-10-05'), frontier, ...[4, 5, 6, 7, 8].map((n) => fact(n, '2026-10-06'))];
+    const prefs = region('How you like things', 'about-preferences').replace('\n<!--',
+      `\n${PREFS.map((text, i) => `${timelineLine({ date: i < 3 ? '2026-10-05' : '2026-10-06', text, source: 'Your words' })}\n`).join('')}<!--`);
+    const learned = ABOUT_TEXT.replace(region('How you like things', 'about-preferences'), prefs);
+    const NEW = 'I want the bins out on Thursday night, never on Wednesday, so the lane stays clear.';
+    const b = await made({ folder: { ...folder, [LEDGER]: events.map((e) => JSON.stringify(e)).join('\n') + '\n', [ABOUT]: learned },
+      inbox: [many('Plum', 60), { line: `Remember this: ${NEW}`, files: [] }, many('Fern', 50)] });
+    await seedState(b);
+    const to = { Plum: X, Fern: Y };
+    const selection = placing(b, to); const intent: Row = noted(b, to);
+    const replies: unknown[] = [selection, intent, intent, {}, {}];
+    let judged = false;
+    const real = RunTiming.prototype.requireOperations;
+    vi.spyOn(RunTiming.prototype, 'requireOperations').mockImplementation(function (this: RunTiming, count: number, items: number, mapped?: number) {
+      // The re-plan with the consolidation is over the ledger; every plan before it is counted as it is.
+      if (judged) throw new LedgerExhausted(items);
+      real.call(this, count, items, mapped);
+    });
+    type Fact = { n: number; text: string };
+    const r = await run(b, replies, { beforeReply: async (turn, frame) => {
+      const v = frame.value as { piles?: Array<{ pileId: string; words: string }>; consolidation?: { facts: Fact[] }; judge?: { lines: Array<{ n: number }> } };
+      if (turn === 1) {
+        const words = v.piles?.find((p) => p.words.includes(NEW))?.pileId ?? 'missing pile';
+        selection.items.push({ itemId: words, kind: 'unknown', destination: b.id(X), wants: [] });
+        intent.observations = [{ source: { pileId: words }, section: 'about-preferences', category: 'preference', text: NEW }];
+      }
+      if (v.consolidation) replies[turn - 1] = { lines: v.consolidation.facts.map((f) => ({ text: `${f.text.split(',')[0]?.replace(/\.$/, '')}.`, facts: [f.n], form: 'current' })) };
+      if (v.judge) { judged = true; replies[turn - 1] = { verdicts: v.judge.lines.map((l) => ({ n: l.n, supported: true, reason: 'Made-up reason: it follows from its facts.' })) }; }
+    } });
+    expect(r.frames.filter((f) => 'consolidation' in f.value), 'the consolidation is asked once, after trimming').toHaveLength(1);
+    expect(judged, 'and judged').toBe(true);
+    waitsForNextRun(r, [pileOf(b, 'Fern')], 60);
+    expect(r.after[LEDGER], 'the plan that fit keeps the new fact').toContain(NEW);
+    const ledger = parseObservations(new TextEncoder().encode(r.after[LEDGER] ?? ''));
+    expect(ledger.events.filter((e) => e.kind === 'consolidation' && e.runId === r.dispatch?.runId), 'and no consolidation of this run').toEqual([]);
+    expect(errors().some((l) => /consolidation of run .* is skipped/.test(l)), 'the skip is told').toBe(true);
   }, 120_000);
 });

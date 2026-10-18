@@ -51,6 +51,13 @@ export interface SectionHashes {
   rules?: string;
 }
 
+/** The run's model allowance: both semantic steps and retries spend it (80% of the job's 15 minutes). */
+export const MODEL_MS = 900_000 * 0.8;
+/** One thing's model wall time: its share of the selection and of its writing group, four at a time (c12-admit; staging revisits it). */
+export const THING_MS = 3_000;
+/** The things a run admits: what fits 60% of the allowance (the rest is room for retries and maintenance), never over 200. */
+export const ADMIT_THINGS = Math.min(200, Math.floor(MODEL_MS * 0.6 / THING_MS));
+
 export class LedgerExhausted extends BowerError {
   constructor(readonly count: number) { super('unknown', 'These items will be handled on the next run.'); }
 }
@@ -80,7 +87,7 @@ export class RunTiming {
   }
 
   /** Both semantic steps and retries spend the same 80% allowance. */
-  remainingModelMs(): number { return Math.max(0, 900_000 * 0.8 - (this.clock() - this.began)); }
+  remainingModelMs(): number { return Math.max(0, MODEL_MS - (this.clock() - this.began)); }
   /** A model call's numbers (null: it gave no JSON result), summed for the run line; with a kind, also a line of its own. */
   addModel(stats: ModelStats | null, kind?: CallKind): void {
     if (kind) this.calls.push(`model-call: kind=${kind} in=${stats?.inputTokens ?? 0} cached=${stats?.cacheReadTokens ?? 0} out=${stats?.outputTokens ?? 0} ms=${Math.max(0, Math.round(stats?.wallMs ?? 0))}`);

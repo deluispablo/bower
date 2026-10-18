@@ -159,6 +159,8 @@ export type Manifest = {
   satisfiedAppends?: SatisfiedAppend[];
   /** The sources a model reply's refusal left for the next tidy-up (plan-partial), one row each; absent when none waited. */
   waiting?: Array<{ name: string; why: typeof WAITING_WHY }>;
+  /** Things left in the inbox for the next tidy-up with no row of their own (c12-admit); absent when none. */
+  waitingThings?: number;
   /** Fields of an unaccepted C05 draft: never written, and a manifest carrying either is refused (`manifestOf`). */
   completedAppends?: unknown;
   appendEvidence?: unknown;
@@ -540,7 +542,7 @@ const waitingOk = (rows: unknown, captured: number): boolean => list(rows, (row)
 export const isAppendCompletion =(row: unknown): row is AppendCompletion => closed(row, ['requestId', 'targetFileId'])
   && recordId(row.requestId) && driveId(row.targetFileId);
 function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean): boolean {
-  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['satisfiedAppends', 'waiting'])
+  return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'], ['satisfiedAppends', 'waiting', 'waitingThings'])
     && value.v === v && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
@@ -551,7 +553,8 @@ function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean)
       && driveId(r.consent.targetFileId) && driveId(r.consent.sourceFileId) && editEntry(r.entry)
       && seenFile(r.before) && path(r.path) && text(r.text) && verifiedContent(r.content) && hash(r.operationId)))
     && capture(value.capture) && list(value.operations, item) && list(value.reportPlan, contribution)
-    && (value.waiting === undefined || waitingOk(value.waiting, value.capture.piles.length + value.capture.journal.length));
+    && (value.waiting === undefined || waitingOk(value.waiting, value.capture.piles.length + value.capture.journal.length))
+    && (value.waitingThings === undefined || (integer(value.waitingThings) && value.waitingThings >= 1));
 }
 function manifest(value: unknown): value is Manifest {
   return manifestOf(value, 1, operation);

@@ -466,7 +466,10 @@ describe('B12c one result note per settled request', () => {
     // A run whose own, non-map operations pass 200 still exhausts: 201 letters filed beside a small map.
     const g = await folder();
     const mixed = await press(g, async (ctx) => ({ ...(await shared(ctx)), things: (ctx.things ?? []).map((t) => ({ fileId: t.fileId, to: HUNT, name: t.name })) }), { pile: 201 });
-    expect(Object.keys(mixed.after).filter((p) => /\/manifest-[^/]+\.json$/.test(p)), 'exhaustion stores no manifest').toEqual([]);
+    // c12-admit A9: a held run stores one manifest that writes nothing but its reading progress, never an effect.
+    const held = Object.keys(mixed.after).filter((p) => /\/manifest-[^/]+\.json$/.test(p))
+      .flatMap((p) => (JSON.parse(mixed.after[p] ?? '{}') as { operations?: Array<{ effect: { kind: string } }> }).operations ?? []);
+    expect(held.filter((op) => op.effect.kind !== 'write-runner-json' && op.effect.kind !== 'create-text'), 'exhaustion plans no effect').toEqual([]);
     expect(Object.keys(mixed.after).filter((p) => p.startsWith('Inbox/') && /Letter \d{3}\.txt$/.test(p)), 'every letter waits in the inbox').toHaveLength(201);
   }, 120_000);
 

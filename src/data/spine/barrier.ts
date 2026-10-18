@@ -137,6 +137,7 @@ export function fixedReport(r: RunReport): RunReport {
   if (r.unconfirmed?.length) out.unconfirmed = r.unconfirmed.map((a) => ({ name: a.name, why: a.why }));
   if (r.kept?.length) out.kept = r.kept.map((a) => ({ name: a.name, why: a.why }));
   if (r.answered?.length) out.answered = r.answered.map((a) => ({ questionId: a.questionId, kind: a.kind, outcome: a.outcome, why: a.why, ...(a.note !== undefined ? { note: a.note } : {}) }));
+  if (r.waiting) out.waiting = r.waiting;
   return out;
 }
 
