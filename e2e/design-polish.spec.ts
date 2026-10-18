@@ -19,7 +19,7 @@ test('design-polish AC1: after Send, Tell Bower shows one focus ring, on the box
   expect(rings).toEqual({ text: false, box: true });
   // Unchanged: a field on its own keeps its ring (the Add screen's note field).
   await page.goto('/add?scenario=default&time=instant');
-  const own = page.getByRole('textbox').first();
+  const own = page.getByRole('textbox', { name: 'What is this? (optional)' });
   await own.focus();
   expect(await own.evaluate((t) => getComputedStyle(t).outlineStyle)).not.toBe('none');
 });

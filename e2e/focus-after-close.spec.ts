@@ -47,7 +47,7 @@ test('F2: a button that changes the page moves the keyboard to the new page', as
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Add a pile', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Add a pile', level: 1 })).toBeFocused();
-  await page.getByRole('textbox').first().fill('A note for the inbox');
+  await page.getByRole('textbox', { name: 'What is this? (optional)' }).fill('A note for the inbox');
   const put = page.getByRole('button', { name: 'Add to the inbox' });
   await put.focus();
   await page.keyboard.press('Enter');
