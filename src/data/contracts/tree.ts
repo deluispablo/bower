@@ -50,6 +50,9 @@ export function folderWords(parts: string[]): string {
 /** A thing's name as people see it, wherever it shows: no extension (its kind shows beside it, as in the tree). */
 export const thingName = (name: string): string => name.replace(/\.[A-Za-z0-9]{1,5}$/, '');
 
+/** The word for a thing's kind, wherever it shows. */
+export const KIND_WORD: Record<FileKind, string> = { note: 'Note', pdf: 'PDF', image: 'Photo', link: 'Link', doc: 'Document', sheet: 'Spreadsheet', audio: 'Audio', other: 'File' };
+
 export function kindOf(name: string): FileKind {
   const e = extOf(name).toLowerCase();
   if (e === '.md') return 'note';
