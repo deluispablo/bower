@@ -479,6 +479,18 @@ describe('what the review found', () => {
     expect(back).not.toContain('Resources/Cooking/Lemon tart.md');
   });
 
+  it('backlinks leave out Bower\'s own files and keep Inbox notes, even past the read limit', async () => {
+    const link = '---\nsummary: links\n---\n\nSee [[Flat 3, 12 Larkspur Lane]]\n';
+    const bower = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower')?.id ?? (await drive.createFolder(root, '.bower')).id;
+    const hidden = [await drive.createText(bower, 'index.md', link)];
+    for (let i = 0; i < 70; i++) hidden.push(await drive.createText(bower, `extra ${i}.md`, link));
+    const inbox = await drive.createText(await idOf('Inbox'), 'Viewing plan.md', link);
+    await vault.refresh();
+    drive.fullText = async () => [...hidden, inbox];
+    const back = (await vault.note('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md')).backlinks;
+    expect(back).toEqual(['Inbox/Viewing plan.md']);
+  });
+
   it('search reads a bounded number of notes', async () => {
     const folder = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === 'Resources');
     for (let i = 0; i < 150; i++) await drive.createText(folder?.id ?? '', `Idea ${i}.md`, `---\nsummary: idea ${i}\n---\n\nthe rent idea number ${i}\n`);
