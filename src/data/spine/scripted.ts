@@ -320,6 +320,7 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
   const words = new Map(requests.flatMap((l) => l.files.map((f) => [f.id, l.rec.id] as const)));
   for (const l of requests) {
     const id = l.rec.id;
+    const name = l.rec.text ?? l.rec.what;
     // A binding or a completion in the kept records fixes the request's notes by id (TL-P4-32 addendum 5 (2)).
     const recorded = history.completed.some((h) => h.requestId === id) || history.lines.some((h) => h.consent.requestId === id);
     if (recorded) {
@@ -344,7 +345,7 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
     if (l.waitingRun) {
       owned.add(id);
       admitted.add(id);
-      rows.push({ requestId: id, sources: [], name: 'Request', why: TOO_OLD_WHY });
+      rows.push({ requestId: id, sources: [], name, why: TOO_OLD_WHY });
       continue;
     }
     // A request the model says Bower never does is owned whether or not it names a note: one row, no line, archived.
@@ -352,7 +353,7 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
       owned.add(id);
       admitted.add(id);
       sources.set(id, null);
-      rows.push({ requestId: id, sources: null, name: 'Request', why: NEVER_WHY });
+      rows.push({ requestId: id, sources: null, name, why: NEVER_WHY });
       continue;
     }
     const { notes, refused } = requestTargets(listing, ix, l.rec.text ?? l.rec.what);
@@ -362,7 +363,7 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
     // with no line, its row and its archive (TL-P4-32 addendum 5 (3)).
     if (since !== null && l.rec.at < since) {
       admitted.add(id);
-      if (refused === 'overflow') rows.push({ requestId: id, sources: [], name: 'Request', why: TOO_OLD_WHY });
+      if (refused === 'overflow') rows.push({ requestId: id, sources: [], name, why: TOO_OLD_WHY });
       else for (const n of notes) rows.push({ requestId: id, sources: [], name: n.path, fileId: n.file.id, why: TOO_OLD_WHY });
       continue;
     }
@@ -374,7 +375,7 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
     refusesSources = true;
     sources.set(id, null);
     for (const n of notes) blocked.add(n.file.id);
-    if (refused === 'overflow') rows.push({ requestId: id, sources: null, name: 'Request', why: LEFT_AS_WRITTEN.overflow });
+    if (refused === 'overflow') rows.push({ requestId: id, sources: null, name, why: LEFT_AS_WRITTEN.overflow });
     else for (const n of notes.filter((m) => notes.filter((x) => x.titleKey === m.titleKey).length > 1)) {
       rows.push({ requestId: id, sources: null, name: n.path, fileId: n.file.id, why: LEFT_AS_WRITTEN.ambiguous(parentOf(n.path).split('/').join(' / ')) });
     }
