@@ -32,7 +32,7 @@ import {
 import type { OwnershipContext } from '../contracts/ownership-format';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
+import { SET_ASIDE_TEXT, binKeys, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -771,16 +771,25 @@ export class DriveVault implements VaultSource {
           journalFailure.error = e;
           throw e;
         })), path, contextBinned);
+      // One Bin lookup serves every declaration of this read, started by the first that asks; its failure is logged once.
+      let bin: ReturnType<DriveApi['binnedByItem']> | null = null;
+      const binFailure: { error?: unknown } = {};
+      const binned = async (keys: readonly string[]) => (await (bin ??= this.drive.binnedByItem(root, [...new Set(found.declarations.flatMap((d) => binKeys(d.declaration, files)))]).catch((e: unknown) => {
+        if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
+        console.error(e);
+        binFailure.error = e;
+        throw e;
+      }))).filter((h) => keys.includes(h.file.appProperties?.[PROP.item] ?? ''));
       for (const declaration of found.declarations) {
         try {
           const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
-            (f) => this.digestOf(f), (keys) => this.drive.binnedByItem(root, keys), this.dispositionCache, removed);
+            (f) => this.digestOf(f), binned, this.dispositionCache, removed);
           declarations.push({ ...declaration, missingLoose: state.missingLoose });
           if (state.state === 'orphan') summary.count++;
           if (state.state === 'unknown') summary.complete = false;
         } catch (e) {
           if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
-          if (!('error' in journalFailure) || journalFailure.error !== e) console.error(e);
+          if ((!('error' in journalFailure) || journalFailure.error !== e) && binFailure.error !== e) console.error(e);
           summary.complete = false;
         }
       }

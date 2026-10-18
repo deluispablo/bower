@@ -317,7 +317,9 @@ export class DriveHttp implements DriveApi {
     }, BIN_DEPTH);
     for (let i = 0; i < keys.length; i += BIN_KEYS) {
       const has = keys.slice(i, i + BIN_KEYS).map((k) => `appProperties has { key='bowerItem' and value=${quote(k)} }`).join(' or ');
-      for (const file of await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS)) {
+      // A Bin answer cut at the page cap would lose hits silently: the read says it is incomplete instead.
+      const cut = (): never => { throw driveError('unknown'); };
+      for (const file of await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS, undefined, cut)) {
         if (file.folder || !(await Promise.all(file.parents.map((p) => below(p)))).some(Boolean)) continue;
         hits.set(file.id, { file, size: file.sha256 !== undefined ? (file.size ?? null) : null, sha256: file.sha256 ?? null });
       }
@@ -469,16 +471,16 @@ export class DriveHttp implements DriveApi {
   }
 
   /** The files `q` finds, every page up to `maxPages`, as Drive answers them. */
-  async query(q: string, maxPages = Infinity, fields = FIELDS, beforePage?: () => void): Promise<DriveFile[]> {
-    return (await this.wires(q, maxPages, fields, beforePage)).map(toFile);
+  async query(q: string, maxPages = Infinity, fields = FIELDS, beforePage?: () => void, cut?: () => void): Promise<DriveFile[]> {
+    return (await this.wires(q, maxPages, fields, beforePage, cut)).map(toFile);
   }
 
-  private async wires(q: string, maxPages: number, fields: string, beforePage?: () => void): Promise<WireFile[]> {
+  private async wires(q: string, maxPages: number, fields: string, beforePage?: () => void, cut?: () => void): Promise<WireFile[]> {
     const out: WireFile[] = [];
     let pageToken = '';
     let pages = 0;
     do {
-      if (++pages > maxPages) break;
+      if (++pages > maxPages) { cut?.(); break; }
       beforePage?.();
       const params = new URLSearchParams({ q, fields: `nextPageToken,files(${fields})`, pageSize: String(SEARCH_PAGE_SIZE) });
       if (pageToken) params.set('pageToken', pageToken);
