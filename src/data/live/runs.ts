@@ -3,7 +3,8 @@
  * report is in the Bower folder (`.bower/last-run.json`), read once when the
  * run ends. Whether this device has seen the result is kept on the device.
  * Screens hear about changes: the Worker is asked every 4 s while a run is
- * going, every 60 s otherwise, and when the app comes back into view. A
+ * going, every 60 s otherwise, and on every return to view. Folder discovery
+ * on return has a separate staleness window below. A
  * client error (a 4xx: the Worker has no such route, or refuses) is not
  * asked again until the app comes back into view or a tidy-up starts; offline
  * and server errors keep the beat (retry only what can change: Google Cloud
@@ -18,6 +19,7 @@ import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '..
 
 const FAST_MS = 4_000;
 const SLOW_MS = 60_000;
+export const FOREGROUND_STALE_MS = 30_000;
 const SEEN = 'bower:run-seen';
 
 const clientError = (e: unknown): e is BowerError => {
@@ -57,6 +59,7 @@ export class LiveRuns implements RunSource {
   private refreshing: Promise<void> | null = null;
   private refreshIssued = 0;
   private refreshed = 0;
+  private listedAt = Number.NEGATIVE_INFINITY;
   private disposed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private took = new Set<string>();
@@ -206,7 +209,10 @@ export class LiveRuns implements RunSource {
     this.schedule();
   }
 
-  /** A visible return discovers idle external changes; ordinary status polling stays lightweight. */
+  /**
+   * A visible return lists only when the last finished listing began at least 30 s ago.
+   * Like TanStack's staleTime: https://tanstack.com/query/latest/docs/framework/react/guides/window-focus-refetching
+   */
   private returnToForeground(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.refused = null;
@@ -215,9 +221,10 @@ export class LiveRuns implements RunSource {
     const work = (async () => {
       try {
         await this.current();
-        // A pre-return listing may settle during this wave, but only one begun in it discovers this return's changes.
+        // A pre-return listing may settle during this wave; recheck its age before starting another.
         while (this.refreshed <= before) {
           if (this.disposed || (this.last && !finished(this.last))) return;
+          if (Date.now() - this.listedAt < FOREGROUND_STALE_MS) return;
           await this.refreshFolder();
         }
       } catch (e) {
@@ -237,8 +244,12 @@ export class LiveRuns implements RunSource {
     if (this.disposed) return Promise.resolve();
     if (!this.refreshing) {
       const ticket = ++this.refreshIssued;
+      const began = Date.now();
       this.refreshing = this.vault.refresh().then(() => {
-        if (!this.disposed) this.refreshed = ticket;
+        if (!this.disposed) {
+          this.refreshed = ticket;
+          this.listedAt = began;
+        }
       }).finally(() => { this.refreshing = null; });
     }
     return this.refreshing;

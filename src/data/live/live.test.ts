@@ -12,6 +12,7 @@ import { BowerError, type RunReport, type RunState } from '../types';
 import type { Me, RunReply, RunWire, StatusReply } from '../worker/worker-api';
 import { WorkerHttp } from '../worker/worker-http';
 import { makeLiveSources, type LiveSources } from './index';
+import { FOREGROUND_STALE_MS } from './runs';
 import { holdChunks } from '@/testing/upload-hook';
 
 let live: LiveSources | null = null;
@@ -1410,6 +1411,7 @@ describe('foreground discovery', () => {
     await vi.advanceTimersByTimeAsync(0);
     const version = await b.drive.get(file.id);
     await b.drive.writeText(file.id, freshText, version.modifiedTime);
+    await vi.advanceTimersByTimeAsync(FOREGROUND_STALE_MS);
     back();
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).toHaveBeenCalledTimes(2);
@@ -1532,6 +1534,7 @@ describe('foreground discovery', () => {
     expect(listing).toHaveBeenCalledOnce();
     await a.runs.current();
     expect(listing).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(FOREGROUND_STALE_MS);
     back();
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).toHaveBeenCalledTimes(2);
@@ -1590,6 +1593,7 @@ describe('foreground discovery', () => {
     await b.drive.writeText(file.id, freshText, version.modifiedTime);
     await b.drive.createText(root, 'Remote.md', 'A new remote note.');
     if (outcome === 'idle') status.mockResolvedValue(st(null));
+    await vi.advanceTimersByTimeAsync(FOREGROUND_STALE_MS);
     back();
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).toHaveBeenCalledOnce();
