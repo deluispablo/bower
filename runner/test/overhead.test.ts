@@ -36,17 +36,16 @@ describe('the runner overhead', () => {
   it('the runner overhead cuts keep recovery and ordered status', async () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
-    // The attempt fence: each write (one fenced write may be a few requests in a row) is preceded by the attempt route,
-    // and by a read of its target after that. The one exception is a create into a folder the run itself made moments
-    // before (its records, and what it makes there), which its own answer stands for (drive-calls-cut).
-    const fences: Array<{ at: number; name?: string | undefined; fenceBeforeWrite: boolean; targetRead: boolean }> = [];
-    calls.forEach((x, i) => {
-      if (x.kind !== 'write' || calls[i - 1]?.kind === 'write') return;
-      const lastToken = calls.slice(0, i).map((y) => y.kind).lastIndexOf('attempt');
-      fences.push({ at: i, name: x.name, fenceBeforeWrite: lastToken >= 0, targetRead: x.intoMade === true || calls.slice(lastToken + 1, i).some((y) => y.kind === 'read') });
-    });
-    expect(fences.length).toBeGreaterThan(0);
-    for (const f of fences) expect(f).toEqual({ at: f.at, name: f.name, fenceBeforeWrite: true, targetRead: true });
+    for (const [i, write] of calls.entries()) {
+      if (write.kind !== 'write') continue;
+      const earlier = calls.slice(0, i);
+      const previous = Math.max(0, ...earlier.filter((c) => c.kind === 'write' && c.target === write.target).map((c) => c.end ?? 0));
+      expect(write.fence, write.name).toBeDefined();
+      const fence = earlier.filter((c) => c.fence === write.fence && c.at >= previous && (c.end ?? Infinity) <= write.at);
+      expect(fence.filter((c) => c.kind === 'attempt'), write.name).toHaveLength(1);
+      const target = write.method === 'POST' ? write.parent : write.target;
+      expect(write.intoMade === true || fence.some((c) => c.kind === 'read' && new URL(c.path, 'https://drive.test').pathname === `/drive/v3/files/${target}`), write.name).toBe(true);
+    }
     // Ordered status: reading, writing, saving, then done, and nothing after done.
     const phases = calls.filter((x) => x.kind === 'status').length;
     expect(phases).toBeGreaterThanOrEqual(3);
