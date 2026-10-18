@@ -147,27 +147,27 @@ it.each([
   expect(phases(t.seen)).toEqual(['selection', 'execution']);
 });
 const SECRET = 'SECRET_PICTURE_MARKER';
-const failures: Array<[string, () => ClaudeExit]> = [
-  ['not json', () => ({ ...reply({}), stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'not json' }) })],
-  ['blank', () => reply({ text: '  ' })],
-  ['1969', () => reply({ text: 'x'.repeat(1969) })],
-  ['exit', () => ({ ...reply({ text: SECRET }), code: 1, stderr: SECRET })],
-  ['cut', () => ({ ...reply({ text: SECRET }), cut: 'size' })],
-  ['subtype secret', () => ({ ...reply({ text: SECRET }), stdout: JSON.stringify({ type: 'result', subtype: SECRET, is_error: true, result: SECRET }) })],
-  ['unknown schema key', () => reply({ text: SECRET, [SECRET]: SECRET })],
-  ['throw', () => { throw new BowerError('unknown', SECRET); }],
+// The one log line each failure leaves: a call that exited with a failure adds only its exit code and stderr length.
+const failures: Array<[string, () => ClaudeExit, string]> = [
+  ['not json', () => ({ ...reply({}), stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'not json' }) }), 'picture refused'],
+  ['blank', () => reply({ text: '  ' }), 'picture unreadable'],
+  ['1969', () => reply({ text: 'x'.repeat(1969) }), 'picture unreadable'],
+  ['exit', () => ({ ...reply({ text: SECRET }), code: 1, stderr: SECRET }), `picture failed; claude exited 1 with ${SECRET.length} characters on stderr`],
+  ['cut', () => ({ ...reply({ text: SECRET }), cut: 'size' }), 'picture cut'],
+  ['subtype secret', () => ({ ...reply({ text: SECRET }), stdout: JSON.stringify({ type: 'result', subtype: SECRET, is_error: true, result: SECRET }) }),
+    'picture failed; claude exited 0 with 0 characters on stderr'],
+  ['unknown schema key', () => reply({ text: SECRET, [SECRET]: SECRET }), 'picture unreadable'],
+  ['throw', () => { throw new BowerError('unknown', SECRET); }, 'picture failed'],
 ];
-it.each(failures)('AC5 f4-picture-reply-failures: %s', async (_name, picture) => {
+it.each(failures)('AC5 f4-picture-reply-failures: %s', async (_name, picture, reason) => {
   const b = await seeded(await fixture()); const r = await press(b, transport(b, { picture }));
   expect(phases(r.seen)).toEqual(['picture', 'selection', 'execution']);
   expect(things(r.seen)[0]).toMatchObject({ text: null, why: UNREAD });
   expect(report(r).filed).toHaveLength(1);
   const logs = vi.mocked(console.error).mock.calls.flat().join(' ');
   expect(logs).not.toContain(SECRET); expect(logs).not.toContain(Buffer.from(PNG).toString('base64')); expect(logs).not.toContain('Photo.png');
-  expect(logs).toMatch(/A picture was not read: picture (failed|cut|refused|unreadable)/);
-  for (const line of vi.mocked(console.error).mock.calls.flat().map(String)) {
-    expect(line).toMatch(/(?:A picture was not read: picture (?:failed|cut|refused|unreadable)$|is refused: picture (?:failed|cut|refused|unreadable); claude exited (?:null|\d+) with \d+ characters on stderr$)/);
-  }
+  expect(logs).not.toMatch(/plan for run .* is refused: picture/);
+  expect(vi.mocked(console.error).mock.calls.map((c) => c.map(String).join(' '))).toEqual([`A picture was not read: ${reason}`]);
 });
 it('AC5 f4-picture-reply-failures: 1968 accepted', async () => {
   const b = await seeded(await fixture()); const r = await press(b, transport(b, { picture: () => reply({ text: 'x'.repeat(1968) }) }));

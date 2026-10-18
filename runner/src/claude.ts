@@ -151,6 +151,14 @@ export class InvalidModelReply extends BowerError {
   constructor() { super('unknown', PLAN_REFUSED); }
 }
 
+// claude's stderr may quote the model or a note, so only its exit code and length are logged.
+const exitTail = (exit: ClaudeExit): string => `; claude exited ${exit.code} with ${exit.stderr.trim().length} characters on stderr`;
+
+/** A picture call that gave no reply: its fixed reason (and safe exit metadata) for the picture loop's one line. */
+class PictureNotRead extends BowerError {
+  constructor(readonly reason: string) { super('unknown', PLAN_REFUSED); }
+}
+
 /**
  * The planner refusing a plan (`refused` in `scripted.ts`, `refuse` here), known by its sentence: never a used-up ledger,
  * Drive or unreadable history, which end the run as they would without a model (validate, then retry only validation errors).
@@ -2438,10 +2446,9 @@ function linesOfReply(value: unknown, facts: readonly InputFact[]): Pick<Consoli
 
 export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: ScriptedRead): RunProvider {
   const token = setup.env.CLAUDE_CODE_OAUTH_TOKEN?.trim() || undefined;
-  // `why` is a fixed reason: claude's stderr may quote the model or a note, so only its exit code and length are logged.
+  // `why` is a fixed reason, never stderr text (`exitTail`).
   const refuse = (why: string, exit?: ClaudeExit, invalidReply = false): never => {
-    const tail = exit ? `; claude exited ${exit.code} with ${exit.stderr.trim().length} characters on stderr` : '';
-    console.error(hidden(`The Claude provider's plan for run ${run.runId} is refused: ${why}${tail}`, token));
+    console.error(hidden(`The Claude provider's plan for run ${run.runId} is refused: ${why}${exit ? exitTail(exit) : ''}`, token));
     throw invalidReply ? new InvalidModelReply() : new BowerError('unknown', PLAN_REFUSED);
   };
   return async (admitted) => {
@@ -2605,7 +2612,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         timing.addModel(statsOf(result), kind);
       }
       const reply = replyOf(exit, maxTurns, result);
-      if (!reply.ok && reply.kind === null) return refuse(images?.length ? (exit.cut ? 'picture cut' : 'picture failed') : reply.why, exit, reply.invalidReply);
+      // A picture's failure is local to its preparation (the loop below logs it), never a whole-plan refusal.
+      if (!reply.ok && reply.kind === null && images?.length) throw new PictureNotRead(exit.cut ? 'picture cut' : `picture failed${exitTail(exit)}`);
+      if (!reply.ok && reply.kind === null) return refuse(reply.why, exit, reply.invalidReply);
       return reply;
     };
     for (const { thing, mediaType, bytes } of shown.pictures ?? []) {
@@ -2617,7 +2626,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         reason = reply.ok ? 'picture unreadable' : 'picture refused';
       } catch (error) {
         if (error instanceof LedgerExhausted) throw error;
-        reason = 'picture failed';
+        reason = error instanceof PictureNotRead ? error.reason : 'picture failed';
       }
       thing.why = 'a picture Bower could not read';
       console.error(hidden(`A picture was not read: ${reason}`, token));
