@@ -59,14 +59,16 @@ type Turn = { tags: string[]; retry: boolean; frame: Frame };
  * The tidy-up, each writing call answered by `answer` from the call it answers (W7). `order`: the groups' tags in the order
  * their calls answer, one call at a time through the gate (P11), a group's retry before any later group.
  */
-const tidy = (b: Base, selection: ReturnType<typeof placing>, answer: (t: Turn) => Row, order?: string[]) => {
+const tidy = (b: Base, selection: ReturnType<typeof placing>, answer: (t: Turn) => Row, order?: string[], hold?: (t: Turn) => Promise<void> | undefined) => {
   const replies: unknown[] = [selection, {}];
   const rank = (h: Held): number => order?.findIndex((tag) => tagsIn(h.frame).includes(tag)) ?? 0;
   const held = order && gate((open) => [...open].sort((x, y) => rank(x) - rank(y)).slice(0, 1));
   return run(b, replies, { narrow: false, beforeReply: async (turn, frame) => {
     if (turn === 1) return;
     await held?.(turn, frame);
-    replies[1] = answer({ tags: tagsIn(frame), retry: /^Your reply was refused:/m.test(frame.call.input), frame });
+    const t = { tags: tagsIn(frame), retry: /^Your reply was refused:/m.test(frame.call.input), frame };
+    await hold?.(t);
+    replies[1] = answer(t);
   } });
 };
 /** Two piles in two folders, so two groups in admission order; `reask`: a stored reask on the second's pile. */
@@ -134,11 +136,14 @@ describe('a group with no valid reply or no model time waits whole (c12-fanout-w
     waitsForNextRun(await tidy(plain.b, placing(plain.b, plain.to), refuseSecond(plain)), [idOf(plain.b, plain.two)], size(plain.b, plain.one));
     // No group landed: the first refused twice, the model time gone on its retry; the second, called at once, answers only
     // after that and is refused, so its retry finds no time: one refusal and one time-out.
+    // The second answers only after the first's retry has (an event, not event-loop ticks, which a starved pool can outrun).
     const none = await twoGroups();
+    let firstRetried = (): void => {};
+    const afterFirstRetry = new Promise<void>((resolve) => { firstRetried = resolve; });
     const nothing = await tidy(none.b, placing(none.b, none.to), ({ tags, retry, frame }) => {
-      if (retry && tags.includes(none.one)) outOfTime(frame);
+      if (retry && tags.includes(none.one)) { outOfTime(frame); firstRetried(); }
       return refused(none.b, none.to, tags);
-    }, [none.one, none.two]);
+    }, undefined, ({ tags }) => (tags.includes(none.two) ? afterFirstRetry : undefined));
     expect(nothing.frames, 'a selection, both groups and the first\'s retry').toHaveLength(4);
     failedReply(nothing);
   }, 180_000);
