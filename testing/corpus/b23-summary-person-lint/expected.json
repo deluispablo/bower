@@ -5,7 +5,8 @@
       "Resources/Gardening/Mulch notice.md"
     ],
     "absent": [
-      "Inbox/*"
+      "Inbox/*",
+      "index.md"
     ]
   },
   "unchanged": [
@@ -45,7 +46,7 @@
       ]
     },
     {
-      "path": "index.md",
+      "path": ".bower/index.md",
       "contains": [
         "- [[Mulch notice]] — Mulch: collection at #amber.",
         "- [[Plot diary]] — (no summary)"
@@ -55,7 +56,11 @@
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "createdAtLeast": 1,
+    "created": [
+      "Resources/Gardening/Mulch notice.md",
+      "Bower health.md"
+    ],
+    "updated": [],
     "questionsExactly": 0
   }
 }

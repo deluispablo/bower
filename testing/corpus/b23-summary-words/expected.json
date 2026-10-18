@@ -4,7 +4,8 @@
       "Resources/Gardening/Garden bed.md"
     ],
     "absent": [
-      "Inbox/*"
+      "Inbox/*",
+      "index.md"
     ]
   },
   "unchanged": [
@@ -20,7 +21,7 @@
       ]
     },
     {
-      "path": "index.md",
+      "path": ".bower/index.md",
       "contains": [
         "- [[Garden bed]] — Alex's garden bed plan: the \"amber\" label, #mulch by the gate."
       ]
@@ -37,7 +38,8 @@
   ],
   "report": {
     "created": [
-      "Resources/Gardening/Garden bed.md"
+      "Resources/Gardening/Garden bed.md",
+      "Bower health.md"
     ],
     "updated": [],
     "questionsExactly": 0
