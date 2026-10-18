@@ -10,7 +10,7 @@
  *   server runtimes, pure JavaScript with no worker or native binary (GitHub's runner has no `pdftotext`), bundled
  *   by esbuild into the one-file runner. Chosen over `pdfjs-dist` itself (needs its legacy build and worker set up
  *   in Node) and `pdf-parse` (pins an old PDF.js).
- * - Pictures, scanned PDFs (no text layer) and other kinds get no text: OCR is a later slice. The reason is said.
+ * - Pictures are checked here for the separate vision pass; scanned PDFs and other kinds get no text.
  *
  * Reads are bounded like the original's (`MAX_READ_BYTES`, by the listed size before any download, and
  * `MAX_PDF_PAGES`), and a PDF's pages are read only as far as its share of the run's text budget.
@@ -31,13 +31,36 @@ const PICTURE = new Set(['.jpg', '.jpeg', '.png', '.gif', '.heic', '.heif', '.we
 /** A file name's extension, lower case, with its dot; '' when it has none. */
 export const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
 
+/** shortcut: photos over 7 MB and unsupported formats wait for a Drive thumbnail path when needed. */
+export const MAX_PICTURE_BYTES = 7_000_000;
+export const LOOKABLE = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+
+/** null means download; text-only callers still use readable. */
+export function lookable(name: string, size?: number): { text: null; why: string } | null {
+  if (!LOOKABLE.has(extensionOf(name))) return { text: null, why: 'a kind of photo Bower cannot look at yet' };
+  if (size !== undefined && size > MAX_PICTURE_BYTES) return { text: null, why: 'a photo too big for Bower to look at' };
+  return null;
+}
+
+/** Recheck the downloaded size before sniffing supported image signatures. */
+export function pictureOf(name: string, bytes: Uint8Array): { mediaType: string } | { text: null; why: string } {
+  const skip = lookable(name, bytes.byteLength);
+  if (skip) return skip;
+  const starts = (magic: readonly number[], at = 0) => magic.every((b, i) => bytes[at + i] === b);
+  if (starts([137, 80, 78, 71, 13, 10, 26, 10])) return { mediaType: 'image/png' };
+  if (starts([255, 216, 255])) return { mediaType: 'image/jpeg' };
+  if (starts([71, 73, 70, 56, 55, 97]) || starts([71, 73, 70, 56, 57, 97])) return { mediaType: 'image/gif' };
+  if (starts([82, 73, 70, 70]) && starts([87, 69, 66, 80, 86, 80], 8)) return { mediaType: 'image/webp' };
+  return { text: null, why: 'a picture Bower could not read' };
+}
+
 /**
  * Whether the runner reads this thing's text at all, by its name and its listed size (`size`, when Drive gives one),
  * so nothing is downloaded that will not be read.
  */
 export function readable(name: string, size?: number): Extracted | null {
   const ext = extensionOf(name);
-  if (PICTURE.has(ext)) return { text: null, why: 'a picture: its text is not read yet (OCR comes later)' };
+  if (PICTURE.has(ext)) return { text: null, why: 'a picture, not text' };
   if (!TEXT.has(ext) && ext !== '.pdf') return { text: null, why: 'a kind of file whose text is not read yet' };
   if (size !== undefined && size > MAX_READ_BYTES) return { text: null, why: 'too big to read' };
   return null;

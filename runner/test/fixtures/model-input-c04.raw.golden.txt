@@ -80,7 +80,7 @@ Each row describes what the material is, never a new folder name. Choose its pla
 
 Budget: decide each thing's kind and place from its name and the pile's words first, then read its text.
 Use at most 5 of the notes below for one thing. A long text is cut where marked "[cut here: ...]": work from what is shown. When
-"text" is null, "why" says why: pictures and scanned PDFs are not read yet, so place them by name and words only, or ask.
+"text" is null, "why" says why: place it by name and words only, or ask. A picture's text is what Bower read in it.
 
 Answers: "answers" (when there are any) are the person's answers to questions Bower asked, each with the thing ("fileId")
 or pile ("pileId") it is about when that is below. Place that thing or pile by what the answer says, and do not ask about

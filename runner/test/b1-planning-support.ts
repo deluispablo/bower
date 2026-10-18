@@ -73,6 +73,7 @@ export function phaseAwareClaude(
     return value;
   },
   explicit = false,
+  picture?: (call: ClaudeCall) => ClaudeExit | Promise<ClaudeExit>,
 ): ClaudeSpawn {
   if (phasedTransports.has(execution as ClaudeSpawn)) return execution as ClaudeSpawn;
   let step = -1; let cwd: string | undefined;
@@ -81,6 +82,10 @@ export function phaseAwareClaude(
   const attempts = new Map<string, number>();
   let selected: ClaudeExit | undefined;
   const spawn: ClaudeSpawn = async (call) => {
+    if ((call as ClaudeCall & { images?: unknown }).images) {
+      if (!picture) throw new Error('A picture call needs its own stub.');
+      return picture(call);
+    }
     const { drive, root, admission } = fixture(call);
     const context = lastJson(call.input) as {
       piles: Array<{ pileId: string; things: Array<{ fileId: string }> }>;
