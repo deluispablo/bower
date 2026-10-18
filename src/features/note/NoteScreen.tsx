@@ -261,7 +261,7 @@ function Properties({ note }: { note: Note }) {
             <div key={p.key} className={s.prop}>
               <dt>{p.label}</dt>
               <dd>
-                {p.link ? <Link to={noteRoute(p.link)}>{p.value}</Link> : p.key === 'status' ? <span className={s.status}>{p.value}</span> : p.value}
+                {p.link ? <Link to={noteRoute(p.link)}>{p.value}</Link> : p.key === 'status' ? <span className={s.status}>{p.value}</span> : p.key === 'created' || p.key === 'updated' ? timelineDay(p.value) : p.value}
               </dd>
             </div>
           ))}
