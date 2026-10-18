@@ -8,6 +8,10 @@
       "Inbox/*"
     ]
   },
+  "unchanged": [
+    "Rules.md",
+    "Projects/Saltmere weekend/Saltmere weekend.md"
+  ],
   "linksResolve": true,
   "report": {
     "filed": 2,

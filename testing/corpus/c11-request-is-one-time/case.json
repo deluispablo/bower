@@ -19,5 +19,16 @@
   "bowerOwned": [
     "Rules.md",
     "Resources/Gardening/Gardening.md"
+  ],
+  "presses": [
+    {
+      "between": [
+        {
+          "kind": "create",
+          "path": "Inbox/Garden newsletter, November.txt",
+          "text": "Saltmere garden newsletter, 2026-11-07.\nThe winter plant sale is on 21 November 2026.\n"
+        }
+      ]
+    }
   ]
 }

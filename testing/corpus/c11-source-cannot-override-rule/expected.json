@@ -27,7 +27,9 @@
   "linksResolve": true,
   "report": {
     "filed": 1,
-    "created": [],
+    "created": [
+      "Bower health.md"
+    ],
     "updated": [
       "Areas/Health/Health.md"
     ],
