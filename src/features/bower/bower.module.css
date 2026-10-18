@@ -6,7 +6,9 @@
 .composer textarea { display: block; width: 100%; margin-top: 10px; padding: 10px 4px; resize: vertical; line-height: 1.45; }
 .composerFoot { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .sent { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
-.bubble { align-self: flex-end; max-width: 92%; padding: 12px 14px; border-radius: 18px 18px 4px 18px; background: var(--surface-strong); }
+.askedList { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.askedList li { align-self: flex-end; max-width: 92%; }
+.bubble { padding: 12px 14px; border-radius: 18px 18px 4px 18px; background: var(--surface-strong); }
 .bubble p { color: var(--heading); }
 .bubbleSub { margin: 4px 0 8px; font-size: 14px; color: var(--text-muted) !important; }
 .rules { margin-top: 28px; }

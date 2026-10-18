@@ -221,32 +221,36 @@ export function BowerScreen() {
           <h2 id="asked" className={s.h2}>
             What you asked
           </h2>
-          {(requests ?? []).map((m, i) => (
-            <div key={m.id} className={s.bubble} aria-busy={removing.has(m.id) || undefined}>
-              <p>{m.text}</p>
-              {/* What Bower did, with links to what it names (C09). */}
-              <p className={s.bubbleSub}>{m.done ? <Inline text={m.done} link={link} /> : isRunning(run) ? RUNNING_WAITS : 'Waiting for the next tidy-up.'}</p>
-              {i === 0 && !m.done && !isRunning(run) && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    void startRun(runs, 'instructions').then(
-                      () => useUi.getState().setTidy(true),
-                      (e: unknown) => report(e, 'It did not start. Try again in a minute.'),
-                    )
-                  }
-                >
-                  Let Bower do it now
-                </Button>
-              )}
-              {!m.done && removable(m.id) && (
-                <Button size="sm" variant="ghost" aria-label={`Remove the request: ${m.text}`} aria-disabled={removing.has(m.id) || undefined} onClick={() => void removeAsked(m.id)}>
-                  {removing.has(m.id) ? 'Removing…' : 'Remove'}
-                </Button>
-              )}
-            </div>
-          ))}
+          <ul className={s.askedList} aria-labelledby="asked">
+            {(requests ?? []).map((m, i) => (
+              <li key={m.id}>
+                <div className={s.bubble} aria-busy={removing.has(m.id) || undefined}>
+                  <p>{m.text}</p>
+                  {/* What Bower did, with links to what it names (C09). */}
+                  <p className={s.bubbleSub}>{m.done ? <Inline text={m.done} link={link} /> : isRunning(run) ? RUNNING_WAITS : 'Waiting for the next tidy-up.'}</p>
+                  {i === 0 && !m.done && !isRunning(run) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        void startRun(runs, 'instructions').then(
+                          () => useUi.getState().setTidy(true),
+                          (e: unknown) => report(e, 'It did not start. Try again in a minute.'),
+                        )
+                      }
+                    >
+                      Let Bower do it now
+                    </Button>
+                  )}
+                  {!m.done && removable(m.id) && (
+                    <Button size="sm" variant="ghost" aria-label={`Remove the request: ${m.text}`} aria-disabled={removing.has(m.id) || undefined} onClick={() => void removeAsked(m.id)}>
+                      {removing.has(m.id) ? 'Removing…' : 'Remove'}
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
