@@ -1,7 +1,7 @@
 {
   "files": {
     "present": [
-      "index.md",
+      ".bower/index.md",
       "Resources/Gardening/Clippings/Garden clipping 01.md",
       "Resources/Gardening/Clippings/Garden clipping 02.md",
       "Resources/Gardening/Clippings/Garden clipping 03.md",
@@ -46,10 +46,12 @@
       "Resources/Gardening/Gardening.md",
       "Resources/Gardening/Soil.md",
       "Resources/Gardening/Water.md"
+    ],
+    "absent": [
+      "index.md"
     ]
   },
   "unchanged": [
-    "index.md",
     "Resources/Gardening/Clippings/Garden clipping 01.md",
     "Resources/Gardening/Clippings/Garden clipping 02.md",
     "Resources/Gardening/Clippings/Garden clipping 03.md",
