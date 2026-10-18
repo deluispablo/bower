@@ -37,6 +37,16 @@ describe('returnFocusTo', () => {
     returnFocusTo(null);
     expect(document.activeElement?.tagName).toBe('H1');
   });
+  it('unfocusable_opener_goes_to_heading: goes to the heading when the opener was disabled before the close', () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="o">Tidy up</button></main>';
+    const opener = document.getElementById('o') as HTMLButtonElement;
+    opener.disabled = true;
+    document.body.focus();
+    returnFocusTo(opener);
+    const h1 = document.querySelector('#main h1');
+    expect(document.activeElement).toBe(h1);
+    expect(h1?.getAttribute('tabindex')).toBe('-1');
+  });
 });
 
 describe('close focus (one home, no timer)', () => {
