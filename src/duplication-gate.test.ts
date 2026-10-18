@@ -11,8 +11,8 @@ function block(name: string): string {
   return `export function ${name}(input: number): number {\n${lines.join('\n')}\n  return value0 + value1 + value2 + value3 + value4 + value5;\n}\n`;
 }
 
-function runGate(root: string, baseline: string) {
-  return spawnSync('node', [gate, '--root', root, '--baseline', baseline], { encoding: 'utf8' });
+function runGate(root: string, baseline: string, ...extra: string[]) {
+  return spawnSync('node', [gate, '--root', root, '--baseline', baseline, ...extra], { encoding: 'utf8' });
 }
 
 describe('duplication gate', () => {
@@ -48,6 +48,52 @@ describe('duplication gate', () => {
       const result = runGate(root, baseline);
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain('lower the baseline to 0');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('--update writes the current count to a missing baseline and the gate then passes', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dup-gate-'));
+    try {
+      fs.mkdirSync(path.join(root, 'src'));
+      fs.writeFileSync(path.join(root, 'src', 'one.ts'), block('alpha'));
+      fs.writeFileSync(path.join(root, 'src', 'two.ts'), block('alpha'));
+      const baseline = path.join(root, 'baseline.json');
+
+      expect(runGate(root, baseline, '--update').status).toBe(0);
+      const written = JSON.parse(fs.readFileSync(baseline, 'utf8')) as Record<string, unknown>;
+      expect(Object.keys(written).sort()).toEqual(['clones', 'date']);
+      expect(written.clones).toBe(1);
+      expect(runGate(root, baseline).status).toBe(0);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('--update leaves the baseline untouched when the scanner fails or reports no count', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dup-gate-'));
+    try {
+      // A copy of the gate next to a stand-in scanner, which it resolves as node_modules/jscpd/run-jscpd.js.
+      fs.mkdirSync(path.join(root, 'scripts'));
+      fs.mkdirSync(path.join(root, 'node_modules', 'jscpd'), { recursive: true });
+      fs.mkdirSync(path.join(root, 'src'));
+      const copy = path.join(root, 'scripts', 'check-duplication-gate.mjs');
+      fs.copyFileSync(gate, copy);
+      const scanner = path.join(root, 'node_modules', 'jscpd', 'run-jscpd.js');
+      const baseline = path.join(root, 'baseline.json');
+      const bytes = '{ "clones": 7 }';
+      fs.writeFileSync(baseline, bytes);
+
+      for (const body of ['console.log("Found 0 clones."); process.exit(2);', 'console.log("no report");']) {
+        fs.writeFileSync(scanner, body);
+        const result = spawnSync('node', [copy, '--root', root, '--baseline', baseline, '--update'], {
+          encoding: 'utf8',
+        });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain('did not report a clone count');
+        expect(fs.readFileSync(baseline, 'utf8')).toBe(bytes);
+      }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

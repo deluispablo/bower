@@ -211,10 +211,6 @@ export class Journal {
     if (!this.current()) throw new BowerError('unknown', 'Bower is no longer open on this page.');
   }
 
-  dispose(): void {
-    // Folder-keyed waiting records survive every session, including storage failures.
-  }
-
   private waiting(key: string): Waiting[] {
     const stored = readOutbox(key, this.volatile.get(key));
     const byId = new Map(stored.map((r) => [r.line.id, r]));

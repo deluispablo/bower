@@ -16,7 +16,6 @@
     "exports src/data/fake/fake-runner.ts WORDS_NOT_WRITTEN",
     "exports src/data/fake/fake-worker.ts ReportLedger",
     "exports src/data/session.ts LEASE_TTL_MS",
-    "exports src/features/piles/add-words.ts leftOut",
     "files runner/src/corpus.ts runner/src/corpus.ts",
     "files src/copy-rules.ts src/copy-rules.ts",
     "files src/data/compat-p2-fixtures.ts src/data/compat-p2-fixtures.ts",

@@ -19,8 +19,8 @@
  * Adapted from the original Bower app (github.com/deluispablo/bower,
  * app/src/upload-queue.ts, the queue part; FSL-1.1-MIT, owner's copyright).
  */
-import { type DriveFile } from './drive/drive-api';
-import { arrivedFile, RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient } from './drive/resumable-upload';
+import { type DriveFile, type ResumableDrive } from './drive/drive-api';
+import { arrivedFile, RESUMABLE_CHUNK_BYTES, sendResumable } from './drive/resumable-upload';
 import { isOpenElsewhere, OPEN_ELSEWHERE_TEXT } from './session';
 import { heldAs, makeOnce } from './spine/write-once';
 import { BowerError } from './types';
@@ -104,7 +104,7 @@ export function broadcastBus(): QueueBus | undefined {
 }
 
 export interface UploadQueueDeps {
-  drive: ResumableClient;
+  drive: ResumableDrive;
   store: UploadStore;
   /** `undefined` where the browser has no Web Locks: this tab runs the queue. */
   locks?: LocksLike;

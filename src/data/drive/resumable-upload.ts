@@ -28,7 +28,6 @@ const KEPT_STOPPING_TEXT = 'Google Drive kept stopping this upload. Try again.';
 export const MAX_RESTARTS = 2;
 
 /** The Drive calls a resumable upload needs. */
-export type ResumableClient = ResumableDrive;
 
 /** A target whose content hash is known, so what Drive has can be checked. */
 export type CheckedTarget = ResumableTarget & { sha256: string };
@@ -71,7 +70,7 @@ function check(target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, file: Driv
 }
 
 /** Drive refused the reserved id: a file has it. Read it back instead of making another. */
-async function readBack(drive: ResumableClient, target: CheckedTarget, signal?: AbortSignal): Promise<DriveFile> {
+async function readBack(drive: ResumableDrive, target: CheckedTarget, signal?: AbortSignal): Promise<DriveFile> {
   return check(target, await drive.getUploaded(target.id, signal));
 }
 
@@ -81,7 +80,7 @@ async function readBack(drive: ResumableClient, target: CheckedTarget, signal?: 
  * upload whose bytes this device lost: one Drive made before its reply was
  * lost is sent, not one to choose again.
  */
-export async function arrivedFile(drive: ResumableClient, target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, signal?: AbortSignal): Promise<DriveFile | null> {
+export async function arrivedFile(drive: ResumableDrive, target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, signal?: AbortSignal): Promise<DriveFile | null> {
   let file: DriveFile;
   try {
     file = await drive.getUploaded(target.id, signal);
@@ -99,7 +98,7 @@ const isConflict = (e: unknown): boolean => e instanceof BowerError && e.code ==
  * Rejects with a `BowerError`, or an `AbortError` when `hooks.signal` stops it.
  */
 export async function sendResumable(
-  drive: ResumableClient,
+  drive: ResumableDrive,
   upload: CheckedTarget & { body: Blob; session: string | null },
   hooks: UploadHooks,
   chunkSize: number = RESUMABLE_CHUNK_BYTES,
