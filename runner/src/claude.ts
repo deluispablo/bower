@@ -414,7 +414,7 @@ function promptInstructions(): string {
     '  things outside the person\'s folder, or any part of it does: the whole request is declined; it takes no answer, document, map, view, line or thing.',
     // C08: a request for a report, comparison or other document is answered by one document note.
     '- "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request\'s fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].',
-    '  Write every part the request needs; link the notes and files shown by name or whole path; write only their figures. A request you give a document takes no answer, map or view.',
+    '  Write every part the request needs; link only the notes and files shown below, by name or whole path, never a note or thing this reply files or writes; write only their figures. A request you give a document takes no answer, map or view.',
     // C09 (R15, ruling 15): originals are evidence for answers, never a note's link, line or target.
     '- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" and "documents" only. Cite one as [[its whole path]], or',
     '  [[its full name]] when no other file has it; never link it from a note, give it a line or a state, or write to it.',
@@ -1947,12 +1947,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   }));
   // C06 R3, R4: a link names a thing this reply files, or one note shown below by the planner's own identity rule. An
   // answer's link (C09, ruling 20) names only a note shown: the planner checks it against the folder before anything is filed.
-  const linkWhy = (target: string, filing = true): string | null => {
+  // prod1-mixed-request: a document (`document`) citing a thing this reply files is told so, not "not shown".
+  const linkWhy = (target: string, filing = true, document = false): string | null => {
     const key = (name: string): string => linkTarget(name).replace(/\.md$/, '');
     const filed = [...placed].flatMap(([id, p]) => [p.name, `${p.to}/${p.name}`, admitted.get(id)?.name ?? ''].map(key));
     if (filing && filed.includes(target)) return null;
     const writes = [...words.values(), ...[...authored].map(([id, n]) => ({ to: placed.get(id)?.to ?? '', name: n.name }))];
-    if (writes.flatMap((p) => [p.name, `${p.to}/${p.name}`].map(key)).includes(target)) return 'a link to a note this reply also writes: it was not shown';
+    if ((document && filed.includes(target)) || writes.flatMap((p) => [p.name, `${p.to}/${p.name}`].map(key)).includes(target)) return 'a link to a note this reply also writes: it was not shown';
     const named = linkIdentity(target, seen.files?.keys() ?? []);
     if (named === 'two notes share') return 'a bare name two notes share: give its path, as shown';
     // C09 (ruling 7): an original shown for a request is cited by an answer only.
@@ -2030,7 +2031,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     (d) => {
       if (hasEmptyLink(d.body)) return no('noteLink', 'an empty link: name a note you were shown, or leave it out');
       for (const { target } of [d.summary, d.body].flatMap(authoredLinks)) {
-        const why = linkWhy(target, false);
+        const why = linkWhy(target, false, true);
         if (why) return no('noteLink', why);
       }
       return null;
