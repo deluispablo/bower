@@ -13,7 +13,7 @@ import { PILE_NOTE } from '../../src/data/piles';
 import type { ClaudeCall, ClaudeExit } from '../src/claude';
 import { AT, redispatchCase } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
-import { largeFolder, manifest, phaseAwareClaude, report, run, seedState, setup, waitsForNextRun, type Base, type Frame } from './b1-planning-support';
+import { gate, largeFolder, manifest, phaseAwareClaude, report, run, seedState, setup, waitsForNextRun, type Base, type Frame, type Held } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
@@ -52,35 +52,6 @@ const waitingRows = (r: { after: Record<string, string> }): string[] => ((JSON.p
 const drops = (r: { errors: string }): string[] => r.errors.split('\n').flatMap((l) => /drops a (?:pile|request) \((\w+)\)/.exec(l)?.[1] ?? []);
 const waitLines = (r: { consoleLines: string[] }): string[] => r.consoleLines.filter((l) => /exhaust|next run|left.*inbox|wait/i.test(l) && !l.startsWith('timing:'));
 
-type Held = { frame: Frame; go: () => void };
-/**
- * The transport for writing calls: each is held until the event loop drains (real setImmediate, P5); then `pick` chooses
- * which held calls answer, in the order it gives, and the transport drains again, until none is held. It never waits for a
- * call that cannot come, so calls made one at a time never hang it. Selection and memory calls answer at once.
- */
-function gate(pick: (open: readonly Held[]) => readonly Held[]) {
-  const open: Held[] = [];
-  let arrivals = 0; let settling = false;
-  const drain = async (): Promise<void> => {
-    let seen: number;
-    do { seen = arrivals; for (let i = 0; i < 200; i++) await new Promise<void>((resolve) => { setImmediate(resolve); }); } while (seen !== arrivals);
-  };
-  const settle = async (): Promise<void> => {
-    settling = true;
-    while (open.length) {
-      await drain();
-      for (const h of pick([...open])) { open.splice(open.indexOf(h), 1); h.go(); }
-    }
-    settling = false;
-  };
-  return async (_turn: number, frame: Frame): Promise<void> => {
-    if (frame.value.selection === undefined) return;
-    arrivals++;
-    const held = new Promise<void>((go) => { open.push({ frame, go }); });
-    if (!settling) void settle();
-    await held;
-  };
-}
 // One call answers per drain, so a reply a test sets once its call is released is the one that call reads.
 const inOrder = (open: readonly Held[]): readonly Held[] => open.slice(0, 1);
 const latestFirst = (open: readonly Held[]): readonly Held[] => open.slice(-1);

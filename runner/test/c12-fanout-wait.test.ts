@@ -10,11 +10,12 @@ import { PILE_NOTE } from '../../src/data/piles';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { AT } from './corpus-run';
 import { paging } from './drive-v3';
-import { failedReply, folder, leavesForNextRun, note, run, seedState, setup, waitsForNextRun, type Base, type Frame } from './b1-planning-support';
+import { failedReply, folder, gate, leavesForNextRun, note, run, seedState, setup, waitsForNextRun, type Base, type Frame, type Held } from './b1-planning-support';
 
 const oldPageSize = paging.size;
 beforeEach(() => {
-  vi.useFakeTimers(); vi.setSystemTime(AT); paging.size = 1000;
+  // setImmediate stays real: the gate drains the event loop with it (P11).
+  vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] }); vi.setSystemTime(AT); paging.size = 1000;
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -54,11 +55,18 @@ const waitingRows = (r: { after: Record<string, string> }): string[] => ((JSON.p
 const drops = (r: { errors: string }): string[] => r.errors.split('\n').flatMap((l) => /drops a (?:pile|request) \((\w+)\)/.exec(l)?.[1] ?? []);
 
 type Turn = { tags: string[]; retry: boolean; frame: Frame };
-/** The tidy-up, each writing call answered by `answer` from the call it answers (W7). */
-const tidy = (b: Base, selection: ReturnType<typeof placing>, answer: (t: Turn) => Row) => {
+/**
+ * The tidy-up, each writing call answered by `answer` from the call it answers (W7). `order`: the groups' tags in the order
+ * their calls answer, one call at a time through the gate (P11), a group's retry before any later group.
+ */
+const tidy = (b: Base, selection: ReturnType<typeof placing>, answer: (t: Turn) => Row, order?: string[]) => {
   const replies: unknown[] = [selection, {}];
+  const rank = (h: Held): number => order?.findIndex((tag) => tagsIn(h.frame).includes(tag)) ?? 0;
+  const held = order && gate((open) => [...open].sort((x, y) => rank(x) - rank(y)).slice(0, 1));
   return run(b, replies, { narrow: false, beforeReply: async (turn, frame) => {
-    if (turn > 1) replies[1] = answer({ tags: tagsIn(frame), retry: /^Your reply was refused:/m.test(frame.call.input), frame });
+    if (turn === 1) return;
+    await held?.(turn, frame);
+    replies[1] = answer({ tags: tagsIn(frame), retry: /^Your reply was refused:/m.test(frame.call.input), frame });
   } });
 };
 /** Two piles in two folders, so two groups in admission order; `reask`: a stored reask on the second's pile. */
@@ -124,13 +132,14 @@ describe('a group with no valid reply or no model time waits whole (c12-fanout-w
     // Control: the same refusal with no reask waits.
     const plain = await twoGroups();
     waitsForNextRun(await tidy(plain.b, placing(plain.b, plain.to), refuseSecond(plain)), [idOf(plain.b, plain.two)], size(plain.b, plain.one));
-    // No group landed: the first refused twice, the model time gone on its retry; the second, called at once, refused too.
+    // No group landed: the first refused twice, the model time gone on its retry; the second, called at once, answers only
+    // after that and is refused, so its retry finds no time: one refusal and one time-out.
     const none = await twoGroups();
     const nothing = await tidy(none.b, placing(none.b, none.to), ({ tags, retry, frame }) => {
       if (retry && tags.includes(none.one)) outOfTime(frame);
       return refused(none.b, none.to, tags);
-    });
-    expect([4, 5], 'a selection, both groups, the first\'s retry and the second\'s if it had time').toContain(nothing.frames.length);
+    }, [none.one, none.two]);
+    expect(nothing.frames, 'a selection, both groups and the first\'s retry').toHaveLength(4);
     failedReply(nothing);
   }, 180_000);
 
@@ -154,14 +163,14 @@ describe('a group with no valid reply or no model time waits whole (c12-fanout-w
     const b = await made({ Plum: 5, Fern: 4, Sage: 6 }); await seedState(b);
     const [one = '', two = '', three = ''] = order(b);
     const to = { [one]: X, [two]: Y, [three]: Z };
-    // All three are called at once: the third's refused reply uses up the time, so its retry finds none; the second is
-    // refused twice, or finds no time for its retry if it comes later: it waits either way.
+    // All three are called at once and answer in group order: the first lands, the second is refused twice, then the third's
+    // refused reply uses up the time, so its retry finds none.
     const r = await tidy(b, placing(b, to), ({ tags, frame }) => {
       if (tags.includes(one)) return filing(b, to, tags);
       if (tags.includes(three)) outOfTime(frame);
       return refused(b, to, tags);
-    });
-    expect([4, 5], 'a selection, three groups and the second\'s retry if it had time').toContain(r.frames.length);
+    }, [one, two, three]);
+    expect(r.frames, 'a selection, three groups and the second\'s retry').toHaveLength(5);
     waitsForNextRun(r, [idOf(b, two), idOf(b, three)], size(b, one));
   }, 120_000);
 

@@ -260,6 +260,37 @@ function narrowed(value: unknown, call: Shown, run: { sources: ReadonlySet<strin
   return Object.fromEntries(Object.entries(value).map(([key, rows]) => [key, Array.isArray(rows) && key !== 'newTags' ? rows.filter(kept) : rows]));
 }
 
+export type Held = { frame: Frame; go: () => void };
+/**
+ * c12-fanout-parallel P5, P11: a `beforeReply` for writing calls. Each is held until the event loop drains (real
+ * setImmediate: leave it out of faked timers); then `pick` chooses which held calls answer, in the order it gives (at least
+ * one), and the transport drains again, until none is held. It never waits for a call that cannot come, so calls made one
+ * at a time never hang it. Selection and memory calls answer at once.
+ */
+export function gate(pick: (open: readonly Held[]) => readonly Held[]) {
+  const open: Held[] = [];
+  let arrivals = 0; let settling = false;
+  const drain = async (): Promise<void> => {
+    let seen: number;
+    do { seen = arrivals; for (let i = 0; i < 200; i++) await new Promise<void>((resolve) => { setImmediate(resolve); }); } while (seen !== arrivals);
+  };
+  const settle = async (): Promise<void> => {
+    settling = true;
+    while (open.length) {
+      await drain();
+      for (const h of pick([...open])) { open.splice(open.indexOf(h), 1); h.go(); }
+    }
+    settling = false;
+  };
+  return async (_turn: number, frame: Frame): Promise<void> => {
+    if (frame.value.selection === undefined) return;
+    arrivals++;
+    const held = new Promise<void>((go) => { open.push({ frame, go }); });
+    if (!settling) void settle();
+    await held;
+  };
+}
+
 /**
  * Each entry is one semantic call or validation retry. A retry is never hidden by the test driver. A writing call of a run
  * with several gets the reply narrowed to its own sources (`narrowed`); `narrow: false` sends every reply as it is.
