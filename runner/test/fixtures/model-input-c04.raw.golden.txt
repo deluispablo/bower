@@ -13,8 +13,10 @@ Reply with one JSON object and nothing else, of exactly this shape:
 For each note, summary, Timeline line or Current state, give in "quotes" up to 5 passages copied word for word from its own source, its pile's words or the note it updates, that its facts rest on. Write only facts those passages support, including names, dates, conditions and negation; leave out a fact you cannot quote.
 Every key but "things" is optional. A folder path starts with one of Projects, Areas, Resources, Archive. A thing keeps its extension
 (a saved link may become a ".md" note). "rules" below are the person's rules and win; a list that ends "[cut here: ..." goes on.
-A "to" is its selected destination's path; a line or state goes only on a note selected for what it cites; ask only as selected,
-with its options. When selecting, a request's destination is the folder of a note it wants.
+A "to" is its selected destination's path; a line or state goes only on a note selected for what it cites; ask as selected,
+with its options, or ask once about a source whose supplied evidence shows a doubt selection could not settle:
+give "evidence":{"quote":"<its words, copied>"}, file nothing of that source and never reopen an answer.
+When selecting, a request's destination is the folder of a note it wants.
 
 Where each thing goes, in this order:
 1. Fit: reuse a project, area or topic below. Check for a near-duplicate first: never duplicate a folder or note.

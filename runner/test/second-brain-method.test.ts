@@ -73,9 +73,10 @@ describe('the second-brain method (TL-P4-08)', () => {
     // raised from 10,000 by c12-prefix ruling 2: the one cached fixed text says every clause a run may need, 12,094 today;
     // raised from 12,500 by c08-documents AC7: the documents grammar line, 13,005 today;
     // raised from 13,500 by qa-prod-2-F2: the one-kind folder line, 13,681 today;
-    // raised from 14,000 by brain-02 R3-1: the quotes sentence and shape fields, 14,249 today).
+    // raised from 14,000 by brain-02 R3-1: the quotes sentence and shape fields, 14,249 today;
+    // raised from 14,500 by brain-15 ruling 9: the late-ask sentence, 14,666 today).
     const fixed = text.split('\n__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__\n')[0] ?? '';
-    expect(fixed.length, 'the fixed text, above the boundary').toBeLessThan(14_500);
+    expect(fixed.length, 'the fixed text, above the boundary').toBeLessThan(14_750);
   });
 
   it('an ambiguous thing stays in the inbox with a question and the run goes on', async () => {

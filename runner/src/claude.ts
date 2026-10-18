@@ -368,8 +368,10 @@ function promptInstructions(): string {
     `Every key but "things" is optional. A folder path starts with one of ${MAIN_FOLDERS.join(', ')}. A thing keeps its extension`,
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
     // F5 (ruling 8): the bounds the selection checks enforce, said before the first reply.
-    'A "to" is its selected destination\'s path; a line or state goes only on a note selected for what it cites; ask only as selected,',
-    'with its options. When selecting, a request\'s destination is the folder of a note it wants.',
+    'A "to" is its selected destination\'s path; a line or state goes only on a note selected for what it cites; ask as selected,',
+    'with its options, or ask once about a source whose supplied evidence shows a doubt selection could not settle:',
+    'give "evidence":{"quote":"<its words, copied>"}, file nothing of that source and never reopen an answer.',
+    'When selecting, a request\'s destination is the folder of a note it wants.',
     '',
     'Where each thing goes, in this order:',
     '1. Fit: reuse a project, area or topic below. Check for a near-duplicate first: never duplicate a folder or note.',
@@ -1134,7 +1136,7 @@ export const REFUSALS = {
   thingPlace: 'a thing or pile filed outside the destination its selection gave, or one the selection did not give: its "to" is the path of that destination',
   thingType: 'a note "typeRow" other than the kind its selection gave',
   noteCut: 'a new note while the folder list is cut: file the thing beside a note the selection wants, with no new note',
-  askOptions: 'a question about a thing or pile that the selection did not ask, or with options other than the selection gave',
+  askOptions: 'a question the selection did not ask without "evidence":{"quote"} copied word for word from what was supplied for that source, or with options other than the selection gave (a new question gives none)',
   lineTarget: 'a line or state on a note not selected for the thing, pile or request it cites',
 } as const;
 export type RefusalKind = keyof typeof REFUSALS;
@@ -1393,6 +1395,8 @@ const QUOTES = { most: 5, shortest: 12, longest: 300 } as const;
 const QUOTE_CUT = /\[cut here:[^\]]*\]|\[\d+ pages? not read\]/;
 /** A quote's or a segment's matching form: curly quotes as straight ones (R2-5), then `normalizedText`. */
 const quoteForm = (text: string): string => normalizedText(text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"'));
+/** brain-02's one quote test: word for word, after normalization, in one segment of one of `texts`. */
+const quoteIn = (quote: string, texts: readonly string[]): boolean => texts.flatMap((t) => t.split(QUOTE_CUT)).map(quoteForm).some((s) => s.includes(quoteForm(quote)));
 
 /**
  * The model's reply, declared once with zod 4 (https://zod.dev, the standard TypeScript runtime schema; TL-P4-14
@@ -1633,11 +1637,11 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     if (quotes.length > QUOTES.most) return quoting(`more than ${QUOTES.most} quotes in ${where} "${name}"; give at most ${QUOTES.most}, the passages its facts rest on`);
     // A synopsized thing may also be quoted from the synopsis it was shown (R2-3); its label's figures stay out of `grounded`.
     const synopsis = fileId !== undefined && seen.originals?.has(fileId) ? [seen.texts?.get(fileId) ?? ''] : [];
-    const segments = [...evidence(fileId, context), ...synopsis].flatMap((text) => text.split(QUOTE_CUT)).map(quoteForm);
+    const texts = [...evidence(fileId, context), ...synopsis];
     for (const quote of quotes) {
       const size = quote.trim().length;
       if (size < QUOTES.shortest || size > QUOTES.longest) return quoting(`a quote that is not ${QUOTES.shortest} to ${QUOTES.longest} characters: "${quote}" in ${where} "${name}"; copy a whole passage word for word`);
-      if (!segments.some((segment) => segment.includes(quoteForm(quote)))) return quoting(`a quote that is not in its sources: "${quote}" in ${where} "${name}"; copy the passage word for word from its own source or the note it updates, or leave out the fact it was meant to support`);
+      if (!quoteIn(quote, texts)) return quoting(`a quote that is not in its sources: "${quote}" in ${where} "${name}"; copy the passage word for word from its own source or the note it updates, or leave out the fact it was meant to support`);
     }
     return true;
   };
@@ -1976,7 +1980,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     const [x, y] = a.notes ?? [];
     return a.notes?.length === 2 && x !== undefined && y !== undefined && x !== y && notes.has(x) && notes.has(y) ? [x, y] : null;
   };
-  const Asked = AskShape.superRefine(inOrder<AskIn>([
+  // brain-15 ruling 1: only an execution ask carries evidence; the selection's AskShape stays strict without it.
+  const Asked = AskShape.extend({ evidence: z.strictObject({ quote: z.string(named('askKeys', 'askKeys')) }, named('askKeys')).optional() }).superRefine(inOrder<AskIn>([
     rule('askKeys', (a) => [a.pileId, a.fileId, a.notes].filter((k) => k !== undefined).length === 1),
     rule('askNotes', (a) => a.notes === undefined || pairIn(a) !== null),
     rule('askNotAdmitted', (a) => a.notes !== undefined || about(a).pile !== undefined),
@@ -3250,7 +3255,20 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           for (const ask of rows('asks')) {
             if (ask.notes !== undefined) continue;
             const frozen = selection.value.asks.find((row) => row.fileId === ask.fileId && row.pileId === ask.pileId);
-            if (!frozen || JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return at(no('askOptions'), from('asks', ask));
+            if (frozen) {
+              if (JSON.stringify(ask.options ?? []) !== JSON.stringify(frozen.options ?? [])) return at(no('askOptions'), from('asks', ask));
+              continue;
+            }
+            // brain-15: a late ask (ruling 0). A subject, or its pile, with a stored answer or place choice is never reopened (ruling 5).
+            const subject = String(ask.fileId ?? ask.pileId);
+            const pileOf = shownTook.taken.piles.find((p) => p.pileId === subject || thingsOf(p).some((i) => i.fileId === subject))?.pileId;
+            const settled = new Set([...answers.flatMap((a) => [a.sourceId, subjectKey(a.question) ?? '']), ...await choiceOf()]);
+            if (settled.has(subject) || (pileOf !== undefined && settled.has(pileOf))) return at(no('askTwice'), from('asks', ask));
+            // shortcut: the quote proves the words were supplied, not that they raise the doubt; judge it in brain-02b if a recorded finding shows idle late asks
+            const quote = isRecord(ask.evidence) && typeof ask.evidence.quote === 'string' ? ask.evidence.quote.trim() : '';
+            const supplied = [seen.originals?.get(subject), seen.texts?.get(subject), seen.pileWords?.get(pileOf ?? ''),
+              ...(selection.allowedTargets[subject] ?? []).map((id) => seen.noteTexts?.get(ix.pathOf(id) ?? ''))].filter((t): t is string => t !== undefined);
+            if (ask.options !== undefined || quote.length < QUOTES.shortest || quote.length > QUOTES.longest || !quoteIn(quote, supplied)) return at(no('askOptions'), from('asks', ask));
           }
           // A MOC lists its notes itself and never takes a Timeline line: refuse the line so the thing is filed bare.
           if (rows('lines').some((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
