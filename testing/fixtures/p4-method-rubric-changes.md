@@ -9,7 +9,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | b1-maintenance-crash-resume | agrees | B1 prep case 6: derived maintenance resumes before the report, with no fabricated facts or rows; the person's bytes stay intact (method points 2, 3 and 7; TL-P4-41 Q4/Q5/Q11). Scripted recovery only, no model quality claim. |
 | c04-garden-newsletter | agrees | A garden topic in Resources is a fit when the note links the plot note and the plot note gets a line (points 1, 4, 7). |
 | c04-hardware-receipt | agrees | The person's rule decides the place (fit); the note states only the receipt's facts. |
-| c04-offer-and-flat | agrees | Each thing fits an existing project or a new Area said with its responsibility (point 1, addendum 3). |
+| c04-offer-and-flat | changed | The photo is a real picture with nothing legible, so it waits on one question; the listing keeps no detail its link does not show, and only the offer updates the job hunt. |
 | c05-confirms-known-fact | agrees | New case for point 2: the value gate files the letter beside the plot note, adds a line, makes no note. |
 | c05-hub-lines | changed | It pinned the hubs' Current state untouched; point 3 has Bower rewrite it where the pile changes it. |
 | c05-keep-one-note | agrees | Facts move into the kept note's Current state or Timeline; the second note goes to the Bin. |
@@ -132,6 +132,15 @@ record the method re-check, not an executed model result.
    test (`every expected number is grounded in its case`, runner/test/corpus.test.ts) found no other ungrounded number in
    note `timeline` or `contains` texts across the corpus. It reuses `groundsOf` and `ungrounded` from runner/src/claude.ts
    (now exported, unchanged) and skips paths, report ids and the app's `<!-- since DATE -->` stamp, which are not facts.
+
+## Corpus clean changes (`corpus-fix-c04`)
+
+6. **c04-offer-and-flat, `rubric.md`, `case.json` and its photo; the C04 `case.json` sources.** Reason: the corpus audit
+   (fake image bytes, link facts with no evidence, benchmark provenance). Was: `IMG_2301.jpg` held text, the listing note
+   kept an address and the job hunt got a line from the listing. Now: the photo is a made-up plain JPEG with no metadata;
+   unread, it waits on one yes-or-no question; the listing is filed under a plain name with no address; each hub gets a
+   line only from its own evidence. `expected.json` is unchanged in all three cases. The garden and receipt sources say
+   `new`: their PDFs are hand-built and were never the original benchmark's files.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

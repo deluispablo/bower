@@ -3,7 +3,7 @@
   "capability": "C04",
   "title": "A job offer, a flat listing, a photo and a payslip in one pile",
   "covers": "scripted",
-  "source": "p2-journey:C04, the demo's first pile; the two hub notes it updates are in the starting folder",
+  "source": "p2-journey:C04, the demo's first pile; the two hub notes it updates are in the starting folder; the photo is a made-up plain JPEG with no metadata",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

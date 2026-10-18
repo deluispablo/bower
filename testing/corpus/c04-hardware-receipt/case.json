@@ -3,7 +3,7 @@
   "capability": "C04",
   "title": "A hardware receipt, with a rule about receipts",
   "covers": "model",
-  "source": "bench:3-receipt-pdf, adapted (made-up shop; the original PDF is in bench-3-receipt-pdf)",
+  "source": "new (made-up shop; a hand-built text PDF)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

@@ -11,9 +11,9 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
-| c04-garden-newsletter | C04 | model | bench:2-text-pdf, adapted (made-up garden and dates) |
-| c04-hardware-receipt | C04 | model | bench:3-receipt-pdf, adapted (made-up shop) |
-| c04-offer-and-flat | C04 | scripted | p2-journey:C04, the demo's first pile; the two hub notes it updates are in the starting folder |
+| c04-garden-newsletter | C04 | model | new (made-up garden and dates; a hand-built text PDF) |
+| c04-hardware-receipt | C04 | model | new (made-up shop; a hand-built text PDF) |
+| c04-offer-and-flat | C04 | scripted | p2-journey:C04, the demo's first pile; the two hub notes it updates are in the starting folder; the photo is a made-up plain JPEG with no metadata |
 | c05-confirms-known-fact | C05 | model | new (TL-P4-08 point 2: the value gate makes no note for a known fact) |
 | c05-hub-lines | C05 | scripted | p2-journey:C05, the hub lines of the same press as C04 |
 | c05-keep-one-note | C05 | model | p2-journey:C05 (fake only today: the merge question q1) |

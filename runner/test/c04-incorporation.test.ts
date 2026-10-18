@@ -187,6 +187,7 @@ describe('what the model is shown (P4-3)', () => {
 interface Proposal {
   things: Array<{ thing: string; to: string; name: string; basis?: string; responsibility?: string; note?: { name: string; summary: string; body: string } }>;
   lines?: Array<{ note: string; text: string; cites?: string }>;
+  asks?: Array<{ thing: string; text: string }>;
 }
 
 const PROPOSALS: Record<string, Proposal> = {
@@ -215,20 +216,22 @@ const PROPOSALS: Record<string, Proposal> = {
   'c04-offer-and-flat': {
     things: [
       { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', basis: 'Projects/Job hunt/Job hunt.md', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
-      { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
-      { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', basis: 'Projects/Flat hunt/Flat hunt.md', name: 'Wrenfield Road, kitchen.jpg' },
+      { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat listing.md' },
       { thing: 'Payslip_Aug.pdf', to: 'Areas/Money', responsibility: 'pay and tax records', name: 'Payslip August.pdf', note: { name: 'Payslip, August.md', summary: 'A payslip for August.', body: 'Payslip for August.' } },
     ],
     lines: [
-      { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example.url' },
+      { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A flat listing came in with the job offer.', cites: 'listing-88213.example.url' },
       { note: 'Projects/Job hunt/Job hunt.md', text: 'New offer from Ferrowick, fully remote.', cites: 'Offer_letter_final(2).pdf' },
-      { note: 'Projects/Job hunt/Job hunt.md', text: 'A flat from the same pile went to the flat hunt.', cites: 'listing-88213.example.url' },
     ],
+    asks: [{ thing: 'IMG_2301.jpg', text: 'Is this photo from the flat in the same pile?' }],
   },
 };
 
+/** The picture call's honest local failure: the run cannot read the photo (R4). */
+const FAILED_PICTURE = (): ClaudeExit => ({ code: 1, stderr: '', cut: null, stdout: '' });
+
 /** Scripted proposals: `claude` answered by a script in the same intent shape, its file ids from the context. */
-function proposing(p: Proposal, seen: Context[]): ClaudeSpawn {
+function proposing(p: Proposal, seen: Context[], picture: (call: ClaudeCall) => ClaudeExit | Promise<ClaudeExit> = FAILED_PICTURE): ClaudeSpawn {
   return phaseAwareClaude(async (call, _step, _attempt, phase) => {
     const ctx = contextOf(call.input);
     if (phase === 'execution') seen.push(ctx);
@@ -239,15 +242,17 @@ function proposing(p: Proposal, seen: Context[]): ClaudeSpawn {
       v: 1,
       things: p.things.map(({ thing, ...rest }) => ({ fileId: id(thing), ...rest })),
       ...(p.lines ? { lines: p.lines.map(({ cites, ...rest }) => ({ ...rest, ...(cites ? { cites: id(cites) } : {}) })) } : {}),
+      ...(p.asks ? { asks: p.asks.map(({ thing, text }) => ({ fileId: id(thing), text, yes: 'Yes', no: 'No' })) } : {}),
     };
     return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
-  });
+  }, undefined, false, picture);
 }
 
 const scored = (c: LoadedCase, run: { after: Record<string, string>; lastRun: unknown }) => score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun });
 
 describe('the C04 slice through the Claude provider (P4-3)', () => {
   it('the C04 corpus cases score green with scripted proposals', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     const cases = (await loadCorpus(ROOT)).filter((c) => c.capability === 'C04');
     expect(cases.map((c) => c.id).sort()).toEqual(Object.keys(PROPOSALS).sort());
     for (const c of cases) {
@@ -262,6 +267,31 @@ describe('the C04 slice through the Claude provider (P4-3)', () => {
         if (t.thing.endsWith('.pdf')) expect({ id: c.id, thing: t.thing, text: own !== undefined && shown?.text?.includes(own) }).toEqual({ id: c.id, thing: t.thing, text: true });
       }
     }
+  });
+
+  it('corpus-fix-c04 AC2: offer-and-flat uses only available evidence', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
+    if (!c) throw new Error('no c04-offer-and-flat');
+    const seen: Context[] = [];
+    const pictures: ClaudeCall[] = [];
+    const run = await runWithClaude(c, proposing(PROPOSALS[c.id] ?? { things: [] }, seen, (call) => (pictures.push(call), FAILED_PICTURE())));
+    expect(run.code).toBe(0);
+    expect(pictures.map((p) => (p as ClaudeCall & { images?: unknown }).images)).toEqual([[{ mediaType: 'image/jpeg', data: Buffer.from(c.inboxBinary['IMG_2301.jpg'] ?? []).toString('base64') }]]);
+    const photo = seen[0]?.piles.flatMap((p) => p.things).find((t) => t.name === 'IMG_2301.jpg');
+    expect({ text: photo?.text, why: photo?.why }).toEqual({ text: null, why: 'a picture Bower could not read' });
+    expect(errors.mock.calls.map((args) => args.join(' '))).toEqual([expect.stringContaining('A picture was not read: picture failed')]);
+    const paths = Object.keys(run.after);
+    expect(paths.filter((p) => /^Inbox\/[^/]+\/IMG_2301\.jpg$/.test(p))).toHaveLength(1);
+    expect(paths.filter((p) => p.endsWith('.jpg') && !p.startsWith('Inbox/'))).toEqual([]);
+    const questions = (run.lastRun as { run?: { report?: { questions?: Array<{ text: string; about: string }> } } } | null)?.run?.report?.questions ?? [];
+    expect(questions.map((q) => q.text)).toEqual(['Is this photo from the flat in the same pile?']);
+    expect(questions[0]?.about).toMatch(/\/IMG_2301\.jpg$/);
+    expect(Object.entries(run.after).filter(([p, text]) => /Wrenfield|Flat \d/.test(p) || /Wrenfield|Flat \d/.test(text)).map(([p]) => p)).toEqual([]);
+    const dated = (path: string): string[] => [...(run.after[path] ?? '').matchAll(/^- 2026-10-07 · (.*)$/gm)].map((m) => m[1] ?? '');
+    expect(dated('Projects/Flat hunt/Flat hunt.md')).toEqual(['A flat listing came in with the job offer. · [[Flat listing]]']);
+    expect(dated('Projects/Job hunt/Job hunt.md')).toEqual(['New offer from Ferrowick, fully remote. · [[Industrial Designer, Ferrowick]]']);
+    expect(scored(c, run)).toEqual({ pass: true, unmet: [] });
   });
 
   it('a recorded Claude reply on a C04 case writes a note with its content', async () => {
