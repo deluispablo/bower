@@ -21,6 +21,22 @@ async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
 }
 
 describe('the capability corpus', () => {
+  it('corpus-delete-bench-resources AC1: original-app seed directory is absent', () => {
+    for (const name of ['_bench-vault/3-Resources', '_bench-vault']) {
+      const path = join(ROOT, name);
+      expect.soft(existsSync(path), path).toBe(false);
+    }
+  });
+
+  it('corpus-delete-bench-resources AC2: corpus has no benchmark seed escape hatch', async () => {
+    for (const c of await loadCorpus(ROOT)) assertNoBenchmarkSeed(c);
+  });
+
+  it('the benchmark seed guard accepts historical source provenance', async () => {
+    const receipt = await loadCase(join(ROOT, 'c04-hardware-receipt'));
+    expect(() => assertNoBenchmarkSeed(receipt)).not.toThrow();
+  });
+
   it('corpus-delete-bench-areas AC1: legacy areas and root documents are absent', () => {
     for (const name of ['2-Areas', '2-Areas/Home/Home insurance policy 2026.pdf', 'README.md', 'About-Me.md', 'Rules.md', 'index.md', 'log.md']) {
       const path = join(ROOT, '_bench-vault', name);
@@ -65,7 +81,9 @@ describe('the capability corpus', () => {
 
   it('the benchmark seed guard rejects synthetic metadata and identifies the case', async () => {
     const seed = await loadCase(join(ROOT, 'c09-closest-flat'));
-    expect(() => assertNoBenchmarkSeed({ ...seed, folderFrom: '_bench-vault' })).toThrow(seed.id);
+    for (const folderFrom of ['_bench-vault', '../../original-app/folder']) {
+      expect(() => assertNoBenchmarkSeed({ ...seed, folderFrom })).toThrow(seed.id);
+    }
   });
 
   it('corpus-delete-bench-cases AC1: benchmark cases and external checkout dependency are absent', async () => {
