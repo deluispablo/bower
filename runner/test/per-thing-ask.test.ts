@@ -141,7 +141,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   const edit = (change: (i: Intent, id: Id) => unknown) => (_ctx: Context, id: Id): string => envelope(JSON.stringify(change(filed(id), id)));
   // One bad reply per refusal kind; the records make the compiler and the check below list every kind.
   type ViewKind = 'viewKeys' | 'viewBinding' | 'viewLimit';
-  type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit';
+  type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit' | 'scope';
   type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText' | 'neverKeys';
   type SelectionKind = 'selectionKeys' | 'selectionItem' | 'selectionKind' | 'selectionPlace' | 'selectionWants' | 'selectionBasis';
   type DocumentKind = 'documentKeys' | 'documentBinding' | 'documentPlace' | 'documentText';
@@ -212,6 +212,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     mapKeys: () => [{ ...MAP, extra: 1 }],
     mapBinding: () => [{ ...MAP, requestId: '$note:Projects/Job hunt/Past offer.md' }],
     mapLimit: () => [MAP, MAP],
+    scope: () => [{ ...MAP, scope: { quote: 'words this request never says', changes: ['skills'] } }],
   };
 
   // C09 (c09-answers AC2): answers are refused through a request, which the offer-and-flat case has not; their bad replies are c09-answers.test.ts's table.
