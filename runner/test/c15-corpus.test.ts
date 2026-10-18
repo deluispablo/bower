@@ -1,9 +1,9 @@
-/** C15's five cases land and score through production main: the runner prepares every admitted input itself (C15 R-lines). */
+/** C15's four cases land and score through production main: the runner prepares every admitted input itself (C15 R-lines). */
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadCase } from '../src/corpus';
+import { loadCase, loadCorpus } from '../src/corpus';
 import { AT, replySequence, runWithClaude, scoreCase } from './corpus-run';
 
 beforeEach(() => {
@@ -14,7 +14,7 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
-const CASES = ['c15-ready-package-reused', 'c15-stale-package-rebuilt', 'c15-context-budget-exhausted', 'c15-more-context-bounded', 'c15-scanned-letter'];
+const CASES = ['c15-stale-package-rebuilt', 'c15-context-budget-exhausted', 'c15-more-context-bounded', 'c15-scanned-letter'];
 
 const obsoleteClaims = /(?<!no )\bapp(?:-side)? package\b|\b(?:app[- ]prepared|prepared (?:letter|text|extraction|artifact)|(?:proof|driver) pending|pending (?:scripted|driver)|future driver)\b/i;
 async function modelFor(id: string) {
@@ -63,5 +63,17 @@ describe('C15 corpus cases through main', () => {
       }
     }
     expect(inputs.filter((i) => /"synopsis":/.test(i.split('\n').at(-1) ?? '')), 'no long text read whole in these cases').toHaveLength(0);
+  });
+
+  it('corpus-delete-ready-package AC1: the prepared-package case is gone from the corpus', async () => {
+    expect(existsSync(join(ROOT, 'c15-ready-package-reused'))).toBe(false);
+    expect((await loadCorpus(ROOT)).map((c) => c.id)).not.toContain('c15-ready-package-reused');
+  });
+
+  // guard: passes before deletion
+  it('corpus-delete-ready-package AC2: the known-fact confirmation lives in C05, not C15', async () => {
+    const known = (await loadCorpus(ROOT)).find((c) => c.id === 'c05-confirms-known-fact');
+    expect(known?.capability).toBe('C05');
+    expect(CASES).not.toContain('c05-confirms-known-fact');
   });
 });
