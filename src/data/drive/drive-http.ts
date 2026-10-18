@@ -454,7 +454,7 @@ export class DriveHttp implements DriveApi {
         if (res.ok) {
           // Keep the public Response API while mapping JSON failures for every caller here.
           const json = res.json.bind(res);
-          res.json = () => this.readBody(json, !opts.idempotent);
+          res.json = (() => this.readBody(json, !opts.idempotent)) as typeof res.json;
         }
         return res;
       }
