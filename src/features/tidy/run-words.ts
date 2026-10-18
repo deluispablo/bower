@@ -52,8 +52,20 @@ export function hasReplay(r: RunState | null | undefined): boolean {
 export function reportWaiting(r: RunState | null | undefined): boolean {
   if (!r || r.phase !== 'done' || r.seen || !r.report) return false;
   const rep = r.report;
-  return [rep.filed, rep.created, rep.updated, rep.setAside, rep.questions, rep.leftAsWritten,
+  return !!rep.waiting || [rep.filed, rep.created, rep.updated, rep.setAside, rep.questions, rep.leftAsWritten,
     rep.answered, rep.alreadySaved, rep.unconfirmed, rep.kept].some((rows) => !!rows?.length);
+}
+
+/** What a run left for the next one, in its own sentence (c12-wait-words); empty when nothing waits. */
+const waitWords = (n: number | undefined): string => (n ? `${plural(n, 'thing')} ${n === 1 ? 'waits' : 'wait'} for the next tidy-up.` : '');
+
+/**
+ * What a finished run left unfinished, apart from what it filed: its saved rows set aside, then what waits with no
+ * row of its own. Never added together: they are different things (prod1-partial-results).
+ */
+export function unfinishedWords(report: Pick<RunReport, 'setAside' | 'waiting'> | undefined): string {
+  const aside = report?.setAside.length ? `${plural(report.setAside.length, 'thing')} set aside.` : '';
+  return [aside, waitWords(report?.waiting)].filter(Boolean).join(' ');
 }
 
 /** A finished tidy-up whose replay has not been watched. */
@@ -114,7 +126,7 @@ export function runDetail(r: RunState): string {
     case 'done': {
       const rep = r.report;
       if (!rep) return '';
-      if (rep.nothingReady && !rep.waiting) return 'Nothing in the inbox was ready yet, so it stays as it is.';
+      if (rep.nothingReady && !rep.waiting && !rep.setAside.length) return 'Nothing in the inbox was ready yet, so it stays as it is.';
       const parts: string[] = [];
       if (rep.updated.length) parts.push(`${plural(notesUpdated(rep), 'note')} brought up to date`);
       // Only this run's questions: "new", beside the total of open ones elsewhere (qa6).
@@ -141,7 +153,7 @@ export function runDetail(r: RunState): string {
       // Joined part by part: a name may hold a comma of its own.
       const said = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}` : (parts[0] ?? '');
       // What the run left for the next one: its own sentence, after the parts (c12-wait-words).
-      const wait = rep.waiting ? `${plural(rep.waiting, 'thing')} ${rep.waiting === 1 ? 'waits' : 'wait'} for the next tidy-up.` : '';
+      const wait = waitWords(rep.waiting);
       if (said) return [`${said.charAt(0).toUpperCase()}${said.slice(1)}.`, wait].filter(Boolean).join(' ');
       if (wait) return wait;
       // A read of your changes that did nothing never claims a tidy inbox (design8-run-words).

@@ -20,7 +20,7 @@ import { Button } from '@/ui/Button';
 import { FieldError, fieldBox, Textarea } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
+import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -107,6 +107,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
   const end = run.finishedAt ?? run.phaseAt;
   const replay = hasReplay(run);
   const detail = replay ? landedSummary(run) : runDetail(run);
+  const unfinished = unfinishedWords(run.report);
   return (
     <section className={`${s.card} ${s.away}`} aria-labelledby="away">
       {bird && (
@@ -119,6 +120,8 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
         {replay ? <>{filedWords(run.report)}{run.report?.updated.length ? `, ${plural(notesUpdated(run.report), 'note')} brought up to date` : ''}.</> : runTitle(run)}
       </h2>
       {detail && <p className="muted">{detail}</p>}
+      {/* The destination summary says only what was filed; what was not has its own sentence beside it. */}
+      {replay && unfinished && <p className="muted">{unfinished}</p>}
       {run.report && <RunLinks report={run.report} />}
       <div className={s.row2}>
         {replay && <Button size="sm" onClick={() => startReplay(run.id)}>
