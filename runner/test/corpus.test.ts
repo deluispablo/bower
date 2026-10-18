@@ -20,7 +20,70 @@ async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
   }
 }
 
+// The scripted provider covers at least one case of each capability from C04 to C11, except C10 (its cases are model-marked: tools are off in runner/src/claude.ts).
+const SCRIPTED_CAPABILITIES = CORPUS_CAPABILITIES.filter((c) => c >= 'C04' && c <= 'C11' && c !== 'C10');
+
+function assertScriptedCoverage(cases: LoadedCase[]): void {
+  for (const capability of SCRIPTED_CAPABILITIES) {
+    expect({ capability, scripted: cases.some((c) => c.capability === capability && c.covers === 'scripted') }).toEqual({ capability, scripted: true });
+  }
+}
+
+const OBSOLETE_WEB_DEMOS = ['c10-web-allowed', 'c10-web-denied'];
+const RETAINED_C10 = ['c10-fresh-result-cited', 'c10-denied-keeps-prior-result', 'c10-stale-result-withheld', 'c10-lookup-fails'];
+
+// What each retained rubric must keep saying about web permission; one supporting clause per requirement.
+const PERMISSION_CLAUSES: Record<string, Record<string, RegExp>> = {
+  'c10-fresh-result-cited': {
+    gate: /lookup requires allowWeb: true/,
+    noGrant: /request words or an uploaded capture do not grant permission/,
+    source: /exact source \(page URL\)/,
+    dates: /publication date, retrieval date and applicability/,
+    survives: /personal content and prior history survive/,
+  },
+  'c10-denied-keeps-prior-result': {
+    denied: /allowWeb false means zero search, fetch or revalidation calls/,
+    answer: /honest denial answer/,
+    identical: /target note, hub and saved result byte identical/,
+    checkDate: /saved check date unchanged/,
+    notNew: /never present the old band B as newly verified/,
+  },
+};
+
+function assertPermissionRequirements(rubrics: Record<string, string>): void {
+  for (const [id, clauses] of Object.entries(PERMISSION_CLAUSES)) {
+    for (const [name, re] of Object.entries(clauses)) expect(re.test(rubrics[id] ?? ''), `${id}: ${name}`).toBe(true);
+  }
+}
+
 describe('the capability corpus', () => {
+  it('corpus-delete-web AC1: permission requirements survive obsolete web-demo removal', async () => {
+    const cases = await loadCorpus(ROOT);
+    for (const id of OBSOLETE_WEB_DEMOS) {
+      expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
+      expect.soft(cases.map((c) => c.id), id).not.toContain(id);
+    }
+    for (const id of RETAINED_C10) expect({ id, covers: cases.find((c) => c.id === id)?.covers }).toEqual({ id, covers: 'model' });
+    const rubrics = Object.fromEntries(cases.map((c) => [c.id, c.rubric]));
+    assertPermissionRequirements(rubrics);
+    // Negative controls: without its supporting clause each requirement is rejected.
+    for (const [id, clauses] of Object.entries(PERMISSION_CLAUSES)) {
+      for (const [name, re] of Object.entries(clauses)) {
+        expect(() => assertPermissionRequirements({ ...rubrics, [id]: (rubrics[id] ?? '').replace(re, '') }), `${id}: ${name}`).toThrow(`${id}: ${name}`);
+      }
+    }
+  });
+
+  it('corpus-delete-web AC2: C10 is not required to have a scripted implementation', async () => {
+    const kept = (await loadCorpus(ROOT)).filter((c) => !OBSOLETE_WEB_DEMOS.includes(c.id));
+    expect(() => assertScriptedCoverage(kept)).not.toThrow();
+    // Each other scripted capability is still required.
+    for (const capability of SCRIPTED_CAPABILITIES) {
+      const without = kept.filter((c) => !(c.capability === capability && c.covers === 'scripted'));
+      expect(() => assertScriptedCoverage(without), capability).toThrow(capability);
+    }
+  });
+
   it('corpus-delete-bench-resources AC1: original-app seed directory is absent', () => {
     for (const name of ['_bench-vault/3-Resources', '_bench-vault']) {
       const path = join(ROOT, name);
@@ -105,10 +168,7 @@ describe('the capability corpus', () => {
         expect(['scripted', 'model']).toContain(c.covers);
       }
     }
-    // The scripted provider covers at least one case of each capability from C04 to C11.
-    for (const capability of CORPUS_CAPABILITIES.filter((c) => c >= 'C04' && c <= 'C11')) {
-      expect({ capability, scripted: cases.some((c) => c.capability === capability && c.covers === 'scripted') }).toEqual({ capability, scripted: true });
-    }
+    assertScriptedCoverage(cases);
   });
 
   it('the corpus scorer passes on the scripted provider outputs', async () => {
