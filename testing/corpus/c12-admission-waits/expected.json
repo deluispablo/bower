@@ -1,0 +1,72 @@
+{
+  "runs": [
+    {
+      "files": {
+        "present": [
+          "Areas/Home/Water butt notice.txt",
+          "Areas/Home/Bench notice.txt",
+          "Inbox/*Compost notice.txt"
+        ],
+        "absent": [
+          "Areas/Home/Compost notice.txt"
+        ]
+      },
+      "report": {
+        "filed": 2,
+        "created": [
+          "Bower health.md"
+        ],
+        "setAside": 0,
+        "waiting": 1,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "report": {
+        "filed": 1,
+        "setAside": 0,
+        "waiting": 0,
+        "questionsExactly": 0
+      }
+    }
+  ],
+  "files": {
+    "present": [
+      "Areas/Home/Garden plot.md",
+      "Areas/Home/Water butt notice.txt",
+      "Areas/Home/Bench notice.txt",
+      "Areas/Home/Compost notice.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "timeline": [
+        "2026-09-12 · Planted garlic.",
+        "The replacement water butt has arrived.",
+        "The shared bench has been delivered.",
+        "The compost bins have been emptied.",
+        "[[Compost notice.txt]]"
+      ],
+      "timelineCount": 4
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "setAside": 0,
+    "waiting": 0,
+    "questionsExactly": 0
+  }
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      { "fileId": "$file:Long garden notice.txt", "to": "Areas/Home", "name": "Long garden notice.txt" }
+    ],
+    "lines": [
+      { "note": "Areas/Home/Garden plot.md", "text": "The replacement water butt has arrived.", "cites": "$file:Long garden notice.txt" }
+    ]
+  }
+]

@@ -432,7 +432,14 @@ export function replySequence(all: unknown[]): ClaudeSpawn {
       if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, bind(v)]));
       return value;
     };
-    const intent = bind(replies[Math.min(turn, replies.length - 1)]);
+    // c12-corpus K3, the corpus form of S18: a call that shows only some of the admitted things gets the rows of its own.
+    const unshown = (fixture?.admission?.piles ?? []).flatMap((p) => p.items.map((i) => i.name)).filter((n) => !ids.has(n));
+    const names = (row: unknown): string[] => typeof row === 'string' ? (row.startsWith('$file:') ? [row.slice(6)] : [])
+      : row && typeof row === 'object' ? Object.values(row).flatMap(names) : [];
+    const reply = replies[Math.min(turn, replies.length - 1)];
+    const own = unshown.length && reply && typeof reply === 'object' ? Object.fromEntries(Object.entries(reply).map(([key, rows]) =>
+      [key, Array.isArray(rows) ? rows.filter((row) => !names(row).some((n) => unshown.includes(n))) : rows])) : reply;
+    const intent = bind(own);
     return exit(intent);
   };
   const phased = phaseAwareClaude(execution, (call) => {
@@ -450,6 +457,24 @@ export function replySequence(all: unknown[]): ClaudeSpawn {
     started.add(key);
     return phased(call);
   };
+}
+
+/** `claude` with its model calls counted per press: a call that shows no selection is the planner's first, and opens a press. */
+export function perPress(claude: ClaudeSpawn): { claude: ClaudeSpawn; calls: number[] } {
+  const calls: number[] = [];
+  return { calls, claude: (call) => {
+    if ((lastJson(call.input) as { selection?: unknown }).selection === undefined) calls.push(0);
+    calls[calls.length - 1] = (calls.at(-1) ?? 0) + 1;
+    return claude(call);
+  } };
+}
+
+/** A file left in the Inbox after `run` as it is (bytes and appProperties) beside the same file as seeded, by name; `now` is undefined when it is gone. */
+export async function inboxAsSeeded(c: LoadedCase, run: CaseRun, name: string): Promise<{ now?: { text: string; props?: Record<string, string> }; was: { text: string; props?: Record<string, string> } }> {
+  const drive = fixedDrive();
+  const seeded = (await drive.listAll(await seedCase(drive, c))).find((f) => f.name === name);
+  const at = Object.keys(run.after).find((p) => p.startsWith('Inbox/') && p.split('/').at(-1) === name);
+  return { was: { text: await drive.readText(seeded?.id ?? ''), props: seeded?.appProperties }, ...(at ? { now: { text: run.after[at] ?? '', props: run.props[at] } } : {}) };
 }
 
 export function caseReplies(id: string): ClaudeSpawn {

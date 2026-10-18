@@ -18,7 +18,7 @@ import { WIKI_LINK, linkTarget } from '../../src/data/contracts/links';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 
 /** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
-export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C13', 'C15'] as const;
+export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C12', 'C13', 'C15'] as const;
 export type CorpusCapability = (typeof CORPUS_CAPABILITIES)[number];
 
 export interface CorpusPile {
@@ -108,6 +108,8 @@ export interface ReportExpectation {
   requests?: string[];
   rulesWorded?: number;
   yourChanges?: number;
+  /** Things that waited with no row of their own (admission); none counts as 0. */
+  waiting?: number;
 }
 
 export interface NoteExpectation {
@@ -450,6 +452,7 @@ export function score(input: ScoreInput): Score {
       if (want.requests && JSON.stringify(list(report.requests)) !== JSON.stringify(want.requests)) unmet.push(`report.requests: ${JSON.stringify(list(report.requests))}, expected ${JSON.stringify(want.requests)}`);
       if (want.rulesWorded !== undefined && (report.rulesWorded ?? 0) !== want.rulesWorded) unmet.push(`report.rulesWorded: ${String(report.rulesWorded ?? 0)}, expected ${want.rulesWorded}`);
       if (want.yourChanges !== undefined && (report.yourChanges ?? 0) !== want.yourChanges) unmet.push(`report.yourChanges: ${String(report.yourChanges ?? 0)}, expected ${want.yourChanges}`);
+      if (want.waiting !== undefined && (report.waiting ?? 0) !== want.waiting) unmet.push(`report.waiting: ${String(report.waiting ?? 0)}, expected ${want.waiting}`);
     }
   }
   return { pass: unmet.length === 0, unmet };

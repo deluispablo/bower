@@ -1,0 +1,37 @@
+{
+  "id": "c12-group-waits",
+  "capability": "C12",
+  "title": "A pile group that gets no valid reply waits whole and is filed by the next tidy-up",
+  "covers": "model",
+  "source": "new (C12 lifecycle; the test driver refuses the second group's reply)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "File these seed packets with the garden plot.",
+      "files": [
+        "Seed packet 1.txt",
+        "Seed packet 2.txt",
+        "Seed packet 3.txt",
+        "Seed packet 4.txt",
+        "Seed packet 5.txt",
+        "Seed packet 6.txt"
+      ]
+    },
+    {
+      "line": "File these with the bench fund.",
+      "files": [
+        "Bench receipt 1.txt",
+        "Bench receipt 2.txt",
+        "Bench receipt 3.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": [
+    "Areas/Home/Garden plot.md",
+    "Projects/Bench fund/Bench fund.md"
+  ],
+  "presses": [{}]
+}

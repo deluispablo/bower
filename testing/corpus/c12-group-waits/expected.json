@@ -1,0 +1,77 @@
+{
+  "runs": [
+    {
+      "files": {
+        "present": [
+          "Areas/Home/Seed packet 1.txt",
+          "Areas/Home/Seed packet 6.txt",
+          "Inbox/*Bench receipt 1.txt",
+          "Inbox/*Bench receipt 3.txt"
+        ],
+        "absent": [
+          "Projects/Bench fund/Bench receipt*"
+        ]
+      },
+      "report": {
+        "filed": 6,
+        "created": [
+          "Bower health.md"
+        ],
+        "setAside": 1,
+        "waiting": 0,
+        "questionsExactly": 0
+      }
+    },
+    {
+      "report": {
+        "filed": 3,
+        "setAside": 0,
+        "questionsExactly": 0
+      }
+    }
+  ],
+  "files": {
+    "present": [
+      "Areas/Home/Garden plot.md",
+      "Projects/Bench fund/Bench fund.md",
+      "Areas/Home/Seed packet 1.txt",
+      "Projects/Bench fund/Bench receipt 1.txt",
+      "Projects/Bench fund/Bench receipt 2.txt",
+      "Projects/Bench fund/Bench receipt 3.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "protectedRanges": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "range": {
+        "heading": "My plans"
+      }
+    },
+    {
+      "path": "Projects/Bench fund/Bench fund.md",
+      "range": {
+        "heading": "My plans"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "path": "Projects/Bench fund/Bench fund.md",
+      "timeline": [
+        "2026-09-20 · Opened the bench fund.",
+        "The bench fund paid for the new slats.",
+        "[[Bench receipt 1.txt]]"
+      ],
+      "timelineCount": 4
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 3,
+    "setAside": 0,
+    "questionsExactly": 0
+  }
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      { "fileId": "$file:Water butt notice.txt", "to": "Areas/Home", "name": "Water butt notice.txt" },
+      { "fileId": "$file:Bench notice.txt", "to": "Areas/Home", "name": "Bench notice.txt" }
+    ],
+    "lines": [
+      { "note": "Areas/Home/Garden plot.md", "text": "The replacement water butt has arrived.", "cites": "$file:Water butt notice.txt" },
+      { "note": "Areas/Home/Garden plot.md", "text": "The shared bench has been delivered.", "cites": "$file:Bench notice.txt" }
+    ]
+  }
+]

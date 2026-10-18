@@ -1,8 +1,6 @@
 # Capability corpus (P4-A)
 
-Made-up cases for the capabilities C04 to C11, C13, C15 and C17 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
-Made-up cases for the capabilities C04 to C13 and C15 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
-Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–B3 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
+Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, interruption, waiting), C15 and C17 (Alex, Larkspur Lane, Saltmere, Ferrowick; nothing personal). Each folder holds:
 
 - `case.json`: the inputs (piles, requests, rules, answers, seeded questions), the scope and the web switch;
 - `inbox/`: the files of the piles; `folder/`: the starting folder (notes with their front matter, `Rules.md`);
@@ -61,9 +59,11 @@ Made-up cases for the capabilities C04 to C11, C13, C15 and proposed C17 / B1–
 | c11-source-cannot-override-rule | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-request-is-one-time | C11 | model | new (C11 preparation; scripted intent pending) |
 | c11-source-cannot-answer | C11 | model | new (C11 preparation; scripted intent pending) |
-| c12-model-failure-retry | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
-| c12-tool-interruption-recovery | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
-| c12-text-budget-truthful | C12 | model | new (C12 preparation; scripted fault and lifecycle proof pending) |
+| c12-model-failure-retry | C12 | model | new (C12 lifecycle; the test driver injects the faults) |
+| c12-tool-interruption-recovery | C12 | model | new (C12 lifecycle; the test driver injects the faults) |
+| c12-text-budget-truthful | C12 | model | new (C12 lifecycle; the test driver injects the faults) |
+| c12-group-waits | C12 | model | new (C12 lifecycle; the test driver refuses the second group's reply) |
+| c12-admission-waits | C12 | model | new (C12 lifecycle; the test shrinks the admission estimate to 2) |
 | c13-undo-protects-edit | C13 | model | new |
 | c13-undo-whole-run | C13 | model | new |
 | c13-manifest-move-and-create | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
@@ -315,3 +315,16 @@ provider's answer. Each checks its answer per request, never `.bower/requests.js
 
 - `answers`: per request, the done row in `.bower/requests.json` (read as JSON) whose text equals `request`: its `done` has every `contains`, no `excludes`, and its `[[links]]` resolve by the one name rule to exactly `links`, in order.
 - `tables`: per note at `path`, exactly one GFM table outside fenced code whose header cells equal `header`, with body rows equal to `rows`, in order.
+
+## C12 lifecycle cases
+
+The five `c12-*` cases carry `replies.json` and score through production `main` in `runner/test/c12-corpus.test.ts`
+(`c12-corpus-admit.test.ts` for the admission wait). The three one-press cases score as they are. The two new ones have
+two presses: `expected.runs` holds one entry per press and the top level is the last press, so the inbox ends empty.
+
+- Faults come from the test driver, never from a case: a failed or refused model call, a lost answer with Drive gone,
+  and a group whose reply is refused twice on press 1.
+- `c12-admission-waits` runs with an estimate of 2 things in the test (`ADMIT_THINGS` mocked), against 144 for real; the
+  third pile waits untouched, counted in `report.waiting`, and the next press files it.
+- A thing with text needs a note or a Timeline line citing it, so each thing in `c12-group-waits` has its own line.
+- Waiting things stay in the inbox byte for byte, with their properties.

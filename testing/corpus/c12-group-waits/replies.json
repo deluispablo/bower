@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      { "fileId": "$file:Seed packet 1.txt", "to": "Areas/Home", "name": "Seed packet 1.txt" },
+      { "fileId": "$file:Seed packet 2.txt", "to": "Areas/Home", "name": "Seed packet 2.txt" },
+      { "fileId": "$file:Seed packet 3.txt", "to": "Areas/Home", "name": "Seed packet 3.txt" },
+      { "fileId": "$file:Seed packet 4.txt", "to": "Areas/Home", "name": "Seed packet 4.txt" },
+      { "fileId": "$file:Seed packet 5.txt", "to": "Areas/Home", "name": "Seed packet 5.txt" },
+      { "fileId": "$file:Seed packet 6.txt", "to": "Areas/Home", "name": "Seed packet 6.txt" },
+      { "fileId": "$file:Bench receipt 1.txt", "to": "Projects/Bench fund", "name": "Bench receipt 1.txt" },
+      { "fileId": "$file:Bench receipt 2.txt", "to": "Projects/Bench fund", "name": "Bench receipt 2.txt" },
+      { "fileId": "$file:Bench receipt 3.txt", "to": "Projects/Bench fund", "name": "Bench receipt 3.txt" }
+    ],
+    "lines": [
+      { "note": "Areas/Home/Garden plot.md", "text": "The tomato seed packets have arrived.", "cites": "$file:Seed packet 1.txt" },
+      { "note": "Areas/Home/Garden plot.md", "text": "The basil seed packets have arrived.", "cites": "$file:Seed packet 2.txt" },
+      { "note": "Areas/Home/Garden plot.md", "text": "The carrot seed packets have arrived.", "cites": "$file:Seed packet 3.txt" },
+      { "note": "Areas/Home/Garden plot.md", "text": "The beetroot seed packets have arrived.", "cites": "$file:Seed packet 4.txt" },
+      { "note": "Areas/Home/Garden plot.md", "text": "The chard seed packets have arrived.", "cites": "$file:Seed packet 5.txt" },
+      { "note": "Areas/Home/Garden plot.md", "text": "The pea seed packets have arrived.", "cites": "$file:Seed packet 6.txt" },
+      { "note": "Projects/Bench fund/Bench fund.md", "text": "The bench fund paid for the new slats.", "cites": "$file:Bench receipt 1.txt" },
+      { "note": "Projects/Bench fund/Bench fund.md", "text": "The bench fund paid for the new screws.", "cites": "$file:Bench receipt 2.txt" },
+      { "note": "Projects/Bench fund/Bench fund.md", "text": "The bench fund paid for the new paint.", "cites": "$file:Bench receipt 3.txt" }
+    ]
+  },
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      { "fileId": "$file:Bench receipt 1.txt", "to": "Projects/Bench fund", "name": "Bench receipt 1.txt" },
+      { "fileId": "$file:Bench receipt 2.txt", "to": "Projects/Bench fund", "name": "Bench receipt 2.txt" },
+      { "fileId": "$file:Bench receipt 3.txt", "to": "Projects/Bench fund", "name": "Bench receipt 3.txt" }
+    ],
+    "lines": [
+      { "note": "Projects/Bench fund/Bench fund.md", "text": "The bench fund paid for the new slats.", "cites": "$file:Bench receipt 1.txt" },
+      { "note": "Projects/Bench fund/Bench fund.md", "text": "The bench fund paid for the new screws.", "cites": "$file:Bench receipt 2.txt" },
+      { "note": "Projects/Bench fund/Bench fund.md", "text": "The bench fund paid for the new paint.", "cites": "$file:Bench receipt 3.txt" }
+    ]
+  }
+]
