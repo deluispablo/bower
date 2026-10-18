@@ -64,6 +64,7 @@ function inline(text: string, link: LinkFn, keyBase: string): ReactNode[] {
 
 /** What a cell shows: wikilinks as their labels, bold, italics and code without their marks. */
 const shown = (c: string): string => tokens(c).map((t) => t.text).join('');
+const COMMENT = /<!--.*?-->/g;
 /** A number, optionally signed, with a currency sign, separators, a percent sign or a short unit ("24 min"). */
 const NUMBER = /^[-+]?[£$€]?\d[\d,.]*\s?(%|[A-Za-z]{1,4})?$/;
 
@@ -82,10 +83,21 @@ interface MarkdownProps {
   headingLevel?: number;
 }
 
+/** A generated document's title, said again by its first body line, is shown once: that line is left out of what the reader presents. */
+export function presentedBody(n: Pick<Note, 'body'> & Partial<Pick<Note, 'title' | 'byBower' | 'properties'>>): string {
+  if (!n.byBower || n.title === undefined || !n.properties?.some((p) => p.key === 'type' && p.value === 'document')) return n.body;
+  const lines = n.body.split('\n');
+  const first = lines.findIndex((l) => l.replace(COMMENT, '').trim());
+  const h = /^#{1,4}\s+(.*)$/.exec(lines[first]?.replace(COMMENT, '') ?? '');
+  if (!h || shown(h[1] ?? '').trim() !== n.title.trim()) return n.body;
+  lines[first] = '';
+  return lines.join('\n');
+}
+
 export function Markdown({ text, link, taskRegions, onToggle, headingLevel }: MarkdownProps) {
   // CommonMark leaves HTML comments out of a reader that renders no HTML. shortcut: single-line comments only (the
   // data layer counts task lines one by one), a comment over several lines stays as text.
-  const lines = text.split('\n').map((l) => l.replace(/<!--.*?-->/g, ''));
+  const lines = text.split('\n').map((l) => l.replace(COMMENT, ''));
   const top = Math.min(4, ...lines.map((l) => /^(#{1,4})\s/.exec(l)?.[1]?.length ?? 4));
   let task = -1;
   const blocks: ReactNode[] = [];
@@ -191,10 +203,10 @@ export function outlineOf(text: string): Array<{ level: number; text: string; id
 }
 
 /** The outline of a whole note page: Bower's sections where they sit, around the body's headings. */
-export function noteOutline(n: Pick<Note, 'currentState' | 'body' | 'bowerNote' | 'timeline'>): Array<{ level: number; text: string; id: string }> {
+export function noteOutline(n: Pick<Note, 'currentState' | 'body' | 'bowerNote' | 'timeline'> & Partial<Pick<Note, 'title' | 'byBower' | 'properties'>>): Array<{ level: number; text: string; id: string }> {
   const out: Array<{ level: number; text: string; id: string }> = [];
   if (n.currentState.length) out.push({ level: 2, text: 'Current state', id: 'cs' });
-  out.push(...outlineOf(n.body));
+  out.push(...outlineOf(presentedBody(n)));
   if (n.bowerNote) out.push({ level: 2, text: "Bower's note", id: 'bn' });
   if (n.timeline.length) out.push({ level: 2, text: 'Timeline', id: 'tl' });
   return out;

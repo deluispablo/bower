@@ -13,7 +13,7 @@ import { useUi } from '@/app/ui-store';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton, Button, buttonLinkClass } from '@/ui/Button';
 import { PoseBower } from '@/bird/Bower';
-import { Inline, Markdown } from './markdown';
+import { Inline, Markdown, presentedBody } from './markdown';
 import { useResolver } from './resolve';
 import { webSource } from '@/data/contracts/links';
 import { useFileActions } from '@/features/files/file-actions';
@@ -160,7 +160,7 @@ function NoteView({ path }: { path: string }) {
       )}
       <div className={s.body}>
         <Markdown
-          text={note.body}
+          text={presentedBody(note)}
           taskRegions={note.taskRegions}
           link={link}
           onToggle={isRunning(run) ? undefined : (i) =>
