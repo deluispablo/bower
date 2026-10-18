@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { parseNote } from '../../src/data/contracts/note-format';
-import { caseReplies, redispatchCase, replySequence, runWithClaude, type CaseRun } from './corpus-run';
+import { caseReplies, redispatchCase, replySequence, runWithClaude, scoreCase, type CaseRun } from './corpus-run';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 
 beforeEach(() => {
@@ -81,6 +81,32 @@ it.each(CASES)('AC3 c07-case: $id scores clean through main, with selection then
   else expect(added[0]?.text ?? '', 'a dated change carries no marker').not.toMatch(/^(?:Contradiction|Uncertain):|\(inferred\)/);
   expect((first.lastRun as { run?: { report?: { questions?: unknown[] } } } | null)?.run?.report?.questions ?? [], 'nothing asks the person to choose (R2)').toEqual([]);
   expect(final.after[note], 'the replay press adds nothing').toBe(first.after[note]);
+});
+
+it('corpus-delete-overlaps AC1: same-period rent retains unique preservation assertions', async () => {
+  const c = await load('c07-same-period-rent');
+  const final = await runWithClaude(c, caseReplies(c.id));
+  expect(scoreCase(c, final)).toEqual({ pass: true, unmet: [] });
+  const personal = 'Alex likes the kitchen window.';
+  const history = '2026-10-02 · The earlier listing says rent from 2026-11-01 is 1,450 a month. · [[Earlier listing.txt]]';
+  const contradiction = 'Contradiction: The earlier listing gives 1,450 a month from 2026-11-01; the later listing gives 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]]) · [[Later listing.txt]]';
+  const mutations = [
+    { label: 'personal prose', remove: personal, unmet: `lacks "${personal}"` },
+    { label: 'old history', remove: history, unmet: `no Timeline line with "${history}"` },
+    { label: 'earlier claim', remove: 'The earlier listing gives 1,450 a month from 2026-11-01; ', unmet: `no Timeline line with "${contradiction}"` },
+    { label: 'later claim', remove: 'the later listing gives 1,580 for the same period.', unmet: `no Timeline line with "${contradiction}"` },
+  ];
+  for (const [index, run] of [...final.runs ?? [], final].entries()) {
+    for (const { label, remove, unmet } of mutations) {
+      const original = run.after[FLAT] ?? '';
+      expect(original, label).toContain(remove);
+      const changed = { ...run, after: { ...run.after, [FLAT]: original.replace(remove, '') } };
+      const corrupted = index === 0 ? { ...final, runs: [changed] } : changed;
+      const result = scoreCase(c, corrupted);
+      expect(result.pass, `press ${index + 1}: missing ${label}`).toBe(false);
+      expect(result.unmet).toContain(`run ${index + 1}: ${FLAT}: ${unmet}`);
+    }
+  }
 });
 
 it('AC3 c07-case: a done redispatch of the same-period run makes no model call and writes nothing', async () => {
