@@ -21,6 +21,19 @@ async function assertScriptedCases(scripted: LoadedCase[]): Promise<void> {
 }
 
 describe('the capability corpus', () => {
+  it('corpus-delete-revision-undo AC1: weaker revision and undo cases are absent', async () => {
+    const ids = (await loadCorpus(ROOT)).map((c) => c.id);
+    for (const id of ['c08-revise-comparison', 'c13-undo-protects-edit', 'c13-undo-whole-run']) {
+      expect.soft(existsSync(join(ROOT, id)), id).toBe(false);
+      expect.soft(ids, id).not.toContain(id);
+    }
+    for (const id of ['c08-revise-keeps-personal-text', 'c13-manifest-move-and-create',
+      'c13-manifest-partial-edited-note', 'c13-manifest-state-with-personal-edit']) {
+      expect(ids, id).toContain(id);
+      expect((await loadCase(join(ROOT, id))).id).toBe(id);
+    }
+  });
+
   it('corpus-delete-bench-resources AC1: original-app seed directory is absent', () => {
     for (const name of ['_bench-vault/3-Resources', '_bench-vault']) {
       const path = join(ROOT, name);
