@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { DRIVE_MESSAGES } from '../drive/drive-api';
-import { answered } from '../wait';
+import { answered, BodyReadError } from '../wait';
 import { isRunWire, type Me, type ProcessOptions, type RunReply, type StatusReply, type WorkerApi } from './worker-api';
 import { isLeaseReply, openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
@@ -127,7 +127,7 @@ export class WorkerHttp implements WorkerApi {
         ...(keepalive ? { keepalive: true } : {}),
       });
     } catch (e) {
-      if (e instanceof TypeError) throw new BowerError('offline', SENTENCE.offline);
+      if (e instanceof TypeError || (e instanceof BodyReadError && e.cause instanceof TypeError)) throw new BowerError('offline', SENTENCE.offline);
       console.error(e);
       throw new BowerError('unknown', SENTENCE.unknown);
     }

@@ -21,15 +21,27 @@ export function waitFor(body: unknown): number {
   return ANSWER_WAIT_MS + Math.ceil((size / SLOWEST_BYTES_PER_SECOND) * 1000);
 }
 
+/** A body failed after headers arrived: unlike a fetch failure, this must not replay the request. */
+export class BodyReadError extends Error {
+  constructor(cause: unknown) {
+    super('The response body could not be read', { cause });
+  }
+}
+
 /**
  * `fetchFn(url, init)`, given up on after `ms` (by default `waitFor(init.body)`) if no answer has arrived. The caller's own
- * `signal` still stops it on purpose and keeps its `AbortError`; only the bound ends as a `TypeError`.
- * The bound covers the wait for the answer to start, not the reading of its body.
+ * `signal` still stops it on purpose and keeps its `AbortError`. A body failure wraps its cause to prevent replay.
+ * The bound includes consuming the body; the returned Response holds the completed bytes.
  */
 export async function answered(fetchFn: (url: string, init: RequestInit) => Promise<Response>, url: string, init: RequestInit = {}, ms = waitFor(init.body)): Promise<Response> {
   const own = init.signal ?? undefined;
   const control = new AbortController();
-  const stop = (): void => control.abort(own?.reason);
+  let rejectStop: (reason: unknown) => void = () => undefined;
+  const stopped = new Promise<never>((_, reject) => { rejectStop = reject; });
+  const stop = (): void => {
+    control.abort(own?.reason);
+    rejectStop(own?.reason);
+  };
   if (own?.aborted) stop();
   else own?.addEventListener('abort', stop, { once: true });
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -42,9 +54,18 @@ export async function answered(fetchFn: (url: string, init: RequestInit) => Prom
     }, ms);
   });
   try {
-    return await Promise.race([fetchFn(url, { ...init, signal: control.signal }), tooLate]);
+    const response = await Promise.race([fetchFn(url, { ...init, signal: control.signal }), tooLate, stopped]);
+    try {
+      const bytes = await Promise.race([response.arrayBuffer(), tooLate, stopped]);
+      return new Response([204, 205, 304].includes(response.status) ? null : bytes, { status: response.status, statusText: response.statusText, headers: response.headers });
+    } catch (e) {
+      if (own?.aborted) throw own.reason;
+      // An unreadable error page does not erase the HTTP status used by retry/auth policy.
+      if (!response.ok) return new Response(null, { status: response.status, statusText: response.statusText, headers: response.headers });
+      throw new BodyReadError(late ? new TypeError('No answer in time', { cause: e }) : e);
+    }
   } catch (e) {
-    if (late) throw new TypeError('No answer in time', { cause: e });
+    if (late && !(e instanceof BodyReadError)) throw new TypeError('No answer in time', { cause: e });
     throw e;
   } finally {
     clearTimeout(timer);
