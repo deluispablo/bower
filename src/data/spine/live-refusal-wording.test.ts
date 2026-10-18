@@ -29,7 +29,7 @@ async function plan(words: (title: string) => string, decide: (recordId: string)
     const taken = admission.manifest;
     return planScripted(fakeScripted(drive), root, { scope: 'instructions', allowWeb: false, runId: RUN, requestId: taken.id, requestedAt: taken.at, taken, mintKey: await runKeys(RUN), decisions: decide('never-1') });
   };
-  return { drive, root, changes, request, run };
+  return { drive, root, changes, request, text, run };
 }
 const rowsOf = (p: RunPlan) => (p.manifest.reportPlan ?? []).flatMap((r) => r.value.leftAsWritten ?? []);
 const archives = (p: RunPlan, fileId: string) => p.manifest.operations.some((op) => op.effect.kind === 'move' && op.effect.before.fileId === fileId);
@@ -43,7 +43,7 @@ describe('a request Bower never does', () => {
     const control = await (await plan((title) => `Delete ${title} for good`, silent)).run();
     expect(rowsOf(control).map((r) => r.why)).toEqual([NOTHING_FOUND_WHY]);
     const p = await f.run();
-    expect(rowsOf(p)).toEqual([{ name: 'Request', why: NEVER_WHY }]);
+    expect(rowsOf(p)).toEqual([{ name: f.text, why: NEVER_WHY }]);
     expect(p.manifest.operations.filter((op) => op.effect.kind === 'edit-text')).toEqual([]);
     expect(archives(p, f.request.id)).toBe(true);
   });
@@ -51,7 +51,7 @@ describe('a request Bower never does', () => {
   it('AC1: a request naming no note gets the same row and is archived', async () => {
     const f = await plan(() => 'Wipe everything from my Drive for good', refusing);
     const p = await f.run();
-    expect(rowsOf(p)).toEqual([{ name: 'Request', why: NEVER_WHY }]);
+    expect(rowsOf(p)).toEqual([{ name: f.text, why: NEVER_WHY }]);
     expect(archives(p, f.request.id)).toBe(true);
   });
 

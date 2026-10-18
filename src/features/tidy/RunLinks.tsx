@@ -27,7 +27,7 @@ export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created'
       <LinkList label="Brought up to date" rows={updated} {...(onOpen ? { onOpen } : {})} />
       {!!left.length && <LabelledList label="Left as you wrote them">
         {left.map((r, i) => <li key={r.fileId ?? i}>
-          {r.fileId && <Link to={noteRoute(r.name)} onClick={onOpen}>{displayName(nameOf(r.name))}</Link>}
+          {r.fileId ? <Link to={noteRoute(r.name)} onClick={onOpen}>{displayName(nameOf(r.name))}</Link> : <span>{r.name}</span>}
           <span className="muted">{r.why}</span>
         </li>)}
       </LabelledList>}

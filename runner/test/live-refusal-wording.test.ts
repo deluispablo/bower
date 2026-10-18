@@ -77,7 +77,7 @@ describe('"never": a request Bower will not do', () => {
   it.each([[NAMING], [GENERAL]])('AC2: "%s" is declined with one row, no line, and archived', async (words) => {
     const run = await press([words], (ctx) => ({ ...empty, never: [ctx.asked[words]] }));
     expect(refusals()).toEqual([]);
-    expect(rows(run)).toEqual([{ name: 'Request', why: NEVER_WHY }]);
+    expect(rows(run)).toEqual([{ name: words, why: NEVER_WHY }]);
     expect(rows(run).map((r) => r.why)).not.toContain(NOTHING_FOUND_WHY);
     expect(run.after[LARK]).toBe(FILES[LARK]);
     expect(archived(run, 'press-1')).toBe(true);
@@ -92,7 +92,7 @@ describe('"never": a request Bower will not do', () => {
   const binding = (name: string, bad: (ctx: Ctx) => Record<string, unknown>, words = [NAMING]) => it(`AC2: ${name} is refused answerBinding; the corrected reply applies`, async () => {
     const run = await press(words, (ctx, attempt) => (attempt > 0 ? { ...empty, never: [ctx.asked[NAMING]] } : { ...empty, ...bad(ctx) }));
     expect(refusals()[0]).toBe('answerBinding');
-    expect(rows(run)).toEqual([{ name: 'Request', why: NEVER_WHY }]);
+    expect(rows(run)).toEqual([{ name: NAMING, why: NEVER_WHY }]);
   });
   binding('an unknown request id', () => ({ never: ['not-a-request'] }));
   binding('a request also answered (never first)', (ctx) => ({ never: [ctx.asked[NAMING]], answers: [{ requestId: ctx.asked[NAMING], text: ANSWER }] }));
@@ -111,6 +111,6 @@ describe('"never": a request Bower will not do', () => {
     expect(REFUSALS.neverKeys).toBeDefined();
     const run = await press([NAMING], (ctx, attempt) => (attempt > 0 ? { ...empty, never: [ctx.asked[NAMING]] } : { ...empty, never: value }));
     expect(refusals()[0]).toBe('neverKeys');
-    expect(rows(run)).toEqual([{ name: 'Request', why: NEVER_WHY }]);
+    expect(rows(run)).toEqual([{ name: NAMING, why: NEVER_WHY }]);
   });
 });
