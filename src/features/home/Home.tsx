@@ -6,7 +6,7 @@ import { answered, answerToast } from './answer-words';
 import { answerQuestion } from '@/data/answer-loop';
 import { askingKey, isQuestionSnapshot, subjectOf, type QuestionAnswer } from '@/data/contracts/questions';
 import { usePrefs } from '@/app/prefs';
-import { startRun } from '@/features/tidy/start-run';
+import { useStartRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser, type Loaded } from '@/data/provider';
@@ -155,6 +155,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
 
 function StoppedCard({ run }: { run: RunState }) {
   const { runs } = useSources();
+  const { busy, start } = useStartRun();
   return (
     <section className={`${s.card} ${s.stopped}`} aria-labelledby="stopped" role="alert">
       <div className={s.stoppedHead}>
@@ -167,8 +168,8 @@ function StoppedCard({ run }: { run: RunState }) {
         </div>
       </div>
       <div className={s.row2}>
-        <Button size="sm" onClick={() => void startRun(runs, run.scope).then(() => useUi.getState().setTidy(true), (e: unknown) => report(e, 'It did not start. Try again in a minute.'))}>
-          Try again
+        <Button size="sm" aria-disabled={busy || undefined} onClick={() => void start(run.scope)?.then(() => useUi.getState().setTidy(true), (e: unknown) => report(e, 'It did not start. Try again in a minute.'))}>
+          {busy ? 'Starting…' : 'Try again'}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
           Got it
@@ -271,7 +272,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
 function YourChanges({ running }: { running: boolean }) {
   const changesState = useChanges();
   const { data: list } = changesState;
-  const { runs } = useSources();
+  const { busy, start } = useStartRun();
   if (changesState.error) return <LoadError state={changesState} />;
   if (!list?.length) return null;
   return (
@@ -289,8 +290,8 @@ function YourChanges({ running }: { running: boolean }) {
       </ul>
       {list.length > 5 && <p className="muted" style={{ fontSize: 14 }}>and {plural(list.length - 5, 'more change')}</p>}
       {!running && (
-        <Button size="sm" variant="ghost" onClick={() => void startRun(runs, 'instructions').then(() => useUi.getState().setTidy(true), (e: unknown) => report(e, 'It did not start. Try again.'))}>
-          {list.length === 1 ? 'Let Bower read it now' : 'Let Bower read them now'}
+        <Button size="sm" variant="ghost" aria-disabled={busy || undefined} onClick={() => void start('instructions')?.then(() => useUi.getState().setTidy(true), (e: unknown) => report(e, 'It did not start. Try again.'))}>
+          {busy ? 'Starting…' : list.length === 1 ? 'Let Bower read it now' : 'Let Bower read them now'}
         </Button>
       )}
     </section>
