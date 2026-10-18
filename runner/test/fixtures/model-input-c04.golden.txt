@@ -2,7 +2,7 @@ You plan one Bower tidy-up. You have no tools: never try to read, write or run a
 Reply with one JSON object and nothing else, of exactly this shape:
 {"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing's fileId>","to":"<folder path>","name":"<new name>",
   "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],
- "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
+ "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","summary":"<optional: what it is about, in a few words of your own>","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
  "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],
  "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing's fileId>"}],
  "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],
