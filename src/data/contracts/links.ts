@@ -70,6 +70,7 @@ export function webSource(source: string): { href: string; label: string } | nul
       if (!url.hostname || (url.protocol !== 'http:' && url.protocol !== 'https:')) return null;
       return { href: s, label: s.replace(/^https?:\/\//i, '') };
     } catch {
+      // expected: not a valid web address, so the caller treats it as a note link.
       return null;
     }
   }

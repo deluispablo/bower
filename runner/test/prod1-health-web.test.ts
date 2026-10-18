@@ -58,8 +58,8 @@ describe('prod1-health-web', () => {
     expect(health([source])).not.toContain('Broken link');
   });
 
-  it.each(['/example.com', '//example.com', '/example.com#section', '//example.com#section'])
-  ('leading_slashes_keep_targets_local: %s', (target) => {
+  it.each(['/example.com', '//example.com', '/example.com#section', '//example.com#section'])(
+    'leading_slashes_keep_targets_local: %s', (target) => {
     const source = note('Sources', [target]);
     expect(health([source])).toContain(`no note is called ${target.split('#')[0]}.`);
     const report = health([source, note('example.com')]);
