@@ -25,7 +25,7 @@ for (const source of ['demo', 'fake']) {
     // The sheet also lists requests and pending rules (prod1-confirm-scope); the piles are their own list.
     const piles = sheet.getByRole('list', { name: 'In the inbox', exact: true });
     await expect(piles.getByRole('listitem')).toHaveCount(24);
-    const pileTitles = piles.getByRole('listitem').locator(':scope > span:first-of-type');
+    const pileTitles = piles.getByRole('listitem').locator(':scope > span:not([aria-hidden]):not(.muted)');
     for (const name of names) await expect(pileTitles.filter({ hasText: new RegExp(`^${name}$`) })).toHaveCount(1);
     await animationsEnd(page);
 
