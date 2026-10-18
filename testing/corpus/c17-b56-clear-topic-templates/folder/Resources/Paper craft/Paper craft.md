@@ -1,6 +1,5 @@
 ---
 summary: Reference notes about folded paper.
-type: moc
 status: active
 by: bower
 ---

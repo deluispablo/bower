@@ -56,10 +56,10 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c05-merge-question-first | agrees | Point 1 asks before combining near duplicates; pair identity binds both notes and neither changes before an answer. |
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
-| c17-b56-personal-sale-project | agrees | Rechecked 2026-10-10: points 1–4/7/8; existing sale project beats Ideas, source links/history and personal prose survive. TL-P4-41 requires candidate ids and complete retrieval; B2/B6 supply summary/Source construction, not a second writer. |
+| c17-b56-personal-sale-project | changed | Points 1–4/7/8: the details file under the existing Bicycle sale project, not Ideas, with a note from the sale row's source template whose hub link says why; one sourced Timeline line goes on the hub, and the bell sentence and old history stay. The type table is JSON, and the reports include the health note. |
 | c17-b56-cv-profile | changed | Points 1/3/4/7/8: the CV files under Career originals and copies its one offered source sentence, with its source link, into the profile region of the note marked as the cv row's profile; personal text and history stay. The type table is JSON, the profile mark is a declared Drive property, and each link in the note says why. |
 | c17-b56-offer-job-search | changed | Points 1/3/4/7/8: the offer fits Job hunt with a factual profile comparison, no shared-word decoy or score; the offer row declares no profile, so the profile stays unchanged. The type table is JSON, and each link in the note says why. |
-| c17-b56-clear-topic-templates | agrees | Rechecked 2026-10-10: points 1–4/8; clear trusted reference creates Source/Concept/MOC. TL-P4-41 cut-index rule, B2 scalar summary, marked evergreen MOC and immutable Source apply. Ambiguous variants use TL-P4-44 stored file-to/option ids, not this clear case. |
+| c17-b56-clear-topic-templates | changed | Points 1–4/8: a clear reference topic files the article in a new Rainwater folder with one note, the topic's own MOC hub from the moc template; no compulsory concept, source or Sources subfolder. Paper craft is an untyped legacy Bower note and stays byte identical. The type table is JSON, and the reports include the health note. |
 | c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
 | c15-current-admitted-evidence | changed | Points 1, 2, 3, 7: the current source supplies the venue and sourced history; the filed source keeps its bytes and no other venue is invented. |
 | c15-context-budget-exhausted | agrees | Points 1, 3, 4, 7: explicit words establish fit, only shown evidence enters the linked source note and history, and unread content is disclosed without guessing. |
@@ -213,6 +213,15 @@ record the method re-check, not an executed model result.
     the offer case an offer row without one), the profile mark is a declared Drive property, the CV cites its one
     offered source sentence, each note's links say why, and both cases score clean end to end. Covers stays model in
     both cases.
+
+## Corpus clean changes (`corpus-fix-b56-templates`)
+
+15. **c17-b56-clear-topic-templates and c17-b56-personal-sale-project.** Reason: the corpus audit (a Markdown
+    type-table specimen the runner never reads, no replies, an oracle wanting a concept, a source and a MOC from one
+    thing, which yields at most one note, and a legacy MOC whose stored Timeline stops the run). Now: each folder
+    holds a JSON type table (the seed's article row; a sale row), the clear topic files one MOC hub, Paper craft is an
+    untyped legacy Bower note, the sale note takes its row's source template and its hub link says why, and both cases
+    score clean end to end. Covers stays model in both cases.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

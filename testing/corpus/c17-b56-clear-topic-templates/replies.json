@@ -1,0 +1,19 @@
+[
+  {
+    "kind": "tidy-intent",
+    "v": 1,
+    "things": [
+      {
+        "fileId": "$file:Rainwater article.txt",
+        "to": "Resources/Rainwater",
+        "name": "Rainwater article.txt",
+        "note": {
+          "name": "Rainwater.md",
+          "template": "moc",
+          "summary": "Keeping leaves and twigs out of a rainwater container.",
+          "body": "A covered rainwater container keeps leaves out. A removable screen catches twigs."
+        }
+      }
+    ]
+  }
+]

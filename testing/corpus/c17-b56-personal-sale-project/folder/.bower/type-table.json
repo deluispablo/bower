@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "sale",
+      "match": [
+        "sale"
+      ],
+      "template": "source",
+      "properties": {},
+      "table": []
+    }
+  ]
+}

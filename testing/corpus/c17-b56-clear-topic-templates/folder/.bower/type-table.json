@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "rows": [
+    {
+      "id": "article",
+      "match": [
+        "article",
+        "web clip"
+      ],
+      "template": "source",
+      "properties": {},
+      "table": []
+    }
+  ]
+}
