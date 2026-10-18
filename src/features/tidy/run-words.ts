@@ -114,7 +114,7 @@ export function runDetail(r: RunState): string {
     case 'done': {
       const rep = r.report;
       if (!rep) return '';
-      if (rep.nothingReady) return 'Nothing in the inbox was ready yet, so it stays as it is.';
+      if (rep.nothingReady && !rep.waiting) return 'Nothing in the inbox was ready yet, so it stays as it is.';
       const parts: string[] = [];
       if (rep.updated.length) parts.push(`${plural(notesUpdated(rep), 'note')} brought up to date`);
       // Only this run's questions: "new", beside the total of open ones elsewhere (qa6).
@@ -140,7 +140,10 @@ export function runDetail(r: RunState): string {
       if (rep.yourChanges) parts.push(`${rep.yourChanges} ${other}${rep.yourChanges === 1 ? 'change' : 'changes'} of yours read`);
       // Joined part by part: a name may hold a comma of its own.
       const said = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}` : (parts[0] ?? '');
-      if (said) return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`;
+      // What the run left for the next one: its own sentence, after the parts (c12-wait-words).
+      const wait = rep.waiting ? `${plural(rep.waiting, 'thing')} ${rep.waiting === 1 ? 'waits' : 'wait'} for the next tidy-up.` : '';
+      if (said) return [`${said.charAt(0).toUpperCase()}${said.slice(1)}.`, wait].filter(Boolean).join(' ');
+      if (wait) return wait;
       // A read of your changes that did nothing never claims a tidy inbox (design8-run-words).
       if (r.scope === 'instructions' && !rep.leftAsWritten?.length && !rep.created.length && !rep.filed.length) return "Bower didn't change anything this time.";
       return rep.leftAsWritten?.length ? '' : 'Everything has its place.';
