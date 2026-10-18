@@ -483,6 +483,8 @@ const oneBulletOf = (read: readonly string[] | undefined, proposed: readonly str
 export interface Placement {
   to: string;
   name: string;
+  /** A note written from a pile of words: its summary in the model's own words, stored trimmed (words-note-summary). */
+  summary?: string;
 }
 
 /** A note a model wrote for a thing it files (P4-3): beside the thing, its name, summary and body. */
@@ -2856,12 +2858,13 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   };
   for (const { pileId, folder, words } of fromWords) {
-    const { to, name: title } = wordsPlace(pileId, words);
+    const { to, name: title, summary } = wordsPlace(pileId, words);
     destination(to);
     const name = freeName(planned, to, title);
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
-    const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
+    // The body keeps the person's words; the summary is the reply's own, never those words again.
+    const text = serializeNote({ summary: summary?.trim() || what, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
     generated.push({ to, name, text, what, after: [], pileId, aside: folder.name });
   }
   // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written

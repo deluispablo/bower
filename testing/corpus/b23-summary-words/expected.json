@@ -15,14 +15,14 @@
     {
       "path": "Resources/Gardening/Garden bed.md",
       "contains": [
-        "summary: \"Alex plans a garden bed: use the \\\"amber\\\" label. Keep #mulch beside the gate in Saltmere; the path stays clear.\"",
+        "summary: \"Alex's garden bed plan: the \\\"amber\\\" label, #mulch by the gate.\"",
         "Alex plans a garden bed: use the \"amber\" label.\n\nKeep #mulch beside the gate in Saltmere; the path stays clear."
       ]
     },
     {
       "path": "index.md",
       "contains": [
-        "- [[Garden bed]] — Alex plans a garden bed: use the \"amber\" label. Keep #mulch beside the gate in Saltmere; the path stays clear."
+        "- [[Garden bed]] — Alex's garden bed plan: the \"amber\" label, #mulch by the gate."
       ]
     }
   ],

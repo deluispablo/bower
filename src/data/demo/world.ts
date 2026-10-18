@@ -564,7 +564,7 @@ export class DemoWorld {
         this.notes.set(path, {
           path,
           title: displayName(name),
-          summary: pile.text.trim(),
+          summary: 'Written from a note you added.',
           properties: [{ key: 'kind', label: 'Kind', value: 'Note' }],
           tags: [],
           currentState: [],

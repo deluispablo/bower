@@ -321,7 +321,7 @@ function promptInstructions(): string {
     'Reply with one JSON object and nothing else, of exactly this shape:',
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
     '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
-    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
+    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","summary":"<optional: what it is about, in a few words of your own>","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
     ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],',
     ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>"}],',
     ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],',
@@ -1126,6 +1126,25 @@ const CONTROL = { test: (text: string): boolean => [...text].some((c) => {
 const lineOk = (text: unknown, max: number): text is string =>
   typeof text === 'string' && text.trim() !== '' && text.length <= max && !/[\r\n\t]/.test(text) && !CONTROL.test(text) && !HIDDEN_CHARS.test(text);
 
+/** A text's plain form (B ruling 3): normalized, letters, digits and single spaces only. */
+const plainForm = (text: string): string => normalizedText(text).replace(/[^\p{L}\p{N} ]/gu, '').replace(/ +/g, ' ').trim();
+/** The retry note for a words note's summary that copies its pile (B ruling 5). */
+const COPIES_WORDS = 'a summary that copies the person\'s words: say in a few words of your own what the note is about, or leave summary out';
+/**
+ * Whether a summary copies a pile's words (B ruling 4), on plain forms: the same text, the whole pile when it has 20+
+ * characters (a short one is said in other words around it), or any shared run of 60+ characters.
+ */
+function copiesWords(summary: string, words: string): boolean {
+  const s = plainForm(summary);
+  const w = plainForm(words);
+  if (s === w || (w.length >= 20 && s.includes(w))) return true;
+  for (let i = 0; i + 60 <= s.length; i++) if (w.includes(s.slice(i, i + 60))) return true;
+  return false;
+}
+/** A note's links each say why on their line (C06): a thing's note and a words note's summary. */
+const reasoned = (texts: readonly string[]): true | string => texts.flatMap(authoredLinks).every((l) => l.reason)
+  || 'a link with no reason on its line: write why on the same line, as "See also [[X]]: <why>."';
+
 /** What the model was shown that its reply is checked against: the notes it may update, and (for links) the folder's
  * file paths and names and each thing's text. */
 export interface Seen {
@@ -1160,6 +1179,8 @@ export interface Seen {
   rules?: string;
   /** What a number may come from besides the cited thing: the piles' words, and the notes shown (paths and text). When given, numbers are checked. */
   words?: string;
+  /** Each pile's own words by pileId: a words note's summary may not copy them (words-note-summary). */
+  pileWords?: ReadonlyMap<string, string>;
   shownNotes?: string;
   /**
    * The pairs of notes the person said yes to keeping as one (`keep-one-note-merge`): each from a yes answer this run
@@ -1357,7 +1378,7 @@ const ThingShape = z.strictObject({
 }, named('thingKeys'));
 const WordsShape = z.strictObject({
   pileId: z.string(named('pileNotAdmitted', 'noteKeys')), to: z.string(named('placeOutside', 'noteKeys')), name: z.string(named('noteName', 'noteKeys')),
-  basis: z.unknown().optional(), responsibility: z.unknown().optional(),
+  summary: z.string(named('noteSummary')).optional(), basis: z.unknown().optional(), responsibility: z.unknown().optional(),
 }, named('noteKeys'));
 const LineShape = z.strictObject({
   note: z.string(named('lineNote', 'lineKeys')), text: z.string(named('lineText', 'lineKeys')), cites: z.string(named('lineCites')).optional(),
@@ -1725,8 +1746,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       && !PROFILE_IDENTIFIER.test(t.name) && sentences.get(ref.source)?.[ref.sentence - 1] !== undefined)
       || 'a profile reference outside its offered source sentences'),
     // The link check runs before numeric grounding (C06 R1, R2); properties need no reason line.
-    rule('noteLink', (t) => t.note === undefined || [t.note.summary, bodyOf(t.note)].flatMap(authoredLinks).every((l) => l.reason)
-      || 'a link with no reason on its line: write why on the same line, as "See also [[X]]: <why>."'),
+    rule('noteLink', (t) => t.note === undefined || reasoned([t.note.summary, bodyOf(t.note)])),
     // A Markdown ordered list marker in the body (CommonMark 0.31.2 §5.2: 1 to 9 digits, then "." or ")") is no figure
     // (C06 gaps 5, 9); Timeline and Current state text keep every figure.
     rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary,
@@ -1750,7 +1770,12 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('placeOutside', (n) => placeOk(n.to)),
     rule('noteName', (n) => nameOk(n.name) && extensionOf(n.name) === '.md'),
     rule('newFolder', (n) => newPlace(n.to, n.basis, n.responsibility, seen, areas, n.pileId) ?? true),
-  ], (n) => words.set(n.pileId, { to: n.to, name: n.name })));
+    // Its summary passes a thing note's summary rules (B ruling 6) and never copies the person's words (B ruling 4).
+    rule('noteSummary', (n) => n.summary === undefined || lineOk(n.summary, AUTHORED.summary)),
+    rule('noteSummary', (n) => n.summary === undefined || !copiesWords(n.summary, seen.pileWords?.get(n.pileId) ?? '') || COPIES_WORDS),
+    rule('noteLink', (n) => n.summary === undefined || reasoned([n.summary])),
+    rule('numbers', (n) => n.summary === undefined || grounded(undefined, [n.summary], 'the summary of')),
+  ], (n) => words.set(n.pileId, { to: n.to, name: n.name, ...(n.summary === undefined ? {} : { summary: n.summary }) })));
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
     // One physical line (R6): the two Unicode line breaks too, in a Timeline line only (R23).
@@ -2787,7 +2812,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         files: new Map(listing.flatMap((f) => { const path = f.folder ? undefined : ix.pathOf(f.id); return path === undefined ? [] : [[path, f.id] as const]; })),
         names: shown.names ?? new Set(), texts, originals: shown.originals, folders: new Set(shown.folders),
         mocFolders: new Set(shown.notes.filter((n) => indexed[ix.idOf(n.path) ?? '']?.type === 'moc' && indexed[ix.idOf(n.path) ?? '']?.owner === 'bower').map((n) => n.path.slice(0, n.path.lastIndexOf('/')))),
-        folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'),
+        folderCandidates: new Set(folders.map((f) => f.id)), words: shown.piles.map((p) => p.words).join('\n'), pileWords: new Map(shown.piles.map((p) => [p.pileId, p.words])),
         shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'), rules: shown.rules,
         merges: mergesOf(answers, shown.notes.map((n) => n.path)), requests,
         requestNotes: new Map(Object.entries(shown.requestNotes ?? {}).map(([id, notes]) => [id, new Set(notes.flatMap((n) => ix.pathOf(n) ?? []))])), maps: new Set(Object.entries(indexed)
