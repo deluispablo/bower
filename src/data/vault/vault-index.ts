@@ -31,10 +31,14 @@ export function linkIdentity(target: string, paths: Iterable<string>): { note: s
   return files[0] === undefined ? null : { file: files[0] };
 }
 
+export type IndexWrite = { put: DriveFile } | { drop: string };
+
 export class VaultIndex {
   private files = new Map<string, DriveFile>();
   private paths = new Map<string, string>();
   private ids = new Map<string, string>();
+  /** Hears each `put` and `drop` after it applies (the id given, not the cascade); set only by the app's vault. */
+  onWrite?: (op: IndexWrite) => void;
 
   private constructor(private readonly rootId: string) {}
 
@@ -205,6 +209,7 @@ export class VaultIndex {
   put(file: DriveFile): void {
     this.files.set(file.id, file);
     this.reindex();
+    this.onWrite?.({ put: file });
   }
 
   /** Forgets a file, and everything under it for a folder. */
@@ -220,6 +225,7 @@ export class VaultIndex {
     }
     for (const g of gone) this.files.delete(g);
     this.reindex();
+    this.onWrite?.({ drop: id });
   }
 
   private reindex(): void {
