@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { axeScan } from './axe';
 
 test('AC1 the whole Files page, right panel included, has no heading-order violation', async ({ page, isMobile }) => {
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await page.goto('/files?scenario=default&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

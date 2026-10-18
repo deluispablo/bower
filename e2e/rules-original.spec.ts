@@ -34,6 +34,10 @@ async function proseRead(page: Page): Promise<{ served: boolean }> {
   return seen;
 }
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
+});
+
 for (const width of [375, 1440]) {
   test(`rules-original-ui: the prose, the rules added in Bower and the panel, with WCAG 2.2, at ${width}`, async ({ page }) => {
     await resize(page, { width, height: width < 900 ? 812 : 900 });
