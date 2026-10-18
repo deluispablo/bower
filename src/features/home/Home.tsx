@@ -43,11 +43,26 @@ function useArrivalLine() {
   if (summary.loading) return null;
   const value = summary.error ? { count: 0, complete: false } : summary.data;
   if (!value || (value.complete && value.count === 0)) return null;
-  if (value.count === 0) return { text: "Bower couldn't check that everything you added arrived.", unknown: true };
+  const incomplete = !value.complete;
+  if (value.count === 0) return { text: "Bower couldn't check that everything you added arrived.", unknown: true, incomplete, summary };
   const text = value.count === 1
     ? "1 pile didn't finish arriving. Add it again if you still need it."
     : `${value.count} piles didn't finish arriving. Add them again if you still need them.`;
-  return { text: `${value.complete ? '' : 'At least '}${text}`, unknown: false };
+  return { text: `${value.complete ? '' : 'At least '}${text}`, unknown: false, incomplete, summary };
+}
+
+/** Check again is the folder's one refresh, then this summary's read; the sentence stays until the new answer lands. */
+function CheckAgain({ summary }: { summary: Pick<Loaded<unknown>, 'reload' | 'settled'> }) {
+  const { vault } = useSources();
+  const [busy, setBusy] = useState(false);
+  const press = () => {
+    setBusy(true);
+    void Promise.resolve(vault.refresh?.())
+      .then(() => { summary.reload(); return summary.settled(); })
+      .catch((e: unknown) => report(e, 'That did not work. Try again.'))
+      .finally(() => setBusy(false));
+  };
+  return <Button size="sm" variant="ghost" disabled={busy} onClick={press}>Check again</Button>;
 }
 
 export function Home() {
@@ -192,6 +207,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
             {error.error ? 'Your inbox is not showing.' : piles === undefined || !ready ? 'Looking…' : waiting ? `${plural(waiting, 'thing')} waiting${running ? '' : '. Tidy up when you have added everything.'}` : 'Nothing waiting. Add something and it stays here until the next tidy-up.'}
           </p>
           {ready && arrival && <p className={`${s.arrival} ${arrival.unknown ? 'muted' : s.unfinished}`}>{arrival.text}</p>}
+          {ready && arrival?.incomplete && <CheckAgain summary={arrival.summary} />}
         </div>
       </div>
       {/* Always there, so a notice that comes later is heard. */}
