@@ -147,7 +147,7 @@ describe('Q1b tidy questions', () => {
     expect(sheet.textContent).not.toContain('Where should these papers go?');
     expect(main?.textContent).not.toContain('Where should these papers go?');
     fireEvent.click(within(sheet).getByRole('button', { name: 'Hide this' })); await settle();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("G'day, Alex");
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("Hello, Alex");
     expect(screen.queryByText('Where should these papers go?')).toBeNull();
   });
 

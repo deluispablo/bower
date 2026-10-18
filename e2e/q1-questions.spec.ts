@@ -72,7 +72,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', qs: Question[] =
   await page.goto(`/?source=${source}&scenario=empty&time=instant`);
   await expect(page.locator('#boot')).toHaveCount(0);
   // Positive control in every e2e: the original demo/fake initialized and Home's existing Inbox loaded.
-  await expect(page.getByRole('heading', { level: 1, name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Inbox', exact: true }).getByRole('link', { name: /Papers from Alex/ })).toBeVisible();
   await expect(page.getByRole('main').getByText(ASK, { exact: true })).toBeVisible();
 }
@@ -263,7 +263,7 @@ for (const source of ['demo', 'fake'] as const) {
       await sheet.getByRole('link', { name: '1 more question on Home', exact: true }).click();
       await expect(sheet).toHaveCount(0);
       expect(new URL(page.url()).pathname).toBe('/');
-      await expect(page.getByRole('heading', { level: 1, name: /G'day, Alex/ })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
       await expect(homeCard(page)).toBeVisible();
     });
 

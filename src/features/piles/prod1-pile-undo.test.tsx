@@ -125,7 +125,7 @@ describe('removed_saved_pile_offers_working_undo', () => {
     app(vault, `/pile/${pile.id}`);
     await removeFromScreen();
     // The pile's screen goes Home, as ever; the dock offers Undo there, once its screen is gone.
-    await screen.findByRole('heading', { level: 1, name: /G'day/ });
+    await screen.findByRole('heading', { level: 1, name: /Hello/ });
     const undo = await undoButton();
     expect(await stateOf(pile.id)).toBeNull();
     expect(await declarations()).toEqual([]);
@@ -287,7 +287,7 @@ describe('every supported pile shape keeps its Undo', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Remove this pile' }));
     expect(within(question()).getByText(CHOOSE_AGAIN)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Remove the pile' }));
-    await screen.findByRole('heading', { level: 1, name: /G'day/ });
+    await screen.findByRole('heading', { level: 1, name: /Hello/ });
     await waitFor(async () => expect(await declarations()).toEqual([]));
     fireEvent.click(await undoButton());
     expect(await within(dock()).findByText(BACK)).toBeVisible();

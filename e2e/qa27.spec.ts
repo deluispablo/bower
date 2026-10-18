@@ -24,7 +24,7 @@ const another = async (page: Page): Promise<Page> => {
   await settled(next);
   return next;
 };
-const home = (page: Page) => page.getByRole('heading', { level: 1, name: /G'day, Alex/ });
+const home = (page: Page) => page.getByRole('heading', { level: 1, name: /Hello, Alex/ });
 const blocked = (page: Page) => page.getByRole('heading', { level: 1, name: BLOCKED });
 const useHere = (page: Page) => page.getByRole('button', { name: 'Use here' });
 

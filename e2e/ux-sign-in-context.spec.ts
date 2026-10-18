@@ -53,6 +53,6 @@ test('AC2: another account preserves an encoded destination and consumes it once
   await expect(page.getByRole('heading', { name: /^Flat hunt/, level: 1 })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('bower:sign-in-from'))).toBeNull();
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/');
 });

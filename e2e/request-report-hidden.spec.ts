@@ -48,7 +48,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', shape: Shape, pi
   });
   await page.goto(`/?source=${source}&scenario=empty&time=instant`);
   await expect(page.locator('#boot')).toHaveCount(0);
-  await expect(page.getByRole('heading', { level: 1, name: /G'day, Alex/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
   return run;
 }
 

@@ -27,7 +27,7 @@ for (const width of [390, 1440]) for (const colorScheme of ['light', 'dark'] as 
     const kept = source || null;
     expect(await selection()).toEqual([kept, 'signed-out', 'instant']);
     await page.getByRole('button', { name: 'Continue with Google' }).click();
-    await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
     expect(await selection()).toEqual([kept, 'signed-out', 'instant']);
     await page.goBack();
     await expect(page).toHaveURL(/\/landing\/$/);
@@ -98,7 +98,7 @@ for (const destination of ['/files/Projects', '/files/Projects/Flat%20hunt?view=
     await expect(page.getByRole('heading', { name: destination.includes('Flat') ? /^Flat hunt/ : /^Projects/, level: 1 })).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem('bower:sign-in-from'))).toBeNull();
     await page.evaluate(() => location.assign('/'));
-    await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
     expect(new URL(page.url()).pathname).toBe('/');
   });
 }

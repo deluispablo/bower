@@ -42,9 +42,8 @@ export const plural = (n: number, one: string, many = `${one}s`): string => `${n
 /** A count that may still be loading: the plain label until it is known, never a false zero. */
 export const countOr = (n: number | undefined, one: string, loading: string): string => (n === undefined ? loading : plural(n, one));
 
-/** Bower is Australian; the greeting is too. */
-export function greeting(name: string): string {
-  return `G'day, ${name}`;
+export function greeting(name?: string): string {
+  return name ? `Hello, ${name}` : 'Hello';
 }
 
 /** What goes to the Bin with a folder. `nested`: it has folders, so the count is everything inside, not what its row shows. */

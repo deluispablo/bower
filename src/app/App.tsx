@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { bootDone, bootFail } from './boot';
 import { applyTheme, usePrefs } from './prefs';
 import { Shell } from './Shell';
@@ -170,14 +170,17 @@ function Gatekeeper() {
 }
 
 /** One rule for every route change, including views outside Shell (sign-in, legal). */
-function RouteFocus() {
+export function RouteFocus() {
   const { pathname } = useLocation();
+  const type = useNavigationType();
   const last = useRef(pathname);
   useEffect(() => {
     if (last.current === pathname) return;
     last.current = pathname;
+    // A new screen opens at the top; back and forward leave scroll to the browser (BrowserRouter has no ScrollRestoration).
+    if (type !== 'POP') window.scrollTo(0, 0);
     return focusRouteHeading();
-  }, [pathname]);
+  }, [pathname, type]);
   return null;
 }
 

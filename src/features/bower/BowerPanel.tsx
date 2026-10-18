@@ -78,7 +78,7 @@ export function BowerPanel() {
       )}
       <section>
         {/* With the person's own text there is no count to claim; while that is unknown, none either. */}
-        <h2 className={s.ph}>{countOr(prose === '' ? rules?.length : undefined, 'rule', 'Rules')}</h2>
+        <h2 className={s.ph}>{countOr(prose === '' && rules?.length ? rules.length : undefined, 'rule', 'Rules')}</h2>
         <LoadError state={rulesState} />
         <ul className={s.panelRules}>
           {(rules ?? []).slice(0, prose ? 4 : 5).map((r) => (

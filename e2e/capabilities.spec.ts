@@ -199,7 +199,7 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   await expect(merged.getByText('New', { exact: true })).toBeVisible();
   // The question stays gone; the rule is in Bower's words with yours kept.
   await home(page);
-  await expect(page.getByRole('heading', { level: 1, name: /G'day/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Hello/ })).toBeVisible();
   await expect(page.getByText('Keep one note for both?')).toHaveCount(0);
   await page.getByRole('link', { name: /^Ask$/ }).first().click();
   const worded = page.getByRole('main').getByRole('listitem').filter({ hasText: WORDED });
@@ -302,7 +302,7 @@ test('a refused merge shows as an answered row on the note that stays and under 
   const STAYS = 'Flat 7, Cobble Row';
   await open(page, '/', 'gone-answers');
   // A question whose subject is gone is not shown.
-  await expect(page.getByRole('heading', { level: 1, name: /G'day/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /Hello/ })).toBeVisible();
   await expect(page.getByText('look like one flat')).toHaveCount(0);
   await tidyUp(page);
   const sheet = page.getByRole('dialog');

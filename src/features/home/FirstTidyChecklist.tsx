@@ -1,20 +1,19 @@
 import { useId } from 'react';
 import { useNavigate } from 'react-router';
 import { useUi } from '@/app/ui-store';
-import { FIRST_TIDY_STEPS, type FirstTidyStep } from '@/data/contracts/first-tidy';
+import { FIRST_TIDY_STEPS, type FirstTidy, type FirstTidyStep } from '@/data/contracts/first-tidy';
 import { useSources } from '@/data/provider';
 import type { RunState } from '@/data/types';
 import { hasReplay } from '@/features/tidy/run-words';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
-import { keepFirstTidyStep, useFirstTidy, useFirstTidyFailure } from './useFirstTidy';
+import { keepFirstTidyStep, useFirstTidyFailure } from './useFirstTidy';
 import s from './home.module.css';
 
 type Step = { key: FirstTidyStep; title: string; text: string; action: { label: string; go: () => void } | null };
 
 /** The first tidy-up in three steps, above the Inbox until its report has been opened. Only the current step acts. */
-export function FirstTidyChecklist({ run }: { run: RunState | null | undefined }) {
-  const { data } = useFirstTidy();
+export function FirstTidyChecklist({ run, progress: data }: { run: RunState | null | undefined; progress: FirstTidy | null | undefined }) {
   const failure = useFirstTidyFailure((f) => f.failure);
   const { vault } = useSources();
   const { setTidy, startReplay } = useUi();
