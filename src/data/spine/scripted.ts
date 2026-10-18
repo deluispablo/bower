@@ -212,6 +212,8 @@ const LEFT_AS_WRITTEN = {
 export const TOO_OLD_WHY = "Bower didn't add the line: this request is too old for Bower to know if it already did. Ask again if you still want it.";
 /** A named target with no line in this run (TL-P4-32 addendum 6; the designer's owner-signed row). */
 export const NOTHING_FOUND_WHY = "Bower didn't add the line: it found nothing about this note in what you added.";
+/** A request Bower will not do, whatever it names (live-refusal-wording): the model's `never`, one row, no line. */
+export const NEVER_WHY = "Bower didn't do this: it never deletes anything for good, skips the Bin or changes things outside your folder.";
 /** A consolidation skipped this run (B4c R25): nothing is lost, the facts stay as their own lines. */
 export const SHORTEN_SKIPPED = 'Bower could not shorten what it has learned.';
 /** Row 1's line, under "Brought up to date". */
@@ -306,7 +308,7 @@ type LeftRow = LeftAsWritten & { requestId: string; sources: string[] | null };
  * - A line already there is satisfied only under its source's final name (6); otherwise it is appended.
  * A request settles only when every note it binds has its line written or there, or a row; otherwise it waits whole.
  */
-function settleRequest(requests: readonly JournalLine[], listing: readonly DriveFile[], ix: VaultIndex, history: AppendHistory, since: number | null) {
+function settleRequest(requests: readonly JournalLine[], listing: readonly DriveFile[], ix: VaultIndex, history: AppendHistory, since: number | null, neverDo: ReadonlySet<string> = new Set()) {
   const done = (requestId: string, targetFileId: string): boolean => history.completed.some((h) => h.requestId === requestId && h.targetFileId === targetFileId);
   const bound = new Map<string, { requestId: string; path: string; file: DriveFile }>();
   const owned = new Set<string>();
@@ -346,6 +348,14 @@ function settleRequest(requests: readonly JournalLine[], listing: readonly Drive
       owned.add(id);
       admitted.add(id);
       rows.push({ requestId: id, sources: [], name: 'Request', why: TOO_OLD_WHY });
+      continue;
+    }
+    // A request the model says Bower never does is owned whether or not it names a note: one row, no line, archived.
+    if (neverDo.has(id)) {
+      owned.add(id);
+      admitted.add(id);
+      sources.set(id, null);
+      rows.push({ requestId: id, sources: null, name: 'Request', why: NEVER_WHY });
       continue;
     }
     const { notes, refused } = requestTargets(listing, ix, l.rec.text ?? l.rec.what);
@@ -574,6 +584,8 @@ export interface Filing {
   answers?: ReadonlyMap<string, string>;
   /** C08: documents that answer requests, by request record id, checked by the provider. */
   documents?: ReadonlyMap<string, { to: string; title: string; what: string; body: string }>;
+  /** Requests the model says Bower never does, by request record id: each gets the `NEVER_WHY` row and no line. */
+  neverDo?: ReadonlySet<string>;
 }
 
 /** One op of a map on one note (B12): a property `set` or `union` (with the row it was checked against), or a tag (`key: 'tags'`) `add` or `remove`. */
@@ -731,6 +743,8 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
   suggestions?: Filing['suggestions'];
   /** The maps requests answer (B12); a request one answers settles once its notes are written, unavailable or as asked. */
   maps?: Filing['maps'];
+  /** The requests Bower never does (by record id): each settles with one row, whatever it names. */
+  neverDo?: ReadonlySet<string>;
   /** How it answers a request, by its words and record id (two requests with the same words are two); without it, requests wait. */
   request?(text: string, id: string): RequestPlan | null;
   /** The Timeline line an answer adds to a stored note (C07). */
@@ -758,6 +772,7 @@ export function modelDecisions(filing: Filing): Decisions {
     views: filing.views ?? [],
     ...(filing.suggestions ? { suggestions: filing.suggestions } : {}),
     ...(filing.maps ? { maps: filing.maps } : {}),
+    ...(filing.neverDo?.size ? { neverDo: filing.neverDo } : {}),
     // C09 (R1): a reply's answer is its request's plain answer plan, by record id; the provider passes only the requests it acts on (R7).
     // C08: so is a reply's document, by the same record id.
     ...(filing.answers?.size || filing.documents?.size ? { request: (_text: string, id: string): RequestPlan | null => {
@@ -1343,7 +1358,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // (C09 R6) leaves it, as a map or view does: its answer is its result; so does one given a document (C08 R12).
   const settlement = settleRequest(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id) && !viewRequests.has(l.rec.id)
     && !mapRequests.has(l.rec.id) && !mapWaits.has(l.rec.id) && !mapOwned.waits.has(l.rec.id)
-    && !['answer', 'document'].includes(d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind ?? '')), listing, ix, appends, since);
+    && !['answer', 'document'].includes(d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind ?? '')), listing, ix, appends, since, d.neverDo);
   // A thing a request's line on a person's note cites is filed and cited, never taken for a copy of one already saved.
   for (const [, b] of settlement.bound) {
     if (b.file.appProperties?.by === 'bower') continue;

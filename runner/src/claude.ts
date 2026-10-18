@@ -381,6 +381,8 @@ function promptInstructions(): string {
     '  line of at most 1,000 characters with words, no web address; link each note or file you used as [[its name]], or [[its whole path]] when the',
     '  name is shared. A figure you say a note gives must be in that note; a count, total or difference of linked notes\' figures is fine.',
     '  Say plainly what the notes do not say. A request you answer takes no map or view.',
+    '- "never" (optional): "never":["<the request\'s fileId>"] for a request in "requests" below that asks Bower to delete anything for good, skip the Bin or change',
+    '  things outside the person\'s folder, or any part of it does: the whole request is declined; it takes no answer, document, map, view, line or thing.',
     // C08: a request for a report, comparison or other document is answered by one document note.
     '- "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request\'s fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].',
     '  Write every part the request needs; link the notes and files shown by name or whole path; write only their figures. A request you give a document takes no answer, map or view.',
@@ -1063,6 +1065,7 @@ export const REFUSALS = {
   // C09 (R3): an answer's links take the one link rule's own kind (noteLink) and its figures `numbers`.
   answerKeys: 'an answer with keys outside the intent: give {requestId, text}',
   answerBinding: "an answer whose request is not one of the person's requests below, or a second answer for one request",
+  neverKeys: 'a "never" that is not a list of at least one request id: give "never":["<requestId>"]',
   answerText: 'an answer that is not one plain line of at most 1,000 characters, with [[links]] only',
   // C08 (round 1 ruling 9): a document's links take noteLink and its figures numbers, as an answer's do.
   documentKeys: 'a document with keys outside the intent: give {requestId, to, title, summary, body}',
@@ -1340,6 +1343,7 @@ const Envelope = z.strictObject({
   kind: z.literal('tidy-intent', intentIssue), v: z.literal(1, intentIssue), things: z.array(z.unknown(), intentIssue),
   newTags: z.unknown().optional(), notes: section, lines: section, states: section, asks: section, keep: section, askAfter: section, views: section, maps: section, observations: memorySection, forget: memorySection, ends: memorySection,
   answers: z.array(z.unknown(), named('answerKeys')).optional(),
+  never: z.array(z.unknown(), named('neverKeys')).optional(),
   documents: z.array(z.unknown(), named('documentKeys')).optional(),
 }, intentIssue);
 const NoteShape = z.strictObject({
@@ -1945,6 +1949,10 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return !n || quoting(`a number that is in none of its sources: "${n}" in the document "${d.title.trim()}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
   ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: d.summary.trim(), body: d.body })));
+  // live-refusal-wording: a request Bower will not do, once, given no answer, document, map, view, Timeline line or thing
+  // (the whole request is declined), as a request named twice or not shown is no request of this run.
+  // Checked on the reply as sent (below), so the refusal never depends on the order or validity of the other sections.
+  let neverDo: ReadonlySet<string> = new Set();
   const whole: Array<Rule<unknown>> = [
     // Ending words are no fact of their own, and a fact ends once (R35).
     rule('memory', () => new Set(ends.map((e) => e.factId)).size === ends.length && !ends.some((e) => observations.some((o) => {
@@ -2010,7 +2018,23 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }
     grownTags = growth;
     newTags = growth.declared;
-    bound = new Set([...value.maps ?? [], ...value.views ?? []].flatMap((x) => (isRecord(x) && typeof x.requestId === 'string' ? [x.requestId] : [])));
+    const idsIn = (rows: readonly unknown[] | undefined, key: string): string[] => (rows ?? []).flatMap((x) => (isRecord(x) && typeof x[key] === 'string' ? [x[key]] : []));
+    bound = new Set([...idsIn(value.maps, 'requestId'), ...idsIn(value.views, 'requestId')]);
+    const never = value.never;
+    if (never) {
+      const ids = never.filter((id): id is string => typeof id === 'string');
+      if (!ids.length || ids.length !== never.length) {
+        ctx.addIssue({ code: 'custom', message: 'neverKeys', params: { why: REFUSALS.neverKeys } });
+        return z.NEVER;
+      }
+      // One request is declined whole: it takes no other result, citing line or thing, is shown, and is listed once.
+      const taken = new Set([...bound, ...idsIn(value.answers, 'requestId'), ...idsIn(value.documents, 'requestId'), ...idsIn(value.lines, 'cites'), ...idsIn(value.things, 'fileId')]);
+      if (ids.some((id, i) => seen.requests?.has(id) !== true || ids.indexOf(id) !== i || taken.has(id))) {
+        ctx.addIssue({ code: 'custom', message: 'answerBinding', params: { why: 'a "never" for a request that is not one of the requests below, is listed twice, or is also given an answer, document, map, view or line, or named as a thing' } });
+        return z.NEVER;
+      }
+      neverDo = new Set(ids.map((id) => seen.requests?.get(id)?.id ?? ''));
+    }
     return value;
   }).pipe(Body);
   return {
@@ -2021,7 +2045,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       // The two-new budget goes in reply order (R73): the reply's own key order says which section came first.
       const keys = isRecord(value) ? Object.keys(value) : [];
       const suggestions = suggested.length ? { suggestions: { first: keys.indexOf('views') < keys.indexOf('askAfter'), views: suggested } } : {};
-      return { ok: true, held, filing: { ...suggestions, newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}), ...(maps.length ? { maps } : {}), ...(answered.size ? { answers: answered } : {}), ...(documented.size ? { documents: documented } : {}) } };
+      return { ok: true, held, filing: { ...suggestions, newTags, observations, forget, ends, profiles, thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, askAfter: (pile, at) => { const q = after.get(pile.id); return q ? { ...q, askedAt: at } : null; }, ...(askedPairs.length ? { pairAsks: askedPairs } : {}), ...(kept.length ? { keep: kept } : {}), ...(views.length ? { views } : {}), ...(maps.length ? { maps } : {}), ...(answered.size ? { answers: answered } : {}), ...(documented.size ? { documents: documented } : {}), ...(neverDo.size ? { neverDo } : {}) } };
     },
   };
 }
@@ -2780,7 +2804,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         return took.taken.journal.filter((line) => {
           const request = requests.get(line.fileId);
           if (dropped.has(line.fileId)) return false;
-          if (asked.answered.has(line.fileId) || installing.has(request?.id ?? '') || filing.answers?.has(request?.id ?? '') || filing.documents?.has(request?.id ?? '')) return true;
+          if (asked.answered.has(line.fileId) || installing.has(request?.id ?? '') || filing.answers?.has(request?.id ?? '') || filing.documents?.has(request?.id ?? '') || filing.neverDo?.has(request?.id ?? '')) return true;
           return (shown.requestNotes?.[line.fileId] ?? []).every((id) => targets.has(id)) && (!(filing.answers?.size || filing.documents?.size) || !request
             || requestTargets(listing, ix, request.text).notes.length > 0 || ix.waitingRun(line.fileId) !== null);
         });
@@ -2834,7 +2858,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
             });
           }
         }
-        return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
+        return ['things', 'notes', 'lines', 'states', 'asks', 'askAfter', 'answers', 'documents', 'views', 'maps', 'never'].some((s) => Array.isArray(reply[s]) && reply[s].length > 0) ? reply : null;
       };
       const intent = await twice(input, 'execution', async (value) => {
         await prepareMaps(value);
