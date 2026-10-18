@@ -17,6 +17,8 @@
 # - The job runs on GitHub's ubuntu-latest unless the BOWER_RUNS_ON variable names another runner label, such as
 #   self-hosted for a machine of the person's own (free of Actions minutes; https://docs.github.com/en/actions/
 #   how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job). Only for a private repository.
+# - On a self-hosted runner the Claude Code cache and the region steps are skipped (runner.environment): its home
+#   keeps Claude Code between jobs, it has no Azure metadata service, and the timing line says region=self-hosted.
 name: tidy
 run-name: tidy ${{ github.event.client_payload.run_id }} ${{ github.event.client_payload.attempt }}
 
@@ -49,9 +51,10 @@ jobs:
           node-version: '24'
       # Claude Code is kept between runs by its pinned version, as the original's ingest.yml keeps its CLI
       # (https://github.com/actions/cache, v6 on Node 24 as its ci.yml pins it): restored on a hit, installed on a miss.
+      # Skipped on a self-hosted runner, whose home keeps ~/claude-cli; the install then updates it in place.
       - name: Cache Claude Code
         id: cache-claude-cli
-        if: vars.BOWER_PROVIDER == 'claude'
+        if: vars.BOWER_PROVIDER == 'claude' && runner.environment == 'github-hosted'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/claude-cli
@@ -65,7 +68,9 @@ jobs:
       # The runner's Azure region, read from the instance metadata service as text
       # (https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service). Any failure or a
       # non-region answer leaves BOWER_RUNNER_REGION unset (the timing line then says unknown); the step never fails the job.
+      # Skipped on a self-hosted runner, which has no metadata service (the timing line then says self-hosted).
       - name: Record the runner region
+        if: runner.environment == 'github-hosted'
         continue-on-error: true
         run: |
           region="$(curl -s -m 2 -H Metadata:true 'http://169.254.169.254/metadata/instance/compute/location?api-version=2021-02-01&format=text' || true)"

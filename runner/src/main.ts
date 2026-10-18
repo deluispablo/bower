@@ -458,7 +458,8 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
   console.log(`Tidy-up ${runId}, attempt ${attempt}, with the ${name} provider.`);
   // The job's start up to here: Node's uptime, as the original's queue and set-up row.
   const timing = new RunTiming(process.uptime() * 1000);
-  timing.setRegion(env.BOWER_RUNNER_REGION);
+  // A self-hosted runner has no Azure region: it is named as such, never by its host or timezone (the log is public).
+  timing.setRegion(env.BOWER_RUNNER_REGION || (env.RUNNER_ENVIRONMENT === 'self-hosted' ? 'self-hosted' : undefined));
   try {
     const end = await runTidy({
       api,
