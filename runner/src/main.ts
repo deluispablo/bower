@@ -38,6 +38,7 @@
 import { createOwnershipContext, type OwnershipContext } from '../../src/data/contracts/ownership-format';
 import type { Pacing } from '../../src/data/drive/transport';
 import { readFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import { admittedThings } from '../../src/data/spine/admission';
@@ -262,8 +263,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
       await status.publishQuestions(plannedQuestions(manifest), totalOf(seen.total));
     } catch (error) {
       // The retained snapshot rides the next ordinary report; publication never stops durable effects.
-      const detail = error instanceof Error ? error.stack ?? error.message : String(error);
-      console.error(`Live question publication failed; the next status report will carry the snapshot again. ${detail.replace(/\s+/g, ' ')}`);
+      console.error(publicationFailedLine(error));
     }
   };
 
@@ -385,6 +385,35 @@ export interface MainOptions {
   claude?: ClaudeSpawn;
 }
 
+/** Home, cwd and tmp directories become `…` (longest first, only at a path boundary); an empty or `/` one is skipped. */
+function hidePaths(text: string): string {
+  const roots = [homedir(), process.cwd(), tmpdir()].map((r) => r.replace(/\/+$/, '')).filter(Boolean)
+    .sort((a, b) => b.length - a.length).map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return roots.length ? text.replace(new RegExp(`(?:${roots.join('|')})(?![\\w.-])`, 'g'), '…') : text;
+}
+
+/** One public log line for an Error: the sentence, ` (code)`, `: cause sentence`; never a stack or an absolute path. Other values pass through. */
+export function publicLine(x: unknown): string {
+  if (!(x instanceof Error)) return typeof x === 'string' ? x : String(x);
+  const code = x instanceof BowerError ? ` (${x.code})` : '';
+  const cause = x.cause instanceof Error ? `: ${x.cause.message}` : '';
+  return hidePaths(`${x.message}${code}${cause}`);
+}
+
+/** The one log line when publishing the live questions fails: no stack, no path. */
+export function publicationFailedLine(error: unknown): string {
+  return `Live question publication failed; the next status report will carry the snapshot again. ${publicLine(error).replace(/\s+/g, ' ')}`;
+}
+
+/** Wraps `console.error` so an Error argument prints its `publicLine`; returns the restore. */
+export function installPublicLog(): () => void {
+  const original = console.error;
+  console.error = (...args: unknown[]) => original(...args.map((a) => (a instanceof Error ? publicLine(a) : a)));
+  return () => {
+    console.error = original;
+  };
+}
+
 /**
  * The process on GitHub Actions: the provider `BOWER_PROVIDER` names (scripted when unset), the Worker at
  * `BOWER_API_URL`, and the dispatch from the event file at `GITHUB_EVENT_PATH`, which is where the ticket stays: it
@@ -485,6 +514,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
 
 // Run as the bundle's entry (`node runner/dist/runner.mjs`), never when imported.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  installPublicLog();
   main(process.env).then((code) => {
     process.exitCode = code;
   }, (e: unknown) => {
