@@ -60,6 +60,7 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   const unchecked = sorted.filter((note) => !note.lint && !note.refused && !note.diagnostic);
   const broken: string[] = [];
   const inbound = new Map<string, number>();
+  const outbound = new Set<string>();
   for (const note of sorted) {
     for (const raw of note.lint?.links ?? []) {
       const target = linkTarget(raw).replace(/^\/+/, '');
@@ -74,7 +75,9 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
       }
       // Self-links never count; a title two notes share counts for both, as Obsidian picks one of them.
       for (const { item: other, key } of notePaths.get(lastOf(target)) ?? []) {
-        if (other !== note.path && matches(key, target)) inbound.set(other, (inbound.get(other) ?? 0) + 1);
+        if (other === note.path || !matches(key, target)) continue;
+        inbound.set(other, (inbound.get(other) ?? 0) + 1);
+        outbound.add(note.path);
       }
     }
   }
@@ -127,8 +130,8 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   const binned = originals.filter((original) => original.after === null
     && sorted.some((note) => note.owner === 'bower' && parentOf(note.path) === parentOf(original.path)))
     .map((original) => `- Binned: ${thingName(nameOf(original.path))} was moved to the Bin.`);
-  // An orphan needs the whole inbound graph; About me and Rules are the notes the app opens directly, never linked to.
-  const orphans = sorted.some((note) => !note.lint) ? [] : bower.filter((note) => !inbound.has(note.path) && !isRoot(note.path)
+  // An orphan has no note links in or out (as Obsidian counts) and needs the whole graph; About me and Rules are the notes the app opens directly, never linked to.
+  const orphans = sorted.some((note) => !note.lint) ? [] : bower.filter((note) => !inbound.has(note.path) && !outbound.has(note.path) && !isRoot(note.path)
     && !isHub(note.path, nameOf(note.path), note.type ?? undefined)).map((note) => `- Nothing links to ${link(note.path)}.`);
   const notChecked = unchecked.filter((note) => placed.get(note.path)).map((note) => `- Waiting: ${link(note.path)}. Bower will check it next time.`);
   const couldNotRead = sorted.filter((note) => note.refused && placed.get(note.path))
