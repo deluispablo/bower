@@ -118,6 +118,12 @@ export const PROP = {
   /** On a run's folder in `.bower/runs`, set at done: its run id, and when it ended in ms (`runner/src/spine/retention.ts`). */
   run: 'bowerRun',
   runEnded: 'bowerRunEnded',
+  /** On the Bower root: set to `1` once that first tidy-up step happened; never removed. */
+  firstAdded: 'bowerFirstAdded',
+  /** On the Bower root: set to `1` once that first tidy-up step happened; never removed. */
+  firstStarted: 'bowerFirstStarted',
+  /** On the Bower root: set to `1` once that first tidy-up step happened; never removed. */
+  firstReviewed: 'bowerFirstReviewed',
 } as const;
 
 /** The stamps a new record carries: its pile, and for a declaration the layout it was declared with. */

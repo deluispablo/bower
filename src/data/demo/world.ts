@@ -1,4 +1,5 @@
 import { checkedAnswer, type QuestionAnswer } from '../contracts/questions';
+import { firstTidyFrom, type FirstTidy, type FirstTidyStep } from '../contracts/first-tidy';
 /**
  * The demo: Alex's Bower folder in memory, behind the same doors the real
  * Drive and Worker will use. Moves and renames change the tree for real; a
@@ -107,6 +108,8 @@ export class DemoWorld {
   /** Where each inbox thing goes in the next tidy-up (the demo's stand-in for Claude). */
   private plans = new Map<string, { title: string; to: string; note?: string }>(Object.entries(FILING));
   private run: RunState | null = null;
+  /** The first tidy-up steps marked in this demo (the folder's own record over Drive); a reload forgets them, as all demo state. */
+  private firstTidyMarks = new Set<FirstTidyStep>();
   private user: User | null = ALEX;
   private folder: FolderState = 'ready';
   private vaultListeners = new Set<Listener>();
@@ -360,6 +363,11 @@ export class DemoWorld {
       if (!this.latency) queueMicrotask(go);
       else setTimeout(go, this.latency * (0.6 + Math.random() * 0.8));
     });
+  }
+  /** The first tidy-up's steps, read as over Drive (`firstTidyFrom`); with no folder, it is not there. */
+  private firstTidyNow(): FirstTidy {
+    if (this.folder === 'missing') throw new BowerError('not-found', 'Your Bower folder is not there any more.');
+    return firstTidyFrom(this.firstTidyMarks, { piles: this.piles.length > 0, ran: this.run !== null });
   }
   private emitVault(): void {
     this.vaultListeners.forEach((l) => l());
@@ -1039,6 +1047,16 @@ export class DemoWorld {
           this.record('task', `${ticked ? 'Ticked' : 'Unticked'} "${label}" in ${n.title}`, path);
         }),
       changes: () => this.wait(() => [...this.journal]),
+      firstTidy: () => this.wait(() => this.firstTidyNow()),
+      markFirstTidy: (step) =>
+        this.wait(() => {
+          this.firstTidyNow();
+          if (!this.firstTidyMarks.has(step)) {
+            this.firstTidyMarks.add(step);
+            this.emitVault();
+          }
+          return this.firstTidyNow();
+        }),
       subscribe: (cb) => this.on(this.vaultListeners, cb),
     };
   }

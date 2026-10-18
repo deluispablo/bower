@@ -30,6 +30,7 @@ import {
   type TreeNode,
 } from '../types';
 import type { OwnershipContext } from '../contracts/ownership-format';
+import { FIRST_TIDY_SAVE_FAILED, FIRST_TIDY_STEPS, firstTidyFrom, type FirstTidy, type FirstTidyStep } from '../contracts/first-tidy';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
 import { SET_ASIDE_TEXT, binKeys, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, findPileDeclarations, orphanState, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest, type LooseDeclaration } from '../pile-readiness';
@@ -88,6 +89,8 @@ export const NOT_THE_SAME_TEXT = {
 /** A file by the name and place it was listed with: what a move or a rename must still find. */
 const seenPlace = (f: DriveFile): SeenExpectation => ({ id: f.id, name: f.name, parents: f.parents });
 const where = (folder: string): string => folder.replaceAll('/', ' / ') || 'your Bower folder';
+/** Each first tidy-up step's property on the Bower root. */
+const FIRST_TIDY_PROP: Record<FirstTidyStep, string> = { added: PROP.firstAdded, started: PROP.firstStarted, reviewed: PROP.firstReviewed };
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
 function deviceId(): string {
@@ -1440,6 +1443,37 @@ export class DriveVault implements VaultSource {
   /** The last tidy-up's own report, as the runner wrote it. */
   lastRun(): Promise<LastRunFile | null> {
     return this.json(SYSTEM.lastRun);
+  }
+
+  /** The Bower root as Drive keeps it now; gone or in the Bin, the folder is not there. */
+  private async liveRoot(): Promise<DriveFile> {
+    const root = await byId(this.drive, await this.rootId());
+    if (!root || root.trashed) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
+    return root;
+  }
+
+  async firstTidy(): Promise<FirstTidy> {
+    const props = (await this.liveRoot()).appProperties ?? {};
+    const marks = new Set(FIRST_TIDY_STEPS.filter((s) => props[FIRST_TIDY_PROP[s]] === '1'));
+    const [listed, run] = await Promise.all([this.pilesListed(), this.lastRun()]);
+    return firstTidyFrom(marks, { piles: listed.length > 0, ran: run !== null });
+  }
+
+  async markFirstTidy(step: FirstTidyStep): Promise<FirstTidy> {
+    try {
+      const root = await this.liveRoot();
+      const key = FIRST_TIDY_PROP[step];
+      if (root.appProperties?.[key] !== '1') {
+        // Drive merges a properties patch: only this step's key is sent, so marks from any device all stay.
+        await this.once(root, `first-tidy:${step}`, (op, fence) => this.drive.update(root.id, { appProperties: { ...op, [key]: '1' } }, { fence }));
+        this.emit();
+      }
+      return await this.firstTidy();
+    } catch (e) {
+      if (e instanceof BowerError) throw e;
+      console.error(e);
+      throw new BowerError('unknown', FIRST_TIDY_SAVE_FAILED, undefined, { cause: e });
+    }
   }
 
   /** One plain sentence about keeping uploads on this device, or `null`. */
