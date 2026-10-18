@@ -354,15 +354,17 @@ function promptInstructions(): string {
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
     'Reply with one JSON object and nothing else, of exactly this shape:',
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
-    '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
-    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","summary":"<optional: what it is about, in a few words of your own>","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
-    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"]}],',
-    ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>"}],',
+    '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>","quotes":["<a passage copied word for word>"]}}],',
+    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","summary":"<optional: what it is about, in a few words of your own>","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","quotes":["<a passage copied word for word>"]}],',
+    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"],"quotes":["<a passage copied word for word>"]}],',
+    ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>","quotes":["<a passage copied word for word>"]}],',
     ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],',
     '  (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})',
     ' "keep":[{"kept":"<the path of a note below>","other":"<the path of a note below>"}],',
     ' "askAfter":[{"pileId":"<a pile you file>","text":"Remember this kind for next time?","yes":"Yes","no":"No",',
     '  "proposal":{"id":"<slug>","payload":{"kind":"type-row","row":{"id":"<slug>","match":["<kind>"],"template":"source","properties":{},"table":[]}}}}]}',
+    // brain-02 (ruling 4): quoted evidence (Anthropic, "Reduce hallucinations": direct quotes for factual grounding).
+    'For each note, summary, Timeline line or Current state, give in "quotes" up to 5 passages copied word for word from its own source, its pile\'s words or the note it updates, that its facts rest on. Write only facts those passages support, including names, dates, conditions and negation; leave out a fact you cannot quote.',
     `Every key but "things" is optional. A folder path starts with one of ${MAIN_FOLDERS.join(', ')}. A thing keeps its extension`,
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
     // F5 (ruling 8): the bounds the selection checks enforce, said before the first reply.
@@ -1063,6 +1065,7 @@ export const REFUSALS = {
   nameChangesKind: 'a name that changes what a thing is',
   rawName: 'a name that says nothing (underscores, a copy number, "final" at the end or a camera id)',
   numbers: 'a number that is in none of its sources',
+  quote: 'a quote that is not word for word in the source its item names',
   newFolder: 'a new folder under Areas or Projects with no rule line or note cited',
   noteForNote: 'a note for a thing filed as a note',
   noteKeys: 'a note with keys outside the intent',
@@ -1139,7 +1142,7 @@ export type RefusalKind = keyof typeof REFUSALS;
  * reply-level until it is listed, and so is any kind that cannot be traced to an admitted source.
  */
 const ITEM_LEVEL: ReadonlySet<RefusalKind> = new Set<RefusalKind>([
-  'nameChangesKind', 'rawName', 'numbers', 'newFolder', 'noteForNote', 'noteName', 'noteSummary', 'noteBody', 'noteSections', 'noteLink',
+  'nameChangesKind', 'rawName', 'numbers', 'quote', 'newFolder', 'noteForNote', 'noteName', 'noteSummary', 'noteBody', 'noteSections', 'noteLink',
   'noteMdLink', 'noteWeb', 'noNote', 'lineNote', 'lineText', 'lineCites', 'lineUncited', 'lineMarker', 'lineAlsoCites', 'stateNote',
   'stateText', 'stateCites', 'askNotes', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'documentText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget']);
 /**
@@ -1382,6 +1385,12 @@ function newPlace(to: string, basis: unknown, responsibility: unknown, seen: See
 
 /** The longest responsibility phrase a model may give for a new Area. */
 const RESPONSIBILITY_MAX = 60;
+/** brain-02 ruling 1: an item's quotes, at most 5, each 12 (as `ruleLine` and `sourceBasisOk`) to 300 characters trimmed. */
+const QUOTES = { most: 5, shortest: 12, longest: 300 } as const;
+/** What ends a quotable segment: a cut or an unread-pages marker (`CUT`, `rendered`). */
+const QUOTE_CUT = /\[cut here:[^\]]*\]|\[\d+ pages? not read\]/;
+/** A quote's or a segment's matching form: curly quotes as straight ones (R2-5), then `normalizedText`. */
+const quoteForm = (text: string): string => normalizedText(text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"'));
 
 /**
  * The model's reply, declared once with zod 4 (https://zod.dev, the standard TypeScript runtime schema; TL-P4-14
@@ -1424,9 +1433,11 @@ const Envelope = z.strictObject({
   never: z.array(z.unknown(), named('neverKeys')).optional(),
   documents: z.array(z.unknown(), named('documentKeys')).optional(),
 }, intentIssue);
+/** brain-02: the passages, copied word for word, an authored item's facts rest on (checked by `quoted` in `replySchema`). */
+const Quotes = z.array(z.string(named('quote')), named('quote')).optional();
 const NoteShape = z.strictObject({
   name: z.string(named('noteName', 'noteKeys')), summary: z.string(named('noteSummary', 'noteKeys')), body: z.string(named('noteBody', 'noteKeys')),
-  typeRow: z.string().optional(), template: z.string().optional(), properties: z.record(z.string(), z.unknown()).optional(),
+  typeRow: z.string().optional(), template: z.string().optional(), properties: z.record(z.string(), z.unknown()).optional(), quotes: Quotes,
 }, named('noteKeys'));
 const ProfileRef = z.strictObject({ source: z.string(), sentence: z.number().int().positive() }, named('noteBody'));
 const ThingShape = z.strictObject({
@@ -1435,16 +1446,16 @@ const ThingShape = z.strictObject({
 }, named('thingKeys'));
 const WordsShape = z.strictObject({
   pileId: z.string(named('pileNotAdmitted', 'noteKeys')), to: z.string(named('placeOutside', 'noteKeys')), name: z.string(named('noteName', 'noteKeys')),
-  summary: z.string(named('noteSummary')).optional(), basis: z.unknown().optional(), responsibility: z.unknown().optional(),
+  summary: z.string(named('noteSummary')).optional(), basis: z.unknown().optional(), responsibility: z.unknown().optional(), quotes: Quotes,
 }, named('noteKeys'));
 const LineShape = z.strictObject({
   note: z.string(named('lineNote', 'lineKeys')), text: z.string(named('lineText', 'lineKeys')), cites: z.string(named('lineCites')).optional(),
-  marker: z.unknown().optional(), alsoCites: z.unknown().optional(),
+  marker: z.unknown().optional(), alsoCites: z.unknown().optional(), quotes: Quotes,
 }, named('lineKeys'));
 const StateShape = z.strictObject({
   note: z.string(named('stateNote', 'stateKeys')),
   lines: z.array(z.string(named('stateText')), named('stateText', 'stateKeys')).min(1, named('stateText')).max(STATE_WRITE.lines, named('stateText')),
-  cites: z.string(named('stateCites')).optional(),
+  cites: z.string(named('stateCites')).optional(), quotes: Quotes,
 }, named('stateKeys'));
 const AskShape = z.strictObject({
   text: z.string(named('askText', 'askKeys')), yes: z.string(named('askText', 'askKeys')), no: z.string(named('askText', 'askKeys')),
@@ -1568,11 +1579,17 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const sourceText = (id: string | undefined): string => id === undefined ? ''
     : seen.originals?.get(id) ?? seen.texts?.get(id) ?? seen.requests?.get(id)?.text
       ?? seen.noteTexts?.get(pathIn(seen, id)) ?? seen.fileTexts?.get(pathIn(seen, id)) ?? '';
+  /**
+   * An item's own evidence (brain-01; brain-02 ruling 1): its source, its pile's words, the note it updates and a line's
+   * checked secondary.
+   */
+  const evidence = (fileId: string | undefined, context: { note?: string; secondary?: string } = {}): string[] => {
+    const pileId = admitted.get(fileId ?? '')?.pileId ?? (byPile.has(fileId ?? '') ? fileId : undefined);
+    return [sourceText(fileId), seen.pileWords?.get(pileId ?? '') ?? '', seen.noteTexts?.get(context.note ?? '') ?? '', sourceText(context.secondary)];
+  };
   const grounded = (fileId: string | undefined, texts: readonly string[], where: string,
     context: { note?: string; secondary?: string; links?: boolean } = {}): true | Quoted => {
-    const pileId = admitted.get(fileId ?? '')?.pileId ?? (byPile.has(fileId ?? '') ? fileId : undefined);
-    const local = groundsOf([sourceText(fileId), seen.pileWords?.get(pileId ?? '') ?? '',
-      seen.noteTexts?.get(context.note ?? '') ?? '', sourceText(context.secondary)].join('\n'));
+    const local = groundsOf(evidence(fileId, context).join('\n'));
     for (const text of texts) {
       // Keep fenced figures checked, but never turn their example links into citations.
       let fence: Fence | null = null;
@@ -1598,6 +1615,25 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
         const n = ungrounded(claims, ground);
         if (n) return quoting(`a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from its cited evidence or attached pile context, or leave the figure out`);
       }
+    }
+    return true;
+  };
+  /**
+   * brain-02: each quote is word for word, after normalization, in one segment of the item's own evidence; a cut or an
+   * unread-pages marker ends a segment, so a quote never spans one or two sources (Instructor, "Exact citations").
+   */
+  const quoted = (quotes: readonly string[] | undefined, fileId: string | undefined, where: string,
+    context: { note?: string; secondary?: string } = {}): true | Quoted => {
+    if (quotes === undefined) return true;
+    const name = admitted.get(fileId ?? '')?.name ?? 'a note';
+    if (quotes.length > QUOTES.most) return quoting(`more than ${QUOTES.most} quotes in ${where} "${name}"; give at most ${QUOTES.most}, the passages its facts rest on`);
+    // A synopsized thing may also be quoted from the synopsis it was shown (R2-3); its label's figures stay out of `grounded`.
+    const synopsis = fileId !== undefined && seen.originals?.has(fileId) ? [seen.texts?.get(fileId) ?? ''] : [];
+    const segments = [...evidence(fileId, context), ...synopsis].flatMap((text) => text.split(QUOTE_CUT)).map(quoteForm);
+    for (const quote of quotes) {
+      const size = quote.trim().length;
+      if (size < QUOTES.shortest || size > QUOTES.longest) return quoting(`a quote that is not ${QUOTES.shortest} to ${QUOTES.longest} characters: "${quote}" in ${where} "${name}"; copy a whole passage word for word`);
+      if (!segments.some((segment) => segment.includes(quoteForm(quote)))) return quoting(`a quote that is not in its sources: "${quote}" in ${where} "${name}"; copy the passage word for word from its own source or the note it updates, or leave out the fact it was meant to support`);
     }
     return true;
   };
@@ -1832,6 +1868,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary,
       bodyOf(t.note).replace(/^(\s*)\d{1,9}[.)](?=\s|$)/gmu, '$1')], 'the note for')),
     rule('numbers', (t) => t.note === undefined || grounded(t.fileId, Object.values(t.note.properties ?? {}).map((value) => JSON.stringify(value)), 'the properties of', { links: false })),
+    rule('quote', (t) => quoted(t.note?.quotes, t.fileId, 'the note for')),
   ], (t) => {
     placed.set(t.fileId, { to: t.to, name: t.name });
     if (t.profile !== undefined) {
@@ -1856,6 +1893,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('noteSummary', (n) => n.summary === undefined || !copiesWords(n.summary, seen.pileWords?.get(n.pileId) ?? '') || COPIES_WORDS),
     rule('noteLink', (n) => n.summary === undefined || reasoned([n.summary])),
     rule('numbers', (n) => n.summary === undefined || grounded(n.pileId, [n.summary], 'the summary of')),
+    rule('quote', (n) => quoted(n.quotes, n.pileId, 'the summary of')),
   ], (n) => words.set(n.pileId, { to: n.to, name: n.name, ...(n.summary === undefined ? {} : { summary: n.summary }) })));
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
@@ -1887,6 +1925,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
     rule('numbers', (l) => !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))
       || grounded(l.cites, [l.text], 'the Timeline line on', { note: l.note, secondary: authoredOf(l).alsoCites })),
+    rule('quote', (l) => !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))
+      || quoted(l.quotes, l.cites, 'the Timeline line on', { note: l.note, secondary: authoredOf(l).alsoCites })),
   ], (l) => {
     // A request's line cites its words, not a pile: a state may not cite the request by it.
     if (l.cites !== undefined && !placed.has(l.cites) && !seen.requests?.has(l.cites)) cited.add(l.cites);
@@ -1900,6 +1940,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
     rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites) || cited.has(st.cites)),
     rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of', { note: st.note })),
+    rule('quote', (st) => quoted(st.quotes, st.cites, 'the Current state of', { note: st.note })),
   ], (st) => { if (notes.has(st.note) && !seen.suppressed?.has(st.note)) current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null }); }));
   // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
   // with the pile's words, and the rest of the pile is filed (TL-P4-08 point 1, addendum 4). A loose thing is its pile.
