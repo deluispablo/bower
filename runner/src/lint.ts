@@ -5,7 +5,7 @@
  */
 import { dateOk, NOTE_REFUSED, readTypeTable, validSummary } from '../../src/data/contracts/note-format';
 import { isHub } from '../../src/data/contracts/hub';
-import { linkTarget } from '../../src/data/contracts/links';
+import { linkTarget, webSource } from '../../src/data/contracts/links';
 import type { MaintenanceDeclaration, MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { normalizeTag, NOTE_TAGS_MAX, readTagList } from '../../src/data/contracts/tag-format';
 import { isRoot, nameOf, parentOf } from '../../src/data/contracts/tree';
@@ -68,6 +68,7 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
         if (item.after && matches(key, target)) linkedOriginals.add(item.after);
       }
       if (!targets.get(lastOf(target))?.some(({ key }) => matches(key, target))) {
+        if (webSource(raw)) continue;
         if (placed.get(note.path)) broken.push(`- Broken link in ${link(note.path)}: no note is called ${raw.split(/[#^]/)[0]?.trim() ?? raw}.`);
         continue;
       }

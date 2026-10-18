@@ -15,7 +15,7 @@ import { IconButton, Button, buttonLinkClass } from '@/ui/Button';
 import { PoseBower } from '@/bird/Bower';
 import { Inline, Markdown } from './markdown';
 import { useResolver } from './resolve';
-import { webSource } from './web-source';
+import { webSource } from '@/data/contracts/links';
 import { useFileActions } from '@/features/files/file-actions';
 import { AnsweredRows } from '@/features/tidy/RunLinks';
 import { isRunning } from '@/features/tidy/run-words';
