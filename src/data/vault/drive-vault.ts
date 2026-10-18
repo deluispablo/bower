@@ -1466,9 +1466,11 @@ export class DriveVault implements VaultSource {
         }
       }
     }
-    const lines = (await this.journal.list()).filter((r) => r.kind === 'rule');
+    const all = await this.journal.list();
+    const paired = pairsOf(all);
+    const lines = all.filter((r) => r.kind === 'rule' && !paired.has(r.id));
     // Your rule lines in line order, as the next tidy-up words them (`ruleSequence`, the one home): an add taken out
-    // by a later line is not listed.
+    // by a later line is not listed; a rule line and its standing Undo cancel (`pairsOf`).
     const { removed, accepted } = ruleSequence(
       worded,
       lines.filter((r) => !r.removes).map((r) => ({ recordId: r.id, text: r.text ?? r.what, yourWords: r.text ?? r.what, since: r.at })),

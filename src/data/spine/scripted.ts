@@ -3775,7 +3775,8 @@ export async function build(decided: Decided): Promise<Ended> {
   /** What each record's archive waits for: the plan's `needs`. */
   const archives = new Map<string, readonly string[]>();
   const satisfiedAppends: SatisfiedAppend[] = [];
-  // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply.
+  // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply,
+  // except rule lines, which cancel (`ruleChangesOf`).
   const paired = pairsOf(journal.map((l) => l.rec));
   for (const line of journal) {
     const { derived, moves } = await archiveOf(line);
@@ -3953,8 +3954,10 @@ function ruleChangesOf(lines: readonly JournalLine[], wordRule: (words: string) 
   const left = new Set<string>();
   const add: RuleAdd[] = [];
   const remove: RuleRemove[] = [];
+  // A rule line and its standing Undo cancel (`pairsOf`, R2): the rule stays as it was.
+  const paired = pairsOf(lines.map((l) => l.rec));
   for (const { rec } of lines) {
-    if (rec.kind !== 'rule') continue;
+    if (rec.kind !== 'rule' || paired.has(rec.id)) continue;
     if (rec.removes) {
       const out: RuleRemove = { recordId: rec.id, text: rec.removes, since: rec.at };
       if (ruleRemoveOk(out)) remove.push(out);
