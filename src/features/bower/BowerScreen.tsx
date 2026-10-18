@@ -2,7 +2,7 @@ import { LoadError } from '@/ui/LoadError';
 import { useRef, useState } from 'react';
 import { shortDay } from '@/app/words';
 import { report, undoToast } from '@/ui/report';
-import { startRun } from '@/features/tidy/start-run';
+import { useStartRun } from '@/features/tidy/start-run';
 import { Link } from 'react-router';
 import { noteRoute } from '@/app/paths';
 import { useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
@@ -36,7 +36,8 @@ const sameWords = (a: string, b: string): boolean => {
  * Either becomes a note in the inbox that Bower reads.
  */
 export function BowerScreen() {
-  const { vault, runs } = useSources();
+  const { vault } = useSources();
+  const { busy: starting, start: startRequestRun } = useStartRun();
   const rulesState = useRulesSection();
   const { rules, prose } = rulesState;
   const runState = useRun();
@@ -232,14 +233,15 @@ export function BowerScreen() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-disabled={starting || undefined}
                       onClick={() =>
-                        void startRun(runs, 'instructions').then(
+                        void startRequestRun('instructions')?.then(
                           () => useUi.getState().setTidy(true),
                           (e: unknown) => report(e, 'It did not start. Try again in a minute.'),
                         )
                       }
                     >
-                      Let Bower do it now
+                      {starting ? 'Starting…' : 'Let Bower do it now'}
                     </Button>
                   )}
                   {!m.done && removable(m.id) && (
