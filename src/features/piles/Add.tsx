@@ -36,13 +36,7 @@ interface Draft {
 let inFlight: { text: string; done: Promise<boolean> } | null = null;
 
 /** Sends the pile and runs its global effects once; they do not depend on any screen being open. */
-function start(
-  addPile: (pile: NewPile) => Promise<Pile>,
-  pile: NewPile,
-  keys: string[],
-  said: string,
-  clearIf: (sent: string) => void,
-): void {
+function start(addPile: (pile: NewPile) => Promise<Pile>, pile: NewPile, keys: string[], said: string, clearIf: (sent: string) => void): void {
   inFlight = {
     text: pile.text,
     done: (async () => {
@@ -67,8 +61,7 @@ function start(
   };
 }
 
-const folderWords = (path: string): string =>
-  path.slice(0, Math.max(0, path.lastIndexOf('/'))).replaceAll('/', ' / ') || 'your Bower folder';
+const folderWords = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/'))).replaceAll('/', ' / ') || 'your Bower folder';
 
 /** A draft file whose bytes are gone (the page was reloaded) cannot be sent. */
 const missing = (d: Draft): boolean => d.kind !== 'link' && !get(d.key);
@@ -120,9 +113,7 @@ export function Add() {
       setItemsState([]);
       nav('/');
     });
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- follows the save when busy turns on; clearIf and nav are stable.
   }, [busy]);
   const files = useRef<HTMLInputElement>(null);
@@ -161,15 +152,8 @@ export function Add() {
   const add = (all: Array<Omit<Draft, 'key'> & { file?: Blob }>): void => {
     if (inFlight) return;
     // The same file (name and size) or the same link, added again, is already here.
-    const same = (d: Draft, x: (typeof all)[number]): boolean =>
-      x.url ? d.url === x.url : d.name === x.name && !d.url && get(d.key)?.size === x.file?.size;
-    const list = all.filter(
-      (x, i) =>
-        !items.some((d) => same(d, x)) &&
-        all.findIndex(
-          (y) => y.name === x.name && y.url === x.url && y.file?.size === x.file?.size,
-        ) === i,
-    );
+    const same = (d: Draft, x: (typeof all)[number]): boolean => (x.url ? d.url === x.url : d.name === x.name && !d.url && get(d.key)?.size === x.file?.size);
+    const list = all.filter((x, i) => !items.some((d) => same(d, x)) && all.findIndex((y) => y.name === x.name && y.url === x.url && y.file?.size === x.file?.size) === i);
     const twice = all.find((x) => !list.includes(x));
     if (twice) toast(`${twice.name} is already in this pile.`);
     if (!list.length) return;
@@ -180,25 +164,16 @@ export function Add() {
       return { x, key: old?.key ?? `${Date.now()}-${i}-${x.name}`, refill: Boolean(old) };
     });
     for (const { x, key } of keyed) if (x.file) keep(key, x.file);
-    const drafts = keyed.flatMap(({ x: { file, ...d }, key, refill }) =>
-      refill ? [] : [{ ...d, key }],
-    );
+    const drafts = keyed.flatMap(({ x: { file, ...d }, key, refill }) => (refill ? [] : [{ ...d, key }]));
     // A refill changes no row, only its bytes: a new list draws it again.
     setItems((x) => [...x, ...drafts]);
     // Before anything is sent: does the folder already have any of these?
-    const sent = keyed.flatMap(({ x: { name, file }, key }) =>
-      file ? [{ key, name, body: file }] : [],
-    );
+    const sent = keyed.flatMap(({ x: { name, file }, key }) => (file ? [{ key, name, body: file }] : []));
     if (sent.length)
       void vault.duplicates(sent.map(({ name, body }) => ({ name, body }))).then(
         (found) => {
-          const dup = new Map(
-            sent.flatMap((d, i) => (found[i] ? [[d.key, found[i]] as const] : [])),
-          );
-          if (dup.size)
-            setItems((x) =>
-              x.map((d) => (dup.has(d.key) ? { ...d, dup: dup.get(d.key) ?? '' } : d)),
-            );
+          const dup = new Map(sent.flatMap((d, i) => (found[i] ? [[d.key, found[i]] as const] : [])));
+          if (dup.size) setItems((x) => x.map((d) => (dup.has(d.key) ? { ...d, dup: dup.get(d.key) ?? '' } : d)));
         },
         (e: unknown) => console.error(e),
       );
@@ -206,13 +181,10 @@ export function Add() {
     later(() => {
       const b = bird.current;
       const row = document.querySelector('[data-pile-item]:last-of-type');
-      b?.flyTo(() => b.pointOn(row, 0.85))
-        .peck()
-        .wait(0.3);
+      b?.flyTo(() => b.pointOn(row, 0.85)).peck().wait(0.3);
     }, 60);
   };
-  const fromFiles = (fl: FileList | null, origin: string): void =>
-    add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin, file: f })));
+  const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin, file: f })));
   const [badLink, setBadLink] = useState(false);
   const addLink = (): void => {
     if (inFlight) return;
@@ -221,14 +193,7 @@ export function Add() {
       setBadLink(true);
       return;
     }
-    add([
-      {
-        name: v.replace(/^https?:\/\//, '').replace(/\/$/, ''),
-        kind: 'link',
-        origin: 'A link you pasted',
-        url: v,
-      },
-    ]);
+    add([{ name: v.replace(/^https?:\/\//, '').replace(/\/$/, ''), kind: 'link', origin: 'A link you pasted', url: v }]);
     setLink('');
   };
   const onDrop = (e: DragEvent): void => {
@@ -246,41 +211,24 @@ export function Add() {
       toast('Add the missing files again, or take them out.');
       return;
     }
-    start(
-      (pile) => vault.addPile(pile),
-      {
-        text,
-        items: items.map(({ key, name, kind, origin, url }) => {
-          const body = get(key);
-          return { name, kind, origin, ...(body ? { body } : {}), ...(url ? { url } : {}) };
-        }),
-      },
-      items.map((d) => d.key),
-      ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox',
-      clearIf,
-    );
+    start((pile) => vault.addPile(pile), {
+      text,
+      items: items.map(({ key, name, kind, origin, url }) => {
+        const body = get(key);
+        return { name, kind, origin, ...(body ? { body } : {}), ...(url ? { url } : {}) };
+      }),
+    }, items.map((d) => d.key), ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', clearIf);
     setBusy(true);
   };
 
   return (
     <div className={s.page}>
       <h1 className={s.title}>Add a pile</h1>
-      <p className="muted">
-        Things that belong together, and a line about them. They wait in the inbox until you tidy
-        up.
-      </p>
+      <p className="muted">Things that belong together, and a line about them. They wait in the inbox until you tidy up.</p>
 
       <label className={s.what}>
         <span>What is this?</span>
-        <Textarea
-          rows={2}
-          placeholder="Receipts from the Saltmere weekend"
-          value={text}
-          disabled={busy}
-          onChange={(e) => {
-            if (!inFlight) setText(e.target.value);
-          }}
-        />
+        <Textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} disabled={busy} onChange={(e) => { if (!inFlight) setText(e.target.value); }} />
       </label>
 
       <div
@@ -302,48 +250,17 @@ export function Add() {
             return z ? { x: z.clientWidth - 64, y: 2 } : { x: 200, y: 2 };
           }}
         />
-        <p className={s.zoneTitle}>
-          {busy ? 'Saving this pile…' : over ? 'Let go and Bower takes it' : 'Drop files here'}
-        </p>
+        <p className={s.zoneTitle}>{busy ? 'Saving this pile…' : over ? 'Let go and Bower takes it' : 'Drop files here'}</p>
         <div className={s.zoneBtns}>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              if (!inFlight) files.current?.click();
-            }}
-          >
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { if (!inFlight) files.current?.click(); }}>
             <Icon name="file" size={18} /> Choose files
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              if (!inFlight) camera.current?.click();
-            }}
-          >
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { if (!inFlight) camera.current?.click(); }}>
             <Icon name="camera" size={18} /> Take a photo
           </Button>
         </div>
-        <input
-          ref={files}
-          type="file"
-          multiple
-          disabled={busy}
-          hidden
-          onChange={(e) => fromFiles(e.target.files, 'From this device')}
-        />
-        <input
-          ref={camera}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          disabled={busy}
-          hidden
-          onChange={(e) => fromFiles(e.target.files, 'From the camera')}
-        />
+        <input ref={files} type="file" multiple disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From this device')} />
+        <input ref={camera} type="file" accept="image/*" capture="environment" disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From the camera')} />
         <form
           className={`${s.linkRow} ${fieldBox()}`}
           onSubmit={(e) => {
@@ -389,17 +306,7 @@ export function Add() {
               </span>
               <span className={s.itemMain}>
                 <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>
-                  {draftLine(
-                    {
-                      origin: it.origin,
-                      missing: missing(it),
-                      empty: !it.url && get(it.key)?.size === 0,
-                      dup: it.dup,
-                    },
-                    it.dup ? `You already have this in ${folderWords(it.dup)}.` : undefined,
-                  )}
-                </span>
+                <span className={s.itemSub}>{draftLine({ origin: it.origin, missing: missing(it), empty: !it.url && get(it.key)?.size === 0, dup: it.dup }, it.dup ? `You already have this in ${folderWords(it.dup)}.` : undefined)}</span>
                 {it.dup && (
                   <span className={s.dupActions}>
                     <Button
@@ -410,27 +317,7 @@ export function Add() {
                     >
                       Leave it out
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => {
-                        if (!inFlight)
-                          setItems((x) =>
-                            x.map((y) =>
-                              y.key === it.key
-                                ? {
-                                    key: y.key,
-                                    name: y.name,
-                                    kind: y.kind,
-                                    origin: y.origin,
-                                    ...(y.url ? { url: y.url } : {}),
-                                  }
-                                : y,
-                            ),
-                          );
-                      }}
-                    >
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (!inFlight) setItems((x) => x.map((y) => (y.key === it.key ? { key: y.key, name: y.name, kind: y.kind, origin: y.origin, ...(y.url ? { url: y.url } : {}) } : y))); }}>
                       Add it anyway
                     </Button>
                   </span>
@@ -451,16 +338,8 @@ export function Add() {
       )}
 
       <div className={s.footer}>
-        <Button
-          block
-          disabled={busy || ready.length !== items.length || (!ready.length && !text.trim())}
-          onClick={save}
-        >
-          {busy
-            ? 'Saving…'
-            : ready.length
-              ? `Add ${plural(ready.length, 'thing')} to the inbox`
-              : 'Add to the inbox'}
+        <Button block disabled={busy || ready.length !== items.length || (!ready.length && !text.trim())} onClick={save}>
+          {busy ? 'Saving…' : ready.length ? `Add ${plural(ready.length, 'thing')} to the inbox` : 'Add to the inbox'}
         </Button>
       </div>
     </div>
