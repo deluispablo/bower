@@ -186,7 +186,7 @@ describe('the fan-out through main (c12-fanout)', () => {
     expect(report(r).filed).toHaveLength(things);
   }, 60_000);
 
-  it('AC2 c12-fanout-eight: 40 one-thing piles in 40 folders make 1 selection and 5 writing calls of 8, in first-pile order, one at a time', async () => {
+  it('AC2 c12-fanout-eight: 40 one-thing piles in 40 folders make 1 selection and 5 writing calls of 8, in first-pile order, at most four at a time', async () => {
     const large = largeFolder(80, 40, 40);
     const b = await setup(large); await seedState(b);
     const MAIN = ['Projects', 'Areas', 'Resources', 'Archive'];
@@ -200,7 +200,7 @@ describe('the fan-out through main (c12-fanout)', () => {
     expect(r.code).toBe(0);
     const calls = writing(r);
     expect(r.frames, 'one selection and five writing calls').toHaveLength(6);
-    expect(most, 'never more than one call in flight').toBe(1);
+    expect(most, 'at most 4 calls in flight').toBeLessThanOrEqual(4);
     for (const f of calls) expect(own(f).size, 'at most eight things a call').toBeLessThanOrEqual(8);
     const piles = b.admission.piles.map((p) => p.pileId);
     const chunks = Array.from({ length: 5 }, (_, i) => piles.slice(i * 8, i * 8 + 8).sort().join());
@@ -293,11 +293,10 @@ describe('the fan-out through main (c12-fanout)', () => {
     await seedState(b);
     const to = { Plum: X, Fern: Y };
     const current = filing(b, to, []);
-    const tagged: string[] = [];
     const r = await run(b, [placing(b, to), current], { narrow: false, beforeReply: async (turn, frame) => {
       if (turn === 1) return;
-      const tags = tagged.length ? ['mulch'] : ['rainwater', 'compost'];
-      tagged.push(tagsIn(frame));
+      // By group, not by which call comes first: Plum's pile is admitted first, so its group is first.
+      const tags = tagsIn(frame) === 'Plum' ? ['rainwater', 'compost'] : ['mulch'];
       current.newTags = tags;
       current.things = filing(b, to, tagsIn(frame).split('+')).things.map((t) => (String(t.name).endsWith('.txt') ? { ...t,
         note: { name: String(t.name).replace(/\.txt$/, '.md'), summary: 'Alex received a remote developer offer.', body: 'Alex received a remote developer offer.', tags } } : t));
@@ -305,7 +304,7 @@ describe('the fan-out through main (c12-fanout)', () => {
     expect(r.code).toBe(0);
     expect(r.frames).toHaveLength(3);
     expect(JSON.parse(r.after[SYSTEM.tags] ?? '{"tags":[]}'), 'the first two additions, in group order').toMatchObject({ tags: ['rainwater', 'compost'] });
-    const [first = '', next = ''] = tagged;
+    const [first, next] = ['Plum', 'Fern'];
     const noteOf = (tag: string): string => r.after[`${tag === 'Plum' ? X : Y}/${tag} notice.md`] ?? '';
     expect(noteOf(first), 'the first group\'s note keeps its tags').toMatch(/compost/);
     expect(noteOf(next), 'the next group\'s note is filed').not.toBe('');

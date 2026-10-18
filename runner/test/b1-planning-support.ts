@@ -55,7 +55,7 @@ export function largeFolder(notes: number, folders: number, things: number) {
 export interface Item { itemId: string; kind: string; destination: string | { parentId: string; name: string }; wants: string[] }
 export interface Selection { items: Item[]; asks: unknown[] }
 /** A planning call: the JSON it reads (run context and call text as one record) and all it reads (`promptOf`). */
-export interface Frame { call: ClaudeCall; value: Record<string, unknown>; prompt: string; events: Observation[] }
+export interface Frame { call: ClaudeCall; value: Record<string, unknown>; prompt: string; events: Observation[]; attempt?: number }
 export interface Traffic { method: string; url: URL; range: string | null; sent: number; got: number }
 export type Base = Awaited<ReturnType<typeof setup>>;
 
@@ -75,7 +75,10 @@ export function phaseAwareClaude(
   explicit = false,
 ): ClaudeSpawn {
   if (phasedTransports.has(execution as ClaudeSpawn)) return execution as ClaudeSpawn;
-  let step = -1; let attempt = 0; let cwd: string | undefined;
+  let step = -1; let cwd: string | undefined;
+  // c12-fanout-parallel P9: a retry counts per call, by its phase and sorted source ids (none: the empty key), so the
+  // interleaved retries of groups called at once each count from 1; calls that do not overlap count as before.
+  const attempts = new Map<string, number>();
   let selected: ClaudeExit | undefined;
   const spawn: ClaudeSpawn = async (call) => {
     const { drive, root, admission } = fixture(call);
@@ -85,9 +88,12 @@ export function phaseAwareClaude(
     };
     const phase = context.selection === undefined ? 'selection' : 'execution';
     const retry = /^Your reply was refused:/m.test(call.input);
-    if (cwd !== call.cwd) { cwd = call.cwd; step++; selected = undefined; attempt = 0; }
-    else if (retry) attempt++;
-    else attempt = 0;
+    const ids = (context.sources ?? []).map((s) => s.itemId).sort();
+    const key = ids.length ? `${phase}:${ids.join()}` : '';
+    const fresh = cwd !== call.cwd;
+    if (fresh) { cwd = call.cwd; step++; selected = undefined; attempts.clear(); }
+    const attempt = !fresh && retry ? (attempts.get(key) ?? 0) + 1 : 0;
+    attempts.set(key, attempt);
     if (explicit) return execution(call, step, attempt, phase);
     if (phase === 'selection' && retry && selected) {
       await execution(call, step, attempt, phase);
@@ -270,8 +276,8 @@ export async function run(base: Base, replies: unknown[], options: {
   const errorStart = vi.mocked(console.error).mock.calls.length;
   const frames: Frame[] = []; const events: Observation[] = []; const traffic: Traffic[] = [];
   const sources = { sources: new Set<string>(), first: undefined as string | undefined };
-  const claude = phaseAwareClaude(async (call) => {
-    const frame = { call, value: frameOf(call), prompt: promptOf(call), events: [...events] };
+  const claude = phaseAwareClaude(async (call, _step, attempt) => {
+    const frame = { call, value: frameOf(call), prompt: promptOf(call), events: [...events], attempt };
     frames.push(frame);
     const shown = frame.value as Shown;
     if (shown.selection === undefined && shown.sources) {

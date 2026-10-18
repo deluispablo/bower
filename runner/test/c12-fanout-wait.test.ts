@@ -124,22 +124,26 @@ describe('a group with no valid reply or no model time waits whole (c12-fanout-w
     // Control: the same refusal with no reask waits.
     const plain = await twoGroups();
     waitsForNextRun(await tidy(plain.b, placing(plain.b, plain.to), refuseSecond(plain)), [idOf(plain.b, plain.two)], size(plain.b, plain.one));
-    // No group landed: the first refused twice, the model time gone on its retry, the second never sent.
+    // No group landed: the first refused twice, the model time gone on its retry; the second, called at once, refused too.
     const none = await twoGroups();
     const nothing = await tidy(none.b, placing(none.b, none.to), ({ tags, retry, frame }) => {
-      if (!tags.includes(none.one)) return filing(none.b, none.to, tags);
-      if (retry) outOfTime(frame);
-      return refused(none.b, none.to, [none.one]);
+      if (retry && tags.includes(none.one)) outOfTime(frame);
+      return refused(none.b, none.to, tags);
     });
-    expect(nothing.frames, 'a selection, the first group and its retry').toHaveLength(3);
+    expect([4, 5], 'a selection, both groups, the first\'s retry and the second\'s if it had time').toContain(nothing.frames.length);
     failedReply(nothing);
   }, 180_000);
 
   it('AC3 c12-fanout-wait-cannot: a reasked group out of model time after the first landed holds the whole run', async () => {
-    const answer = (g: Awaited<ReturnType<typeof twoGroups>>) => ({ tags, frame }: Turn) => { outOfTime(frame); return filing(g.b, g.to, tags); };
+    // Both groups are called at once: the second's first reply is refused and uses up the time, so its retry finds none.
+    const answer = (g: Awaited<ReturnType<typeof twoGroups>>) => ({ tags, frame }: Turn) => {
+      if (!tags.includes(g.two)) return filing(g.b, g.to, tags);
+      outOfTime(frame);
+      return refused(g.b, g.to, [g.two]);
+    };
     const choice = await twoGroups(true);
     const r = await tidy(choice.b, placing(choice.b, choice.to), answer(choice));
-    expect(r.frames, 'a selection and the first group').toHaveLength(2);
+    expect(r.frames, 'a selection and both groups; the retry never goes out').toHaveLength(3);
     leavesForNextRun(r);
     // Control: with no reask the second group waits and the first is filed.
     const plain = await twoGroups();
@@ -150,12 +154,14 @@ describe('a group with no valid reply or no model time waits whole (c12-fanout-w
     const b = await made({ Plum: 5, Fern: 4, Sage: 6 }); await seedState(b);
     const [one = '', two = '', three = ''] = order(b);
     const to = { [one]: X, [two]: Y, [three]: Z };
-    const r = await tidy(b, placing(b, to), ({ tags, retry, frame }) => {
-      if (!tags.includes(two)) return filing(b, to, tags);
-      if (retry) outOfTime(frame);
-      return refused(b, to, [two]);
+    // All three are called at once: the third's refused reply uses up the time, so its retry finds none; the second is
+    // refused twice, or finds no time for its retry if it comes later: it waits either way.
+    const r = await tidy(b, placing(b, to), ({ tags, frame }) => {
+      if (tags.includes(one)) return filing(b, to, tags);
+      if (tags.includes(three)) outOfTime(frame);
+      return refused(b, to, tags);
     });
-    expect(r.frames, 'a selection, three groups and one retry; the third never goes out').toHaveLength(4);
+    expect([4, 5], 'a selection, three groups and the second\'s retry if it had time').toContain(r.frames.length);
     waitsForNextRun(r, [idOf(b, two), idOf(b, three)], size(b, one));
   }, 120_000);
 

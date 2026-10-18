@@ -12,7 +12,7 @@
  * - With no checkout or home settings (TL-P4-01 P4-2): `--setting-sources ""` loads no user, project or local settings
  *   or CLAUDE.md (https://code.claude.com/docs/en/cli-reference; https://code.claude.com/docs/en/agent-sdk/
  *   claude-code-features, `settingSources: []`), only the policy passed with `--settings`, which excludes every
- *   CLAUDE.md and turns auto memory off; and HOME and CLAUDE_CONFIG_DIR are an empty folder of the run's own.
+ *   CLAUDE.md and turns auto memory off; and HOME and CLAUDE_CONFIG_DIR are an empty folder of each call's own.
  * - In an empty folder of its own, under `env -i`-style allow-list from `run.sh` (`CLAUDE_ENV_ALLOWLIST`): the
  *   credential is `CLAUDE_CODE_OAUTH_TOKEN` from the instance repository's secrets (Claude Code GitHub Actions,
  *   https://code.claude.com/docs/en/github-actions), passed in its environment only, never in an argument, the
@@ -50,7 +50,7 @@ import { markerText, parseTimelineLine } from '../../src/data/contracts/timeline
 import { WIKI_LINK, formerNames, linkTarget } from '../../src/data/contracts/links';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
-import type { ScriptedRead } from '../../src/data/spine/read';
+import { limiter, type ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
@@ -2110,9 +2110,9 @@ function sourceOf(section: string, row: unknown, piles: Admitted['taken']['piles
   return piles.find((p) => p.pileId === id || thingsOf(p).some((i) => i.fileId === id))?.pileId;
 }
 
-/** The runner's environment cut down to the allow-list, with a home of the run's own. */
+/** The runner's environment cut down to the allow-list, with a home of the call's own. */
 function claudeEnv(env: Readonly<Record<string, string | undefined>>, home: string): Record<string, string> {
-  // HOME and the config folder are an empty folder of the run's own: nothing of the runner's user reaches claude.
+  // HOME and the config folder are an empty folder of the call's own: nothing of the runner's user reaches claude.
   const kept: Record<string, string> = { HOME: home, CLAUDE_CONFIG_DIR: join(home, '.claude'), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
   for (const name of ENV_ALLOWLIST) {
     const value = env[name];
@@ -2626,17 +2626,23 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       return asks && !asks.ok ? asks : result;
     };
     const work = await mkdtemp(join(tmpdir(), 'bower-claude-'));
-    const home = join(work, 'home'); const cwd = join(work, 'run');
-    await mkdir(home); await mkdir(cwd);
+    const cwd = join(work, 'run');
+    await mkdir(cwd);
+    let homes = 0;
     // The planning calls' prompt file: in the run's own folder, outside the model's cwd, removed with it (c12-prefix).
     const systemFile = join(work, 'system-prompt.md');
     const call = async (input: string, kind: CallKind | undefined, on = model, system?: string): Promise<Read> => {
       const timeoutMs = timing.remainingModelMs();
       if (timeoutMs <= 0) return exhausted();
+      // P6: each call its own empty home and config folder (claude rewrites .claude.json unlocked); the cwd stays shared.
+      const home = join(work, `home-${++homes}`);
+      await mkdir(home);
+      const spawn = (): Promise<ClaudeExit> => (setup.spawn ?? spawnClaude)({ command: 'claude', args: claudeArgs(on, maxTurns, system),
+        env: claudeEnv(setup.env, home), cwd, input, timeoutMs, maxBytes: REPLY_LIMIT });
       let exit: ClaudeExit | undefined;
       try {
-        exit = await timing.time('model', () => (setup.spawn ?? spawnClaude)({ command: 'claude', args: claudeArgs(on, maxTurns, system),
-          env: claudeEnv(setup.env, home), cwd, input, timeoutMs, maxBytes: REPLY_LIMIT }));
+        // S14: writing calls overlap, so the fan-out's one model wrap times them, never each call's own.
+        exit = await (kind === 'execution' ? spawn() : timing.time('model', spawn));
       } finally {
         // A spawned call that throws gets its line too, with zeros.
         timing.addModel(exit ? statsOf(exit.stdout) : null, kind);
@@ -3028,15 +3034,21 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         };
         return { input, check, drop, plan: (): RunManifest | undefined => validatedPlan };
       };
-      // Every group's input is made, in group order, before the first writing call goes out (S11); the calls go one at a time.
+      // Every group's input is made, in group order, before the first writing call goes out (S11); up to four calls go at once.
       const jobs: Array<Awaited<ReturnType<typeof job>>> = [];
       for (const [i, group] of (groups.length ? groups : [[]]).entries()) jobs.push(await job(group, i === 0));
+      const waitable = (error: unknown): error is BowerError => plannerRefusal(error) || error instanceof LedgerExhausted;
+      // S15, P8: an error that is not a wait starts no more groups; the started ones settle; one model wrap for all (S14).
+      const limit = limiter(4, (error) => !waitable(error));
+      const settled = await timing.time('model', () => Promise.allSettled(jobs.map((j) => limit(() => twice(j.input, 'execution', j.check, j.drop)))));
       const intents: Array<Extract<Intent, { ok: true }>> = [];
       const waits: BowerError[] = [];
-      for (const [i, j] of jobs.entries()) {
-        try { intents.push(await twice(j.input, 'execution', j.check, j.drop)); } catch (error) {
+      // P5: the merge walks the groups in order, whatever order their replies came back in.
+      for (const [i, s] of settled.entries()) {
+        if (s.status === 'fulfilled') intents.push(s.value); else {
+          const error: unknown = s.reason;
           // S13: no valid reply, or no model time, makes the group wait whole; any other error stops the run (ruling 4).
-          if (single || !(plannerRefusal(error) || error instanceof LedgerExhausted)) throw error;
+          if (single || !waitable(error)) throw error;
           const group = new Set(groups[i]);
           // W1: a pile planned whatever the reply says cannot wait: its group's own error fails or holds the run, as one call's would.
           for (const pile of shownTook.taken.piles) if (group.has(pile.pileId) && await chosenPile(pile)) throw error;
@@ -3044,6 +3056,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           for (const source of group) if (!dropped.has(source)) dropped.set(source, 'group');
         }
       }
+      // P5: item-level drops were set as replies came back; they are told in group order.
+      const groupOf = new Map(groups.flatMap((group, i) => group.map((id) => [id, i] as const)));
+      const inOrder = [...dropped].sort(([a], [b]) => (groupOf.get(a) ?? 0) - (groupOf.get(b) ?? 0));
+      dropped.clear();
+      for (const [source, why] of inOrder) dropped.set(source, why);
       // S12: with no group landed, a refusal fails the run; all out of time is today's held run.
       if (!intents.length) throw waits.find(plannerRefusal) ?? waits[0];
       const intent = mergedFiling(intents);
