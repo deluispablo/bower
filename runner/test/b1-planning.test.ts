@@ -64,8 +64,13 @@ it('b1-scripted-two-step-reply-freezes-every-execution-target', async () => {
   expect(result.after['Projects/Remote search/Developer offers/Offer.txt']).toBe(b.c.inboxFiles['Offer.txt']);
 });
 
-it('b1-index-job-offer', async () => {
+it('corpus-fix-b1-context AC2: B1 planning needs no fixture repair', async () => {
   const b = await setup({ fixture: 'b1-index-job-offer' });
+  const count = async (x: Base, p: string) => (await x.drive.listAll(x.root)).filter((f) => x.drive.pathOf(f.id, x.root) === p).length;
+  expect(b.c.folder['index.md']).toBeUndefined();
+  expect(b.c.folder['hot.md']).toBeUndefined();
+  expect(b.c.folder[SYSTEM.index]).toBeDefined();
+  expect(b.c.folder[SYSTEM.hot]).toBeDefined();
   const hub = 'Projects/Zinnia path/Zinnia path.md';
   const chosen = select(b, [b.id(hub), b.id(PERSONAL)], 'Projects/Zinnia path');
   const replies = JSON.parse(await readFile(join(b.c.dir, 'replies.json'), 'utf8')) as Array<Record<string, unknown>>;
@@ -84,11 +89,22 @@ it('b1-index-job-offer', async () => {
   expect.soft(payload(r, 0), 'selection sees the relevant id past twelve hubs').toContain(b.id(hub));
   expect.soft(payload(r, 0), 'selection does not eagerly receive L3 personal text').not.toContain('Alex checks whether each offer is remote.');
   expect.soft(payload(r, 1), 'execution has selected personal evidence').toContain('Alex checks whether each offer is remote.');
+  expect(r.after[SYSTEM.index]).toContain('### Zinnia path');
+  expect(r.after[SYSTEM.index]).toContain('- [[Ferrowick offer]] — Ferrowick offers Alex a remote developer role.');
+  expect(r.after['index.md']).toBeUndefined();
+  expect(r.after['hot.md']).toBeUndefined();
+  expect(r.after['Projects/Zinnia path/Ferrowick offer.md']).toMatch(/^summary: .*Ferrowick.*remote developer role/m);
+  expect(await count(b, SYSTEM.index)).toBe(1);
+  expect(await count(b, SYSTEM.hot)).toBe(1);
   const warm = await setup({ fixture: 'b1-index-job-offer' }); await seedState(warm);
+  expect(await count(warm, SYSTEM.index)).toBe(1);
+  expect(await count(warm, SYSTEM.hot)).toBe(1);
   const warmExecution = JSON.parse(JSON.stringify(replies[0]).replaceAll('$file:Ferrowick offer.txt', warm.sources[0]?.itemId ?? '')) as unknown;
   const cached = await run(warm, [select(warm, [warm.id(hub), warm.id(PERSONAL)], 'Projects/Zinnia path'), warmExecution]);
   completed(cached); twoSteps(cached);
   expect.soft(cached.after[PERSONAL]).toBe(warm.c.folder[PERSONAL]);
+  expect(await count(warm, SYSTEM.index)).toBe(1);
+  expect(await count(warm, SYSTEM.hot)).toBe(1);
 });
 
 it('b1-changes-person-edit', async () => {

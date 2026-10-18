@@ -3,11 +3,13 @@
     "present": [
       "Projects/Zinnia path/Ferrowick offer.txt",
       "Projects/Zinnia path/Ferrowick offer.md",
-      "index.md"
+      ".bower/index.md"
     ],
     "absent": [
       "Inbox/*",
-      "Projects/Alder bench/Ferrowick offer*"
+      "Projects/Alder bench/Ferrowick offer*",
+      "index.md",
+      "hot.md"
     ]
   },
   "placement": {
@@ -34,8 +36,7 @@
     "Projects/Oak chair/Oak chair.md",
     "Projects/Pine tray/Pine tray.md",
     "Projects/Willow frame/Willow frame.md",
-    "Resources/Careers/Applications.md",
-    "hot.md"
+    "Resources/Careers/Applications.md"
   ],
   "protectedRanges": [
     {
@@ -69,7 +70,7 @@
       ]
     },
     {
-      "path": "index.md",
+      "path": ".bower/index.md",
       "contains": [
         "# Index",
         "## Projects",

@@ -61,7 +61,7 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c15-scanned-letter | C15 | model | bench:4-scanned-pdf, adapted (made-up) |
 | c15-stale-package-rebuilt | C15 | model | new (runner extraction of admitted source bytes) |
 | c15-context-budget-exhausted | C15 | model | new (runner extraction of admitted source bytes) |
-| b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture; scripted proof pending |
+| b1-index-job-offer | C17 / B1 | model | TL-P4-39; reused made-up B123 indexed job-search fixture |
 | b1-changes-person-edit | C17 / B1 | model | TL-P4-39 §1.6, addendum 2; supported own-note edit on the same Drive |
 | b1-moc-over-40 | C17 / B1 | model | TL-P4-38 addenda 1–2; 41-item parent folds to existing child maps |
 | b1-index-no-change | C17 / B1 | model | TL-P4-39 F9; reused made-up B123 exclusions and unchanged-index fixture |
