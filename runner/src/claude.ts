@@ -175,14 +175,14 @@ export function claudeLimits(env: Readonly<Record<string, string | undefined>>):
 }
 
 /**
- * The arguments `claude` runs with: print mode, JSON out, the model and cap, no tool, no MCP server, the policy. A
+ * The arguments `claude` runs with: print mode, JSON (streamed for images), the model and cap, no tool, no MCP server, the policy. A
  * planning call first names its prompt file, which replaces the default prompt (cli-reference, "System prompt flags").
  */
 export function claudeArgs(model: string, maxTurns: number, systemPromptFile?: string, images = false): string[] {
   return [
     ...(systemPromptFile === undefined ? [] : ['--system-prompt-file', systemPromptFile]),
-    ...(images ? ['--input-format', 'stream-json'] : []),
-    '-p', '--output-format', 'json', '--model', model, '--max-turns', String(maxTurns),
+    ...(images ? ['--input-format', 'stream-json', '--verbose'] : []),
+    '-p', '--output-format', images ? 'stream-json' : 'json', '--model', model, '--max-turns', String(maxTurns),
     '--tools', '', '--strict-mcp-config', '--permission-mode', 'dontAsk', '--no-session-persistence',
     // No user, project or local settings (the CLI's form of the Agent SDK's `settingSources: []`): only managed
     // policy, if the machine has one, and the policy passed here apply (cli-reference, settings precedence).
@@ -2226,15 +2226,28 @@ export const spawnClaude: ClaudeSpawn = (call) =>
 /** The reply's JSON, or why there is none: a refusal of the model's answer (asked once more), or a run that went wrong. */
 type Read = { ok: true; value: unknown } | Refused | { ok: false; kind: null; why: string; invalidReply?: true };
 
-/** The reply's JSON out of `claude -p --output-format json`'s result, or why there is none. */
-function replyOf(exit: ClaudeExit, maxTurns: number): Read {
-  if (exit.cut) return { ok: false, kind: null, why: `stopped at its ${exit.cut} cap`, invalidReply: true };
-  let envelope: unknown;
+/** Image streams must end in exactly one result; no partial or trailing event can supply reply or usage. */
+function resultOf(stdout: string, streaming: boolean): unknown {
   try {
-    envelope = JSON.parse(exit.stdout);
+    if (!streaming) return JSON.parse(stdout);
+    let result: Record<string, unknown> | undefined;
+    for (const line of stdout.split('\n')) {
+      if (!line.trim()) continue;
+      const event: unknown = JSON.parse(line);
+      if (!event || typeof event !== 'object' || Array.isArray(event)
+        || typeof (event as Record<string, unknown>).type !== 'string' || result) return undefined;
+      if ((event as Record<string, unknown>).type === 'result') result = event as Record<string, unknown>;
+    }
+    return result;
   } catch {
-    return { ok: false, kind: null, why: `exit ${exit.code}, no JSON result`, invalidReply: true };
+    return undefined;
   }
+}
+
+/** The reply's JSON out of the decoded CLI result, or why there is none. */
+function replyOf(exit: ClaudeExit, maxTurns: number, envelope: unknown): Read {
+  if (exit.cut) return { ok: false, kind: null, why: `stopped at its ${exit.cut} cap`, invalidReply: true };
+  if (envelope === undefined) return { ok: false, kind: null, why: `exit ${exit.code}, no JSON result`, invalidReply: true };
   if (!envelope || typeof envelope !== 'object' || (envelope as { type?: unknown }).type !== 'result') return { ok: false, kind: null, why: `exit ${exit.code}, not a result`, invalidReply: true };
   const { subtype, is_error: isError, num_turns: turns, result } = envelope as Record<string, unknown>;
   if (subtype === 'error_max_turns' || (typeof turns === 'number' && turns > maxTurns)) return { ok: false, kind: null, why: `over its turn cap of ${maxTurns}`, invalidReply: true };
@@ -2249,13 +2262,7 @@ function replyOf(exit: ClaudeExit, maxTurns: number): Read {
 }
 
 /** The model step's numbers from the JSON result, when it has them; only numbers are kept. */
-function statsOf(stdout: string): ModelStats | null {
-  let r: unknown;
-  try {
-    r = JSON.parse(stdout);
-  } catch {
-    return null;
-  }
+function statsOf(r: unknown): ModelStats | null {
   if (!r || typeof r !== 'object') return null;
   const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
   const { duration_ms: wall, duration_api_ms: api, num_turns: turns, usage } = r as Record<string, unknown>;
@@ -2560,14 +2567,16 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const spawn = (): Promise<ClaudeExit> => (setup.spawn ?? spawnClaude)({ command: 'claude', args: claudeArgs(on, maxTurns, system, !!images?.length),
         env: claudeEnv(setup.env, home), cwd, input, ...(images?.length ? { images } : {}), timeoutMs, maxBytes: REPLY_LIMIT });
       let exit: ClaudeExit | undefined;
+      let result: unknown;
       try {
         // S14: writing calls overlap, so the fan-out's one model wrap times them, never each call's own.
         exit = await (kind === 'execution' ? spawn() : timing.time('model', spawn));
+        result = resultOf(exit.stdout, !!images?.length);
       } finally {
         // A spawned call that throws gets its line too, with zeros.
-        timing.addModel(exit ? statsOf(exit.stdout) : null, kind);
+        timing.addModel(statsOf(result), kind);
       }
-      const reply = replyOf(exit, maxTurns);
+      const reply = replyOf(exit, maxTurns, result);
       if (!reply.ok && reply.kind === null) return refuse(images?.length ? (exit.cut ? 'picture cut' : 'picture failed') : reply.why, exit, reply.invalidReply);
       return reply;
     };
