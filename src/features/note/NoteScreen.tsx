@@ -174,9 +174,7 @@ function NoteView({ path }: { path: string }) {
             <PoseBower pose="idle" size={64} />
           </div>
           <h2 id="bn">Bower&rsquo;s note</h2>
-          <p>
-            <Inline text={note.bowerNote.text} link={link} />
-          </p>
+          <Markdown text={note.bowerNote.text} link={link} />
           <p className={s.source}>
             <span className={s.dot} style={{ background: note.bowerNote.source === 'notes' ? 'var(--brand)' : note.bowerNote.source === 'web' ? 'var(--para-resources)' : 'var(--para-archive)' }} />
             {note.bowerNote.source === 'notes' ? 'From your notes' : note.bowerNote.source === 'web' ? 'From the web' : 'From your notes and the web'}
