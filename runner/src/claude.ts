@@ -47,7 +47,7 @@ import { failureKind } from '../../src/data/drive/transport';
 import { inSetFolder, setMembers, type SetNote } from './views';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../../src/data/contracts/note-templates';
 import { markerText, parseTimelineLine } from '../../src/data/contracts/timeline-line';
-import { WIKI_LINK, formerNames, linkTarget } from '../../src/data/contracts/links';
+import { scanLinks, replaceLinks, formerNames, linkTarget } from '../../src/data/contracts/links';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import { admittedThings } from '../../src/data/spine/admission';
@@ -1283,7 +1283,7 @@ const MD_LINK = /\[[^\]]*\]\(\s*<?([^)\s>]*)>?[^)]*\)/g;
 const WEB = /\b(?:https?:\/\/|www\.)[^\s<>()[\]]+/gi;
 
 function profileSources(text: string): ProfileSources {
-  return [...text.matchAll(WIKI_LINK)].map((match) => ({ path: match[0] }));
+  return [...scanLinks(text)].map((match) => ({ path: match[0] }));
 }
 
 /**
@@ -1560,11 +1560,11 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const prose = text.split('\n').map((line) => {
         const previous = fence;
         fence = fenceAfter(line, fence);
-        return previous || fence ? line.replace(WIKI_LINK, (link) => link.replace(/[[\]]/g, ' ')) : line;
+        return previous || fence ? replaceLinks(line, (link) => link.replace(/[[\]]/g, ' ')) : line;
       }).join('\n');
       // Segment around whole links, then restore their targets and aliases for citation and claim checks. Uppercase, so a
       // link that opens a sentence still ends the one before it (UAX #29 never breaks before a lowercase letter).
-      const masked = prose.replace(WIKI_LINK, (link) => 'X'.repeat(link.length));
+      const masked = replaceLinks(prose, (link) => 'X'.repeat(link.length));
       for (const { index, segment: boundary } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked)) {
         const segment = prose.slice(index, index + boundary.length);
         const ground = new Set(local);
@@ -1575,7 +1575,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
           }
         }
         // The later link check still validates identity; only an explicit alias is authored claim text.
-        const claims = segment.replace(WIKI_LINK, (_link, _target: string, alias?: string) => alias ?? '');
+        const claims = replaceLinks(segment, (_link, _target: string, alias?: string) => alias ?? '');
         const n = ungrounded(claims, ground);
         if (n) return quoting(`a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from its cited evidence or attached pile context, or leave the figure out`);
       }
@@ -1998,7 +1998,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     // A link alone is no answer (ruling 16): its line needs words, as a note's link needs its reason.
     rule('answerText', (a) => lineOk(a.text.trim(), ANSWER_MAX) && !/\]\(/.test(a.text) && !new RegExp(WEB.source, 'i').test(a.text)
       && !/\[\[|\]\]/.test(a.text.replace(/\[\[[^[\]|]*\]\]/g, '')) && authoredLinks(a.text).every((l) => l.reason)
-      && /[\p{L}\p{N}]/u.test(a.text.replace(WIKI_LINK, ' '))),
+      && /[\p{L}\p{N}]/u.test(replaceLinks(a.text, () => ' '))),
     (a) => {
       // Ruling 19: an empty target ("[[ ]]") names nothing.
       if (hasEmptyLink(a.text)) return no('noteLink', 'an empty link: name a note you were shown, or leave it out');

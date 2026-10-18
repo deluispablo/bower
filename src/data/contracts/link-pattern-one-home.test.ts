@@ -3,11 +3,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import * as links from './links';
 
-const { linkTarget, rewriteLinks } = links;
-const WIKI_LINK = (links as Record<string, unknown>).WIKI_LINK as RegExp;
+const { linkTarget, rewriteLinks, scanLinks } = links;
 const plainLinks = (links as Record<string, unknown>).plainLinks as (text: string) => string;
 
 // input, group 1 (raw name), group 2 (label), linkTarget(name), plainLinks(input): R1, R2, R10, R12, R17.
@@ -30,8 +30,7 @@ const TABLE: Array<[string, string | null, string | undefined, string, string]> 
 
 describe('AC1 the one wikilink pattern', () => {
   it.each(TABLE)('%j', (input, name, label, target, plain) => {
-    expect(WIKI_LINK).toBeInstanceOf(RegExp);
-    const found = [...input.matchAll(WIKI_LINK)];
+    const found = [...scanLinks(input)];
     if (name === null) expect(found).toEqual([]);
     else {
       expect(found.map((m) => [m[0], m[1], m[2]])).toEqual([[input, name, label]]);
@@ -100,4 +99,37 @@ describe('AC2 no second [[ pattern', () => {
     expect(readFileSync(join(ROOT, 'runner/src/claude.ts'), 'utf8')).not.toMatch(/const extensionOf\b/);
     expect(readFileSync(join(ROOT, 'runner/src/extract.ts'), 'utf8')).toMatch(/export const extensionOf\b/);
   });
+});
+
+import { boundedWikilinks, FAMILIES, SIZES, type Route } from '../../../testing/wikilink-worker';
+const routes: Route[] = ['scan', 'plain', 'rewrite', 'rewrite-later', 'profile', 'profile-later'];
+for (const route of routes) for (const unit of FAMILIES) for (const size of SIZES) {
+  it(`sec-wikilinks-contract-bounded ${route} ${JSON.stringify(unit)} ${size}`, async () => {
+    await boundedWikilinks(route, unit, size);
+  }, 30000);
+}
+
+it('preserves raw captures, recovery and half-open UTF-16 ranges', () => {
+  const cases: Array<[string, Array<[string, string, string | undefined, number, number]>]> = [
+    ['[[bad][[ok]]', [['[[ok]]', 'ok', undefined, 6, 12]]],
+    ['[[bad\r[[ok]]', [['[[ok]]', 'ok', undefined, 6, 12]]],
+    ['[[a[[b]]', [['[[a[[b]]', 'a[[b', undefined, 0, 8]]],
+    ['[[a|b[[c]]', [['[[a|b[[c]]', 'a', 'b[[c', 0, 10]]],
+    ['[[a\\b|c\\d]]', [['[[a\\b|c\\d]]', 'a\\b', 'c\\d', 0, 11]]],
+    ['😀[[a]][[b|c]]', [['[[a]]', 'a', undefined, 2, 7], ['[[b|c]]', 'b', 'c', 7, 14]]],
+    ['[[a[b]]', [['[[a[b]]', 'a[b', undefined, 0, 7]]],
+  ];
+  for (const [text, expected] of cases) {
+    expect([...scanLinks(text)].map((m) => [m[0], m[1], m[2], m.index, m.index + m[0].length])).toEqual(expected);
+  }
+});
+
+// Bounded legacy oracle: random small inputs cannot block the test process.
+it('matches the former grammar on short mixed delimiters', () => {
+  fc.assert(fc.property(fc.array(fc.constantFrom('[', ']', '|', '\r', '\n', 'a', '\\', '😀'), { maxLength: 100 }), (chars) => {
+    const text = chars.join('');
+    const old = /\[\[([^\]|\r\n]*)(?:\|([^\]\r\n]*))?\]\]/g;
+    const shape = (m: { 0: string; 1?: string; 2?: string; index: number }) => [m[0], m[1], m[2], m.index];
+    expect([...scanLinks(text)].map(shape)).toEqual([...text.matchAll(old)].map(shape));
+  }), { numRuns: 2000, seed: 16 });
 });

@@ -1,7 +1,7 @@
 import type { Note } from '@/data/types';
 import { LIST_MARK, TASK_BOX } from '@/data/tasks';
 import { tableCells } from '@/data/search-text';
-import { WIKI_LINK } from '@/data/contracts/links';
+import { scanLinks } from '@/data/contracts/links';
 import type { ReactNode } from 'react';
 import { Checkbox } from '@/ui/Field';
 
@@ -21,17 +21,30 @@ interface Token {
 /** The one matcher, in a single pass: what `inline` renders and `shown` reads cannot differ. */
 function tokens(text: string): Token[] {
   const out: Token[] = [];
-  const re = new RegExp(`${WIKI_LINK.source}|\\*\\*([^*]+)\\*\\*|\\*([^*]+)\\*|\`([^\`]+)\``, 'g');
+  const re = /\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
+  const links = scanLinks(text);
+  let link = links.next().value;
+  let format = re.exec(text);
   let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push({ kind: 'text', text: text.slice(last, m.index) });
-    // A link naming nothing ([[]], [[|b]]) stays as written.
-    if (m[1] !== undefined) out.push(m[1] ? { kind: 'link', text: m[2]?.trim() ? m[2] : m[1], target: m[1] } : { kind: 'text', text: m[0] });
-    else if (m[3]) out.push({ kind: 'strong', text: m[3] });
-    else if (m[4]) out.push({ kind: 'em', text: m[4] });
-    else if (m[5]) out.push({ kind: 'code', text: m[5] });
-    last = re.lastIndex;
+  while (link || format) {
+    if (link && (!format || link.index <= format.index)) {
+      if (link.index > last) out.push({ kind: 'text', text: text.slice(last, link.index) });
+      const [all, name, alias] = link;
+      out.push(name ? { kind: 'link', text: alias?.trim() ? alias : name, target: name } : { kind: 'text', text: all });
+      last = link.index + all.length;
+      link = links.next().value;
+    } else if (format) {
+      if (format.index > last) out.push({ kind: 'text', text: text.slice(last, format.index) });
+      if (format[1]) out.push({ kind: 'strong', text: format[1] });
+      else if (format[2]) out.push({ kind: 'em', text: format[2] });
+      else if (format[3]) out.push({ kind: 'code', text: format[3] });
+      last = format.index + format[0].length;
+    }
+    if (link && link.index < last) link = links.next(last).value;
+    if (format && format.index < last) {
+      re.lastIndex = last;
+      format = re.exec(text);
+    }
   }
   if (last < text.length) out.push({ kind: 'text', text: text.slice(last) });
   return out;
@@ -40,11 +53,12 @@ function tokens(text: string): Token[] {
 function inline(text: string, link: LinkFn, keyBase: string): ReactNode[] {
   return tokens(text).map((t, k) => {
     const key = `${keyBase}-${k}`;
-    if (t.kind === 'link') return link(t.target ?? t.text, t.text, key);
-    if (t.kind === 'strong') return <strong key={key}>{t.text}</strong>;
-    if (t.kind === 'em') return <em key={key}>{t.text}</em>;
-    if (t.kind === 'code') return <code key={key}>{t.text}</code>;
-    return t.text;
+    const text = t.text.replace(/\n/g, ' ');
+    if (t.kind === 'link') return link(t.target ?? text, text, key);
+    if (t.kind === 'strong') return <strong key={key}>{text}</strong>;
+    if (t.kind === 'em') return <em key={key}>{text}</em>;
+    if (t.kind === 'code') return <code key={key}>{text}</code>;
+    return text;
   });
 }
 
@@ -157,7 +171,7 @@ export function Markdown({ text, link, taskRegions, onToggle, headingLevel }: Ma
     }
     const para: string[] = [];
     while (i < lines.length && (lines[i] ?? '').trim() && !/^(#{1,4}\s|\s*[-*]\s|\s*\d+\.\s|\||> )/.test(lines[i] ?? '')) para.push(lines[i++] ?? '');
-    blocks.push(<p key={key}>{inline(para.join(' '), link, key)}</p>);
+    blocks.push(<p key={key}>{inline(para.join('\n'), link, key)}</p>);
   }
   return <>{blocks}</>;
 }
