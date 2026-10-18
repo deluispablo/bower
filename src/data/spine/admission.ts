@@ -4,7 +4,7 @@
  * declaration. The run takes exactly that set, and what changed since waits for the next run.
  */
 import type { DeclarationRef } from '../contracts/run-manifest';
-import { PILE_NOTE } from '../piles';
+import { PILE_NOTE, thingCount } from '../piles';
 
 export type AdmissionScope = 'all' | 'instructions';
 
@@ -63,7 +63,10 @@ export type Admission = { kind: 'nothing'; cause: NothingCause } | { kind: 'mani
  * a thing). Your changes are not things. This is the `total` the app shows ("Reading N things").
  */
 export function admittedThings(m: AdmissionManifest): number {
-  return m.piles.reduce((sum, p) => sum + p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)).length, 0);
+  return m.piles.reduce((sum, p) => {
+    const files = p.anchor ? p.items.filter((i) => i.name !== PILE_NOTE).length : p.items.length;
+    return sum + thingCount(files, files < p.items.length);
+  }, 0);
 }
 
 /** Whether `value` is an admission manifest, as stored with the run and handed to the runner. */

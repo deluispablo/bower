@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { countThings, folderCount, isEmptyPile, safeInboxName } from './piles';
-import type { TreeNode } from './types';
+import { countThings, folderCount, isEmptyPile, safeInboxName, thingsIn } from './piles';
+import type { Pile, TreeNode } from './types';
 
 const file = (path: string, hub = false): TreeNode => ({ path, name: path.split('/').pop() ?? '', type: 'file', kind: 'note', modified: 0, ...(hub ? { hub: true } : {}) }) as TreeNode;
 
@@ -31,5 +31,15 @@ describe('an empty pile', () => {
   it('is never a pile whose note Bower could not read', () => {
     expect(isEmptyPile({ items: [], text: '' })).toBe(true);
     expect(isEmptyPile({ items: [], text: '', noteLocked: true })).toBe(false);
+  });
+});
+
+describe('things in a pile', () => {
+  const pile = (items: number, text: string, noteLocked?: boolean) => ({ items: Array.from({ length: items }, () => ({})), text, ...(noteLocked ? { noteLocked } : {}) }) as unknown as Pile;
+  it('counts a locked note once, as isEmptyPile does, and a note beside files not at all', () => {
+    expect(thingsIn(pile(0, '', true))).toBe(1);
+    expect(thingsIn(pile(0, '   '))).toBe(0);
+    expect(thingsIn(pile(0, 'words'))).toBe(1);
+    expect(thingsIn(pile(2, 'words'))).toBe(2);
   });
 });

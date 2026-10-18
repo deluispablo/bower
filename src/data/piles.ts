@@ -11,8 +11,10 @@ import type { Pile, PileItem, TreeNode } from './types';
 export const PILE_NOTE = 'Pile note.md';
 
 /** Things a pile asks Bower to file: its files, or its note when it is only a note. */
+export const thingCount = (files: number, hasNote: boolean): number => files || (hasNote ? 1 : 0);
+
 export function thingsIn(p: Pile): number {
-  return p.items.length || (p.text.trim() ? 1 : 0);
+  return thingCount(p.items.length, !!p.text.trim() || !!p.noteLocked);
 }
 
 /**
