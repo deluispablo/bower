@@ -2474,10 +2474,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     ].map((name) => ({ name, why: WAITING_WHY }));
     /** The items the selection placed (set once it is checked). */
     let placed: ReadonlySet<string> = new Set();
+    const unread = new Set<string>();
     const requests = new Map<string, { id: string; text: string }>();
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, t = took.taken): Promise<RunManifest> => {
       const waiting = dropped.size ? new Set([...held ?? [], ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => p.pileId)]) : held;
-      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context, tagList }, undefined, waiting);
+      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions({ ...filing, unread }), context: run.context, tagList }, undefined, waiting);
       // WS7, WS11: a pile the selection gave no item (a new folder in a cut map), that no question or hold accounts for,
       // is left in the inbox with no row: it is counted, never "nothing was ready".
       const asked = new Set(plan.manifest.operations.flatMap(({ effect: e }) => {
@@ -2850,6 +2851,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
     };
       await synopses();
+      for (const thing of shown.piles.flatMap((pile) => pile.things)) if (!thing.text?.trim()) unread.add(thing.fileId);
       // Written once, after the synopses (which change only pile text, on stdin): both calls and their retries read it.
       const system = systemPrompt(run, shown);
       await writeFile(systemFile, system);

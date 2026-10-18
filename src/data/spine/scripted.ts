@@ -211,6 +211,7 @@ export const TOO_OLD_WHY = "Bower didn't add the line: this request is too old f
 export const NOTHING_FOUND_WHY = "Bower didn't add the line: it found nothing about this note in what you added.";
 /** A request Bower will not do, whatever it names (live-refusal-wording): the model's `never`, one row, no line. */
 export const NEVER_WHY = "Bower didn't do this: it never deletes anything for good, skips the Bin or changes things outside your folder.";
+export const UNREAD_WHY = "Bower couldn't read what's in this, so it filed it by its name.";
 /** A consolidation skipped this run (B4c R25): nothing is lost, the facts stay as their own lines. */
 export const SHORTEN_SKIPPED = 'Bower could not shorten what it has learned.';
 /** Row 1's line, under "Brought up to date". */
@@ -543,6 +544,8 @@ export interface AuthoredState {
  * `applyChanges` alone adds a line, on Bower's notes only.
  */
 export interface Filing {
+  /** Admitted things whose text was null or blank when shown to the planner. */
+  unread?: ReadonlySet<string>;
   newTags?: readonly string[];
   observations?: readonly unknown[];
   forget?: readonly { factId: string; quote?: string }[];
@@ -716,7 +719,7 @@ export interface Disagreement {
  * (`modelDecisions`), or the scripted provider's, which also answers what no model reply does yet (the optional part).
  * A part a reply leaves out is not done: requests and answers it does not settle wait for a run that can act on them.
  */
-export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'forget' | 'ends' | 'shownFactIds' | 'consolidation' | 'profiles' | 'kinds'> {
+export interface Decisions extends Pick<Filing, 'unread' | 'newTags' | 'observations' | 'forget' | 'ends' | 'shownFactIds' | 'consolidation' | 'profiles' | 'kinds'> {
   thing(t: ThingSeen): Placement | null;
   words(pileId: string, words: string): Placement | null;
   pileAsk(pile: Pile): Ask | null;
@@ -757,6 +760,7 @@ export interface Decisions extends Pick<Filing, 'newTags' | 'observations' | 'fo
 /** The model's intent as decisions: what it placed, wrote and asked, nothing more. */
 export function modelDecisions(filing: Filing): Decisions {
   return {
+    unread: filing.unread,
     newTags: filing.newTags, observations: filing.observations, forget: filing.forget, ends: filing.ends, shownFactIds: filing.shownFactIds, consolidation: filing.consolidation, profiles: filing.profiles, kinds: filing.kinds,
     thing: (t) => filing.thing(t.fileId),
     words: (pileId) => filing.words(pileId),
@@ -3278,7 +3282,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   return {
     kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
-    rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, back, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
+    rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, back, edited, missing, areas: d.areas, unread: d.unread, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled, lookedUpNothing,
@@ -3365,6 +3369,8 @@ export async function build(decided: Decided): Promise<Ended> {
       ...(tagOp && generated.some((note) => note.after.includes(thing.file.id) && parseNote(note.name, note.text).tags.length) ? [tagOp] : [])]);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
     moveOf.set(thing.file.id, move);
+    if (decided.unread?.has(thing.file.id)) reportPlan.push({ requires: [move], when: 'applied',
+      value: { ...empty(), leftAsWritten: [{ name: join(to, name), fileId: thing.file.id, why: UNREAD_WHY }] } });
     const choice = chosen.get(thing.file.id);
     if (choice) derive(choice.record, move);
     const fallback = fallbackOf(thing);
