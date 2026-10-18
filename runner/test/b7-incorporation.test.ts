@@ -14,12 +14,14 @@ import { isRunnerFile, RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout
 import { DriveVault } from '../../src/data/vault/drive-vault';
 import { outsideAdmitted } from '../src/spine/admitted';
 import { loadCase } from '../src/corpus';
-import { AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import { AT, redispatchCase, runOnDrive, runScripted, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { manifests, observe, writes, type Observation } from './b23-hot-observe';
 import { completed, failedReply, reply, report, run, select, setup, type Base } from './b1-planning-support';
 import { fixedDrive, paging } from './drive-v3';
 
 const TAGS = '.bower/tags.json';
+const GROWTH = 'c17-b7-automatic-growth-replay';
 const DEST = 'Resources/Gardening';
 const KNOWN = ['gardening', 'remote-work', 'learning'];
 const pageSize = paging.size;
@@ -217,7 +219,7 @@ describe('B7 through production main', () => {
     expect(mutations(r)).toEqual([]);
   });
 
-  it.each(['reuse-known', 'proposal-yes', 'proposal-budget', 'authority-full-cap'])('%s untagged positive control', async (slug) => {
+  it.each(['reuse-known', 'automatic-growth-replay', 'proposal-budget', 'authority-full-cap'])('%s untagged positive control', async (slug) => {
     await control(await fixture(slug));
   });
 
@@ -317,7 +319,7 @@ describe('B7 through production main', () => {
     const reused = await control(reuse);
     expect(vocabulary(reused)).toEqual(KNOWN);
     // The execution reply declares candidates from the person's request.
-    const b = await fixture('proposal-yes', { words: 'File this rainwater guide. Tag it rainwater.' });
+    const b = await fixture('automatic-growth-replay', { words: 'File this rainwater guide. Tag it rainwater.' });
     const r = await run(b, [select(b, [], DEST), intent(b, undefined, ['rainwater'])]);
     completed(r); noProposals(r);
     expect(vocabulary(r), 'a named topic installs automatically without a consent reply field')
@@ -485,7 +487,7 @@ describe('B7 through production main', () => {
   });
 
   it('b7-r25-missing-list lost create reply recovers by reserved id and completes the dependent note once', async () => {
-    const b = await fixture('proposal-yes', { vocabulary: null });
+    const b = await fixture('automatic-growth-replay', { vocabulary: null });
     let reserved: string | undefined; let lost = false;
     const r = await run(b, [select(b, [], DEST), intent(b, ['rainwater'], ['rainwater'])], {
       around: (fetch) => async (input, init = {}) => {
@@ -625,7 +627,7 @@ describe('B7 through production main', () => {
 
   it.each(['unchanged', 'changed', 'refused'] as const)('b7-growth-before-dependent-create %s', async (fault) => {
     await control(await fixture());
-      const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
+      const b = await fixture('automatic-growth-replay', { words: 'File this. Tag it rainwater.' });
       let changed = false; let refused = false;
       const r = await run(b, [select(b, [], DEST), intent(b, ['rainwater'], ['rainwater'])], { beforeReply: async (turn) => {
         if (turn === 2 && fault === 'changed') {
@@ -663,7 +665,7 @@ describe('B7 through production main', () => {
 
   it('b7-lost-vocabulary-response', async () => {
     await control(await fixture());
-    const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
+    const b = await fixture('automatic-growth-replay', { words: 'File this. Tag it rainwater.' });
     let lost = false;
     const r = await run(b, [select(b, [], DEST), intent(b, ['rainwater'], ['rainwater'])], { around: (fetch) => async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -719,7 +721,7 @@ describe('B7 through production main', () => {
 
   it('b7-r29-undo-keeps-vocabulary (retention only)', async () => {
     await control(await fixture());
-    const b = await fixture('proposal-yes', { words: 'File this. Tag it rainwater.' });
+    const b = await fixture('automatic-growth-replay', { words: 'File this. Tag it rainwater.' });
     const app = new DriveVault({ drive: b.drive, rootId: async () => b.root, runningPiles: () => new Set(), device: 'b7-undo-device' });
     const update = vi.spyOn(b.drive, 'update'); const untrash = vi.spyOn(b.drive, 'untrash');
     const appUndo = await Promise.allSettled([app.move(TAGS, 'Inbox', { undo: true }), app.restore(TAGS)]);
@@ -778,7 +780,7 @@ describe('B7 through production main', () => {
     expect(mutations(r)).toHaveLength(oracle.runs[0]?.vocabularyMutationSends ?? 0);
   });
 
-  it.each(['proposal-yes', 'proposal-budget', 'authority-full-cap'].map((slug) => ({ slug })))('b7-r30-corpus-oracles $slug', async ({ slug }) => {
+  it.each(['automatic-growth-replay', 'proposal-budget', 'authority-full-cap'].map((slug) => ({ slug })))('b7-r30-corpus-oracles $slug', async ({ slug }) => {
     const b = await fixture(slug);
     const replies = JSON.parse(await readFile(resolve(b.c.dir, 'replies.json'), 'utf8')) as unknown[];
     const oracle = JSON.parse(await readFile(resolve(b.c.dir, 'expected-tag-results.json'), 'utf8')) as {
@@ -822,5 +824,52 @@ describe('B7 through production main', () => {
       }
       before = r.after;
     }
+  });
+
+  it('corpus-fix-b7-replay AC1: automatic topic growth requires no consent', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', GROWTH));
+    expect(c.id).toBe(GROWTH);
+    const events: Observation[] = [];
+    let drive: FakeDrive | undefined;
+    let root = '';
+    const final = await runScripted(c, (f) => observe(drive as FakeDrive, root, events)(f), false, async (d, r) => { drive = d; root = r; });
+    for (const r of [final.runs?.[0], final]) {
+      expect(r?.code).toBe(0);
+      if (!r) throw new Error('The first run is missing.');
+      expect(vocabulary(r)).toEqual(['gardening', 'rainwater']);
+      expect(tagged(r, 'Resources/Gardening/Rain barrel guide.md')).toEqual(['gardening']);
+      expect(report(r).questions).toEqual([]);
+      expect((JSON.parse(r.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] }).questions).toEqual([]);
+      expect(Object.keys(r.after).filter((p) => p.startsWith(SYSTEM.proposals + '/'))).toEqual([]);
+    }
+    expect(mutations({ events })).toHaveLength(1);
+    const lines = async (file: string) => (await readFile(resolve(import.meta.dirname, '../..', file), 'utf8')).split('\n');
+    const readme = await lines('testing/corpus/README.md');
+    const method = await lines('testing/fixtures/p4-method-rubric-changes.md');
+    const readmeRow = readme.find((l) => l.startsWith('| c17-b7-automatic-growth-replay |'));
+    const methodRow = method.find((l) => l.startsWith('| c17-b7-automatic-growth-replay |'));
+    expect(readmeRow).toBe('| c17-b7-automatic-growth-replay | C17 / B7 | model | TL-P4-49 automatic growth; rainwater joins the topics on first filing, and a later idle run changes only Bower\'s run records |');
+    expect(methodRow).toBe('| c17-b7-automatic-growth-replay | changed | Points 1–8: the clear source files beside Gardening with its existing topic and a linked note, rainwater joins the topics on its own with no question, and a later idle run changes no note or topic; source and personal text are never rewritten (TL-P4-49; F7/R2). |');
+    expect(readmeRow).not.toMatch(/yes|consent/i);
+    expect(methodRow).not.toMatch(/yes|consent/i);
+    expect([...readme, ...method].filter((l) => l.startsWith('| c17-b7-proposal-yes |'))).toEqual([]);
+  });
+
+  it('corpus-fix-b7-replay AC2: replay compares generated files with the preceding run', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', GROWTH));
+    const final = await runScripted(c);
+    const first = final.runs?.[0];
+    expect(final.runs).toHaveLength(1);
+    expect(first?.code).toBe(0);
+    expect(final.code).toBe(0);
+    expect(scoreCase(c, final).unmet).toEqual([]);
+    const a = first?.after ?? {};
+    const b = final.after;
+    expect(Object.keys(a).filter((p) => !Object.hasOwn(b, p))).toEqual([]);
+    expect(final.dispatch?.runId).toBe('abc123-run1-2');
+    const RECORDS = '.bower/runs/abc123-run1-2/';
+    const changed = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((p) => a[p] !== b[p]).sort();
+    expect(changed.filter((p) => !p.startsWith(RECORDS))).toEqual(['.bower/changes/press-2.json', '.bower/last-run.json', '.bower/retrieval.json']);
+    expect(changed.filter((p) => p.startsWith(RECORDS))).not.toEqual([]);
   });
 });
