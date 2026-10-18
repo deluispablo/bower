@@ -8,7 +8,7 @@ import { isHub } from '../../src/data/contracts/hub';
 import { linkTarget, webSource } from '../../src/data/contracts/links';
 import type { MaintenanceDeclaration, MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { normalizeTag, NOTE_TAGS_MAX, readTagList } from '../../src/data/contracts/tag-format';
-import { isRoot, nameOf, parentOf } from '../../src/data/contracts/tree';
+import { isRoot, nameOf, parentOf, thingName } from '../../src/data/contracts/tree';
 
 export const HEALTH_NAME = 'Bower health.md';
 
@@ -123,10 +123,10 @@ export function renderHealth(notes: Readonly<Record<string, MaintenanceNote>>, f
   const bound = new Set(sorted.flatMap((note) => note.lint?.original && after[note.id]
     ? [`${parentOf(after[note.id]?.path ?? '')}/${note.lint.original}`.toLowerCase()] : []));
   const unlinked = sorted.some((note) => !note.lint) ? [] : originals.flatMap((original) => original.after ? [original.after] : []).filter((path) => folders.has(parentOf(path))
-    && !linkedOriginals.has(path) && !bound.has(path.toLowerCase())).map((path) => `- Not linked: no note links to ${link(path)}.`);
+    && !linkedOriginals.has(path) && !bound.has(path.toLowerCase())).map((path) => `- Not linked: no note links to [[${path}|${thingName(nameOf(path))}]].`);
   const binned = originals.filter((original) => original.after === null
     && sorted.some((note) => note.owner === 'bower' && parentOf(note.path) === parentOf(original.path)))
-    .map((original) => `- Binned: ${original.path} was moved to the Bin.`);
+    .map((original) => `- Binned: ${thingName(nameOf(original.path))} was moved to the Bin.`);
   // An orphan needs the whole inbound graph; About me and Rules are the notes the app opens directly, never linked to.
   const orphans = sorted.some((note) => !note.lint) ? [] : bower.filter((note) => !inbound.has(note.path) && !isRoot(note.path)
     && !isHub(note.path, nameOf(note.path), note.type ?? undefined)).map((note) => `- Nothing links to ${link(note.path)}.`);

@@ -315,7 +315,7 @@ describe('B8c2 appendix checks on Bower notes through main', () => {
     for (const path of moved) expect(run.after[path]).toBeUndefined();
     if (kind === 'bin') {
       expect(about(run, path)).toBe('');
-      expect(healthOf(run).filter((line) => /binned/i.test(line) && line.includes('Seed photo.jpg'))).toHaveLength(1);
+      expect(healthOf(run)).toContain('- Binned: Seed photo was moved to the Bin.');
       expect(run.after[HEALTH]).not.toContain(`[[${path}`);
     } else {
       expect(run.after[`${destination}/Seed photo.jpg`]).toBe(kind === 'companion-alone' ? 'another photo' : 'made-up image bytes');
