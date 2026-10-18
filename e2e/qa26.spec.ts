@@ -126,7 +126,8 @@ async function removeFromInbox(page: Page, name: RegExp): Promise<void> {
   await row.getByRole('button', { name: 'Remove the pile', exact: true }).click();
   await expect(toast(page, 'Pile removed')).toBeVisible();
   await expect(inbox(page).getByRole('link', { name })).toHaveCount(0);
-  await expect(page.getByText(CHANGED, { exact: true })).toHaveCount(0);
+  // The last tidy-up's report keeps its set-aside row as history (prod1-partial-results); the Inbox drops it.
+  await expect(inbox(page).getByText(CHANGED, { exact: true })).toHaveCount(0);
 }
 
 test('demo: a set-aside pile says why on the Inbox and its screen, stays after a tidy-up, and goes when removed', async ({ page }) => {
