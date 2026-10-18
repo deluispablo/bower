@@ -118,10 +118,15 @@ async function corpusCase(id: string): Promise<LoadedCase> {
   return c;
 }
 
+/** The accepted app's name-based question (legacy format), seeded open; the corpus case asks a typed pair instead. */
+const LEGACY_Q = { id: 'q-merge-flat-3', text: '[[Flat 3 (second)]] looks like [[Flat 3, 12 Larkspur Lane]]. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1791300000000 };
+/** The keep-one-note folder with the legacy question open (and `journal`, any changes of yours). */
+const legacyKeep = (c: LoadedCase, journal: LoadedCase['journal']): LoadedCase => ({ ...c, scope: 'instructions', inbox: [], presses: undefined, questions: [LEGACY_Q], journal });
+
 /** The keep-one-note folder with its question open and not yet answered (and any other changes of yours). */
 async function keepWorld(journal: LoadedCase['journal'] = []): Promise<RealWorld> {
   const c = await corpusCase('c05-keep-one-note');
-  return await realWorld({ seed: (drive) => seedCase(drive, { ...c, journal }), claude: keepWhenAnswered });
+  return await realWorld({ seed: (drive) => seedCase(drive, legacyKeep(c, journal)), claude: keepWhenAnswered });
 }
 
 async function vaultOf(w: RealWorld): Promise<{ vault: AppVault; answerQuestion: AnswerQuestion }> {
@@ -312,7 +317,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
   it('answers reach the model path', async () => {
     const c = await corpusCase('c05-keep-one-note');
     const shown: Shown[] = [];
-    const w = await realWorld({ seed: (drive) => seedCase(drive, { ...c, journal: [] }), claude: async (call) => {
+    const w = await realWorld({ seed: (drive) => seedCase(drive, legacyKeep(c, [])), claude: async (call) => {
       shown.push(shownOf(call));
       return keepWhenAnswered(call);
     } });

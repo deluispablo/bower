@@ -646,7 +646,10 @@ describe('B8b lint and the health note through main', () => {
   });
 
   it('AC15 amended ruling 3: a run that merges a note away leaves no finding or link naming it; every health link resolves', async () => {
-    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-keep-one-note'));
+    // The accepted app's name-based question (legacy format) and its yes; the corpus case asks a typed pair instead.
+    const LEGACY_Q = { id: 'q-merge-flat-3', text: '[[Flat 3 (second)]] looks like [[Flat 3, 12 Larkspur Lane]]. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1791300000000 };
+    const loaded = await loadCase(resolve(import.meta.dirname, '../../testing/corpus/c05-keep-one-note'));
+    const c = { ...loaded, scope: 'instructions' as const, inbox: [], presses: undefined, questions: [LEGACY_Q], journal: [{ kind: 'answer' as const, text: 'yes', questionId: 'q-merge-flat-3' }] };
     const KEPT = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
     const OTHER = 'Projects/Flat hunt/Flat 3 (second).md';
     const control = await runWithClaude(c, replySequence([empty]));

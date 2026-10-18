@@ -310,4 +310,36 @@ it('reports a same-run replay and a newly written tidy-up separately', async () 
   expect(Reflect.get(run, 'requestAction')).toEqual({ kind: 'tidy', id: 'press-3' });
 });
 
+it('corpus-fix-c05-pairs AC3: driver compares actual successive merge runs', async () => {
+  const { caseReplies, scoreCase } = await import('./corpus-run');
+  const FLATS = 'Projects/Flat hunt';
+  const ids = (r: { after: Record<string, string> } | undefined) =>
+    (JSON.parse(r?.after['.bower/questions.json'] ?? '{"questions":[]}') as { questions: Array<{ id: string }> }).questions.map((q) => q.id);
+  for (const id of ['c05-keep-one-note', 'c05-merge-answer-no']) {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', id));
+    // Checked before running, so a missing replies.json cannot hide the missing presses.
+    expect(1 + (c.presses?.length ?? 0), `${id}: three presses`).toBe(3);
+    const run = await runWithClaude(c, caseReplies(id));
+    const runs = [...run.runs ?? [], run];
+    expect(runs, id).toHaveLength(3);
+    for (const r of runs) {
+      expect(r.drive, id).toBe(run.drive);
+      expect(r.root, id).toBe(run.root);
+    }
+    expect(c.expected.runs, id).toHaveLength(3);
+    const asked = ids(runs[0]);
+    expect(asked, id).toHaveLength(1);
+    expect(ids(runs[1]), id).not.toContain(asked[0]);
+    if (id === 'c05-keep-one-note') {
+      expect(runs.map((r) => `${FLATS}/Flat 3 (second).md` in r.after), id).toEqual([true, false, false]);
+    } else {
+      for (const path of [`${FLATS}/Larkspur Lane flat.md`, `${FLATS}/Larkspur Lane flat, second listing.md`, `${FLATS}/Flat hunt.md`]) {
+        expect(runs.map((r) => r.after[path]), path).toEqual([runs[0]?.after[path], runs[0]?.after[path], runs[0]?.after[path]]);
+        expect(runs[0]?.after[path], path).toBeDefined();
+      }
+    }
+    expect(scoreCase(c, run), id).toEqual({ pass: true, unmet: [] });
+  }
+});
+
 });

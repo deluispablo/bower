@@ -2,26 +2,35 @@
   "id": "c05-keep-one-note",
   "capability": "C05",
   "title": "The merge question: keep one note for the same flat",
-  "covers": "model",
-  "source": "p2-journey:C05 (fake only today: the merge question q1)",
-  "scope": "instructions",
+  "covers": "scripted",
+  "source": "p2-journey:C05 (the merge question asked as a typed pair, answered yes, then a tidy-up with nothing new)",
+  "scope": "all",
   "allowWeb": false,
-  "inbox": [],
-  "journal": [
+  "inbox": [
     {
-      "kind": "answer",
-      "text": "yes",
-      "questionId": "q-merge-flat-3"
+      "line": "Flat 3 at 12 Larkspur Lane: second viewing booked for Saturday.",
+      "files": []
     }
   ],
-  "questions": [
+  "journal": [],
+  "questions": [],
+  "presses": [
     {
-      "id": "q-merge-flat-3",
-      "text": "[[Flat 3 (second)]] looks like [[Flat 3, 12 Larkspur Lane]]. Keep one note?",
-      "yes": "Yes, keep one",
-      "no": "No, keep both",
-      "askedAt": 1791300000000
-    }
+      "between": [
+        {
+          "kind": "answer",
+          "question": {
+            "kind": "pair",
+            "notes": [
+              "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+              "Projects/Flat hunt/Flat 3 (second).md"
+            ]
+          },
+          "yes": true
+        }
+      ]
+    },
+    {}
   ],
   "bowerOwned": []
 }

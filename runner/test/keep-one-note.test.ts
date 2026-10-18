@@ -6,12 +6,12 @@
  * needs: each edited note's text as it was read, and the binned note as the run saw it. No live call.
  */
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditText, ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { undoEdit } from '../../src/data/contracts/note-edit';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
-import { runWithClaude, type CaseRun } from './corpus-run';
+import { caseReplies, frameOf, runWithClaude, scoreCase, type CaseRun } from './corpus-run';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
@@ -26,10 +26,14 @@ const LINKER_TEXT = 'Ask about the boiler at [[Flat 3 (second)]].\nCompare with 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 const keepOne: ClaudeSpawn = async () => ({ code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things: [], keep: [{ kept: KEPT, other: OTHER }] }) });
 
+/** The accepted app's name-based question (legacy format), seeded here with its yes; the corpus case asks a typed pair. */
+const LEGACY_Q = { id: 'q-merge-flat-3', text: '[[Flat 3 (second)]] looks like [[Flat 3, 12 Larkspur Lane]]. Keep one note?', yes: 'Yes, keep one', no: 'No, keep both', askedAt: 1791300000000 };
+
 async function keepCase(): Promise<LoadedCase> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-keep-one-note');
   if (!c) throw new Error('no c05-keep-one-note case');
-  return { ...c, folder: { ...c.folder, [LINKER]: LINKER_TEXT } };
+  return { ...c, scope: 'instructions', inbox: [], presses: undefined, questions: [LEGACY_Q], journal: [{ kind: 'answer', text: 'yes', questionId: 'q-merge-flat-3' }],
+    folder: { ...c.folder, [LINKER]: LINKER_TEXT } };
 }
 
 const manifestOf = (run: CaseRun): ManifestV2 => {
@@ -177,5 +181,89 @@ describe('keep one note', () => {
     expect(run.code).toBe(0);
     expect(OTHER in run.after).toBe(false);
     expect(sections(run.after[KEPT] ?? '').timeline).toContain('- 2026-10-07 · Bills included');
+  });
+});
+
+describe('the checked-in yes and no lifecycles (corpus-fix-c05-pairs)', () => {
+  beforeEach(() => {
+    const stored = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const L1 = 'Projects/Flat hunt/Larkspur Lane flat.md';
+  const L2 = 'Projects/Flat hunt/Larkspur Lane flat, second listing.md';
+  const HUB = 'Projects/Flat hunt/Flat hunt.md';
+  type Answer = { answer?: string };
+  type AnswerRecord = { path: string; kind: string; text: string; questionId?: string };
+
+  /** The case from disk with its own replies; each model call's shown answers, grouped per press by the call's folder. */
+  async function lifecycle(id: string): Promise<{ c: LoadedCase; run: CaseRun; runs: CaseRun[]; shown: Answer[][][] }> {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === id);
+    if (!c) throw new Error(`no ${id} case`);
+    // Checked before running, so a missing replies.json cannot hide the missing presses.
+    expect(1 + (c.presses?.length ?? 0), `${id}: three presses`).toBe(3);
+    const byPress = new Map<string, Answer[][]>();
+    const replies = caseReplies(id);
+    const run = await runWithClaude(c, async (call) => {
+      byPress.set(call.cwd, [...byPress.get(call.cwd) ?? [], frameOf<{ answers?: Answer[] }>(call).answers ?? []]);
+      return replies(call);
+    });
+    return { c, run, runs: [...run.runs ?? [], run], shown: [...byPress.values()] };
+  }
+  const binsOf = (after: Record<string, string>): Array<{ path: string; name: string }> => Object.entries(after)
+    .filter(([p]) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p))
+    .flatMap(([path, text]) => (JSON.parse(text) as ManifestV2).operations.flatMap((o) => (o.effect.kind === 'bin' ? [{ path, name: o.effect.before.name }] : [])));
+  const answersOf = (after: Record<string, string>): AnswerRecord[] => Object.entries(after)
+    .filter(([p]) => p.startsWith('.bower/changes/') && p.endsWith('.json'))
+    .map(([path, text]) => ({ path, ...JSON.parse(text) as Omit<AnswerRecord, 'path'> })).filter((r) => r.kind === 'answer');
+  const questionsOf = (run: CaseRun | undefined): unknown => JSON.parse(run?.after['.bower/questions.json'] ?? 'null');
+  const firstId = (run: CaseRun | undefined): string | undefined => (questionsOf(run) as { questions: Array<{ id: string }> } | null)?.questions[0]?.id;
+  const outside = (after: Record<string, string> | undefined): Record<string, string> => Object.fromEntries(Object.entries(after ?? {}).filter(([p]) => !p.startsWith('.bower/')));
+
+  it('corpus-fix-c05-pairs AC2: yes and no use the journal API and survive replay', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Yes: ask, answer Yes, keep one in the app, then a tidy-up with nothing new.
+    const yes = await lifecycle('c05-keep-one-note');
+    expect(yes.runs).toHaveLength(3);
+    expect(yes.runs.map((r) => r.code)).toEqual([0, 0, 0]);
+    const bins = binsOf(yes.run.after);
+    expect(bins.map((b) => b.name)).toEqual(['Flat 3 (second).md']);
+    // In press 2's manifest: written by press 2, not there after press 1.
+    const binManifest = bins[0]?.path ?? '';
+    expect(binManifest in (yes.runs[1]?.after ?? {}) && !(binManifest in (yes.runs[0]?.after ?? {}))).toBe(true);
+    const yesAnswers = answersOf(yes.run.after);
+    expect(yesAnswers).toEqual([expect.objectContaining({ text: 'yes', questionId: firstId(yes.runs[0]) })]);
+    expect(firstId(yes.runs[0])).toMatch(/^q-pair-/);
+    expect(yesAnswers.every((r) => r.path.startsWith('.bower/changes/archive/'))).toBe(true);
+    expect(yes.shown).toHaveLength(3);
+    expect(yes.shown[1]?.flat().map((a) => a.answer)).toContain('Yes, keep one');
+    expect(yes.shown[2]?.flat()).toEqual([]);
+    expect(questionsOf(yes.runs[1])).toEqual({ v: 1, questions: [] });
+    expect(questionsOf(yes.runs[2])).toEqual({ v: 1, questions: [] });
+    expect(outside(yes.runs[2]?.after)).toEqual(outside(yes.runs[1]?.after));
+    expect(scoreCase(yes.c, yes.run)).toEqual({ pass: true, unmet: [] });
+
+    // No: ask, answer No, keep both in the app, then a tidy-up with nothing new; the three notes never change.
+    const no = await lifecycle('c05-merge-answer-no');
+    expect(no.runs).toHaveLength(3);
+    expect(no.runs.map((r) => r.code)).toEqual([0, 0, 0]);
+    expect(binsOf(no.run.after)).toEqual([]);
+    for (const [i, r] of no.runs.entries()) for (const path of [L1, L2, HUB]) expect(r.after[path], `press ${i + 1}: ${path}`).toBe(no.c.folder[path]);
+    const noAnswers = answersOf(no.run.after);
+    expect(noAnswers).toEqual([expect.objectContaining({ text: 'no', questionId: firstId(no.runs[0]) })]);
+    expect(firstId(no.runs[0])).toMatch(/^q-pair-/);
+    expect(noAnswers.every((r) => r.path.startsWith('.bower/changes/archive/'))).toBe(true);
+    expect(no.shown).toHaveLength(3);
+    expect(no.shown[1]?.flat().map((a) => a.answer)).toContain('No, keep both');
+    expect(no.shown[2]?.flat()).toEqual([]);
+    expect(questionsOf(no.runs[1])).toEqual({ v: 1, questions: [] });
+    expect(questionsOf(no.runs[2])).toEqual({ v: 1, questions: [] });
+    expect(reportOf(no.run).questions).toEqual([]);
+    expect(scoreCase(no.c, no.run)).toEqual({ pass: true, unmet: [] });
   });
 });

@@ -20,7 +20,33 @@
   ],
   "linksResolve": true,
   "report": {
-    "updatedAtLeast": 1,
-    "questions": []
-  }
+    "updated": [],
+    "questionsExactly": 0
+  },
+  "runs": [
+    {
+      "report": {
+        "questionsExactly": 1,
+        "questionSubjects": [
+          {
+            "kind": "pair",
+            "notes": [
+              "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+              "Projects/Flat hunt/Flat 3 (second).md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "report": {
+        "updated": [
+          "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+          "Bower health.md"
+        ],
+        "questionsExactly": 0
+      }
+    },
+    {}
+  ]
 }
