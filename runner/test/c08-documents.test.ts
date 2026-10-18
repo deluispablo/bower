@@ -108,7 +108,7 @@ const documents = (run: CaseRun) => Object.keys(run.after).filter((p) => p.start
 const KEYS = 'a document with keys outside the intent: give {requestId, to, title, summary, body}';
 const BINDING = "a document whose request is not one of the person's requests below, or a request given more than one result";
 const PLACE = 'a document whose "to" is not one of the folders shown under Projects, Areas, Resources or Archive';
-const TEXT = 'a document whose title, summary or body breaks the note rules: a title of at most 48 characters with no slash, a summary of one line of at most 200 characters, a body of at most 16,000 characters with no My notes, Timeline or Current state heading';
+const TEXT = 'a document whose title, summary or body breaks the note rules: a title of at most 48 characters with no slash, a summary of one line of at most 200 characters (178 when Bower read only some of the notes), a body of at most 16,000 characters with no My notes, Timeline or Current state heading';
 // Round 1 ruling 9: a document's links take the one link rule's own kind (noteLink), as an answer's do (claude.ts, C09 R3).
 const NOT_SHOWN = 'a link to a note you were not shown: leave it out';
 // The reason quotes the reply's figure, so the log gives the kind's own sentence (sec-hardening L4), as c09-answers does.
