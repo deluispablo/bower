@@ -1,8 +1,11 @@
 {
   "files": {
     "present": [
-      "index.md",
+      ".bower/index.md",
       "Resources/Careers/Career plans.md"
+    ],
+    "absent": [
+      "index.md"
     ]
   },
   "unchanged": [
@@ -20,7 +23,7 @@
       ]
     },
     {
-      "path": "index.md",
+      "path": ".bower/index.md",
       "contains": [
         "- [[Career plans]] — Alex is looking for a remote developer role."
       ],
@@ -50,7 +53,7 @@
       ],
       "notes": [
         {
-          "path": "index.md",
+          "path": ".bower/index.md",
           "contains": [
             "- [[Career plans]] — Alex is looking for a local developer role."
           ]
@@ -64,8 +67,11 @@
     {
       "files": {
         "present": [
-          "index.md",
+          ".bower/index.md",
           "Resources/Careers/Career plans.md"
+        ],
+        "absent": [
+          "index.md"
         ]
       },
       "unchanged": [
@@ -83,7 +89,7 @@
           ]
         },
         {
-          "path": "index.md",
+          "path": ".bower/index.md",
           "contains": [
             "- [[Career plans]] — Alex is looking for a remote developer role."
           ],

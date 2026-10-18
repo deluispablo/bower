@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "Find the job search through the index after twelve unrelated hubs",
   "covers": "model",
-  "source": "new (TL-P4-39 B1; reused made-up TL-P4-38 index fixture; scripted proof pending)",
+  "source": "new (TL-P4-39 B1; reused made-up TL-P4-38 index fixture)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

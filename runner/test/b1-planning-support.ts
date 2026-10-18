@@ -517,8 +517,14 @@ export async function seedState(base: Base, settleMocs = false) {
     cursor: String(Number(await base.drive.getStartPageToken()) + 1), files };
   const sys = base.id(SYSTEM.dir);
   await base.drive.createText(sys, 'retrieval.json', JSON.stringify(state));
-  await base.drive.createText(sys, 'index.md', projection ?? '');
-  await base.drive.createText(sys, 'hot.md', '# Hot\n\n## Recent changes\n- 2026-10-06 · Existing change. · op:012345abcdef\n');
+  // A warm folder is what maintenance leaves: the projection and this hot replace a checked-in seed.
+  const put = async (name: string, text: string) => {
+    const found = (await base.drive.listAll(base.root)).find((f) => base.drive.pathOf(f.id, base.root) === `${SYSTEM.dir}/${name}`);
+    if (found) await base.drive.writeText(found.id, text, found.modifiedTime);
+    else await base.drive.createText(sys, name, text);
+  };
+  await put('index.md', projection ?? '');
+  await put('hot.md', '# Hot\n\n## Recent changes\n- 2026-10-06 · Existing change. · op:012345abcdef\n');
   base.warm = true;
   return state;
 }
