@@ -44,8 +44,9 @@ it.skipIf(process.env.BOWER_CLAUDE_OFFLINE_PROBE !== '1').for([
   };
   const sanitize = (text: string) => text.split(work).join('<isolated>').replaceAll(process.env.HOME ?? work, '<user-home>').slice(0, 4000);
   try {
-    if (!denial) return unavailable('No supported OS network denial mechanism');
-    const run = (binary: string, flags: string[]) => spawnSync(denial[0]!, [...denial.slice(1), binary, ...flags],
+    const [deny, ...denyArgs] = denial ?? [];
+    if (!deny) return unavailable('No supported OS network denial mechanism');
+    const run = (binary: string, flags: string[]) => spawnSync(deny, [...denyArgs, binary, ...flags],
       { cwd, env, input: '', encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', maxBuffer: 64_000 });
     const guard = run('/usr/bin/true', []);
     console.info(JSON.stringify({ denial, guardExit: guard.status, diagnostic: sanitize(guard.stderr ?? ''), error: sanitize(guard.error?.message ?? '') }));
