@@ -11,7 +11,7 @@ import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser, type Loaded } from '@/data/provider';
 import type { Pile, Question, RunState, TreeNode } from '@/data/types';
-import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
+import { displayName, KIND_WORD, kindOf, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { ago, greeting, plural } from '@/app/words';
 import { crumbs, noteRoute, paraColor, routeFor } from '@/app/paths';
@@ -546,6 +546,7 @@ function JustFiled({ run }: { run: RunState | null }) {
               <span className={s.pileMain}>
                 <span className={s.pileText}>{thingName(n.name)}</span>
                 <span className={s.pileSub}>
+                  <span>{KIND_WORD[n.kind ?? kindOf(n.name)]}</span>
                   <span className={s.dot} style={{ background: paraColor(n.path) }} />
                   {crumbs(parentOf(n.path))}
                 </span>

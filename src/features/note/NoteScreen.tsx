@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useNote, useRun, useSources, useTree } from '@/data/provider';
-import { thingName, findNode, nameOf, parentOf } from '@/data/tree';
+import { KIND_WORD, thingName, findNode, nameOf, parentOf } from '@/data/tree';
 import type { Note, RunReport, TreeNode, UpdatedRow } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
 import { NodeMenuButton } from '@/features/files/Explorer';
@@ -271,8 +271,6 @@ function Properties({ note }: { note: Note }) {
     </section>
   );
 }
-
-const KIND_WORD: Record<string, string> = { pdf: 'PDF', image: 'Photo', link: 'Link', doc: 'Document', sheet: 'Spreadsheet', audio: 'Audio', other: 'File' };
 
 function FileView({ node }: { node: TreeNode }) {
   const desktop = useIsDesktop();
