@@ -5,6 +5,12 @@ import { empty, note, reply, report, run, select, setup, phaseAwareClaude, type 
 import { frameOf, runOnDrive, runWithClaude } from './corpus-run';
 import { SYSTEM } from '../../src/data/vault/layout';
 
+/** The value, or a failed test when it is missing. */
+function must<T>(value: T | null | undefined): T {
+  if (value == null) throw new Error('expected a value');
+  return value;
+}
+
 const HOME = 'Resources/Finance';
 const HUB = `${HOME}/Finance.md`;
 const BUDGET = 'Resources/Budget.md';
@@ -56,7 +62,7 @@ it('unrelated bicycle amount cannot ground invoice', () => {
 });
 it.each(['filename', 'rule'])('unrelated rule and filename cannot ground a date: %s', (where) => {
   const c = context();
-  if (where === 'filename') c.taken.piles[1]!.items[0]!.name = 'Budget 2027.txt';
+  if (where === 'filename') must(must(c.taken.piles[1]).items[0]).name = 'Budget 2027.txt';
   else c.seen.rules = 'Keep bicycle plans for 2027.';
   refuses(c, proposal('Due in 2027.'), '2027');
 });
@@ -154,7 +160,7 @@ it.each(fields)('foreign figures cannot ground sibling outputs: %s', (field) => 
   c.seen.texts = new Map([['invoice', 'Total 10.'], ['bicycle', 'Reference 900.']]);
   words(c, 'bicycle-pile', 'Reference 900.'); refuses(c, value);
   c.seen.words = ''; c.seen.pileWords = new Map();
-  c.taken.piles[0]!.items.push(...c.taken.piles[1]!.items); c.taken.piles.splice(1, 1); refuses(c, value);
+  must(c.taken.piles[0]).items.push(...must(c.taken.piles[1]).items); c.taken.piles.splice(1, 1); refuses(c, value);
 });
 it('body citations cannot supply figures to properties or summaries', () => {
   const c = context(); c.seen.noteTexts = new Map([[BUDGET, 'Bicycle budget 900.']]); c.seen.shownNotes = 'Bicycle budget 900.';
@@ -208,22 +214,22 @@ it('repeated numeric refusal holds its pile while unrelated work completes', asy
   expect(result.frames, result.errors).toHaveLength(3); expect(result.frames[2]?.call.input).toMatch(/Your reply was refused: .*"900"/);
   expect(result.errors).toContain('(numbers)'); expect(result.code).toBe(0);
   expect(result.after[`${HOME}/Invoice.md`]).toBeUndefined(); expect(result.after[`${HOME}/Bicycle.md`]).toContain('Bicycle budget 900.');
-  const source = base.sources.find((s) => s.name === 'Invoice.txt')!.itemId;
-  const path = result.pathsById[source]!; expect(path).toMatch(/^Inbox\//); expect(result.after[path]).toBe('Total 10. Payment pending.');
+  const source = must(base.sources.find((s) => s.name === 'Invoice.txt')).itemId;
+  const path = must(result.pathsById[source]); expect(path).toMatch(/^Inbox\//); expect(result.after[path]).toBe('Total 10. Payment pending.');
   expect(result.events.filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method) && e.path === path)).toEqual([]);
   const manifest = JSON.parse(Object.entries(result.after).find(([p]) => /\/manifest-[^/]+\.json$/.test(p))?.[1] ?? '{}');
   expect(manifest.waiting).toHaveLength(1); expect(result.wire?.statuses.at(-1)?.phase).toBe('done');
   expect(report(result).filed).toHaveLength(1);
   expect(report(result).setAside).toEqual([expect.objectContaining({ why: "Bower couldn't tidy this up yet. Try again." })]);
-  const pile = base.admission.piles.find((p) => p.items.some((item) => item.fileId === source))!;
+  const pile = must(base.admission.piles.find((p) => p.items.some((item) => item.fileId === source)));
   for (const item of [...pile.items, ...(pile.anchor ? [pile.anchor] : [])]) {
-    const heldPath = result.pathsById[item.fileId]!;
+    const heldPath = must(result.pathsById[item.fileId]);
     expect(heldPath).toMatch(/^Inbox\//);
     expect(result.events.filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method) && e.path === heldPath)).toEqual([]);
   }
 });
 it('numeric repeated line remains a no-op after source departure', async () => {
-  const base = await fixture(); const source = base.sources.find((s) => s.name === 'Invoice.txt')!.itemId;
+  const base = await fixture(); const source = must(base.sources.find((s) => s.name === 'Invoice.txt')).itemId;
   const line = { note: HUB, text: 'Invoice total is 10.', cites: source };
   const first = await run(base, [select(base, [], HOME), { ...empty, things: liveReply(base, 10).things.map((thing) => thing.fileId === source ? { fileId: source, to: HOME, name: 'Invoice.txt' } : thing), lines: [line] }]);
   expect(first.code, first.errors).toBe(0);

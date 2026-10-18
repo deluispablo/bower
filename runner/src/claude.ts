@@ -1560,7 +1560,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const prose = text.split('\n').map((line) => {
         const previous = fence;
         fence = fenceAfter(line, fence);
-        return previous || fence ? line.replace(WIKI_LINK, (link) => link.replace(/[\[\]]/g, ' ')) : line;
+        return previous || fence ? line.replace(WIKI_LINK, (link) => link.replace(/[[\]]/g, ' ')) : line;
       }).join('\n');
       // Segment around whole links, then restore their targets and aliases for citation and claim checks. Uppercase, so a
       // link that opens a sentence still ends the one before it (UAX #29 never breaks before a lowercase letter).
