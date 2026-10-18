@@ -19,7 +19,7 @@ import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal, type ViewDefinition, type ViewHome } from '../types';
-import { isJournalRecord, pairsOf, type JournalRecord } from '../contracts/journal-record';
+import { isJournalRecord, isWithdrawal, pairsOf, takenBack, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows, type HashesFile, type QuestionsFile, type Recent, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { savedLinkAddress } from '../search-text';
@@ -1063,8 +1063,13 @@ type Captured = Awaited<ReturnType<typeof capture>>;
  * edits, the generated notes, the questions. It ends decided, or with a try again that holds more back.
  */
 export async function decide(drive: ScriptedRead, snapshot: Captured, opts: PlanOptions, attempt: Attempt = { editCap: EDITS_PER_RUN, held: new Set() }) {
-  const { context, rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, requestsRecent, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
+  const { context, rootId, all, listing, ix, lines: everyLine, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, requestsRecent, hashesText, hashesBroken, piles, readiness, dups, appends, since, questionState, questionsBroken, types, typeFile, typeText, tagFile, proposals, proposalIds, memoryFile, memoryText, memoryLedger } = snapshot;
   const { editCap, held } = attempt;
+  // A request the person took back is no request: every reader below takes `lines` without it, and only `journal` keeps
+  // both lines, to archive them (qa-live-claude F3).
+  // A withdrawal that a later line undid is no request either: it and that line fold as a pair, with no row.
+  const back = new Set([...takenBack(everyLine.map((l) => l.rec)), ...everyLine.filter((l) => isWithdrawal(l.rec)).map((l) => l.rec.id)]);
+  const lines = everyLine.filter((l) => !back.has(l.rec.id));
   const grownTags = growTags(opts.decisions.newTags, snapshot.tagList);
   if (!grownTags) return refused('invalid new tags');
   const newKey = opts.mintKey ?? mintKey;
@@ -1285,7 +1290,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     else if (!map.pending) { requestSettled.add(line.rec.id); requestOfAnswer.set(line.rec.id, q.request.id); }
   }
   // Every request in your changes counts, one this run leaves waiting too: the oldest owns a note (R52).
-  const mapOwned = mapsOwned(maps.filter((m) => !m.pending && !m.ask), snapshot.journalAll.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
+  const mapOwned = mapsOwned(maps.filter((m) => !m.pending && !m.ask), snapshot.journalAll.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id) && !columnRequests.has(l.rec.id)
     && !viewRequests.has(l.rec.id) && !mapWaits.has(l.rec.id)), (text) => requestTargets(listing, ix, text).notes.map((n) => n.file.id));
   // A property asked for that is not a column becomes one, the first in reply order, once per row (R25, R56).
   const columned = new Set<string>();
@@ -1444,7 +1449,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const row = answeredGone(q, seenFirst, notesSeen, notePath, (id) => binnedNames.get(id));
     return row ? [[l.rec.id, row] as const] : [];
   }));
-  let journal = lines.filter((l) => {
+  let journal = everyLine.filter((l) => {
+    if (back.has(l.rec.id)) return true;
     if (l.rec.kind === 'request') return formulaWaits.has(l.rec.id) || mapWaits.has(l.rec.id) || mapOwned.waits.has(l.rec.id) ? false
       : columnRequests.has(l.rec.id) || viewRequests.has(l.rec.id) || mapRequests.has(l.rec.id) || declinedRequests.has(l.rec.id)
       || (settlement.owned.has(l.rec.id) ? settlement.admitted.has(l.rec.id) : !!d.request);
@@ -1985,7 +1991,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // its address the line's source; the line names the request, so the request's archive waits for it (rule 7). With
   // the web off nothing is looked up or written, and its answer says so.
   const lookups = new Map<string, WantedLine>();
-  for (const l of opts.allowWeb && date ? journal.filter((x) => x.rec.kind === 'request') : []) {
+  for (const l of opts.allowWeb && date ? journal.filter((x) => x.rec.kind === 'request' && !back.has(x.rec.id)) : []) {
     const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     if (scripted?.kind !== 'lookup') continue;
     const [path] = scripted.uses;
@@ -2891,7 +2897,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // A document the model wrote for a request (C08) is written the same way, one note keyed by its request (R8): one an earlier
   // attempt made stands as written (`existing`), and only the bookkeeping completes.
   const compared = new Map<string, { to: string; name: string; text: string; what: string; key: string; existing?: string }>();
-  for (const l of journal.filter((x) => x.rec.kind === 'request')) {
+  for (const l of journal.filter((x) => x.rec.kind === 'request' && !back.has(x.rec.id))) {
     const scripted = d.request?.(l.rec.text ?? l.rec.what, l.rec.id);
     if ((scripted?.kind !== 'compare' && scripted?.kind !== 'document') || !generatedPlace(scripted.note.to)) continue;
     const key = await resultNoteKey(l.rec.id);
@@ -3241,9 +3247,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     }
     return scripted.answer;
   };
-  const answers = new Map(journal.filter((l) => l.rec.kind === 'request').map((l) => [l.rec.id, answerOf(l)]));
+  const answers = new Map(journal.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id)).map((l) => [l.rec.id, answerOf(l)]));
   // A lookup that looked nothing up (web off, or its note gone) is never done (qa6).
-  const lookedUpNothing = new Set(journal.filter((l) => l.rec.kind === 'request' && !lookups.has(l.rec.id)
+  const lookedUpNothing = new Set(journal.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id) && !lookups.has(l.rec.id)
     && d.request?.(l.rec.text ?? l.rec.what, l.rec.id)?.kind === 'lookup').map((l) => l.rec.id));
   // Bower's own files the run writes, as read now, so the writes pass what they read.
   const requestsRead = requests && answers.size ? { file: requests, content: await ownVerified(requests) } : null;
@@ -3271,7 +3277,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   }
   return {
     kind: 'decided' as const, context, settlement, satisfied, runSources: things.filter((t) => !t.merge).map((t) => t.file.id), run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
-    rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
+    rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, back, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, shorten, mapMoves, mapFixes, requestOfAnswer, recentNew, mapSettled, lookedUpNothing,
@@ -3288,7 +3294,7 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
  */
 export async function build(decided: Decided): Promise<Ended> {
   const fetched = (fileId: string) => ({ fileId, context: decided.context, consents: decided.settlement.consents, path: decided.ix.pathOf(fileId), name: decided.ix.byId(fileId)?.name });
-  const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
+  const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, back, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, resultNotes, requestsRead,
     memoryWrite, memoryWords, memoryRecords, requestsBroken, requestsDone, requestsRecent, sys, questionsList, rounds, chosen, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
     tagWrite, tableWrite, tableRecords, newProposals, proposalFolder, rulesState, rulesFile, archiveFolder, changesFolder, hashesFile, hashesBroken, hashesNew, citedWords, savedWords, answeredRows, settlement, satisfied, runSources, shorten, mapMoves, mapFixes, yesMaps, requestOfAnswer, recentNew, mapSettled, lookedUpNothing, decidedRequests } = decided;
@@ -3617,7 +3623,7 @@ export async function build(decided: Decided): Promise<Ended> {
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
-  const asked = journal.filter((l) => l.rec.kind === 'request');
+  const asked = journal.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id));
   // A request the run did nothing for is never done (qa6 F1): a lookup that looked nothing up, or one with only its
   // "didn't" rows and no line, edit, note or line already there. Its requests row says why: its first row's why.
   // One with no row, no decision and no named answer says it changed nothing (qa7), unless an earlier run's row for it
@@ -3778,7 +3784,7 @@ export async function build(decided: Decided): Promise<Ended> {
   const satisfiedAppends: SatisfiedAppend[] = [];
   // An original and its inverse taken together give no row and no count (`pairsOf`, TL-P4-27 addendum 3); both apply,
   // except rule lines, which cancel (`ruleChangesOf`).
-  const paired = pairsOf(journal.map((l) => l.rec));
+  const paired = new Set([...pairsOf(journal.map((l) => l.rec)), ...back]);
   for (const line of journal) {
     const { derived, moves } = await archiveOf(line);
     archives.set(line.rec.id, derived);
@@ -3941,8 +3947,16 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
   }
   lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
   if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);
-  const requests = lines.filter((l) => l.rec.kind === 'request').slice(0, REQUESTS_PER_RUN);
-  return lines.filter((l) => l.rec.kind !== 'request' || requests.includes(l));
+  // A request taken back and every withdrawal line (a line undoing one too) are always captured, never counted toward the 20:
+  // the cap must not cut an undo from its withdrawal, or what was taken back would change (qa-live-claude F3).
+  const back = takenBack(lines.map((l) => l.rec));
+  // Every line that undoes a withdrawal, text or not, stays beside it for the same reason.
+  const withdrawals = new Set(lines.filter((l) => isWithdrawal(l.rec)).map((l) => l.rec.id));
+  const beside = (l: JournalLine): boolean => isWithdrawal(l.rec) || (l.rec.undoes !== undefined && withdrawals.has(l.rec.undoes));
+  // A restoring request with text is a request: it takes a slot of the 20 first, the others fill what is left, oldest first.
+  const restoring = lines.filter((l) => l.rec.kind === 'request' && l.rec.text !== undefined && beside(l)).length;
+  const requests = lines.filter((l) => l.rec.kind === 'request' && !back.has(l.rec.id) && !beside(l)).slice(0, Math.max(0, REQUESTS_PER_RUN - restoring));
+  return lines.filter((l) => l.rec.kind !== 'request' || back.has(l.rec.id) || beside(l) || requests.includes(l));
 }
 
 type RulesWording = Extract<Change, { kind: 'rules-wording' }>;
