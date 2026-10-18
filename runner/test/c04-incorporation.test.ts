@@ -66,7 +66,8 @@ describe('what the model is shown (P4-3)', () => {
       expect((await (await pdf.getPage(1)).getTextContent()).items).toEqual([]);
       const images = await extractImages(pdf, 1);
       expect(images).toHaveLength(1);
-      const image = images[0]!;
+      const image = images[0];
+      if (!image) throw new Error('expected one image');
       expect([image.width, image.height]).toEqual([64, 64]);
       const expected = new Uint8ClampedArray(64 * 64 * image.channels);
       for (let y = 0; y < 64; y++) {
