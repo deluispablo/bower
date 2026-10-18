@@ -44,7 +44,7 @@ describe('prod1-health-web', () => {
       `- Broken link in [[${FOLDER}/Sources|Sources]]: no note is called flat-listing.example.url.`,
     ]);
     expect(report.split('\n').filter((line) => line.startsWith('- Not linked'))).toEqual([
-      `- Not linked: no note links to [[${FOLDER}/unlinked.example.url|unlinked.example.url]].`,
+      `- Not linked: no note links to [[${FOLDER}/unlinked.example.url|unlinked.example]].`,
     ]);
   });
 
