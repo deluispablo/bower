@@ -103,8 +103,10 @@ const sizes = (r: Awaited<ReturnType<typeof run>>): number[] => r.frames.map((f)
 describe('the made-up large-folder benchmark (c12-measure)', () => {
   it.each([
     // things, things filed at least, the selection call's characters at most, the execution call's characters at most
-    [25, 24, 88_000, 94_000], // measured 24 filed, 83,709 and 88,742 characters
-    [150, 14, 116_000, 120_000], // measured 14 filed, 109,536 and 113,569 characters
+    // c12-map: ranking gives each thing its own notes in place of the same 30 newest, and the bound shared by `indexed`
+    // and `sources` then drops the last sources' candidates; c12-map-cards removes that bound and asks all 25 filed.
+    [25, 5, 92_000, 95_000], // measured 5 filed, 87,110 and 89,912 characters (24 before c12-map)
+    [150, 4, 119_000, 121_000], // measured 4 filed, 112,853 and 115,127 characters (14 before c12-map)
   ])('AC3 c12-measure-benchmark: 800 notes in 60 folders and %i things', async (things, filedMin, selectionMax, executionMax) => {
     expect(support, 'the made-up large folder is part of the planning test support').toHaveProperty('largeFolder');
     const large = support.largeFolder(800, 60, things);
