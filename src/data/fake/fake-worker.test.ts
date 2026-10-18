@@ -3729,7 +3729,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.runs.settled();
       expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(await generatedNotes(w)).toEqual(['Resources/Ideas/Bins go out on Tuesday nights.md']);
-      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: 'Your note', title: 'Bins go out on Tuesday nights', kind: 'note', to: 'Resources/Ideas', note: 'Resources/Ideas/Bins go out on Tuesday nights.md' });
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: 'Your note', title: 'Bins go out on Tuesday nights', kind: 'note', to: 'Resources/Ideas', area: 'New folder Ideas in Resources', note: 'Resources/Ideas/Bins go out on Tuesday nights.md' });
       // The folder stays with the other note (late-child rule); the words it filed are not in it any more.
       expect((await w.drive.evidence(folder.id))?.trashed).toBe(false);
       expect((await w.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id).map((f) => f.id)).toEqual([second.id]);
@@ -4535,7 +4535,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(create.ordinal).toBeLessThan(move.ordinal);
       const filed = manifest.reportPlan.filter((c) => c.value.filed.some((r) => r.name === CURRY.name));
       expect(filed).toHaveLength(1);
-      expect(filed[0]?.value.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE }]);
+      expect(filed[0]?.value.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', area: 'New folder Cooking in Resources', note: NOTE }]);
       expect(filed[0]?.requires).toEqual(expect.arrayContaining([create.operationId, move.operationId]));
       // TL-P2-40: the note it wrote is listed with the notes the run made.
       expect(filed[0]?.value.created).toEqual([{ path: NOTE, what: 'A link you saved.' }]);
@@ -4561,7 +4561,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(w.calls.filter((c) => c.op === 'write-text' && c.id === link.id)).toEqual([]);
       expect(createsOf(w)).toHaveLength(1);
       expect(movesOf(w, link.id)).toBe(1);
-      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE });
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', area: 'New folder Cooking in Resources', note: NOTE });
       expect((await checkpointsOf(w, id)).at(-1)?.outcomes.every((o) => o.state === 'applied')).toBe(true);
       await expectFiledOnce(w);
     });
@@ -4657,7 +4657,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(added?.name).toBe(`${CURRY.name}.url`);
       await tidy(v);
       expect(v.drive.pathOf(added?.id ?? '', v.rootId)).toBe(`Resources/Cooking/${CURRY.name}.url`);
-      expect(viewOf(v)?.run.report?.filed).toContainEqual({ name: `${CURRY.name}.url`, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE });
+      expect(viewOf(v)?.run.report?.filed).toContainEqual({ name: `${CURRY.name}.url`, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', area: 'New folder Cooking in Resources', note: NOTE });
       expect(await notesOf(v)).toHaveLength(1);
     });
 

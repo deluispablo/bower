@@ -17,7 +17,7 @@ import { canonicalRecordJson } from '../contracts/record-json';
 import { formulaInstalled, parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent, type TimelineConsent, type AppendCompletion, type LeftAsWritten, type SatisfiedAppend } from '../contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
-import { checkCreationName, displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
+import { checkCreationName, displayName, folderWords, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type StateShown, type Proposal, type ViewDefinition, type ViewHome } from '../types';
 import { isJournalRecord, isWithdrawal, pairsOf, takenBack, type JournalRecord } from '../contracts/journal-record';
 import { PROP, RECENT, RUNNER_WRITES, SYSTEM, isRunnerFile, recentRows, type HashesFile, type QuestionsFile, type Recent, type RequestsFile } from '../vault/layout';
@@ -3331,16 +3331,18 @@ export async function build(decided: Decided): Promise<Ended> {
         createKey: (await runKeys(opts.runId))('tags'), path: SYSTEM.tags, text: tagWrite.text, content: await utf8(tagWrite.text) })
     : null;
   const reportPlan: ReportContribution[] = [];
-  // A new Area the model gave a responsibility for: the first thing filed there says why it was made (TL-P4-07 addendum 3).
-  const said = new Set<string>();
+  // Every row filed into a folder this run made says it, by the outermost new folder of its branch (TL-P4-07 addendum 3,
+  // F9-folder): "New area Money, for …" when the model gave it a responsibility, else "New folder Garden in Projects".
   const areaOf = (to: string): { area: string } | Record<string, never> => {
-    for (const [path, why] of areas) {
-      if ((to === path || to.startsWith(`${path}/`)) && made.has(path) && !said.has(path)) {
-        said.add(path);
-        return { area: `New area ${nameOf(path)}, for ${why}` };
-      }
-    }
-    return {};
+    let top = '';
+    for (let p = to; p; p = parentOf(p)) if (made.has(p)) top = p;
+    if (!top) return {};
+    const why = areas.get(top);
+    if (why !== undefined) return { area: `New area ${nameOf(top)}, for ${why}` };
+    const parts = top.split('/');
+    const words = folderWords(parts);
+    if (words !== nameOf(top) || parts.length < 2) return { area: `New folder ${words}` };
+    return { area: `New folder ${words} in ${folderWords(parts.slice(0, -1))}` };
   };
   const movesOf = new Map<string, string[]>();
   const moveOf = new Map<string, string>();
@@ -3403,7 +3405,7 @@ export async function build(decided: Decided): Promise<Ended> {
     const after = note.after.flatMap((id) => moveOf.get(id) ?? []);
     const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: newKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, [...after, ...(tagOp && parseNote(note.name, note.text).tags.length ? [tagOp] : [])]);
     const path = join(note.to, note.name);
-    const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
+    const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path, ...areaOf(note.to) }];
     if (note.pileId !== null) {
       notesOf.set(note.pileId, op);
       const choice = chosen.get(note.pileId);
