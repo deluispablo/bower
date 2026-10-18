@@ -11,7 +11,7 @@
 import { BowerError } from '../../../src/data/types';
 import { notAsSeen, sameParents } from '../../../src/data/contracts/still-as-seen';
 import type { DriveFile } from '../../../src/data/drive/drive-api';
-import type { AdmissionManifest, AdmittedFile, AdmittedPile } from '../../../src/data/spine/admission';
+import { admittedThings, type AdmissionManifest, type AdmittedFile, type AdmittedPile } from '../../../src/data/spine/admission';
 import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
@@ -19,6 +19,7 @@ import { applyChanges } from '../../../src/data/contracts/note-edit';
 import { aboutArchivePath, parseObservations, validLearnedBlock } from '../../../src/data/contracts/observations';
 import { maintenanceTargetOk, targetPath } from '../../../src/data/contracts/run-manifest';
 import { RUNNER_WRITES, SYSTEM } from '../../../src/data/vault/layout';
+import { ADMIT_THINGS } from '../timing';
 
 export type { Admitted };
 
@@ -63,6 +64,8 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
   let next = 0;
   const deferred: Deferred[] = [];
   const piles: AdmittedPile[] = [];
+  // c12-admit A2: whole piles in manifest order up to the estimate; the first always (alone it must run), FIFO after a misfit.
+  let things = 0; let full = false; let waiting = 0;
   for (const pile of manifest.piles) {
     const moved: Deferred[] = [];
     if (pile.anchor) {
@@ -74,6 +77,13 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
       if (why) moved.push({ fileId: item.fileId, pileId: pile.pileId, why });
     }
     if (!moved.length) {
+      const n = admittedThings({ ...manifest, piles: [pile] });
+      if (full || (piles.length > 0 && things + n > ADMIT_THINGS)) {
+        full = true; waiting += n;
+        deferred.push(...pile.items.map((i) => ({ fileId: i.fileId, pileId: pile.pileId, why: 'budget' as const })));
+        continue;
+      }
+      things += n;
       piles.push(pile);
       continue;
     }
@@ -87,8 +97,10 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
     if (why) deferred.push({ fileId: line.fileId, pileId: null, why });
     else journal.push(line);
   }
-  if (deferred.length) console.error(`${deferred.length} admitted items changed since admission; they wait for the next tidy-up`);
-  return { taken: { ...manifest, piles, journal }, deferred };
+  const changed = deferred.filter((d) => d.why !== 'budget').length;
+  if (changed) console.error(`${changed} admitted items changed since admission; they wait for the next tidy-up`);
+  if (waiting) console.log(`${waiting} things wait for the next tidy-up: they did not fit this run.`);
+  return { taken: { ...manifest, piles, journal }, deferred, ...(waiting ? { waiting } : {}) };
 }
 
 /**

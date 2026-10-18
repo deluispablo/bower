@@ -608,8 +608,9 @@ it('b1-one-retry-per-step-four-calls-exhaustion-leaves-items-for-next-run', asyn
         expect.soft(await b.drive.evidence(id), 'inbox, declarations and requests remain untouched').toEqual(evidence);
       }
     }
-    expect.soft(Object.keys(r.after).filter((path) => /manifest-[^/]+\.json$/.test(path)),
-      'exhaustion creates no manifest').toEqual([]);
+    // c12-admit A9: the held run's one plan writes nothing but its reading progress, never an effect.
+    expect.soft(manifest(r).operations.filter((op) => op.effect.kind !== 'write-runner-json' && op.effect.kind !== 'create-text'),
+      'exhaustion plans no effect').toEqual([]);
     const admitted = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all',
       clock: () => AT + 1, newId: () => `retry-${phase}` });
     expect(admitted.kind, 'the next run admits exhausted items again').toBe('manifest');

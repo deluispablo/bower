@@ -105,6 +105,8 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
   }
   // A source a model reply's refusal left for the next tidy-up (plan-partial): told once, after the contributions.
   report.setAside.push(...(manifest.waiting ?? []));
+  // Things left in the inbox with no row of their own (c12-admit): the count, never "nothing was ready yet".
+  if (manifest.waitingThings) report.waiting = manifest.waitingThings;
   for (const op of manifest.operations) {
     if (op.effect.kind !== 'maintain') continue;
     const outcome = byId.get(op.operationId);
@@ -132,7 +134,7 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
   if (report.yourChanges === 0) delete report.yourChanges;
   // A full run that captured nothing (every pile it was admitted to take was held when it read them, TL-P3-25):
   // its report says nothing was ready yet, rather than that everything has its place.
-  if (manifest.runScope === 'all' && !manifest.capture.piles.length && !manifest.capture.journal.length) report.nothingReady = true;
+  if (manifest.runScope === 'all' && !manifest.capture.piles.length && !manifest.capture.journal.length && !manifest.waitingThings) report.nothingReady = true;
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
 }
 

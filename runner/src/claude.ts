@@ -3041,11 +3041,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       // S15, P8: an error that is not a wait starts no more groups; the started ones settle; one model wrap for all (S14).
       const limit = limiter(4, (error) => !waitable(error));
       const settled = await timing.time('model', () => Promise.allSettled(jobs.map((j) => limit(() => twice(j.input, 'execution', j.check, j.drop)))));
-      const intents: Array<Extract<Intent, { ok: true }>> = [];
+      const landed: Array<{ group: number; intent: Extract<Intent, { ok: true }> }> = [];
       const waits: BowerError[] = [];
       // P5: the merge walks the groups in order, whatever order their replies came back in.
       for (const [i, s] of settled.entries()) {
-        if (s.status === 'fulfilled') intents.push(s.value); else {
+        if (s.status === 'fulfilled') landed.push({ group: i, intent: s.value }); else {
           const error: unknown = s.reason;
           // S13: no valid reply, or no model time, makes the group wait whole; any other error stops the run (ruling 4).
           if (single || !waitable(error)) throw error;
@@ -3062,9 +3062,35 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       dropped.clear();
       for (const [source, why] of inOrder) dropped.set(source, why);
       // S12: with no group landed, a refusal fails the run; all out of time is today's held run.
-      if (!intents.length) throw waits.find(plannerRefusal) ?? waits[0];
-      const intent = mergedFiling(intents);
-      if (!single && yesList.length) Object.assign(intent.filing, { maps: [...intent.filing.maps ?? [], ...yesList] });
+      if (!landed.length) throw waits.find(plannerRefusal) ?? waits[0];
+      const merged = (): ReturnType<typeof mergedFiling> => {
+        const intent = mergedFiling(landed.map((l) => l.intent));
+        if (!single && yesList.length) Object.assign(intent.filing, { maps: [...intent.filing.maps ?? [], ...yesList] });
+        return intent;
+      };
+      const whole = (filing: Filing): typeof took.taken => ({ ...took.taken, journal: finalJournal(filing) });
+      let intent = merged();
+      // S7: the merged filing is planned once; a refusal there fails the run. c12-admit A6: over 200 operations, the last
+      // landed group that can wait (W1) waits whole, the rest is merged and planned again; none left to wait holds the run.
+      let plan: RunManifest | undefined;
+      while (!single && !plan) {
+        try {
+          plan = await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, whole(intent.filing));
+        } catch (error) {
+          if (!(error instanceof LedgerExhausted) || landed.length < 2) throw error;
+          let last = -1;
+          for (let k = landed.length - 1; k >= 0 && last < 0; k--) {
+            const group = new Set(groups[landed[k]?.group ?? -1]);
+            let chosen = false;
+            for (const pile of shownTook.taken.piles) if (group.has(pile.pileId) && await chosenPile(pile)) chosen = true;
+            if (!chosen) last = k;
+          }
+          if (last < 0) throw error;
+          const [trimmed] = landed.splice(last, 1);
+          for (const source of groups[trimmed?.group ?? -1] ?? []) if (!dropped.has(source)) dropped.set(source, 'group');
+          intent = merged();
+        }
+      }
       // Told once the run goes on without them, never for a run the dropping could not save.
       for (const [source, why] of dropped) {
         if (why !== 'group') console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
@@ -3074,24 +3100,23 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const pile = took.taken.piles.find((p) => p.pileId === source);
         return n + (pile ? Math.max(1, thingsOf(pile).length) : requests.has(source) ? 1 : 0);
       }, 0);
-      if (waits.length) console.log(`${waiting} items left in the inbox for the next run: their group got no plan.`);
-      const whole = (filing: Filing): typeof took.taken => ({ ...took.taken, journal: finalJournal(filing) });
-      // S7: the merged filing is planned once; a refusal there fails the run, and over 200 operations holds it (LedgerExhausted).
-      const validatedPlan = single ? jobs[0]?.plan()
-        : remembers(intent.filing) ? await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, whole(intent.filing)) : undefined;
-      // A memory plan may also consolidate a section; a consolidation the planner cannot add is skipped, the plan kept.
+      if ([...dropped.values()].includes('group')) console.log(`${waiting} items left in the inbox for the next run: their group got no plan.`);
+      const validatedPlan = single ? jobs[0]?.plan() : remembers(intent.filing) ? plan : undefined;
+      // A memory plan may also consolidate a section, once, on the plan that fit; a consolidation the planner cannot add,
+      // or that takes a merged plan over 200 operations after trimming (c12-admit A10), is skipped, the plan kept. A run
+      // of one group is held by that ledger as before.
       if (validatedPlan) {
         const shortened = await consolidation(validatedPlan);
         if (!shortened) return validatedPlan;
         try {
           return await plannedWith(Object.assign(intent.filing, { consolidation: shortened }), intent.held, shown.own, `with ${model}`, whole(intent.filing));
         } catch (error) {
-          if (!plannerRefusal(error)) throw error;
+          if (!plannerRefusal(error) && (single || !(error instanceof LedgerExhausted))) throw error;
           skipped(error.message);
           return validatedPlan;
         }
       }
-      return await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, whole(intent.filing));
+      return plan ?? await plannedWith(intent.filing, intent.held, shown.own, `with ${model}`, whole(intent.filing));
     } finally { await rm(work, { recursive: true, force: true }); }
 
   };

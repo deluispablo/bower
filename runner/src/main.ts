@@ -479,19 +479,22 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
             + admitted.taken.journal.length;
           const refreshed = await timing.maintenance(() => refreshPlanning(drive, rootId), items);
           drive.planReads().handoff(rootId, refreshed.listing);
-          // Held when maintenance's ledger ends discovery or declaration (R6, R7): any plan is dropped and nothing is
-          // admitted; the run's one write is what it read, outside the ledger. The model's own limits still end the run
-          // as before.
-          const held = (exhausted: LedgerExhausted): Promise<RunManifest> => {
+          // c12-admit A5: what waits with no row of its own rides the manifest, for any provider.
+          const waits = (m: RunManifest, n: number): RunManifest => (n ? { ...m, waitingThings: n } : m);
+          // Held when maintenance's ledger ends discovery or declaration (R6, R7), or the planner's ledger stops it (A7):
+          // any plan is dropped and nothing is admitted; the run's one write is what it read, outside the ledger, and its
+          // report counts every thing it took and the budget left.
+          const held = async (exhausted: LedgerExhausted): Promise<RunManifest> => {
             console.log(`${exhausted.count} items left in the inbox for the next run.`);
-            return withProgress(drive, { rootId, runId, allowWeb, taken: admitted.taken }, refreshed);
+            return waits(await withProgress(drive, { rootId, runId, allowWeb, taken: admitted.taken }, refreshed),
+              admittedThings(admitted.taken) + (admitted.waiting ?? 0));
           };
           if (refreshed.exhausted) return held(refreshed.exhausted);
           const index = await planningIndex(drive, rootId, refreshed);
           const provider = providerFor(name, drive, { rootId, runId, allowWeb, context, index, ...(hot ? { hot } : {}) }, { env, timing, retrieval: refreshed.snapshot, prefixes: async (file, discover) => discover ? drive.readPrefix(file) : drive.keptPrefix(file), ...(opts.claude ? { spawn: opts.claude } : {}) });
-          const manifest = await provider(admitted);
           try {
-            return await timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed));
+            const manifest = await provider(admitted);
+            return waits(await timing.maintenance(() => withMaintenance(drive, manifest, undefined, refreshed)), admitted.waiting ?? 0);
           } catch (error) {
             if (!(error instanceof LedgerExhausted)) throw error;
             return held(error);

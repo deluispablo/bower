@@ -11,8 +11,8 @@ export interface Deferred {
   fileId: string;
   /** The pile it belongs to; null for one of your changes. */
   pileId: string | null;
-  /** `pile`: unchanged, but it waits with its pile. */
-  why: 'gone' | 'changed' | 'pile';
+  /** `pile`: unchanged, but it waits with its pile. `budget`: unchanged, it did not fit this run's estimate (c12-admit). */
+  why: 'gone' | 'changed' | 'pile' | 'budget';
 }
 
 /** The admitted set a run took. */
@@ -20,6 +20,8 @@ export interface Admitted {
   /** The manifest with only what is still as admitted. */
   taken: AdmissionManifest;
   deferred: Deferred[];
+  /** Things the estimate left for the next run; absent when none. */
+  waiting?: number;
 }
 
 /** Plans a new run from what it took. The same folder and admitted set give the same plan. */

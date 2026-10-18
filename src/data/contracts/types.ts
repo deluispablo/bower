@@ -318,6 +318,8 @@ export interface RunReport {
   rulesWorded?: number;
   /** A tidy-up that found nothing in the inbox ready when it read it (TL-P3-25): it filed nothing. */
   nothingReady?: true;
+  /** Things that wait for the next tidy-up with no row of their own (c12-admit); never with `nothingReady`. */
+  waiting?: number;
 }
 
 export interface RunState {

@@ -159,7 +159,7 @@ function question(value: unknown): boolean {
 }
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
-  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed', 'kept', 'answered', 'leftAsWritten'])
+  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved', 'unconfirmed', 'kept', 'answered', 'leftAsWritten', 'waiting'])
     || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, isUpdatedRow)
     || !every(value.setAside, setAside) || !every(value.questions, question)) return false;
   if (Object.hasOwn(value, 'leftAsWritten') && !list(value.leftAsWritten, isLeftAsWrittenRow)) return false;
@@ -167,6 +167,7 @@ function runReport(value: unknown): value is RunReport {
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;
   if (Object.hasOwn(value, 'requests') && !list(value.requests, text)) return false;
   if (Object.hasOwn(value, 'nothingReady') && value.nothingReady !== true) return false;
+  if (Object.hasOwn(value, 'waiting') && !(integer(value.waiting) && value.waiting >= 1)) return false;
   if (Object.hasOwn(value, 'alreadySaved') && !(list(value.alreadySaved, isSavedRow) && value.alreadySaved.length > 0)) return false;
   if (Object.hasOwn(value, 'unconfirmed') && !(every(value.unconfirmed, setAside) && value.unconfirmed.length > 0)) return false;
   if (Object.hasOwn(value, 'kept') && !(every(value.kept, setAside) && value.kept.length > 0)) return false;
