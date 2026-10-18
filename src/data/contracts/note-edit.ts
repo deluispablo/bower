@@ -351,11 +351,19 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
 
 /**
  * The rule that lets Bower keep up to date the Current states it did not write (TL-P4-10 point 3): the person's yes
- * to `ADOPT_STATES_QUESTION`, as a rule line (C11 words it).
+ * to `adoptStatesQuestion`, as a rule line (C11 words it).
  */
 export const ADOPT_STATES_RULE = 'Keep the summaries Bower did not write up to date.';
-/** The one question a run asks a folder about Current states Bower did not write (TL-P4-10 point 3), word for word. */
-export const ADOPT_STATES_QUESTION = 'Bower found summaries it did not write. May it keep them up to date?';
+/** The one question a run asks a folder about Current states Bower did not write (TL-P4-10 point 3): up to three of
+ *  the notes that raised it, as links, then how many more; the yes still covers every such summary (ADOPT_STATES_RULE). */
+export const ADOPT_STATES_SHOWN = 3;
+export function adoptStatesQuestion(links: readonly string[]): string {
+  const shown = links.slice(0, ADOPT_STATES_SHOWN);
+  const more = links.length - shown.length;
+  const named = more > 0 ? [...shown, `${more} more ${more === 1 ? 'note' : 'notes'}`] : shown;
+  const list = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named.at(-1) ?? ''}` : (named[0] ?? '');
+  return `Bower found summaries it did not write, for example in ${list}. May it keep every summary it did not write up to date?`;
+}
 /** The id of that one question; a yes to it is recorded as `ADOPT_STATES_RULE` (TL-P4-08 addendum 8). */
 export const ADOPT_STATES_ID = 'q-adopt-states';
 /** The front-matter key that marks what Bower last wrote in a note's Current state. */

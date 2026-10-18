@@ -9,6 +9,8 @@ import { useUi } from '@/app/ui-store';
 import { countOr, plural } from '@/app/words';
 import { Button } from '@/ui/Button';
 import { isRunning, RUNNING_WAITS, runDetail, runTitle } from '@/features/tidy/run-words';
+import { Inline } from '@/features/note/markdown';
+import { useNoteLink } from '@/features/note/note-link';
 import { FailedChanges } from './FailedChanges';
 import s from './bower.module.css';
 
@@ -23,6 +25,7 @@ export function BowerPanel() {
   const requestsState = useRequests();
   const { data: requests } = requestsState;
   const asked = (requests ?? []).filter((r) => !r.done);
+  const link = useNoteLink();
   const { setTidy } = useUi();
   const { runs } = useSources();
   // Put away is Home's Got it: the stopped run is seen, everywhere.
@@ -67,7 +70,7 @@ export function BowerPanel() {
           <h2 className={s.ph}>{plural(qs.length, 'question')} for you</h2>
           {qs.map((q) => (
             <p key={q.id} className={s.panelQ}>
-              {q.text}
+              <Inline text={q.text} link={link} />
             </p>
           ))}
           <Link to="/">Answer on Home</Link>
