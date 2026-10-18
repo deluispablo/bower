@@ -12,7 +12,7 @@ import { canonical } from '../../src/data/spine/records';
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { RUNNER_WRITES, SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { loadCase, type LoadedCase } from '../src/corpus';
-import { frameOf, AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { frameOf, AT, redispatchCase, replySequence, runOnDrive, runScripted, seedCase, type CaseRun } from './corpus-run';
 import { API, TICKET, driveV3, fixedDrive, paging, RUN_ID } from './drive-v3';
 import { RunnerDrive } from '../src/drive';
 import { RunnerToken } from '../src/token';
@@ -410,6 +410,31 @@ it('B1c index: corpus b1-index-no-change preserves the derived stamp on the seco
   expect(second.after[SYSTEM.index]).toBe(first.after[SYSTEM.index]);
   expect(second.after[SYSTEM.index], 'missing derived index is rebuilt on the real instruction path').toBeDefined();
   expect(second.after[SYSTEM.index]).toContain('## Areas');
+});
+
+it('corpus-fix-b1-context AC1: B1 maintains hidden context from checked-in seeds', async () => {
+  const c = await corpus('b1-changes-person-edit');
+  expect(c.folder[SYSTEM.index]).toContain('local developer role');
+  expect(c.folder['index.md']).toBeUndefined();
+  expect(c.folder['hot.md']).toBeUndefined();
+  const r = await runScripted(c);
+  const runs = [...(r.runs ?? []), r];
+  expect(runs.map((x) => x.code)).toEqual([0, 0]);
+  expect(r.score?.unmet).toEqual([]);
+  for (const x of runs) {
+    expect(Object.values(x.pathsById).filter((p) => p === SYSTEM.index)).toHaveLength(1);
+    expect(Object.values(x.pathsById).filter((p) => p === SYSTEM.hot)).toHaveLength(1);
+    expect(x.after['index.md'], 'TL-P4-45: the runner never creates a root index').toBeUndefined();
+    expect(x.after['Resources/Gardening/Garden plans.md']).toBe(c.folder['Resources/Gardening/Garden plans.md']);
+  }
+  expect(runs[0]?.after[SYSTEM.index]).toContain('- [[Career plans]] — Alex is looking for a local developer role.');
+  expect(r.after[SYSTEM.index]).toContain('- [[Career plans]] — Alex is looking for a remote developer role.');
+  expect(r.after[SYSTEM.index]).not.toContain('local developer role');
+  const plans = 'Resources/Careers/Career plans.md';
+  expect(r.after[plans]).toBe('---\nsummary: Alex is looking for a remote developer role.\nstatus: active\n---\n\n# Career plans\n\nAlex is looking for a remote developer role. Updated on 10 October 2026.\n');
+  expect(r.after[plans]).not.toMatch(/^(by|bower_state):/m);
+  expect(r.props[plans]?.by).toBeUndefined();
+  expect(r.props[plans]?.bower_state).toBeUndefined();
 });
 
 it('B1c index: corpus b1-moc-over-40 folds 41 leaves with complete reachable child maps', async () => {
