@@ -69,8 +69,7 @@ What to write:
 - Every summary, line and question is one short plain line, the outcome first.
 - Names: plain words saying what the thing is; keep its extension. Replace underscores, a copy number such as "(2)", "final" endings
   and camera/scanner ids (IMG_1234, DSC_0012, scan0001). Ask about an unexplained photo or scan; never file it under its id.
-- Numbers: copy figures, dates and amounts exactly from its text, pile words or shown notes; never calculate, round
-  or invent limits, scores or counts.
+Copy a figure only from the evidence cited for that claim or its attached pile context. Preserve its subject, unit, date and condition. A figure elsewhere in the run is not evidence.
 
 Kinds of document: the first matching row controls. For example, payslip: the person's money area; employer, month, net pay.
 A kind not listed files immediately like the closest kind.

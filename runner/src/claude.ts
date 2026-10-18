@@ -70,7 +70,7 @@ import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { indexedFront, noteRefusal, ownershipError, parseNote, readTypeTable } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { ABOUT_SECTIONS, type aboutContext, consolidationDue, consolidationInput, consolidationOk, learnedContext, lineFaults, normalizedText, parseObservations, sectionWords } from '../../src/data/contracts/observations';
-import { ABOUT_REGIONS, createOwnershipContext } from '../../src/data/contracts/ownership-format';
+import { ABOUT_REGIONS, createOwnershipContext, fenceAfter, type Fence } from '../../src/data/contracts/ownership-format';
 import { propertyValuesOk } from '../../src/data/contracts/note-format';
 import { mocMembership, mocSnapshot } from '../../src/data/contracts/note-edit';
 import { readTagList } from '../../src/data/contracts/tag-format';
@@ -418,8 +418,7 @@ function promptInstructions(): string {
     '- Every summary, line and question is one short plain line, the outcome first.',
     '- Names: plain words saying what the thing is; keep its extension. Replace underscores, a copy number such as "(2)", "final" endings',
     '  and camera/scanner ids (IMG_1234, DSC_0012, scan0001). Ask about an unexplained photo or scan; never file it under its id.',
-    '- Numbers: copy figures, dates and amounts exactly from its text, pile words or shown notes; never calculate, round',
-    '  or invent limits, scores or counts.',
+    'Copy a figure only from the evidence cited for that claim or its attached pile context. Preserve its subject, unit, date and condition. A figure elsewhere in the run is not evidence.',
     '',
     'Kinds of document: the first matching row controls. For example, payslip: the person\'s money area; employer, month, net pay.',
     'A kind not listed files immediately like the closest kind.',
@@ -1214,7 +1213,7 @@ export interface Seen {
   folders?: ReadonlySet<string>;
   /** The rules text it was shown, for a cited rule line. */
   rules?: string;
-  /** What a number may come from besides the cited thing: the piles' words, and the notes shown (paths and text). When given, numbers are checked. */
+  /** Aggregate prompt context, never evidence for numeric grounding. */
   words?: string;
   /** Each pile's own words by pileId: a words note's summary may not copy them (words-note-summary). */
   pileWords?: ReadonlyMap<string, string>;
@@ -1244,12 +1243,13 @@ export interface Seen {
 
 /**
  * Numbers grounded (TL-P4-08 addendum 5). Every number in an authored summary, note body or Timeline line must be in the
- * cited thing's text, the piles' words or a note shown; a figure the model made up ("the 30-minute commute limit") is
+ * cited thing's text, its attached pile words or explicitly cited note text; a figure outside that evidence is
  * refused and asked again. This is a deterministic check, as Instructor's validate-and-retry
  * (https://python.useinstructor.com/concepts/retrying/) and the grounding checks of retrieval answers do; it judges no style.
  * Forms compared: a thousands separator is ignored (42,000 is 42000, 1.250.000 is 1250000), a decimal comma is a point
  * (7,5 is 7.5), leading zeros are ignored (02 is 2), so a date counts by its day and year numbers (2 November is 2, and
- * 2026-11-02 holds 2026, 11 and 2). Checks include link display text, targets and web addresses.
+ * 2026-11-02 holds 2026, 11 and 2). Checks include explicit link aliases and web addresses, not citation names.
+ * Membership does not prove subject, currency, unit or conditions: those remain prompt requirements (brain-02).
  */
 const NUMBER = /\d+(?:[.,]\d+)*/g;
 const GROUPED = /^\d{1,3}(?:[,.]\d{3})+$/;
@@ -1546,16 +1546,39 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const byPile = new Map(piles.map((p) => [p.pileId, p]));
   const admitted = new Map(piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
   const areas = new Map<string, string>();
-  // The numbers a thing's note or a line citing it may hold: its text, the admitted things' names, the piles' words, the notes shown.
-  const names = [...admitted.values()].map((a) => a.name).join('\n');
-  const common = seen.words === undefined ? null : groundsOf(`${names}\n${seen.words}\n${seen.shownNotes ?? ''}\n${seen.rules ?? ''}`);
-  const grounded = (fileId: string | undefined, texts: readonly string[], where: string): true | Quoted => {
-    if (!common) return true;
-    // A request's line is grounded in its own words too (F1, ruling 1); lineCites admits only the note it names.
-    const own = fileId === undefined ? null : groundsOf(seen.originals?.get(fileId) ?? seen.texts?.get(fileId) ?? seen.requests?.get(fileId)?.text ?? '');
+  const sourceText = (id: string | undefined): string => id === undefined ? ''
+    : seen.originals?.get(id) ?? seen.texts?.get(id) ?? seen.requests?.get(id)?.text
+      ?? seen.noteTexts?.get(pathIn(seen, id)) ?? seen.fileTexts?.get(pathIn(seen, id)) ?? '';
+  const grounded = (fileId: string | undefined, texts: readonly string[], where: string,
+    context: { note?: string; secondary?: string; links?: boolean } = {}): true | Quoted => {
+    const pileId = admitted.get(fileId ?? '')?.pileId ?? (byPile.has(fileId ?? '') ? fileId : undefined);
+    const local = groundsOf([sourceText(fileId), seen.pileWords?.get(pileId ?? '') ?? '',
+      seen.noteTexts?.get(context.note ?? '') ?? '', sourceText(context.secondary)].join('\n'));
     for (const text of texts) {
-      const n = ungrounded(text, own ? new Set([...common, ...own]) : common);
-      if (n) return quoting(`a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from the thing's text, the pile's words or the notes shown, or leave the figure out`);
+      // Keep fenced figures checked, but never turn their example links into citations.
+      let fence: Fence | null = null;
+      const prose = text.split('\n').map((line) => {
+        const previous = fence;
+        fence = fenceAfter(line, fence);
+        return previous || fence ? line.replace(WIKI_LINK, (link) => link.replace(/[[\]]/g, ' ')) : line;
+      }).join('\n');
+      // Segment around whole links, then restore their targets and aliases for citation and claim checks. Uppercase, so a
+      // link that opens a sentence still ends the one before it (UAX #29 never breaks before a lowercase letter).
+      const masked = prose.replace(WIKI_LINK, (link) => 'X'.repeat(link.length));
+      for (const { index, segment: boundary } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked)) {
+        const segment = prose.slice(index, index + boundary.length);
+        const ground = new Set(local);
+        if (context.links !== false) for (const { target, reason } of authoredLinks(segment)) {
+          const named = linkIdentity(target, seen.files?.keys() ?? []);
+          if (reason && named && typeof named !== 'string' && 'note' in named && notes.has(named.note)) {
+            for (const n of groundsOf(seen.noteTexts?.get(named.note) ?? '')) ground.add(n);
+          }
+        }
+        // The later link check still validates identity; only an explicit alias is authored claim text.
+        const claims = segment.replace(WIKI_LINK, (_link, _target: string, alias?: string) => alias ?? '');
+        const n = ungrounded(claims, ground);
+        if (n) return quoting(`a number that is in none of its sources: "${n}" in ${where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from its cited evidence or attached pile context, or leave the figure out`);
+      }
     }
     return true;
   };
@@ -1788,7 +1811,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     // A Markdown ordered list marker in the body (CommonMark 0.31.2 §5.2: 1 to 9 digits, then "." or ")") is no figure
     // (C06 gaps 5, 9); Timeline and Current state text keep every figure.
     rule('numbers', (t) => t.note === undefined || grounded(t.fileId, [t.note.summary,
-      bodyOf(t.note).replace(/^(\s*)\d{1,9}[.)](?=\s|$)/gmu, '$1'), JSON.stringify(t.note.properties ?? {})], 'the note for')),
+      bodyOf(t.note).replace(/^(\s*)\d{1,9}[.)](?=\s|$)/gmu, '$1')], 'the note for')),
+    rule('numbers', (t) => t.note === undefined || grounded(t.fileId, Object.values(t.note.properties ?? {}).map((value) => JSON.stringify(value)), 'the properties of', { links: false })),
   ], (t) => {
     placed.set(t.fileId, { to: t.to, name: t.name });
     if (t.profile !== undefined) {
@@ -1812,7 +1836,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('noteSummary', (n) => n.summary === undefined || lineOk(n.summary, AUTHORED.summary)),
     rule('noteSummary', (n) => n.summary === undefined || !copiesWords(n.summary, seen.pileWords?.get(n.pileId) ?? '') || COPIES_WORDS),
     rule('noteLink', (n) => n.summary === undefined || reasoned([n.summary])),
-    rule('numbers', (n) => n.summary === undefined || grounded(undefined, [n.summary], 'the summary of')),
+    rule('numbers', (n) => n.summary === undefined || grounded(n.pileId, [n.summary], 'the summary of')),
   ], (n) => words.set(n.pileId, { to: n.to, name: n.name, ...(n.summary === undefined ? {} : { summary: n.summary }) })));
   const Line = LineShape.superRefine(inOrder<z.output<typeof LineShape>>([
     rule('lineNote', (l) => notes.has(l.note) || !!seen.suppressed?.has(l.note)),
@@ -1842,7 +1866,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       || !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))),
     // The news rule reads the line's own words, before any label (round 2).
     rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
-    rule('numbers', (l) => grounded(l.cites, [l.text], 'the Timeline line on')),
+    rule('numbers', (l) => !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))
+      || grounded(l.cites, [l.text], 'the Timeline line on', { note: l.note, secondary: authoredOf(l).alsoCites })),
   ], (l) => {
     // A request's line cites its words, not a pile: a state may not cite the request by it.
     if (l.cites !== undefined && !placed.has(l.cites) && !seen.requests?.has(l.cites)) cited.add(l.cites);
@@ -1855,7 +1880,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('stateTwice', (st) => !current.some((x) => x.path === st.note)),
     rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
     rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites) || cited.has(st.cites)),
-    rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of')),
+    rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of', { note: st.note })),
   ], (st) => { if (notes.has(st.note) && !seen.suppressed?.has(st.note)) current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null }); }));
   // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
   // with the pile's words, and the rest of the pile is filed (TL-P4-08 point 1, addendum 4). A loose thing is its pile.
