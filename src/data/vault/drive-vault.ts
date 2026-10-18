@@ -613,10 +613,31 @@ export class DriveVault implements VaultSource {
       }
       const items = ix.filesIn(path).filter((k) => !k.folder && k.name !== PILE_NOTE).map(itemOf);
       const words = f.name.replace(/^\d{4}-\d{2}-\d{2} /, '');
-      out.push({ id, path, text: words === 'Pile' ? '' : words, createdAt, items });
+      out.push({ id, path, text: words === 'Pile' ? '' : words, createdAt, items: [...items, ...this.sendingRows(ix, id)] });
     }
+    // What is on its way is known here, with no read; the queue is read as it is, never started (Home's full read starts it).
+    this.addSending(ix, out);
     out.sort((a, b) => b.createdAt - a.createdAt);
     return ix.file(SYSTEM.questions) ? this.projectQuestions(out, ix, true) : out;
+  }
+
+  /** A pile's things still on its way from this page or a reload, minus those whose file already shows (listed once). */
+  private sendingRows(ix: VaultIndex, pileId: string): PileItem[] {
+    const listed = (id: string | null): boolean => id !== null && ix.pathOf(id) !== undefined;
+    const queued = this.queuedItems(pileId).filter((i) => !listed(i.fileId));
+    return [...(this.uploads.get(pileId)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
+  }
+
+  /** Lone things on their way have no file yet: they are shown from this page's uploads and the queue a reload left. */
+  private addSending(ix: VaultIndex, out: Pile[]): void {
+    for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
+    for (const item of this.queuedItems()) {
+      if (item.fileId !== null && ix.pathOf(item.fileId) !== undefined) continue;
+      const pile = out.find((p) => p.id === item.pileId);
+      if (pile) {
+        if (!pile.path && !pile.items.some((i) => i.id === item.memberKey)) pile.items.push(queuedRow(item));
+      } else out.push({ id: item.pileId, text: '', createdAt: Date.parse(item.addedAt), items: [queuedRow(item)] });
+    }
   }
 
   async piles(context?: OwnershipContext): Promise<Pile[]> {
@@ -636,8 +657,6 @@ export class DriveVault implements VaultSource {
         console.error(e);
         throw e;
       }));
-    // A thing whose lost answer already shows in the folder is listed as itself, once.
-    const listed = (id: string | null): boolean => id !== null && ix.pathOf(id) !== undefined;
     // Each pile is read at the same time as the others: the slowest pile, not their sum, is the wait.
     const row = async (f: DriveFile): Promise<Pile | null> => {
       const path = ix.pathOf(f.id);
@@ -677,8 +696,7 @@ export class DriveVault implements VaultSource {
       // A pile whose note could not be read already waits, logged: nothing more of it is read (or logged) now.
       const marked = !!f.appProperties?.[PROP.declaration];
       const declared = marked && !locked ? await this.declaredState(f, this.uploads.get(id)) : null;
-      const queued = this.queuedItems(id).filter((i) => !listed(i.fileId));
-      const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
+      const sending = this.sendingRows(ix, id);
       const contextKey = declared?.contextKey ?? null;
       // Every note with the pile's context key is its context, never a thing to file; unread, any keyed pile note.
       const bound = (k: DriveFile): boolean => (contextKey ? k.appProperties?.[PROP.item] === contextKey : marked && locked && k.name === PILE_NOTE && !!k.appProperties?.[PROP.item]);
@@ -722,16 +740,7 @@ export class DriveVault implements VaultSource {
       return { id, path, text: refused ? '' : text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(noteLocked ? { noteLocked: true as const } : {}) };
     };
     for (const pile of await Promise.all(ix.filesIn('Inbox').map(row))) if (pile) out.push(pile);
-    // A lone thing still on its way has no file yet: show it from here.
-    for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
-    // A lone thing a reload left on its way: the upload queue still holds it.
-    for (const item of this.queuedItems()) {
-      if (listed(item.fileId)) continue;
-      const pile = out.find((p) => p.id === item.pileId);
-      if (pile) {
-        if (!pile.path && !pile.items.some((i) => i.id === item.memberKey)) pile.items.push(queuedRow(item));
-      } else out.push({ id: item.pileId, text: '', createdAt: Date.parse(item.addedAt), items: [queuedRow(item)] });
-    }
+    this.addSending(ix, out);
     for (const pile of await this.looseMissing(new Set(out.map((p) => p.id)))) out.push(pile);
     // Queue completion updates the listing through fromQueue. Publish only when that listing and the
     // queued rows stayed consistent across the reads; otherwise reuse the listing and read caches.
