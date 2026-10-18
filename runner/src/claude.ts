@@ -50,6 +50,7 @@ import { markerText, parseTimelineLine } from '../../src/data/contracts/timeline
 import { WIKI_LINK, formerNames, linkTarget } from '../../src/data/contracts/links';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
+import { admittedThings } from '../../src/data/spine/admission';
 import { limiter, type ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
@@ -136,6 +137,8 @@ export interface ClaudeSetup {
   /** The run's timing line, which gets the model step's numbers. */
   timing?: RunTiming;
   retrieval?: Readonly<Record<string, MaintenanceNote>>;
+  /** A listed note has no known entry (discovery unfinished): `retrieval` lacks it. */
+  unread?: boolean;
   prefixes?: (file: DriveFile, discover?: boolean) => Promise<string | null | undefined>;
 }
 
@@ -206,7 +209,7 @@ interface ShownThing { fileId: string; name: string; kind: string; text: string 
 type ProfileSources = Array<{ path: string }>;
 
 type MapRow = { id: string; path: string; notes: number; hub?: { id: string; path: string; summary: string }; types?: string[]; tags?: string[] };
-type Card = { id: string; path: string; summary?: string; type?: string; tags?: string[]; members?: string[] };
+type Card = { id: string; path: string; summary?: string; type?: string; tags?: string[]; members?: string[]; unread?: true };
 /** The most common values of `values`, most first (ties by name), at most `n`. */
 const commonest = (values: readonly string[], n: number): string[] | undefined => {
   const counts = new Map<string, number>();
@@ -247,6 +250,8 @@ interface Shown {
   /** L1, the folder map (c12-map-cards): one row per folder in path order, bounded; `foldersCut` when rows are left out. */
   map?: MapRow[];
   foldersCut?: boolean;
+  /** The cut is discovery's, not the map's bound: some listed notes are not read yet. */
+  unread?: true;
   /** L2, the candidate cards: each note once, however many sources name it; a source names its candidates by id. */
   cards?: Card[];
   sources?: Array<{ itemId: string; candidates: string[] }>;
@@ -470,7 +475,7 @@ function systemPrompt(run: ScriptedRun, shown: Shown): string {
     '| --- | --- | --- | --- | --- | --- | --- |',
     ...(shown.types ?? []).map((row) => `| ${[row.id, row.match, row.template, row.properties, row.table, row.group_by ?? null, row.profile ?? null].map(cell).join(' | ')} |`),
     JSON.stringify({ ...(shown.rules ? { rules: shown.rules } : {}), ...(shown.aboutMe ? { aboutMe: shown.aboutMe, learnedFacts: shown.learnedFacts } : {}), ...(run.hot ? { hot: run.hot } : {}), map: shown.map ?? [] }),
-    ...(shown.foldersCut ? ['> folders cut: no match does not mean no destination.'] : []),
+    ...(shown.foldersCut ? [shown.unread ? '> folders not fully read: no match does not mean no destination.' : '> folders cut: no match does not mean no destination.'] : []),
   ].join('\n');
 }
 
@@ -2417,10 +2422,23 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => cut(p.anchor?.name ?? thingsOf(p)[0]?.name ?? p.items[0]?.name ?? p.pileId)),
       ...took.taken.journal.filter((l) => dropped.has(l.fileId)).map((l) => cut(requestText(l.fileId)?.trim() || l.name)),
     ].map((name) => ({ name, why: WAITING_WHY }));
+    /** The items the selection placed (set once it is checked). */
+    let placed: ReadonlySet<string> = new Set();
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, t = took.taken): Promise<RunManifest> => {
       const waiting = dropped.size ? new Set([...held ?? [], ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => p.pileId)]) : held;
       const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context, tagList }, undefined, waiting);
-      const manifest: RunManifest = dropped.size ? { ...plan.manifest, waiting: waitingRows((id) => requests.get(id)?.text) } : plan.manifest;
+      // WS7, WS11: a pile the selection gave no item (a new folder in a cut map), that no question or hold accounts for,
+      // is left in the inbox with no row: it is counted, never "nothing was ready".
+      const asked = new Set(plan.manifest.operations.flatMap(({ effect: e }) => {
+        const list = e.kind === 'write-runner-json' && e.path === SYSTEM.questions || e.kind === 'create-text' && e.name === 'questions.json' ? jsonOf(e.text) : null;
+        return isRunnerFile(SYSTEM.questions, list) ? list.questions.map((q) => q.subject) : [];
+      }));
+      const left = took.taken.piles.filter((p) => !dropped.has(p.pileId)
+        && !plan.manifest.capture.piles.some((c) => c.pileId === p.pileId)
+        && ![p.pileId, ...p.items.map((i) => i.fileId)].some((id) => placed.has(id) || asked.has(id)));
+      const waitingThings = admittedThings({ ...took.taken, piles: left });
+      const counted: RunManifest = waitingThings > 0 ? { ...plan.manifest, waitingThings } : plan.manifest;
+      const manifest: RunManifest = dropped.size ? { ...counted, waiting: waitingRows((id) => requests.get(id)?.text) } : counted;
       const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES, false);
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
       const stray = outsideAdmitted(manifest, took, own, new Set((filing.keep ?? []).map((k) => k.other)));
@@ -2553,6 +2571,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const isCard = new Set(cardIds);
     shown.cards = cardIds.map((id): Card => {
       const note = indexed[id];
+      if (setup.unread && !setup.retrieval?.[id]) return { id, path: note?.path ?? ix.pathOf(id) ?? '', unread: true };
       if (!note) return { id, path: ix.pathOf(id) ?? '' };
       const tags = metadata[id]?.tags; const members = note.members?.filter((m) => isCard.has(m));
       return { id, path: note.path, summary: note.summary, ...(note.type ? { type: note.type } : {}), ...(tags?.length ? { tags } : {}), ...(members?.length ? { members } : {}) };
@@ -2573,8 +2592,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         ...(hub && hubNote ? { hub: { id: hub, path: hubNote.path, summary: hubNote.summary } } : {}), ...(types ? { types } : {}), ...(tags ? { tags } : {}) };
     }).sort((a, b) => a.path < b.path ? -1 : 1);
     shown.map = boundMap(allRows);
-    const foldersCut = shown.map.length < allRows.length;
+    const foldersCut = shown.map.length < allRows.length || !!setup.unread;
     shown.foldersCut = foldersCut;
+    if (setup.unread) shown.unread = true;
     const typeFile = ix.file(SYSTEM.typeTable);
     shown.types = readTypeTable(typeFile ? await read.readText(typeFile.id) : null).table.rows;
     // Stored answers pin their own source; requests only nominate candidates.
@@ -2888,6 +2908,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (files.length) shown.files = files;
         shown.presentLines = presentLinesOf(shown.notes, listing, ix, run);
         shown.selection = selection.value; shown.allowedTargets = selection.allowedTargets;
+        placed = new Set(selection.value.items.map((item) => item.itemId));
         const input = prepared(run, shownTook, shown);
         const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => t.text === null ? [] : [[t.fileId, t.text] as const])));
         const { sets: mapSets, noteTypes, prepare: prepareMaps, skipped: mapSkipped } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? [], recent);

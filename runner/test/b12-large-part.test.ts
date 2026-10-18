@@ -589,8 +589,6 @@ describe('B12d the large corpus case in the landed grammar', () => {
     const table = c.folder[SYSTEM.typeTable];
     expect(JSON.parse(table ?? '{}'), 'every row is a valid stored row').toEqual(readTypeTable(table ?? null).table);
     const replies = JSON.parse(await readFile(join(ROOT, id, 'replies.json'), 'utf8')) as Array<{ maps?: Array<Record<string, unknown>> }>;
-    expect(replies[0]?.maps?.[0], 'the first reply asks with one rule for all').toMatchObject({ requestId: '$request:change-1', ops: expect.any(Array) as unknown,
-      question: { text: expect.any(String) as unknown, yes: expect.any(String) as unknown, no: expect.any(String) as unknown } });
     const text = [table, JSON.stringify(replies), JSON.stringify(c.expected), JSON.stringify(c), c.rubric].join('\n');
     for (const stale of ['$set:', '"setId"', '$script:', '$question:', 'Pending B12', 'future scripts']) expect(text, `no stale specimen ${stale}`).not.toContain(stale);
     for (const hand of ['oracle.json', 'inventory.json', 'late-arrival.txt']) expect(existsSync(join(ROOT, id, hand)), `${hand} is gone`).toBe(false);

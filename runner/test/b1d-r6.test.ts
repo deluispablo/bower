@@ -172,8 +172,9 @@ it('b1d-r6 B1 maintenance charges every send within 300', async () => {
   expect(full.sends.filter((send) => !send.afterExhaustion), 'the meter permits exactly 300 sends before refusing').toHaveLength(300);
   expect.soft(full.sends.filter((send) => send.afterExhaustion), 'no uncharged sends escape after exhaustion').toHaveLength(0);
   const sourcePath = full.r.pathsById[full.b.sources[0]?.itemId ?? ''] ?? '';
-  expect(sourcePath, 'exhaustion before effects keeps the source in Inbox').toMatch(/^Inbox\//);
-  expect(full.r.after[sourcePath], 'exhaustion before effects keeps the source bytes').toBe(full.b.c.inboxFiles['Offer.txt']);
+  // c12-warm-start (WS1): discovery's exhaustion no longer holds the run; its progress and log go outside the ledger.
+  expect(sourcePath, 'the run plans on what it knows and files the source').toBe('Projects/Remote search/Offer.txt');
+  expect(full.r.after[sourcePath], 'the filed source keeps its bytes').toBe(full.b.c.inboxFiles['Offer.txt']);
 });
 
 it('b1d-r6 B2 exhaustion stops read-ahead and handles pending rejections', async () => {
