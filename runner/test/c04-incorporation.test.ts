@@ -92,7 +92,9 @@ describe('what the model is shown (P4-3)', () => {
     };
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
-    const input = calls[0]?.input ?? '';
+    const planning = calls.filter((c) => !(c as ClaudeCall & { images?: unknown }).images);
+    expect(calls.filter((c) => (c as ClaudeCall & { images?: unknown }).images)).toHaveLength(1);
+    const input = planning[0]?.input ?? '';
     const ctx = contextOf(input);
     const things = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t]));
     expect(things.size).toBe(10);
@@ -108,7 +110,7 @@ describe('what the model is shown (P4-3)', () => {
     expect(things.get('scan0001.pdf')).toMatchObject({ text: null });
     expect(things.get('scan0001.pdf')?.why).toMatch(/no text layer/);
     expect(things.get('IMG_0001.jpg')).toMatchObject({ text: null });
-    expect(things.get('IMG_0001.jpg')?.why).toMatch(/picture/);
+    expect(things.get('IMG_0001.jpg')?.why).toMatch(/could not read/);
     expect(things.get('Broken.pdf')).toMatchObject({ text: null });
     expect(things.get('Broken.pdf')?.why).toMatch(/could not be read/);
     // Bounded per thing, and the cut is marked, never silent.
@@ -126,13 +128,13 @@ describe('what the model is shown (P4-3)', () => {
     expect(shown).toBeLessThanOrEqual(PER_RUN);
     expect(things.get('Long notes 5.txt')?.cut).toBeGreaterThan(30_000 - PER_THING);
     // The prompt tells the model what it was not shown.
-    expect(input).toMatch(/OCR/);
+    expect(input).toContain("A picture's text is what Bower read in it.");
 
     // Selection has metadata; picked full-note evidence is bounded in execution, never Alex's unpicked note.
     expect(ctx.notes).toEqual([]);
     expect(ctx.cards?.find((card) => card.id === hubFile.id)).toEqual({ id: hubFile.id, path: 'Areas/Garden/Garden.md', summary: '(no summary)' });
     expect(input).not.toContain('Plot 14. '.repeat(20));
-    const execution = contextOf(calls[1]?.input ?? '');
+    const execution = contextOf(planning[1]?.input ?? '');
     expect(execution.notes.map((n) => n.path)).toEqual(['Areas/Garden/Garden.md']);
     const note = execution.notes[0];
     expect(note?.text.startsWith(hub.slice(0, 200))).toBe(true);
