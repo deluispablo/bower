@@ -2403,8 +2403,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const count = itemCount + took.taken.journal.length;
     let tagList: ReturnType<typeof readTagList> | undefined;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
-    // The sources (a pile's id, a request's journal file id) a refusal of the reply's second try left for the next tidy-up, by that refusal's kind.
-    const dropped = new Map<string, RefusalKind>();
+    // The sources (a pile's id, a request's journal file id) a refusal of the reply's second try left for the next tidy-up, by that refusal's kind;
+    // 'group': its group got no valid reply or no model time and waits whole (c12-fanout-wait).
+    const dropped = new Map<string, RefusalKind | 'group'>();
     const cut = (name: string): string => {
       if (name.length <= MAX_NAME) return name;
       let out = '';
@@ -2863,6 +2864,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           // An answer that chose an option is a place choice (the only options a question carries).
           ...taken.answers.flatMap((a) => (typeof a.value === 'object' && 'option' in a.value ? [subjectKey(a.question) ?? ''] : []))]);
       };
+      const chosenPile = async (pile: typeof took.taken.piles[number]): Promise<boolean> => {
+        const chosen = await choiceOf();
+        return chosen.has(pile.pileId) || thingsOf(pile).some((i) => chosen.has(i.fileId));
+      };
       const remembers = (filing: Filing): boolean => !!(filing.observations?.length || filing.forget?.length || filing.ends?.length || filing.profiles?.size);
       /** One group's writing call, prepared before any call goes out (S11): its input, and its check and drop over its own data only (S3). */
       const job = async (group: readonly string[], firstGroup: boolean) => {
@@ -2910,7 +2915,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
           const first = refused.source;
           if (first === undefined || dropped.has(first) || !isRecord(value)) return null;
           const pile = piles.find((p) => p.pileId === first);
-          if (pile && [...await choiceOf()].some((s) => s === pile.pileId || thingsOf(pile).some((i) => i.fileId === s))) return null;
+          if (pile && await chosenPile(pile)) return null;
           const reply = structuredClone(value);
           const pending = [first];
           for (let source = pending.pop(); source !== undefined; source = pending.pop()) {
@@ -3027,11 +3032,32 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const jobs: Array<Awaited<ReturnType<typeof job>>> = [];
       for (const [i, group] of (groups.length ? groups : [[]]).entries()) jobs.push(await job(group, i === 0));
       const intents: Array<Extract<Intent, { ok: true }>> = [];
-      for (const j of jobs) intents.push(await twice(j.input, 'execution', j.check, j.drop));
+      const waits: BowerError[] = [];
+      for (const [i, j] of jobs.entries()) {
+        try { intents.push(await twice(j.input, 'execution', j.check, j.drop)); } catch (error) {
+          // S13: no valid reply, or no model time, makes the group wait whole; any other error stops the run (ruling 4).
+          if (single || !(plannerRefusal(error) || error instanceof LedgerExhausted)) throw error;
+          const group = new Set(groups[i]);
+          // W1: a pile planned whatever the reply says cannot wait: its group's own error fails or holds the run, as one call's would.
+          for (const pile of shownTook.taken.piles) if (group.has(pile.pileId) && await chosenPile(pile)) throw error;
+          waits.push(error);
+          for (const source of group) if (!dropped.has(source)) dropped.set(source, 'group');
+        }
+      }
+      // S12: with no group landed, a refusal fails the run; all out of time is today's held run.
+      if (!intents.length) throw waits.find(plannerRefusal) ?? waits[0];
       const intent = mergedFiling(intents);
       if (!single && yesList.length) Object.assign(intent.filing, { maps: [...intent.filing.maps ?? [], ...yesList] });
       // Told once the run goes on without them, never for a run the dropping could not save.
-      for (const [source, why] of dropped) console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
+      for (const [source, why] of dropped) {
+        if (why !== 'group') console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
+      }
+      // W3: one line for every group that waited, counting its things (a pile at least one, a request one).
+      const waiting = [...dropped].filter(([, why]) => why === 'group').reduce((n, [source]) => {
+        const pile = took.taken.piles.find((p) => p.pileId === source);
+        return n + (pile ? Math.max(1, thingsOf(pile).length) : requests.has(source) ? 1 : 0);
+      }, 0);
+      if (waits.length) console.log(`${waiting} items left in the inbox for the next run: their group got no plan.`);
       const whole = (filing: Filing): typeof took.taken => ({ ...took.taken, journal: finalJournal(filing) });
       // S7: the merged filing is planned once; a refusal there fails the run, and over 200 operations holds it (LedgerExhausted).
       const validatedPlan = single ? jobs[0]?.plan()

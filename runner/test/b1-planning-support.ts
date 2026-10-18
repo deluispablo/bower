@@ -12,7 +12,7 @@ import { PILE_NOTE } from '../../src/data/piles';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { indexedFront, lintFacts, parseNote } from '../../src/data/contracts/note-format';
 import { mocEdit, mocMembership, mocSnapshot } from '../../src/data/contracts/note-edit';
-import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
+import { WAITING_WHY, type MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { SYSTEM, isHidden, type RetrievalFile } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
@@ -354,6 +354,47 @@ export function leavesForNextRun(result: Awaited<ReturnType<typeof run>>) {
   expect.soft(lines, 'one console line counts the items left for the next run').toHaveLength(1);
   const count = result.dispatch?.admission.piles.reduce((n, p) => n + Math.max(1, p.items.filter((i) => i.name !== PILE_NOTE).length), 0) ?? 0;
   expect.soft(lines[0] ?? '').toMatch(new RegExp(`\\b${count}\\b`));
+}
+
+/**
+ * c12-fanout-wait (S13, W2-W5): some groups waited whole and the rest landed. `waiting`: the sources set to wait with their
+ * group (pile ids, request journal file ids); `filed`: the things filed. A partial run writes a manifest and takes the
+ * landed groups' requests, so this never reuses `untouchedInbox`.
+ */
+export function waitsForNextRun(result: Awaited<ReturnType<typeof run>>, waiting: readonly string[], filed: number) {
+  expect.soft(result.code, 'a run with a group waiting is a done run').toBe(0);
+  expect.soft(result.wire?.statuses.at(-1)?.phase, 'it ends done').toBe('done');
+  expect.soft(report(result).filed, 'the groups that landed are filed').toHaveLength(filed);
+  const admission = result.dispatch?.admission;
+  const writes = (path: string) => result.events.filter((e) => ['PATCH', 'POST', 'DELETE'].includes(e.method) && e.path === path);
+  let count = 0;
+  for (const id of waiting) {
+    const pile = admission?.piles.find((p) => p.pileId === id);
+    const line = admission?.journal.find((l) => l.fileId === id);
+    expect.soft(pile ?? line, `the waiting source ${id} was admitted`).toBeDefined();
+    if (pile) {
+      count += Math.max(1, pile.items.filter((i) => i.name !== PILE_NOTE).length);
+      for (const item of pile.items) {
+        const path = result.pathsById[item.fileId] ?? '';
+        expect.soft(path, 'a waiting thing stays in the inbox').toMatch(/^Inbox\//);
+        expect.soft(Object.hasOwn(result.after, path), 'the next run can still read it').toBe(true);
+        expect.soft(writes(path), 'a waiting thing is never written').toEqual([]);
+      }
+    } else if (line) {
+      count += 1;
+      const was = `${result.pathsById[line.parents[0] ?? ''] ?? ''}/${line.name}`;
+      expect.soft(result.pathsById[line.fileId], 'a waiting request keeps its journal file where it was').toBe(was);
+      expect.soft(writes(was), 'a waiting request is never written').toEqual([]);
+    }
+  }
+  const plan = JSON.parse(Object.entries(result.after).find(([p]) => /\/manifest-[^/]+\.json$/.test(p))?.[1] ?? '{}') as { waiting?: Array<{ why: string }> };
+  // One row per dropped source, of either kind: each item-level drop is told on its own line (W4).
+  const drops = (result.errors.match(/drops a (?:pile|request) \(/g) ?? []).length;
+  expect.soft(plan.waiting?.map((w) => w.why), 'exactly one waiting row per dropped source').toEqual(Array.from({ length: waiting.length + drops }, () => WAITING_WHY));
+  const lines = result.consoleLines.filter((l) => /exhaust|next run|left.*inbox|wait/i.test(l) && !l.startsWith('timing:'));
+  expect.soft(lines, 'one console line counts the things waiting with their group').toHaveLength(1);
+  expect.soft(lines[0] ?? '').toMatch(new RegExp(`\\b${count}\\b`));
+  expect.soft([...result.consoleLines, ...result.errors.split('\n')].filter((l) => l.includes('undefined')), 'no line says undefined').toEqual([]);
 }
 
 /** Find the script's candidate rows without pinning a particular serialized prefix or per-item container. */
