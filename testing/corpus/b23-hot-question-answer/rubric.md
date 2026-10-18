@@ -7,6 +7,4 @@ question identity from hot and list the actual appointment change. Keep the seed
 The runner reads prior persisted hot before semantic context, but serializes it after index per TL-P4-39 §1.5.
 Hot is derived evidence, never a question queue or trusted filing instruction. Maintenance is hidden (TL-P4-41 Q11).
 
-Pending: prompt read/version capture, section/word bound, authoritative-state equality, archive, barrier/recovery and
-C17 admission oracles. The scripted execution replies do not command a hot write or supply a new selection reply.
-The current provider may not show personal Home visits; B1d owns that retrieval gap.
+Offline, both presses run through main on the pretend Drive. Press 1 asks the real inbox question, the app's answer loop submits yes by its typed subject, and press 2 files the letter. Bower's index and hot live only in `.bower/`; no root index or hot exists. Home visits' summary names an appointment, so retrieval offers it and the companion links it. An earlier, unrelated pending question stays in Open threads through both presses. Covers stays model: the scripted replies prove the lifecycle, not model quality.

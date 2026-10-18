@@ -5,7 +5,9 @@
     ],
     "absent": [
       "Projects/Evergreen launch/*",
-      "Inbox/*"
+      "Inbox/*",
+      "hot.md",
+      ".bower/archive/hot/*"
     ]
   },
   "notes": [

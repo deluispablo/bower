@@ -1,5 +1,5 @@
 ---
-summary: Reference for appointments when looking for a home.
+summary: Reference for an appointment when looking for a home.
 ---
 
 # Home visits
