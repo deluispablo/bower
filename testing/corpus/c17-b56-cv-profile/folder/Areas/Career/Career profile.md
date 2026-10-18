@@ -1,6 +1,6 @@
 ---
 summary: Alex career facts, with sources.
-type: person
+type: cv
 status: active
 by: bower
 bower_format: ownership/2

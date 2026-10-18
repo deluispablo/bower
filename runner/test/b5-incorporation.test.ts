@@ -8,11 +8,11 @@ import { loadCase } from '../src/corpus';
 import { readTypeTable } from '../../src/data/contracts/note-format';
 import * as providers from '../src/provider';
 import { scriptedDecisions } from '../../src/data/demo/script';
-import { planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
+import { authoredLinks, linkReasons, planScripted, runKeys, type Decisions } from '../../src/data/spine/scripted';
 import type { LastRunFile } from '../../src/data/vault/layout';
 import type { Proposal, Question, TypeRow, TypeTable } from '../../src/data/contracts/types';
 import type { QuestionAnswer } from '../../src/data/contracts/questions';
-import { promptOf, frameOf, AT, redispatchCase, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { promptOf, frameOf, AT, caseReplies, redispatchCase, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { phaseAwareClaude } from './b1-planning-support';
 
@@ -426,4 +426,32 @@ it('b5-table-first-create-and-lenient-read: a trusted rewrite retains stored ext
   decisions(); const result = await run(base);
   expect(result.code).toBe(0);
   expect(tableOf(result)).toEqual({ ...stored, rows: [{ ...stored.rows[0], table: ['company', 'salary', 'location', 'hours'] }] });
+});
+
+it.each([
+  ['c17-b56-cv-profile', ['See also [[Areas/Career/Career profile]]: the profile this CV updates.', 'See also [[Areas/Career/Career]]: the career record it belongs to.'],
+    ['Areas/Career/Originals/Alex CV.md', 'Bower health.md'], ['Areas/Career/Career profile.md']],
+  ['c17-b56-offer-job-search', ['See also [[Projects/Job hunt/Job hunt]]: the job search this offer belongs to.', 'See also [[Areas/Career/Career profile]]: the profile the role is compared with.'],
+    ['Projects/Job hunt/Offers/Ferrowick offer.md', 'Bower health.md'], ['Projects/Job hunt/Job hunt.md']],
+])('corpus-fix-b56-profile AC3: offer and CV reports and links match current effects (%s)', async (slug, lines, created, updated) => {
+  const DIR = (id: string) => new URL(`../../testing/corpus/${id}/`, import.meta.url).pathname;
+  const PROPS = { 'Areas/Career/Career profile.md': { profile: 'cv' } };
+  const replies = JSON.parse(readFileSync(join(DIR(slug), 'replies.json'), 'utf8')) as Array<{ things: Array<{ note: { body: string } }> }>;
+  const body = replies[0]?.things[0]?.note.body ?? '';
+  expect(body.split('\n').filter((l) => l.includes('[['))).toEqual(lines);
+  expect(linkReasons(body).map((x) => x.target)).toEqual(authoredLinks(body).map((x) => x.target));
+  expect(linkReasons(body)).toHaveLength(2);
+  const c = await loadCase(resolve(DIR(slug)));
+  const run = await runWithClaude(c, caseReplies(slug), PROPS);
+  expect(run.code).toBe(0);
+  expect(run.score).toEqual({ pass: true, unmet: [] });
+  const report = (run.lastRun as LastRunFile).run.report;
+  expect((report?.created ?? []).map((x) => x.path).sort()).toEqual([...created].sort());
+  expect([...new Set((report?.updated ?? []).map((x) => x.path))]).toEqual(updated);
+  expect(c.expected.report?.created).toEqual(created);
+  expect(c.expected.report?.updated).toEqual(updated);
+  expect(run.after[created[0] ?? '']).toContain(body);
+  const kept = slug === 'c17-b56-cv-profile' ? ['Areas/Career/Career.md']
+    : ['Areas/Career/Career profile.md', 'Projects/Greenhouse repair/Greenhouse repair.md'];
+  for (const path of kept) expect(run.after[path], `${path} keeps its bytes`).toBe(c.folder[path]);
 });

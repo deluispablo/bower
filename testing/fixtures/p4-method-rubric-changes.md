@@ -57,8 +57,8 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c05-merge-answer-no | agrees | The person's no keeps both notes and their links; settling the answer does not authorize a merge. |
 | c05-marked-state-keeps-history | agrees | Point 3 rewrites a genuinely Bower-owned state from evidence while Timeline only grows and personal prose survives. |
 | c17-b56-personal-sale-project | agrees | Rechecked 2026-10-10: points 1–4/7/8; existing sale project beats Ideas, source links/history and personal prose survive. TL-P4-41 requires candidate ids and complete retrieval; B2/B6 supply summary/Source construction, not a second writer. |
-| c17-b56-cv-profile | changed | Rechecked 2026-10-10: points 1/3/4/7/8; originals/profile fit remains. Clarified TL-P4-39 F2/F7/R2: short state through C05, full grounded profile through a new Bower region, never a larger state or About me preference. No new-region personal-edit handling; expected.json unchanged. |
-| c17-b56-offer-job-search | agrees | Rechecked 2026-10-10: points 1/3/4/7/8; offer fits Job hunt with factual profile comparison, no shared-word decoy or score. B1 selects hub/profile ids within five; F13 forbids inventing currency/column authority from the source. |
+| c17-b56-cv-profile | changed | Points 1/3/4/7/8: the CV files under Career originals and copies its one offered source sentence, with its source link, into the profile region of the note marked as the cv row's profile; personal text and history stay. The type table is JSON, the profile mark is a declared Drive property, and each link in the note says why. |
+| c17-b56-offer-job-search | changed | Points 1/3/4/7/8: the offer fits Job hunt with a factual profile comparison, no shared-word decoy or score; the offer row declares no profile, so the profile stays unchanged. The type table is JSON, and each link in the note says why. |
 | c17-b56-clear-topic-templates | agrees | Rechecked 2026-10-10: points 1–4/8; clear trusted reference creates Source/Concept/MOC. TL-P4-41 cut-index rule, B2 scalar summary, marked evergreen MOC and immutable Source apply. Ambiguous variants use TL-P4-44 stored file-to/option ids, not this clear case. |
 | c05-note-not-written-by-bower | agrees | TL-P4-32: one requested sourced line; state asks once, protected bytes and ownership stay personal, replay adds nothing (points 1, 3, 7, 8). |
 | c15-current-admitted-evidence | changed | Points 1, 2, 3, 7: the current source supplies the venue and sourced history; the filed source keeps its bytes and no other venue is invented. |
@@ -204,6 +204,15 @@ record the method re-check, not an executed model result.
     2 archives the section before the ledger write, keeps all eight facts in the ledger and each qualifier in its line,
     and is scored on its archive, the ledger and short qualifier phrases. A document-sourced preference, sensitive
     fact, rule or schema is refused by the origin rule. Covers stays model in both cases.
+
+## Corpus clean changes (`corpus-fix-b56-profile`)
+
+14. **c17-b56-cv-profile and c17-b56-offer-job-search.** Reason: the corpus audit (a Markdown type-table specimen the
+    runner never reads, a profile mark and a table installed by the tests, a profile reply as free words, bare links,
+    and reports missing the health note). Now: each folder holds a JSON type table (the cv row with its profile, and in
+    the offer case an offer row without one), the profile mark is a declared Drive property, the CV cites its one
+    offered source sentence, each note's links say why, and both cases score clean end to end. Covers stays model in
+    both cases.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 

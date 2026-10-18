@@ -394,11 +394,10 @@ describe('B10 a long text reaches the planner through one cited synopsis', () =>
     const SYNOPSIS = 'Alex delivered a map editor that works without a connection.';
     const c = await loaded('c17-b56-cv-profile', { 'Alex CV.txt': `${SPAN}\nExperience: built career map tools at Ferrowick in 2026.\n${words(3100, 'Alex labels paper trays for the plot today.')}` });
     const drive = fixedDrive();
-    const root = await seedCase(drive, c);
+    const root = await seedCase(drive, c, { [PROFILE]: { profile: 'cv' } });
+    expect((await drive.listAll(root)).filter((f) => f.name === 'type-table.json')).toHaveLength(1);
     const ix = VaultIndex.build(root, await drive.listAll(root));
     const id = (path: string): string => ix.idOf(path) ?? '';
-    await drive.update(id(PROFILE), { appProperties: { profile: 'cv' } });
-    await drive.createText(id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [{ id: 'cv', match: ['cv'], template: 'source', properties: {}, table: [], profile: { template: 'profile' } }] }));
     const note = { name: 'Alex CV.md', summary: SPAN, body: `${SPAN} [[Areas/Career/Career profile]] [[Areas/Career/Career]]`, typeRow: 'cv' };
     const r = await press(c, {
       synopsis: () => ({ statements: [{ text: SYNOPSIS, parts: [1] }] }),

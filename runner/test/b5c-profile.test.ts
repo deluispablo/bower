@@ -87,8 +87,10 @@ import { typeRowOk } from '../../src/data/contracts/note-format';
 import type { ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { NOTE_TEMPLATES } from '../../src/data/contracts/note-templates';
 import { media, type Base } from './b1-planning-support';
-import { redispatchCase } from './corpus-run';
-import { readFileSync } from 'node:fs';
+import { lastJson, redispatchCase, replySequence, runWithClaude } from './corpus-run';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { loadCase } from '../src/corpus';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { paging } from './drive-v3';
@@ -180,33 +182,24 @@ async function rejectedProfile(b: Base, sentences: number[], reason: RegExp) {
   return result;
 }
 
+type ProfileRef = { source: string; sentence: number };
+const PROPS = { [PROFILE]: { profile: 'cv' } };
 async function corpusProfile(slug: string, control = false) {
-  const b = await setup({ fixture: slug });
-  const kind = slug.endsWith('cv-profile') ? 'cv' : 'offer';
-  const rows = [declaration(kind)];
-  await b.drive.update(b.id(PROFILE), { appProperties: { profile: kind } });
-  await b.drive.createText(b.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows }));
-  const replies = JSON.parse(readFileSync(new URL(`../../testing/corpus/${slug}/replies.json`, import.meta.url), 'utf8')) as
-    Array<{ things: Array<{ profile?: string }> }>;
+  const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', slug));
+  const replies = JSON.parse(readFileSync(join(c.dir, 'replies.json'), 'utf8')) as
+    Array<{ things: Array<{ profile?: ProfileRef[]; note: { body: string; typeRow?: string } }> }>;
   if (control) for (const intent of replies) for (const thing of intent.things) delete thing.profile;
-  let bound = JSON.stringify(replies[0]);
-  for (const source of b.sources) bound = bound.replaceAll(`$file:${source.name}`, source.itemId);
-  const cv = slug.endsWith('cv-profile');
-  const parent = cv ? 'Areas/Career' : 'Projects/Job hunt';
-  const hub = cv ? 'Areas/Career/Career.md' : JOB;
-  const selection = { items: b.sources.map((source) => ({ itemId: source.itemId, kind: cv ? 'cv' : 'offer',
-    destination: { parentId: b.id(parent), name: cv ? 'Originals' : 'Offers' },
-    wants: [b.id(PROFILE), b.id(hub)],
-  })), asks: [] };
-  const result = await run(b, [selection, JSON.parse(bound) as unknown]);
-  return { b, result, errors: result.errors };
+  const inputs: string[] = [];
+  const scripted = replySequence(replies);
+  const result = await runWithClaude(c, async (call) => { inputs.push(call.input); return scripted(call); }, PROPS);
+  return { c, replies, inputs, result };
 }
 
 it('b5-cv-profile-through-main control: sourced note and bounded region author work', async () => {
   await ordinaryControl();
   const corpus = await corpusProfile('c17-b56-cv-profile', true);
-  expect(corpus.result.code, corpus.errors).toBe(0);
-  expect(corpus.result.after[PROFILE]).toBe(corpus.b.c.folder[PROFILE]);
+  expect(corpus.result.code).toBe(0);
+  expect(corpus.result.after[PROFILE]).toBe(corpus.c.folder[PROFILE]);
   const before = profileNote();
   expect(applyChanges(bytes(before), [change])).toMatchObject({ ok: true, text: before.replace(PREVIOUS, NEXT) });
   expect(applyChanges(bytes(before), [{ ...change, text: `${Array(398).fill('TypeScript').join(' ')} [[Alex CV.txt]]\n` }]).ok).toBe(true);
@@ -217,24 +210,7 @@ it('b5-cv-profile-through-main', async () => {
     [1], /profile.*reference|offered/i);
   await rejectedProfile(await profileBase({ text: `${Array(401).fill('TypeScript').join(' ')}.` }),
     [1], /ungrounded or overlong profile plan/i);
-  const cv = await setup({ fixture: 'c17-b56-cv-profile' });
-  await cv.drive.update(cv.id(PROFILE), { appProperties: { profile: 'cv' } });
-  await cv.drive.createText(cv.id('.bower'), 'type-table.json', JSON.stringify({ v: 1, rows: [declaration()] }));
-  const replies = JSON.parse(readFileSync(new URL('../../testing/corpus/c17-b56-cv-profile/replies.json', import.meta.url), 'utf8')) as
-    Array<{ things: Array<{ profile: Array<{ source: string; sentence: number }> }> }>;
-  const span = 'Achievement: shipped an offline map editor.';
-  expect(cv.c.inboxFiles[SOURCE]).toContain(span);
-  for (const intent of replies) for (const thing of intent.things) thing.profile = [{ source: `$file:${SOURCE}`, sentence: 1 }];
-  let bound = JSON.stringify(replies[0]);
-  for (const source of cv.sources) bound = bound.replaceAll(`$file:${source.name}`, source.itemId);
-  const selection = { items: cv.sources.map((source) => ({ itemId: source.itemId, kind: 'cv',
-    destination: { parentId: cv.id('Areas/Career'), name: 'Originals' },
-    wants: [cv.id(PROFILE), cv.id('Areas/Career/Career.md')],
-  })), asks: [] };
-  const corpus = await run(cv, [selection, JSON.parse(bound) as unknown]);
-  expect.soft(corpus.code, 'CV corpus main admits the whole referenced source sentence').toBe(0);
-  expect(corpus.frames).toHaveLength(2);
-  expect.soft(corpus.after[PROFILE]).toContain(framed('profile', `${span} [[Alex CV]]\n[[Career]]\n`));
+  // The c17-b56-cv-profile corpus part runs in 'corpus-fix-b56-profile AC2' below.
   const b = await profileBase(); const result = await mainProfile(b, [1]);
   copied(result, `${FACT} [[Alex CV]]\n[[Earlier CV]]\n`); expect(result.after[PROFILE]).toMatch(/\[\[[^\]]*Alex CV/);
   expect(result.after[PROFILE]).not.toContain(PREVIOUS); preserved(b, result);
@@ -344,10 +320,10 @@ it('b5-first-document-creates-profile', async () => {
 });
 
 it('b5-offer-factual-comparison control: sourced comparison uses real profile links', async () => {
-  const { b, result, errors } = await corpusProfile('c17-b56-offer-job-search', true);
-  expect(result.code, errors).toBe(0);
-  expect(result.after[PROFILE]).toBe(b.c.folder[PROFILE]);
-  expect(result.after[DECOY]).toBe(b.c.folder[DECOY]);
+  const { c, result } = await corpusProfile('c17-b56-offer-job-search', true);
+  expect(result.code).toBe(0);
+  expect(result.after[PROFILE]).toBe(c.folder[PROFILE]);
+  expect(result.after[DECOY]).toBe(c.folder[DECOY]);
   expect(result.after['Projects/Job hunt/Offers/Ferrowick offer.md']).toContain('48000');
 });
 it('b5-offer-factual-comparison', async () => {
@@ -549,4 +525,64 @@ it('b5-profile-property-duplicate', async () => {
   const result = await duplicateProfiles([1]);
   expect(result.errors, 'duplicate identity is unresolved, not a planning error').toBe('');
   expect(result.frames, 'unresolved duplicate target omits the update without refusing valid words').toHaveLength(2);
+});
+
+const DIR = (slug: string) => new URL(`../../testing/corpus/${slug}/`, import.meta.url).pathname;
+const SLUGS = ['c17-b56-cv-profile', 'c17-b56-offer-job-search'] as const;
+const { profile: _offerProfile, ...offerRow } = declaration('offer');
+const TABLES = { 'c17-b56-cv-profile': { v: 1, rows: [declaration()] }, 'c17-b56-offer-job-search': { v: 1, rows: [declaration(), offerRow] } };
+const SPAN = 'Achievement: shipped an offline map editor.';
+const readCase = (slug: string, path: string) => readFileSync(join(DIR(slug), path), 'utf8');
+
+it('corpus-fix-b56-profile AC1: profile fixtures use valid JSON tables and explicit ownership', () => {
+  for (const slug of SLUGS) {
+    expect(existsSync(join(DIR(slug), 'folder/.bower/type-table.json')), `${slug} holds a JSON type table`).toBe(true);
+    const table = readCase(slug, 'folder/.bower/type-table.json');
+    expect(table).toBe(`${JSON.stringify(TABLES[slug], null, 2)}\n`);
+    for (const row of (JSON.parse(table) as { rows: unknown[] }).rows) expect(typeRowOk(row), `${slug} row is strict`).toBe(true);
+    expect(existsSync(join(DIR(slug), 'folder/.bower/type-table.md'))).toBe(false);
+    expect(readCase(slug, `folder/${PROFILE}`).split('\n')[2]).toBe('type: cv');
+    const kase = JSON.parse(readCase(slug, 'case.json')) as { source: string; bowerOwned: string[] };
+    expect(kase.source).not.toMatch(/pending/i);
+    expect(kase.source).toContain('runner/test/b5c-profile.test.ts');
+    expect(Object.keys(kase), 'no new case.json key').toEqual(['id', 'capability', 'title', 'covers', 'source', 'scope', 'allowWeb', 'inbox', 'journal', 'questions', 'bowerOwned']);
+    expect(kase.bowerOwned).toContain('.bower/type-table.json'); expect(kase.bowerOwned).not.toContain('.bower/type-table.md');
+    const { unchanged } = JSON.parse(readCase(slug, 'expected.json')) as { unchanged: string[] };
+    expect(unchanged).toContain('.bower/type-table.json'); expect(unchanged).not.toContain('.bower/type-table.md');
+    expect(readCase(slug, 'rubric.md')).not.toMatch(/installs the row|Markdown table specimens|pending|only after implementation/i);
+  }
+  const repairs: Record<string, RegExp[]> = {
+    'b5c-profile.test.ts': [/cv\.drive\.(?:update|createText)\(/, /appProperties: \{ profile: kind \}/, /thing\.profile = \[/],
+    'qa-live-claude-F4.test.ts': [/update\(b\.id\('Areas\/Career\/Career profile\.md'\)/, /createText\(b\.id\('\.bower'\), 'type-table\.json'/],
+    'b10-synopsis.test.ts': [/update\(id\(PROFILE\)/, /createText\(id\('\.bower'\), 'type-table\.json'/],
+  };
+  for (const [file, patterns] of Object.entries(repairs)) {
+    const text = readFileSync(new URL(file, import.meta.url), 'utf8');
+    for (const pattern of patterns) expect(text, `${file} repairs a seeded fixture`).not.toMatch(pattern);
+  }
+});
+
+it('corpus-fix-b56-profile AC2: profile replies use source and sentence references', async () => {
+  type Reply = Array<{ things: Array<Record<string, unknown> & { note: Record<string, unknown> }> }>;
+  const [cv, offer] = SLUGS.map((slug) => (JSON.parse(readCase(slug, 'replies.json')) as Reply)[0]?.things[0]);
+  expect(cv?.profile).toEqual([{ source: `$file:${SOURCE}`, sentence: 1 }]);
+  for (const thing of [cv, offer]) expect(thing?.note).not.toHaveProperty('typeRow');
+  expect(offer).not.toHaveProperty('profile');
+  const corpus = await corpusProfile('c17-b56-cv-profile');
+  expect(corpus.result.code).toBe(0);
+  const executions = corpus.inputs.filter((i) => lastJson(i).selection !== undefined);
+  expect(executions).toHaveLength(1);
+  const shown = lastJson<{ piles: Array<{ things: Array<{ name: string; sentences?: unknown }> }> }>(executions[0] ?? '')
+    .piles.flatMap((p) => p.things).find((t) => t.name === SOURCE);
+  expect(shown?.sentences, 'execution offers the CV its one profile sentence').toEqual([{ sentence: 1, text: SPAN }]);
+  expect(corpus.result.after[PROFILE]).toContain(framed('profile', `${SPAN} [[Alex CV]]\n[[Career]]\n`));
+  expect(corpus.result.after[PROFILE]).not.toContain('Alex uses JavaScript.');
+  const seed = corpus.c.folder[PROFILE] ?? '';
+  for (const k of ['personal', 'timeline', 'bower-note']) {
+    const from = seed.indexOf(`<!-- bower:ownership/2 begin ${k} -->`);
+    const end = `<!-- bower:ownership/2 end ${k} -->\n`;
+    expect(from, `the seed holds its ${k} block`).toBeGreaterThanOrEqual(0);
+    expect(corpus.result.after[PROFILE]).toContain(seed.slice(from, seed.indexOf(end, from) + end.length));
+  }
+  expect(corpus.result.after[TABLE]).toBe(corpus.c.folder[TABLE]);
 });

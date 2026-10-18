@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "A CV updates its named profile instead of being filed as an application",
   "covers": "model",
-  "source": "new (TL-P4-47 addendum 12; deterministic replies pending B5c, not semantic model evidence)",
+  "source": "new (TL-P4-47 addendum 12; scripted through production main in runner/test/b5c-profile.test.ts and runner/test/b5-incorporation.test.ts, not semantic model evidence)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
@@ -18,7 +18,7 @@
   "questions": [],
   "bowerOwned": [
     "Rules.md",
-    ".bower/type-table.md",
+    ".bower/type-table.json",
     "Areas/Career/Career profile.md",
     "Areas/Career/Career.md",
     "Projects/Job hunt/Job hunt.md"

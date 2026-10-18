@@ -11,10 +11,14 @@
         "note": {
           "name": "Alex CV.md",
           "summary": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor.",
-          "body": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor. [[Areas/Career/Career profile]] [[Areas/Career/Career]]",
-          "typeRow": "cv"
+          "body": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor.\n\nSee also [[Areas/Career/Career profile]]: the profile this CV updates.\nSee also [[Areas/Career/Career]]: the career record it belongs to."
         },
-        "profile": "Alex uses TypeScript and SQL, built map tools at Ferrowick in 2026, and shipped an offline map editor."
+        "profile": [
+          {
+            "source": "$file:Alex CV.txt",
+            "sentence": 1
+          }
+        ]
       }
     ]
   }
