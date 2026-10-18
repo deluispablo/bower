@@ -762,9 +762,9 @@ export function modelDecisions(filing: Filing): Decisions {
     // C08: so is a reply's document, by the same record id.
     ...(filing.answers?.size || filing.documents?.size ? { request: (_text: string, id: string): RequestPlan | null => {
       const answer = filing.answers?.get(id);
-      const document = filing.documents?.get(id);
+      const doc = filing.documents?.get(id);
       return answer !== undefined ? { kind: 'answer', uses: [], answer }
-        : document ? { kind: 'document', note: { to: document.to, title: document.title, what: document.what }, body: document.body } : null;
+        : doc ? { kind: 'document', note: { to: doc.to, title: doc.title, what: doc.what }, body: doc.body } : null;
     } } : {}),
   };
 }
