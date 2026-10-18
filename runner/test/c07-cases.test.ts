@@ -9,7 +9,8 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loadCase, type LoadedCase } from '../src/corpus';
 import { parseNote } from '../../src/data/contracts/note-format';
-import { caseReplies, redispatchCase, replySequence, runWithClaude, scoreCase, type CaseRun } from './corpus-run';
+import { caseReplies, redispatchCase, replySequence, runOnDrive, runWithClaude, scoreCase, type CaseRun } from './corpus-run';
+import { manifest } from './b1-planning-support';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 
 beforeEach(() => {
@@ -27,6 +28,8 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const FLAT = 'Projects/Flat hunt/Larkspur Lane flat.md';
 const VISIT = 'Projects/Garden visit/Saltmere garden visit.md';
+const EARLIER = 'Projects/Flat hunt/Earlier listing.txt';
+type Reply = { kind: string; v: number; things: unknown[]; lines?: Array<Record<string, unknown>> };
 /** Each case, the note its line goes on, the source note the draft wrote and must no longer write, and its marker. */
 const CASES = [
   { id: 'c07-same-period-rent', note: FLAT, oldNote: 'Projects/Flat hunt/Later listing.md', marker: 'Contradiction: ' },
@@ -47,6 +50,9 @@ function counted(spawn: ClaudeSpawn) {
   } };
 }
 const pressOne = (run: CaseRun): CaseRun => run.runs?.[0] ?? run;
+const replies = async (id: string): Promise<Reply[]> => JSON.parse(await readFile(join(ROOT, id, 'replies.json'), 'utf8')) as Reply[];
+/** The edit operations a run's manifest holds for one note. */
+const editsOf = (run: CaseRun, path: string) => manifest(run).operations.filter((o) => o.effect.kind === 'edit-text' && (o.effect as { path?: string }).path === path);
 
 it.each(CASES)('AC2 c07-fixtures-landed: $id has scripted replies in B9\'s form and a replay press (R7)', async ({ id, oldNote }) => {
   const c = await load(id);
@@ -129,4 +135,93 @@ it('AC4 guard c07-attribution: swapped figures fail the same-period score, so th
   const reply = { ...first, lines: first?.lines?.map((l, i) => (i === 0 && swapped ? { ...l, text: swapped } : l)) };
   const run = await runWithClaude(c, replySequence([reply, ...replies.slice(1)]));
   expect(run.score?.pass, 'reversed attribution never scores clean').toBe(false);
+});
+
+const AC1 = 'corpus-delete-b9 AC1: same-period rent enforces both-source marker binding — ';
+const SAME = 'c07-same-period-rent';
+const plain = (reply: Reply | undefined): Reply => ({ ...reply, lines: reply?.lines?.map(({ marker: _m, alsoCites: _a, ...line }) => line) } as Reply);
+const REQUEST = { kind: 'tidy', text: 'Record the same disagreement only if it is not already in the flat note.' } as const;
+
+// guard: passes before deletion
+it(`${AC1}an ordinary line files the later listing and leaves the earlier one`, async () => {
+  const c = await load(SAME);
+  const [first, second] = await replies(SAME);
+  const run = pressOne(await runWithClaude(c, replySequence([plain(first), second as Reply])));
+  expect(run.code).toBe(0);
+  expect(run.after[FLAT]).toContain('Neither is confirmed. · [[Later listing.txt]]');
+  expect(run.after[EARLIER]).toBe(c.folder[EARLIER]);
+});
+
+// guard: passes before deletion
+it(`${AC1}both sources bind into one contradiction line in one edit`, async () => {
+  const c = await load(SAME);
+  const first = pressOne(await runWithClaude(c, caseReplies(SAME)));
+  expect(first.code, 'two distinct bound sources materialize before authoring').toBe(0);
+  const entries = parseNote(FLAT, first.after[FLAT] ?? '').timeline;
+  expect(entries).toHaveLength(2);
+  expect(entries[1]).toEqual({ date: '2026-10-07', source: 'Later listing.txt',
+    text: 'Contradiction: The earlier listing gives 1,450 a month from 2026-11-01; the later listing gives 1,580 for the same period. Neither is confirmed. (also from [[Earlier listing.txt]])' });
+  expect(first.after[EARLIER]).toBe(c.folder[EARLIER]);
+  expect(editsOf(first, FLAT), 'one edit for the flat note').toHaveLength(1);
+});
+
+/** Press 1 files the later listing with its line; a fresh press repeats the same line, citing the filed listing. */
+async function freshPress(marked: boolean) {
+  const c = await load(SAME);
+  // B9's shape: press 2 is the same explicit request, so no default request is left open at press 3.
+  c.presses = [{ request: REQUEST }];
+  const [reply, second] = await replies(SAME);
+  const first = marked ? (reply as Reply) : plain(reply);
+  const final = await runWithClaude(c, replySequence([first, second as Reply]));
+  expect(final.code).toBe(0);
+  const filed = Object.entries(final.pathsById).find(([, path]) => path === 'Projects/Flat hunt/Later listing.txt')?.[0];
+  expect(filed, 'the later listing was filed').toBeDefined();
+  const { calls, spawn } = counted(replySequence([{ ...first, things: [], lines: first.lines?.map((l) => ({ ...l, cites: filed })) }]));
+  const again = await runOnDrive(c, final.drive, final.root, { claude: spawn, request: REQUEST, pacing: { baseMs: 0, sleep: async () => {} } }, 3);
+  expect(again.code, 'the repeated line is valid input: it is already present').toBe(0);
+  expect(calls, 'selection then execution, no validation retry').toEqual(['selection', 'execution']);
+  expect(again.after[FLAT], 'no second line').toBe(final.after[FLAT]);
+  const rows = ((again.lastRun as { run?: { report?: { updated?: Array<{ path: string }> } } })?.run?.report?.updated ?? []).map((r) => r.path);
+  expect(rows, 'no updated row for a line already there').not.toContain(FLAT);
+}
+// guard: passes before deletion
+it(`${AC1}an ordinary line repeated on a fresh press is a no-op`, async () => { await freshPress(false); });
+// guard: passes before deletion
+it(`${AC1}the same marked line on a fresh press is a no-op, found by its final text`, async () => { await freshPress(true); });
+
+// guard: passes before deletion
+it.each([
+  ['one source', (line: Record<string, unknown>) => { delete line.alsoCites; }],
+  ['a basename', (line: Record<string, unknown>) => { line.alsoCites = ['Earlier listing.txt']; }],
+])(`${AC1}refuses %s before any write`, async (_name, mutate) => {
+  const c = await load(SAME);
+  const [first] = await replies(SAME);
+  const line = { ...first?.lines?.[0] };
+  mutate(line);
+  const inputs: string[] = [];
+  const sp = replySequence([{ ...first, lines: [line] } as Reply]);
+  const run = pressOne(await runWithClaude(c, async (call: ClaudeCall) => { inputs.push(call.input); return sp(call); }));
+  expect(run.code).toBe(1);
+  expect(run.after[FLAT]).toBe(c.folder[FLAT]);
+  const retry = inputs.find((input) => /^Your reply was refused:/m.test(input)) ?? '';
+  expect(retry, 'refused through the retry, by the marker rules').toMatch(/^Your reply was refused:/m);
+  expect(retry).not.toContain('a line with keys outside the intent');
+});
+
+// guard: passes before deletion
+it(`${AC1}refuses the new source itself, linked and filed, on a fresh press`, async () => {
+  const c = await load(SAME);
+  // B9's shape: press 2 is the same explicit request, so no default request is left open at press 3.
+  c.presses = [{ request: REQUEST }];
+  const [first, second] = await replies(SAME);
+  const final = await runWithClaude(c, replySequence([plain(first), second as Reply]));
+  const filed = Object.entries(final.pathsById).find(([, path]) => path === 'Projects/Flat hunt/Later listing.txt')?.[0];
+  expect(filed, 'the later listing was filed').toBeDefined();
+  const inputs: string[] = [];
+  const sp = replySequence([{ ...first, things: [], lines: first?.lines?.map((l) => ({ ...l, cites: filed, alsoCites: ['Projects/Flat hunt/Later listing.txt'] })) } as Reply]);
+  const again = await runOnDrive(c, final.drive, final.root, { claude: async (call: ClaudeCall) => { inputs.push(call.input); return sp(call); }, request: REQUEST, pacing: { baseMs: 0, sleep: async () => {} } }, 3);
+  expect(again.code).toBe(1);
+  expect(again.after[FLAT]).toBe(final.after[FLAT]);
+  const retry = inputs.find((input) => /^Your reply was refused:/m.test(input)) ?? '';
+  expect(/^Your reply was refused: (.*)$/m.exec(retry)?.[1], 'refused for its identity only').toContain('naming the thing the line cites');
 });
