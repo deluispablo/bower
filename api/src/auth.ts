@@ -221,7 +221,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   // sign-in with one word of why (TL-P3-07), never a JSON page. Details go to the log only.
   auth.get('/auth/callback', async (c) => {
     const env = c.get('env');
-    const backToSignIn = (why: 'cancelled' | 'failed', detail: unknown) => {
+    const backToSignIn = (why: 'cancelled' | 'failed' | 'not-invited', detail: unknown) => {
       console.error(`[${c.get('requestId')}] sign-in ${why}:`, detail);
       c.header('Set-Cookie', oauthCookie('', 0));
       return c.redirect(`${env.APP_ORIGIN}/sign-in?signin=${why}`, 302);
@@ -233,7 +233,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     } catch (err) {
       // A missing limiter fails closed (500); a refused request lands on the sign-in like any failure.
       if (err instanceof HttpError && err.cause instanceof RateLimitUnavailable) throw err;
-      return backToSignIn('failed', err);
+      return backToSignIn(err instanceof HttpError && err.code === 'forbidden' && err.cause === 'not-invited' ? 'not-invited' : 'failed', err);
     }
   });
 
@@ -260,7 +260,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     // An unproven address is never matched against the allowlist (Google: use email only when email_verified).
     if (!identity.emailVerified || !(await isAllowed(env.BOWER_KV, identity.email))) {
       // Nothing is kept for someone who was not invited.
-      throw new HttpError(403, 'forbidden');
+      throw new HttpError(403, 'forbidden', undefined, { cause: 'not-invited' });
     }
 
     const key = await importEncryptionKey(env.TOKEN_ENC_KEY);

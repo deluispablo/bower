@@ -21,6 +21,7 @@ function GoogleG() {
 const SIGNIN_SENTENCES: Record<string, string> = {
   cancelled: 'Sign-in was cancelled.',
   failed: "Bower couldn't sign you in. Try again.",
+  'not-invited': "This Google account isn't invited to Bower yet. Try another account.",
 };
 
 export function SignIn() {

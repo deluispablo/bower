@@ -39,6 +39,18 @@ describe('sign-in after Google sends the person back', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Bower couldn't sign you in. Try again.");
   });
 
+  it('says the account is not invited once, then drops the parameter', async () => {
+    open('?signin=not-invited');
+    const sentence = "This Google account isn't invited to Bower yet. Try another account.";
+    expect(screen.getByRole('alert')).toHaveTextContent(sentence);
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/sign-in$/));
+    expect(screen.getByRole('alert')).toHaveTextContent(sentence);
+    const cleanedSearch = screen.getByTestId('where').textContent?.replace('/sign-in', '') ?? '';
+    cleanup();
+    open(cleanedSearch);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('says nothing for an unknown value, and still cleans the address', async () => {
     open('?signin=whatever');
     expect(screen.queryByRole('alert')).toBeNull();
