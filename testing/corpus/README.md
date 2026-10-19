@@ -84,6 +84,14 @@ web lookup: the runner gives the model no web tool); c08-revise-keeps-personal-t
 document: asking again makes a new note); c13-manifest-move-and-create, c13-manifest-partial-edited-note and
 c13-manifest-state-with-personal-edit (the owner dropped Undo of a whole tidy-up on 2026-10-16).
 
+The registry, `CORPUS_EXECUTION` in `runner/src/corpus.ts`, records each case's consumer test, setup, execution mode
+and live readiness apart from `covers`. Of the 90 retained cases, the eight above are excluded and 82 can execute; 74 of
+them are live-ready. Eight need a setup that only their consumer test supplies, so they are not live-ready:
+b1-maintenance-crash-resume (maintenance-reply-lost), c12-admission-waits (admission-estimate-2),
+c12-group-waits (group-reply-refused), c12-model-failure-retry (model-call-fails), c12-tool-interruption-recovery
+(filing-answer-lost), c17-b56-cv-profile and c17-b56-offer-job-search (career-profile-property), and
+c17-b8-settled-recovery (hub-edit-refused-log-lost).
+
 `replies.json` supplies deterministic intent replies at the existing Claude provider boundary. `$file:NAME` binds an exact admitted name to its id. `between` edits or moves run on the same fake Drive between two production runner calls; an empty array runs twice without a personal edit. Existing cases keep their demo-provider path.
 
 Later presses can also use `case.json`'s additive `presses` array. Each item describes what happens after the previous
@@ -180,8 +188,8 @@ ids that are never admitted. Case 4 (own text deletion) was dropped (TL-P4-48 Q3
 
 All four have landed: each `replies.json` uses the landed `views` grammar, bound by the
 driver's request, note and folder selectors, and runs through main. The hand oracles live
-in the runner's B11 tests; no computed number is seeded in `expected.json`. C17
-registration and verdict selection remain upstream H1 work. See the B11 prep notes.
+in the runner's B11 tests; no computed number is seeded in `expected.json`. Verdict
+selection remains upstream H1 work. See the B11 prep notes.
 
 ## B7 preparation cases — 2026-10-10
 

@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function assertNoBenchmarkSeed(meta: Pick<LoadedCase, 'id' | 'folderFrom'>): void {
+function assertNoBenchmarkSeed(meta: { id: string; folderFrom?: unknown }): void {
   expect(meta.folderFrom, meta.id).toBeUndefined();
 }
 
@@ -122,7 +122,7 @@ describe('the capability corpus', () => {
     const cases = (await loadCorpus(ROOT)).filter((c) => c.capability === 'C04');
     expect(cases.map((c) => c.id).sort()).toEqual(['c04-garden-newsletter', 'c04-hardware-receipt', 'c04-offer-and-flat']);
     for (const c of cases) {
-      expect({ id: c.id, expected: c.expected, folderFrom: c.folderFrom }).toEqual({ id: c.id, expected: JSON.parse(await readFile(join(ROOT, c.id, 'expected.json'), 'utf8')) as unknown, folderFrom: undefined });
+      expect({ id: c.id, expected: c.expected }).toEqual({ id: c.id, expected: JSON.parse(await readFile(join(ROOT, c.id, 'expected.json'), 'utf8')) as unknown });
     }
     const offer = cases.find((c) => c.id === 'c04-offer-and-flat');
     if (!offer) throw new Error('no c04-offer-and-flat');

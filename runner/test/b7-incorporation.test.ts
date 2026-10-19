@@ -749,7 +749,7 @@ describe('B7 through production main', () => {
     await b.drive.createText(b.id(SYSTEM.changes), 'b7-undo-request.json', JSON.stringify({ v: 1, id: 'b7-undo-request',
       device: 'device-1', at: AT + 1, kind: 'request', what: 'Undo the last tidy-up', text: 'Undo the last tidy-up' }));
     const events: Observation[] = [];
-    const undone = await runOnDrive({ ...b.c, scope: 'undo' }, b.drive, b.root,
+    const undone = await runOnDrive(b.c, b.drive, b.root,
       { claude: async () => reply({ kind: 'tidy-intent', v: 1, things: [] }), answerStart: { scope: 'instructions', requestId: 'b7-undo-run' },
         around: observe(b.drive, b.root, events), pacing: { sleep: async () => {} } }, 2);
     expect(undone.code).toBe(0); expect(undone.after[TAGS]).toBe(first.after[TAGS]);

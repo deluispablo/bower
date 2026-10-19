@@ -159,7 +159,6 @@ it('B3b hot: an Undo run refreshes hot from restored evidence', async () => {
     v: 1, id: 'undo-request', device: 'device-1', at: AT + 1, kind: 'request',
     what: 'Undo the last tidy-up', text: 'Undo the last tidy-up',
   }));
-  c.scope = 'undo'; // c13 legacy scope maps to the production instruction dispatch.
   vi.setSystemTime(AT + 1);
   events.length = 0;
   const undone = await runOnDrive(c, drive, root, { pacing, claude: replySequence([empty]),

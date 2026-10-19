@@ -4,7 +4,7 @@
   "title": "Undo safe effects while keeping a later edit",
   "covers": "model",
   "source": "new (C13 requirement; unsupported today: Undo of a whole tidy-up was dropped)",
-  "scope": "undo",
+  "scope": "instructions",
   "allowWeb": false,
   "inbox": [],
   "journal": [

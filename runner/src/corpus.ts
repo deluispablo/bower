@@ -8,7 +8,8 @@
  * Semantic expectations are not scored here: each case's `rubric.md` is for the quality reviewer.
  */
 import { readFile, readdir } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
+import { z } from 'zod';
 import type { Question } from '../../src/data/contracts/types';
 import { subjectOf } from '../../src/data/contracts/questions';
 import { distinctPaths } from '../../src/data/spine/report';
@@ -17,8 +18,8 @@ import { displayName, nameOf } from '../../src/data/contracts/tree';
 import { scanLinks, linkTarget } from '../../src/data/contracts/links';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 
-/** The capabilities the corpus covers, by the ids of `docs/P2_ACCEPTANCE.md`. */
-export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C12', 'C13', 'C15'] as const;
+/** The capabilities the corpus covers: C04 to C15, and C17 for the second brain's B cases (TL-P4-39). */
+export const CORPUS_CAPABILITIES = ['C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'C10', 'C11', 'C12', 'C13', 'C15', 'C17'] as const;
 export type CorpusCapability = (typeof CORPUS_CAPABILITIES)[number];
 
 export interface CorpusPile {
@@ -70,11 +71,8 @@ export interface CorpusCase {
   covers: 'scripted' | 'model';
   /** `bench:<case>`, `p2-journey:<C0x>` or `new`, and how it was adapted. */
   source: string;
-  /** One of the original app's five bench cases, kept unchanged for the speed comparison (TL-P4-01). */
-  speedBaseline?: boolean;
-  /** A shared starting folder under the corpus root (the original's bench folder), used instead of the case's `folder/`. */
-  folderFrom?: string;
-  scope: 'all' | 'instructions' | 'undo';
+  /** The run scope of the case's presses (the runner's `RunScope`). */
+  scope: 'all' | 'instructions';
   allowWeb: boolean;
   inbox: CorpusPile[];
   journal: CorpusJournalLine[];
@@ -86,6 +84,119 @@ export interface CorpusCase {
   /** Later presses on the same Drive; legacy `between` still supplies one second press. */
   presses?: CorpusPress[];
 }
+
+/**
+ * How a retained case executes today (corpus-registry AC1), recorded apart from `covers`, which is only a label.
+ * `consumer` is the runner test (under `runner/test`) that runs the case through main; `setup` names the fault or extra
+ * Drive state that test supplies beyond the case's files. `replies` runs the case's `replies.json` at the Claude
+ * boundary, `provider` runs it through the scripted provider, `inline` through replies its consumer writes. A case is
+ * live-ready when a run from its own files alone can execute it: not excluded and needing no setup.
+ */
+export type CaseExecution =
+  | { consumer: string; setup: string | null; mode: 'replies' | 'provider' | 'inline'; live: boolean }
+  /** Never dispatched: `reason` says what Bower does not support (the README's exclusion paragraph). */
+  | { consumer: string; setup: null; mode: 'excluded'; live: false; reason: string };
+
+const replies = (consumer: string, setup: string | null = null): CaseExecution => ({ consumer, setup, mode: 'replies', live: setup === null });
+const provider = (consumer: string): CaseExecution => ({ consumer, setup: null, mode: 'provider', live: true });
+const inline = (consumer: string): CaseExecution => ({ consumer, setup: null, mode: 'inline', live: true });
+const excluded = (reason: string): CaseExecution => ({ consumer: 'corpus-requirements.test.ts', setup: null, mode: 'excluded', live: false, reason });
+const NO_LOOKUP = 'Bower has no web lookup: the runner gives the model no web tool';
+const NO_UNDO = 'the owner dropped Undo of a whole tidy-up on 2026-10-16';
+
+/** The one execution registry: every retained case once, by id (corpus-registry AC1). */
+export const CORPUS_EXECUTION: Readonly<Record<string, CaseExecution>> = {
+  'b1-changes-person-edit': replies('b1-index.test.ts'),
+  'b1-index-job-offer': replies('b1-planning.test.ts'),
+  'b1-index-no-change': replies('b1-index.test.ts'),
+  'b1-maintenance-crash-resume': replies('b1a-contract.test.ts', 'maintenance-reply-lost'),
+  'b1-moc-over-40': replies('b1-index.test.ts'),
+  'b23-hot-evidence-only': replies('b23-hot-recovery.test.ts'),
+  'b23-hot-question-answer': replies('b23-hot-context.test.ts'),
+  'b23-summary-person-lint': replies('words-note-summary.test.ts'),
+  'b23-summary-words': replies('words-note-summary.test.ts'),
+  'c04-garden-newsletter': inline('c04-incorporation.test.ts'),
+  'c04-hardware-receipt': inline('c04-incorporation.test.ts'),
+  'c04-offer-and-flat': provider('corpus.test.ts'),
+  'c05-confirms-known-fact': inline('c05-incorporation.test.ts'),
+  'c05-hub-lines': replies('c05-incorporation.test.ts'),
+  'c05-keep-one-note': replies('corpus-driver.test.ts'),
+  'c05-line-not-repeated': replies('c05-incorporation.test.ts'),
+  'c05-marked-state-keeps-history': replies('c05-marked-history.test.ts'),
+  'c05-merge-answer-no': replies('corpus-driver.test.ts'),
+  'c05-merge-question-first': replies('pair-ask.test.ts'),
+  'c05-note-not-written-by-bower': replies('c05-person-notes.test.ts'),
+  'c05-person-edited-between-runs': replies('c05-between.test.ts'),
+  'c06-clipping-compared': replies('c06-corpus.test.ts'),
+  'c06-shared-name-unrelated': replies('c06-corpus.test.ts'),
+  'c06-stored-project-connection': replies('c06-corpus.test.ts'),
+  'c06-two-sources-attributed': replies('c06-corpus.test.ts'),
+  'c07-answer-yes': replies('state-rewrite.test.ts'),
+  'c07-dated-rent-change': replies('c07-cases.test.ts'),
+  'c07-same-period-rent': replies('c07-cases.test.ts'),
+  'c07-tentative-closure': replies('c07-cases.test.ts'),
+  'c08-compare-flats': provider('c08-documents.test.ts'),
+  'c08-compare-missing-fact': replies('c08-attached-reports.test.ts'),
+  'c08-report-with-sources': replies('c08-attached-reports.test.ts'),
+  'c08-revise-keeps-personal-text': excluded('Bower does not revise a generated document: asking again makes a new note'),
+  'c09-burst-pipe': replies('c09-corpus.test.ts'),
+  'c09-closest-flat': provider('c09-corpus.test.ts'),
+  'c09-not-in-sources': replies('c09-corpus.test.ts'),
+  'c09-original-over-summary': replies('c09-corpus.test.ts'),
+  'c09-two-source-answer': replies('c09-corpus.test.ts'),
+  'c10-denied-keeps-prior-result': excluded(NO_LOOKUP),
+  'c10-fresh-result-cited': excluded(NO_LOOKUP),
+  'c10-lookup-fails': excluded(NO_LOOKUP),
+  'c10-stale-result-withheld': excluded(NO_LOOKUP),
+  'c11-ambiguous-stays': provider('c11-corpus.test.ts'),
+  'c11-document-is-not-policy': provider('corpus.test.ts'),
+  'c11-request-is-one-time': inline('c11-corpus.test.ts'),
+  'c11-rule-worded': provider('corpus.test.ts'),
+  'c11-saltmere-question': provider('c11-corpus.test.ts'),
+  'c11-source-cannot-answer': inline('c11-corpus.test.ts'),
+  'c11-source-cannot-override-rule': inline('c11-corpus.test.ts'),
+  'c12-admission-waits': replies('c12-corpus-admit.test.ts', 'admission-estimate-2'),
+  'c12-group-waits': replies('c12-corpus.test.ts', 'group-reply-refused'),
+  'c12-model-failure-retry': replies('c12-corpus.test.ts', 'model-call-fails'),
+  'c12-text-budget-truthful': replies('c12-corpus.test.ts'),
+  'c12-tool-interruption-recovery': replies('c12-corpus.test.ts', 'filing-answer-lost'),
+  'c13-manifest-move-and-create': excluded(NO_UNDO),
+  'c13-manifest-partial-edited-note': excluded(NO_UNDO),
+  'c13-manifest-state-with-personal-edit': excluded(NO_UNDO),
+  'c15-context-budget-exhausted': replies('c15-corpus.test.ts'),
+  'c15-current-admitted-evidence': replies('c15-corpus.test.ts'),
+  'c15-image-only-pdf-asked': replies('c15-corpus.test.ts'),
+  'c15-short-pdfs-read-whole': replies('c15-corpus.test.ts'),
+  'c17-b10-complete-tail': replies('b10-corpus.test.ts'),
+  'c17-b10-partial-pdf': replies('b10-corpus.test.ts'),
+  'c17-b10-personal-original': replies('b10-corpus.test.ts'),
+  'c17-b10-shared-budget': replies('b10-corpus.test.ts'),
+  'c17-b11-flat-formulas': replies('b11-proposals.test.ts'),
+  'c17-b11-monthly-money': replies('b11-proposals.test.ts'),
+  'c17-b11-proposal-authority': replies('b11-proposals.test.ts'),
+  'c17-b11-skills-tally': replies('b11-proposals.test.ts'),
+  'c17-b12-authority-person-boundary': replies('b12-result-note.test.ts'),
+  'c17-b12-closed-ops': replies('b12-result-note.test.ts'),
+  'c17-b12-large-first-part': replies('b12-large-part.test.ts'),
+  'c17-b12-shared-target': replies('b12-result-note.test.ts'),
+  'c17-b4-forget-no-return': replies('b4c-fixtures.test.ts'),
+  'c17-b4-gate-archive-first': replies('b4c-fixtures.test.ts'),
+  'c17-b4-origin-not-authority': replies('b4c-fixtures.test.ts'),
+  'c17-b56-clear-topic-templates': replies('b56-corpus.test.ts'),
+  'c17-b56-cv-profile': replies('b5c-profile.test.ts', 'career-profile-property'),
+  'c17-b56-offer-job-search': replies('b5-incorporation.test.ts', 'career-profile-property'),
+  'c17-b56-personal-sale-project': replies('b56-corpus.test.ts'),
+  'c17-b7-authority-full-cap': replies('b7-incorporation.test.ts'),
+  'c17-b7-automatic-capacity-order': replies('b7-incorporation.test.ts'),
+  'c17-b7-automatic-growth-replay': replies('b7-incorporation.test.ts'),
+  'c17-b7-reuse-known': replies('b7-incorporation.test.ts'),
+  'c17-b8-bounded-encoding': replies('b8-log.test.ts'),
+  'c17-b8-findings-refresh': replies('b8-health.test.ts'),
+  'c17-b8-report-only-grammar': replies('b8-health.test.ts'),
+  'c17-b8-settled-recovery': replies('b8-health.test.ts', 'hub-edit-refused-log-lost'),
+  'c17-b9-person-list-kept': replies('b9-corpus.test.ts'),
+  'c17-b9-uncertain-and-inferred': replies('b9-corpus.test.ts'),
+};
 
 export interface ReportExpectation {
   /** How many things were filed. */
@@ -210,19 +321,73 @@ async function walk(dir: string): Promise<{ text: Record<string, string>; binary
   return { text, binary };
 }
 
+/**
+ * `case.json`, declared once with zod 4 (https://zod.dev, as the runner's model reply in `claude.ts`): strict objects
+ * refuse unknown keys, so a misspelt or retired key (`folderFrom`, `speedBaseline`) fails instead of being ignored.
+ */
+const Subject = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('pair'), notes: z.tuple([z.string(), z.string()]) }),
+  z.strictObject({ kind: z.literal('state'), note: z.string() }),
+  z.strictObject({ kind: z.literal('inbox'), path: z.string() }),
+  z.strictObject({ kind: z.literal('request') }),
+  z.strictObject({ kind: z.literal('folder') }),
+]);
+const Between = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('words'), line: z.string() }),
+  z.strictObject({ kind: z.literal('edit'), path: z.string(), text: z.string() }),
+  z.strictObject({ kind: z.literal('create'), path: z.string(), text: z.string() }),
+  z.strictObject({ kind: z.literal('move'), path: z.string(), to: z.string() }),
+  z.strictObject({ kind: z.literal('answer'), question: z.union([z.strictObject({ id: z.string() }), Subject]), yes: z.boolean() }),
+]);
+const CaseMeta: z.ZodType<CorpusCase> = z.strictObject({
+  id: z.string(), capability: z.enum(CORPUS_CAPABILITIES), title: z.string(), covers: z.enum(['scripted', 'model']), source: z.string(),
+  scope: z.enum(['all', 'instructions']), allowWeb: z.boolean(),
+  inbox: z.array(z.strictObject({ line: z.string(), files: z.array(z.string()) })),
+  journal: z.array(z.strictObject({ kind: z.enum(['request', 'rule', 'answer']), text: z.string(), questionId: z.string().optional() })),
+  questions: z.array(z.strictObject({ id: z.string(), text: z.string(), yes: z.string(), no: z.string(), about: z.string().optional(), askedAt: z.number() })),
+  bowerOwned: z.array(z.string()),
+  between: z.array(Between).optional(),
+  presses: z.array(z.strictObject({
+    between: z.array(Between).optional(),
+    request: z.discriminatedUnion('kind', [z.strictObject({ kind: z.literal('replay'), id: z.string() }), z.strictObject({ kind: z.literal('tidy'), text: z.string().optional() })]).optional(),
+  })).optional(),
+});
+
+/** A case's `case.json`, validated before anything is read or seeded from it (corpus-registry AC2); `name` is its folder. */
+function caseMeta(name: string, text: string): CorpusCase {
+  let json: unknown;
+  try { json = JSON.parse(text); } catch (e) { throw new Error(`corpus case ${name}: case.json is not JSON`, { cause: e }); }
+  const parsed = CaseMeta.safeParse(json);
+  if (!parsed.success) {
+    // The first issue, at its path (`case.json.inbox[0].files`): one plain line for the corpus author.
+    const issue = parsed.error.issues[0];
+    const at = (issue?.path ?? []).map((p) => typeof p === 'number' ? `[${p}]` : `.${String(p)}`).join('');
+    throw new Error(`corpus case ${name}: case.json${at}: ${issue?.message ?? 'invalid'}`);
+  }
+  if (parsed.data.id !== name) throw new Error(`corpus case ${name}: case.json id "${parsed.data.id}" is not its folder name`);
+  return parsed.data;
+}
+
 export async function loadCase(dir: string): Promise<LoadedCase> {
-  const meta = JSON.parse(await readFile(join(dir, 'case.json'), 'utf8')) as CorpusCase;
+  const name = basename(dir);
+  const text = await readFile(join(dir, 'case.json'), 'utf8').catch((e: unknown) => { throw new Error(`corpus case ${name}: case.json cannot be read`, { cause: e }); });
+  const meta = caseMeta(name, text);
   const expected = JSON.parse(await readFile(join(dir, 'expected.json'), 'utf8')) as Expected;
   const rubric = await readFile(join(dir, 'rubric.md'), 'utf8');
-  const start = await walk(meta.folderFrom ? join(dir, '..', meta.folderFrom) : join(dir, 'folder'));
+  const start = await walk(join(dir, 'folder'));
   const inbox = await walk(join(dir, 'inbox'));
+  // Every input a case names is one of its files: no seeded stand-in hides a missing one.
+  for (const [i, pile] of meta.inbox.entries()) {
+    for (const file of pile.files) if (!(file in inbox.text || file in inbox.binary)) throw new Error(`corpus case ${name}: pile ${i + 1} names ${file}, which is not in inbox/`);
+  }
+  for (const path of meta.bowerOwned) if (!(path in start.text || path in start.binary)) throw new Error(`corpus case ${name}: bowerOwned names ${path}, which is not in folder/`);
   return { ...meta, dir, folder: start.text, folderBinary: start.binary, inboxFiles: inbox.text, inboxBinary: inbox.binary, expected, rubric };
 }
 
-/** Every case under the corpus root, in id order. */
+/** Every case under the corpus root, in id order; a root that cannot be read fails, and no directory is skipped. */
 export async function loadCorpus(root: string): Promise<LoadedCase[]> {
-  const found = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const names = found.filter((e) => e.isDirectory() && !e.name.startsWith('_')).map((e) => e.name).sort();
+  const found = await readdir(root, { withFileTypes: true }).catch((e: unknown) => { throw new Error(`corpus root ${root} cannot be read`, { cause: e }); });
+  const names = found.filter((e) => e.isDirectory()).map((e) => e.name).sort();
   return Promise.all(names.map((n) => loadCase(join(root, n))));
 }
 

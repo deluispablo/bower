@@ -109,7 +109,6 @@ async function undoFiling() {
     at: AT + 1, kind: 'move', what: 'Put back Mulch notice.', undoes: op, fileId: id, path: 'Inbox/Mulch notice.txt', from: filed }));
   await base.drive.createText(changes?.id ?? '', 'undo-request.json', JSON.stringify({ v: 1, id: 'undo-request', device: 'device-1',
     at: AT + 1, kind: 'request', what: 'Undo the last tidy-up', text: 'Undo the last tidy-up' }));
-  base.c.scope = 'undo';
   vi.setSystemTime(AT + 1);
   const undone = await runOnDrive(base.c, base.drive, base.root, { claude: replySequence([empty]), around: base.around, pacing,
     answerStart: { scope: 'instructions', requestId: 'undo-run' } }, 2);
