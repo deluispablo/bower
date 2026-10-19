@@ -669,8 +669,8 @@ describe('B8b lint and the health note through main', () => {
 
   it('AC15 round 3 ruling 3: health describes the folder as admitted; the run\'s own rename shows in the next run', async () => {
     // One run renames two inbox files a personal note links to: Mulch's rename lands; Seed's is refused, as Alex moved
-    // that file to Archive (same name) right before Bower's move. Start state: both links resolve. A health from the
-    // planned renames would break both, one from settled results would break Mulch's.
+    // that file to Archive (same name) once the run's plan was stored, before any of its moves. Start state: both links
+    // resolve. A health from the planned renames would break both, one from settled results would break Mulch's.
     const base = await setup('settled-recovery', (c) => {
       c.folder[DIARY] = 'Alex keeps these rough notes.\nSee [[Mulch notice.txt]] and [[Seed swap.txt]].\n';
       c.inbox[0]?.files.push('Seed swap.txt');
@@ -690,11 +690,15 @@ describe('B8b lint and the health note through main', () => {
       return observe(base.drive, base.root, base.traffic)(async (input, init = {}) => {
         const last = base.traffic.length > seen ? base.traffic.at(-1) : undefined;
         seen = base.traffic.length;
-        if (!personMoved && last && /Mulch notice\.txt$/.test(last.path) && init.method === 'PATCH') {
+        // Stands in for a loaded pool: Mulch's PATCH goes out 500 event-loop turns late, so Seed's fence and write can go first.
+        if (last && /Mulch notice\.txt$/.test(last.path) && init.method === 'PATCH') for (let i = 0; i < 500; i++) await new Promise<void>((resolve) => { setImmediate(resolve); });
+        const response = await fetch(input, init);
+        // The plan is stored and no effect is fenced yet: the engine awaits the manifest write before any operation.
+        if (!personMoved && last && /\/manifest-[^/]+\.json$/.test(last.path) && init.method === 'POST') {
           personMoved = true;
           await base.drive.update(seed?.id ?? '', { addParent: archive?.id ?? '', removeParent: seed?.parents[0] ?? '' });
         }
-        return fetch(input, init);
+        return response;
       });
     };
     const run = await runOnDrive(base.c, base.drive, base.root, { around, claude: replySequence([intent]), pacing }, 1);

@@ -62,7 +62,7 @@ type Turn = { tags: string[]; retry: boolean; frame: Frame };
 const tidy = (b: Base, selection: ReturnType<typeof placing>, answer: (t: Turn) => Row, order?: string[], hold?: (t: Turn) => Promise<void> | undefined) => {
   const replies: unknown[] = [selection, {}];
   const rank = (h: Held): number => order?.findIndex((tag) => tagsIn(h.frame).includes(tag)) ?? 0;
-  const held = order && gate((open) => [...open].sort((x, y) => rank(x) - rank(y)).slice(0, 1));
+  const held = order && gate((open) => [...open].sort((x, y) => rank(x) - rank(y)).slice(0, 1), { open: [3, 2, 2] });
   return run(b, replies, { narrow: false, beforeReply: async (turn, frame) => {
     if (turn === 1) return;
     await held?.(turn, frame);

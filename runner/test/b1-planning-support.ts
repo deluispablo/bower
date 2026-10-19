@@ -267,32 +267,48 @@ function narrowed(value: unknown, call: Shown, run: { sources: ReadonlySet<strin
   return Object.fromEntries(Object.entries(value).map(([key, rows]) => [key, Array.isArray(rows) && key !== 'newTags' ? rows.filter(kept) : rows]));
 }
 
-export type Held = { frame: Frame; go: () => void };
+export type Held = { frame: Frame; go: () => void; stop: (error: Error) => void };
 /**
  * c12-fanout-parallel P5, P11: a `beforeReply` for writing calls. Each is held until the event loop drains (real
- * setImmediate: leave it out of faked timers); then `pick` chooses which held calls answer, in the order it gives (at least
- * one), and the transport drains again, until none is held. It never waits for a call that cannot come, so calls made one
- * at a time never hang it. Selection and memory calls answer at once.
+ * setImmediate: leave it out of faked timers); then `pick` chooses which held calls answer, in the order it gives, and the
+ * transport drains again, until none is held. `open[k]`: before its k-th pick (0-based, over the gate's life) the gate first
+ * waits until that many calls are held, an event, not event-loop turns, which a starved pool can outrun (a latch). Past the
+ * list it waits for no count, so calls made one at a time never hang it. Selection and memory calls answer at once.
  */
-export function gate(pick: (open: readonly Held[]) => readonly Held[]) {
+export function gate(pick: (open: readonly Held[]) => readonly Held[], { open: want = [] }: { open?: readonly number[] } = {}) {
   const open: Held[] = [];
-  let arrivals = 0; let settling = false;
+  let arrivals = 0; let settling = false; let picks = 0;
+  const turn = (): Promise<void> => new Promise<void>((resolve) => { setImmediate(resolve); });
   const drain = async (): Promise<void> => {
     let seen: number;
-    do { seen = arrivals; for (let i = 0; i < 200; i++) await new Promise<void>((resolve) => { setImmediate(resolve); }); } while (seen !== arrivals);
+    do { seen = arrivals; for (let i = 0; i < 200; i++) await turn(); } while (seen !== arrivals);
+  };
+  const latch = async (n: number): Promise<void> => {
+    const until = vi.getRealSystemTime() + 10_000;
+    while (open.length < n) {
+      if (vi.getRealSystemTime() > until) {
+        const error = new Error(`gate: expected ${n} writing calls held before pick ${picks + 1}, saw ${open.length}`);
+        for (const h of open.splice(0)) h.stop(error);
+        throw error;
+      }
+      await turn();
+    }
   };
   const settle = async (): Promise<void> => {
     settling = true;
-    while (open.length) {
-      await drain();
-      for (const h of pick([...open])) { open.splice(open.indexOf(h), 1); h.go(); }
-    }
-    settling = false;
+    try {
+      while (open.length) {
+        await latch(want[picks] ?? 0);
+        await drain();
+        picks++;
+        for (const h of pick([...open])) { open.splice(open.indexOf(h), 1); h.go(); }
+      }
+    } finally { settling = false; }
   };
   return async (_turn: number, frame: Frame): Promise<void> => {
     if (frame.value.selection === undefined) return;
     arrivals++;
-    const held = new Promise<void>((go) => { open.push({ frame, go }); });
+    const held = new Promise<void>((go, stop) => { open.push({ frame, go, stop }); });
     if (!settling) void settle();
     await held;
   };
