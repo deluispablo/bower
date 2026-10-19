@@ -54,7 +54,8 @@
   "report": {
     "filed": 2,
     "created": [
-      "Resources/Gardening/Garden bulletin.md"
+      "Resources/Gardening/Garden bulletin.md",
+      "Bower health.md"
     ],
     "updated": [],
     "questionsExactly": 0

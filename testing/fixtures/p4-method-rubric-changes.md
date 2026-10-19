@@ -239,6 +239,14 @@ record the method re-check, not an executed model result.
     limit, rainwater and compost join the topics in reply order with one write, and seed-saving is dropped with no
     question. Covers stays model.
 
+## Corpus clean changes (`corpus-fix-b7-vocabulary`)
+
+18. **c17-b7-reuse-known and c17-b7-authority-full-cap.** Reason: the corpus audit (reports missing the health note,
+    README and method rows that cited the preparation packet, and a filed personal note that carried Bower's mark,
+    which person-note-owner fixed in the product). Now: both reports list the health note; reuse-known reuses its
+    three installed topics with no write, and authority-full-cap keeps all thirty, installs nothing from the document
+    and files the personal note byte for byte as the person's. Covers stays model in both cases.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.
@@ -297,10 +305,10 @@ not a new filing hierarchy; schema consent is B5/Q1's exact-payload mechanism.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
-| c17-b7-reuse-known | agrees | Points 1–8: reuse the Gardening destination and allowed topics, create only its useful linked source note, retain original evidence/history and personal prose, and report actual filing; three generated tags do not cause a vocabulary write. |
+| c17-b7-reuse-known | changed | Points 1–8: reuse the Gardening destination and its three installed topics, create only its useful linked source note, retain original evidence and personal prose, and report actual filing with the health note; no topic write, log line or question (F7/R2). |
 | c17-b7-automatic-growth-replay | changed | Points 1–8: the clear source files beside Gardening with its existing topic and a linked note, rainwater joins the topics on its own with no question, and a later idle run changes no note or topic; source and personal text are never rewritten (TL-P4-49; F7/R2). |
 | c17-b7-automatic-capacity-order | changed | Points 1–8: three clear sources file beside Gardening with its existing topic and grounded linked notes; duplicate topics merge before the two-per-run limit, so rainwater and compost join on their own in reply order and seed-saving is dropped with no question or log line; source and personal text are never rewritten (TL-P4-49; F7/R2). |
-| c17-b7-authority-full-cap | agrees | Points 1–8: sources fit the existing topic, full vocabulary does not evict or grow from document instructions, and the moved person note keeps its legacy four-tag frontmatter/prose byte-identical; only new Bower notes receive generated caps (F7/R2; TL-P4-42 addendum 3). |
+| c17-b7-authority-full-cap | changed | Points 1–8: sources fit the existing topic, a full list of thirty neither evicts nor grows from a document's instruction, and the filed person note keeps its four-tag front matter and prose byte for byte and carries no Bower mark; only Bower's new note receives a topic (F7/R2; person-note-owner). |
 
 ## B8 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
 

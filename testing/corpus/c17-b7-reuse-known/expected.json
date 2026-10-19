@@ -31,7 +31,8 @@
   "report": {
     "filed": 1,
     "created": [
-      "Resources/Gardening/Garden workshop.md"
+      "Resources/Gardening/Garden workshop.md",
+      "Bower health.md"
     ],
     "updated": [],
     "questionsExactly": 0
