@@ -9,10 +9,13 @@ for (const width of [375, 1440]) {
       // The pretend Drive opens in about 2.3 s even under scenario=slow (one 1.5 s answer), so the boot is gone
       // before 3 s there; the slow answers that keep the boot up are the demo's (two sequential 1.5 s reads).
       test.skip(isFake, 'scenario=slow keeps the boot up past 3 s only on the demo source');
-      // Keep the slow demo's two session reads pending past 3.5 s.
-      await page.addInitScript(() => { Math.random = () => 0.99; });
+      // Keep the boot up until the checks are done: the demo's module is held (playwright.dev/docs/network), an event,
+      // not the time its slow reads have left.
+      let release = (): void => {};
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      await page.route('**/src/data/demo/world.ts*', async (route) => { await held; await route.continue(); });
       // Install and pause before the page loads (playwright.dev/docs/clock): the clock then stands still from the first
-      // script, so no machine speed can put it past a time read later. The two session reads still need more than 3.5 s.
+      // script, so no machine speed can put it past a time read later.
       await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
       await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
       await page.goto('/?scenario=slow&time=instant');
@@ -30,6 +33,7 @@ for (const width of [375, 1440]) {
       await expectAxeClean(page, { include: '#boot' });
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await expect(boot.locator('.b-eye')).toHaveCSS('animation-name', 'none');
+      release();
     });
 
     test('a failed boot says it could not open and offers try again', async ({ page, allowConsole }) => {

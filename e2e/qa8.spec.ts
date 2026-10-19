@@ -58,18 +58,22 @@ test('focus after a stopped run is put away stays in the page', async ({ page, i
 
 test('the inbox reads the same in the tree and on Home: same order, same names', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop tree next to Home');
+  // Inbox open in the tree from the start, as the tree keeps it: pressing its row on Home would open it and remount Home.
+  await page.addInitScript(() => localStorage.setItem('bower:open', JSON.stringify(['Projects', 'Areas', 'Projects/Flat hunt', 'Inbox'])));
   await open(page, '/');
+  const before = await page.evaluate(() => history.length);
   const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-  const inbox = tree.getByRole('treeitem', { name: /^Inbox/ });
-  if ((await inbox.getAttribute('aria-expanded')) !== 'true') await inbox.click();
+  const rows = tree.locator('[data-path^="Inbox/"]');
+  await expect(rows.first()).toBeVisible();
   const start = (t: string): string => t.trim().slice(0, 14).toLowerCase();
-  const inTree = (await tree.locator('[data-path^="Inbox/"]').evaluateAll((els) => els.filter((e) => (e.getAttribute('data-path') ?? '').split('/').length === 2).map((e) => e.querySelector('[class*="name"]')?.textContent ?? ''))).map(start);
+  const inTree = (await rows.evaluateAll((els) => els.filter((e) => (e.getAttribute('data-path') ?? '').split('/').length === 2).map((e) => e.querySelector('[class*="name"]')?.textContent ?? ''))).map(start);
   const homePiles = page.locator('main a[href*="/pile/"] [class*="pileText"]');
-  await expect(homePiles.first()).toBeVisible();
   await page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: /^and \d+ more$/ }).click();
-  const onHome = (await homePiles.allTextContents()).map(start);
+  expect(await page.evaluate(() => history.length), 'the tree step navigated nowhere: one mounted Home').toBe(before);
   expect(inTree.length).toBeGreaterThan(1);
-  expect(inTree).toEqual(onHome);
+  // Web-first: retries until Home's list reads the tree's names in order (playwright.dev/docs/test-assertions#auto-retrying-assertions).
+  const literal = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expect(homePiles).toHaveText(inTree.map((t) => new RegExp(`^\\s*${literal(t)}`, 'i')));
   // A lone file is named as the tree names it: no extension (its kind shows beside it).
   for (const t of await homePiles.allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,5}$/);
 });
