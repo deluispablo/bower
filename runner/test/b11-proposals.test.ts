@@ -12,6 +12,7 @@ import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { canonical } from '../../src/data/spine/records';
+import { NOTHING_FOUND_WHY, REQUEST_DONE } from '../../src/data/spine/scripted';
 import { isRunnerFile, RUNNER_WRITES, SYSTEM } from '../../src/data/vault/layout';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCase, type LoadedCase } from '../src/corpus';
@@ -938,5 +939,51 @@ describe('B11f suggested views', () => {
     expect(JSON.parse(run.after[`${SYSTEM.proposals}/${fresh}.json`] ?? '{}')).toEqual({ v: 1, id: fresh,
       payload: { kind: 'view', home: { kind: 'moc', fileId: f.mapId }, definition: bound(REVISED, f.folderId) } });
     expect(run.after[oldPath], 'the old frozen file is untouched').toBe(asked1.after[oldPath]);
+  });
+});
+
+/** What a press reported, and each request's row in requests.json as [id, done]. */
+const reportOf = (run: CaseRun) => (run.lastRun as { run?: { report?: { questions?: Array<{ text: string }>; updated?: Array<{ path: string; what: string }>;
+  leftAsWritten?: Array<{ name: string; why: string }> } } }).run?.report;
+const doneRows = (run: CaseRun) => (JSON.parse(run.after[SYSTEM.requests] ?? '{"done":[]}') as { done: Array<{ id: string; done?: string }> }).done.map((r) => [r.id, r.done]);
+
+describe('request-settles-on-suggestion', () => {
+  it('request-settles-on-suggestion AC1: a request answered by a suggested view settles done, with no nothing-found row for its map', async () => {
+    const c = await loadCase(join(ROOT, 'c17-b11-proposal-authority'));
+    const run = await runWithClaude(c, caseReplies(c.id));
+    const first = run.runs?.[0] ?? run;
+    expect([first.code, run.code]).toEqual([0, 0]);
+    const report = reportOf(first);
+    expect(report?.questions?.map((q) => q.text), 'press 1 asks the suggestion').toEqual(['Save an earliest-deadline view for active offers in Job hunt?']);
+    expect(report?.updated?.map((r) => [r.path, r.what]), 'and updates the map').toEqual([[MAP, 'Updated map.']]);
+    expect(report?.leftAsWritten ?? [], 'no row says Bower found nothing for the map it updated').toEqual([]);
+    expect(doneRows(first), 'the request is done, in the words every done request has').toEqual([['change-1', REQUEST_DONE]]);
+    expect(REQUEST_DONE).toBe('Done. See what changed in your folders.');
+    expect(doneRows(run), 'press 2 keeps that row').toEqual([['change-1', REQUEST_DONE]]);
+    expect(run.score).toEqual({ pass: true, unmet: [] });
+  });
+
+  it.each(['c17-b11-skills-tally', 'c17-b11-monthly-money', 'c17-b11-flat-formulas'])('request-settles-on-suggestion AC2 guard: %s installs its view and settles done with no row, as before', async (id) => {
+    const c = await loadCase(join(ROOT, id));
+    const run = await runWithClaude(c, caseReplies(id));
+    const first = run.runs?.[0] ?? run;
+    expect(first.code).toBe(0);
+    expect(reportOf(first)?.leftAsWritten ?? []).toEqual([]);
+    expect(doneRows(first)).toEqual([['change-1', REQUEST_DONE]]);
+    expect(run.score).toEqual({ pass: true, unmet: [] });
+  });
+
+  it('request-settles-on-suggestion AC3: a suggestion settles a request naming its map; with no suggestion the map keeps its nothing-found row', async () => {
+    const f = await folder();
+    const run = await press(f, (ctx) => ({ ...empty, views: [proposing(f, ctx.request)] }));
+    expect(phase(run)).toBe('done');
+    expect(questions(run).filter((q) => q.proposal), 'the suggestion is asked').toHaveLength(1);
+    expect(reportOf(run)?.leftAsWritten ?? [], 'no nothing-found row').toEqual([]);
+    expect(doneRows(run)).toEqual([['press-1', REQUEST_DONE]]);
+    const plain = await folder();
+    const none = await press(plain);
+    expect(phase(none)).toBe('done');
+    expect(reportOf(none)?.leftAsWritten?.map((r) => [r.name, r.why]), 'guard: the same words with no suggestion keep the row').toEqual([[MAP, NOTHING_FOUND_WHY]]);
+    expect(doneRows(none)).toEqual([['press-1', NOTHING_FOUND_WHY]]);
   });
 });
