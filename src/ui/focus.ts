@@ -76,6 +76,8 @@ export function returnFocusTo(first: HTMLElement | null): void {
     return;
   }
   opener.focus();
+  // A disabled, inert or hidden opener cannot take focus: the heading instead, with no watch.
+  if (document.activeElement !== opener) return focusHeading();
   const onIn = (e: FocusEvent): void => {
     if (e.target !== opener) end();
   };
