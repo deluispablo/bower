@@ -19,7 +19,7 @@ test('a failed tidy-up says why, never freezes, and trying again works', async (
   await page.keyboard.press('Escape');
   await expect(page.getByRole('alert').getByRole('heading', { name: 'The tidy-up stopped' })).toBeVisible();
   await page.getByRole('alert').getByRole('button', { name: 'Try again' }).click();
-  await page.getByRole('button', { name: /Tidy up/ }).first().waitFor();
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/15 things filed/).first()).toBeVisible({ timeout: 30_000 });
   expect(await responsive(page)).toBe('ok');
 });

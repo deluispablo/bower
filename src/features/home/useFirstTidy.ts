@@ -1,11 +1,19 @@
 import { create } from 'zustand';
-import { FIRST_TIDY_SAVE_FAILED, type FirstTidyStep } from '@/data/contracts/first-tidy';
-import { useLoad } from '@/data/provider';
+import { FIRST_TIDY_SAVE_FAILED, FIRST_TIDY_STEPS, firstTidyFrom, type FirstTidyStep } from '@/data/contracts/first-tidy';
+import { useLoad, useRun } from '@/data/provider';
 import type { VaultSource } from '@/data/sources';
 import { BowerError } from '@/data/types';
 
-/** The progress of the first tidy-up, from the folder; null when the source cannot say (a stub without the method). */
-export const useFirstTidy = () => useLoad(async (s) => (await s.vault.firstTidy?.()) ?? null, (s, cb) => { return s.vault.subscribe(cb); });
+/**
+ * The progress of the first tidy-up, from the folder; null when the source cannot say (a stub without the method).
+ * A run the Worker admitted is step 2 done: Drive keeps a run's record only once it reports, so the run itself counts here.
+ */
+export function useFirstTidy() {
+  const progress = useLoad(async (s) => (await s.vault.firstTidy?.()) ?? null, (s, cb) => s.vault.subscribe(cb));
+  const { data: run } = useRun();
+  const p = progress.data;
+  return p && run ? { ...progress, data: firstTidyFrom(new Set(FIRST_TIDY_STEPS.filter((k) => p[k])), { piles: false, ran: true }) } : progress;
+}
 
 /** The one mark that could not be saved, shown by the checklist with its retry. */
 export const useFirstTidyFailure = create<{ failure: { step: FirstTidyStep; message: string } | null }>(() => ({ failure: null }));
