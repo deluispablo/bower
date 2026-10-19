@@ -57,6 +57,10 @@ it('corpus-registry AC3: unsupported cases are excluded before dispatch', async 
   expect(remaps, 'no undo scope is written or remapped').toEqual([]);
 }, 60_000);
 
+/** A finished run's `last-run.json` in the runner's current shape (corpus-scorer-validation AC2), with these question rows. */
+const lastRunWith = (questions: Array<Record<string, unknown>>): unknown => ({ v: 1, run: { id: 'run-1', scope: 'all', phase: 'done', requestedAt: 0, phaseAt: 0,
+  report: { filed: [], created: [], updated: [], setAside: [], questions: questions.map((q) => ({ text: 'Is this right?', yes: 'Yes', no: 'No', askedAt: 0, ...q })) } } });
+
 it('corpus-scorer-home AC2: offline consumers call one complete scorer', async () => {
   const corpus = await import('../src/corpus');
   const driver = await import('./corpus-run');
@@ -66,7 +70,7 @@ it('corpus-scorer-home AC2: offline consumers call one complete scorer', async (
   const path = 'Projects/Alex.md';
   const text = '---\ntitle: Alex\n---\n\n## My thoughts\nAlex likes café light.\n';
   const one = (expected: Expected, after: Record<string, string>, more: { props?: Record<string, Record<string, string>>; lastRun?: unknown } = {}) =>
-    score({ expected, before: { [path]: text }, after, lastRun: { v: 1, run: { report: { questions: [] } } }, ...more }).unmet;
+    score({ expected, before: { [path]: text }, after, lastRun: lastRunWith([]), ...more }).unmet;
   expect(one({ protectedRanges: [{ path, range: { heading: 'My thoughts' } }] }, { [path]: text.replace('light', 'Light') })).toEqual([`${path}: protected range changed: My thoughts`]);
   expect(one({ properties: [{ path, equals: { custom: 'Alex' } }] }, { [path]: text }, { props: { [path]: { custom: 'Sam' } } })).toEqual([`${path}: appProperty custom expected "Alex"`]);
   expect(one({ report: { questionSubjects: [{ kind: 'folder' }] } }, { [path]: text })).toEqual(['report.questions: missing {"kind":"folder"} subject']);
@@ -81,10 +85,10 @@ it('corpus-scorer-home AC2: offline consumers call one complete scorer', async (
 
 it("the scorer counts questions exactly and checks a pair's subject", () => {
   const pairSubject = { kind: 'pair' as const, notes: ['Projects/A.md', 'Projects/B.md'] as [string, string] };
-  const check = (questions: unknown[]) => score({
+  const check = (questions: Array<Record<string, unknown>>) => score({
     expected: { report: { questionsExactly: 1, pairSubject } }, before: {}, after: {},
     pathsById: { a: 'Projects/A.md', b: 'Projects/B.md', c: 'Projects/C.md' },
-    lastRun: { run: { report: { questions } } },
+    lastRun: lastRunWith(questions),
   });
   expect(check([{ id: 'q-pair-a.b' }, { id: 'q-pair-a.c' }]).pass).toBe(false);
   expect(check([{ id: 'q-pair-a.c' }]).pass).toBe(false);
@@ -288,7 +292,7 @@ it('checks a typed state question by the resolved note id', async () => {
   const run = await runWithClaude(c, replySequence([emptyIntent]));
   expect(scoreCase(c, run).pass).toBe(false);
   const id = Object.entries(run.pathsById).find(([, path]) => path === PERSONAL)?.[0];
-  const withQuestion = (question: unknown) => ({ ...run, lastRun: { run: { report: { questions: [question] } } } });
+  const withQuestion = (question: Record<string, unknown>) => ({ ...run, lastRun: lastRunWith([question]) });
   expect(scoreCase(c, withQuestion({ id: `q-state-${id}` }))).toEqual({ pass: true, unmet: [] });
   expect(scoreCase(c, withQuestion({ id: 'q-state-other' })).pass).toBe(false);
   expect(scoreCase(c, withQuestion({ id: `q-ask-${id}`, subject: id })).pass).toBe(false);
@@ -297,16 +301,15 @@ it('checks a typed state question by the resolved note id', async () => {
 describe.each(['final', 'per-run'] as const)('empty expectations in the %s score', (where) => {
   it.each<[string, Expected, string]>([
     ['questionSubjects', { report: { questionSubjects: [] } }, 'report.questionSubjects: expected a non-empty list'],
-    ['absent', { properties: [{ path: PERSONAL, absent: [], equals: { custom: 'Alex' } }] },
-      `${PERSONAL}: properties.absent: expected a non-empty list`],
-    ['equals', { properties: [{ path: PERSONAL, absent: ['by'], equals: {} }] },
-      `${PERSONAL}: properties.equals: expected at least one key`],
+    ['absent', { properties: [{ path: PERSONAL, absent: [], equals: { custom: 'Alex' } }] }, 'properties[0].absent: expected a non-empty list'],
+    ['equals', { properties: [{ path: PERSONAL, absent: ['by'], equals: {} }] }, 'properties[0].equals: expected at least one key'],
   ])('refuses empty %s', async (_field, expected, reason) => {
     const { replySequence } = await import('./corpus-run');
     const c = { ...await smallCase(), expected: where === 'final' ? expected : { runs: [expected] } };
     const run = await runWithClaude(c, replySequence([emptyIntent]), { [PERSONAL]: { custom: 'Alex' } });
     expect(run.code).toBe(0);
-    expect(run.score).toEqual({ pass: false, unmet: [where === 'final' ? reason : `run 1: ${reason}`] });
+    // Checked against the schema at its place (corpus-scorer-validation AC1), before any press is scored.
+    expect(run.score).toEqual({ pass: false, unmet: [where === 'final' ? `expected.${reason}` : `expected.runs[0].${reason}`] });
   });
 });
 

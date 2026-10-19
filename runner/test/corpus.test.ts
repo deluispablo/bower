@@ -7,6 +7,11 @@ import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
+/** A finished run's `last-run.json` in the runner's current shape (corpus-scorer-validation AC2): empty rows unless given. */
+const lastRunOf = (report: Record<string, unknown>): unknown => ({ v: 1, run: { id: 'run-1', scope: 'all', phase: 'done', requestedAt: 0, phaseAt: 0,
+  report: { filed: [], created: [], updated: [], setAside: [], questions: [], ...report } } });
+const FILED = { name: 'x.pdf', title: 'X', to: 'Resources', kind: 'pdf' };
+const asked = (id: string): Record<string, unknown> => ({ id, text: 'Is this right?', yes: 'Yes', no: 'No', askedAt: 0 });
 // A case's answer step goes through the app's answer path, which keeps the device outbox.
 beforeEach(() => {
   const stored = new Map<string, string>();
@@ -255,7 +260,7 @@ describe('the capability corpus', () => {
   it('the corpus scorer names every kind of unmet expectation', () => {
     const before = { 'A.md': 'one\n', 'B.md': 'two\n' };
     const after = { 'A.md': 'changed\n', 'N.md': '---\nby: bower\n---\n\n[[Nowhere]]\n\n## Timeline\n- 2026-10-07 · One line.\n', 'Inbox/x.pdf': 'x' };
-    const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'N.md' }], updated: [], setAside: [], questions: [{ id: 'q1' }, { id: 'q2' }], requests: ['a'], rulesWorded: 0, yourChanges: 0 } } };
+    const lastRun = lastRunOf({ filed: [FILED], created: [{ path: 'N.md', what: 'made' }], questions: [asked('q1'), asked('q2')], requests: ['a'], rulesWorded: 0, yourChanges: 0 });
     const unmet = (expected: Parameters<typeof score>[0]['expected'], run: unknown = lastRun): string[] => score({ expected, before, after, lastRun: run }).unmet;
     expect(unmet({ files: { present: ['Z.md'] } })).toEqual(['missing file: Z.md']);
     expect(unmet({ files: { present: ['Inbox/*.pdf'], absent: ['Inbox/*'] } })).toEqual(['file should not exist: Inbox/x.pdf']);
@@ -289,7 +294,7 @@ describe('the capability corpus', () => {
     expect(c).toBeDefined();
     if (!c) return;
     const note = (link: string): string => `---\nby: bower\n---\n${link}\n18 October, 8 November, 7 December, 31 January\n`;
-    const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'x.md' }], updated: [], setAside: [], questions: [], requests: [], rulesWorded: 0, yourChanges: 0 } } };
+    const lastRun = lastRunOf({ filed: [FILED], created: [{ path: 'x.md', what: 'made' }], requests: [], rulesWorded: 0, yourChanges: 0 });
     const at = (folder: string, link = ''): { pass: boolean; unmet: string[] } => {
       const after = { ...c.folder, [`${folder}/Community garden newsletter, autumn.pdf`]: 'pdf', [`${folder}/Community garden newsletter, autumn.md`]: note(link) };
       return score({ expected: c.expected, before: c.folder, after, lastRun });
@@ -308,7 +313,7 @@ describe('the capability corpus', () => {
   it('the C04 scorer matches the exact link target, from the newsletter note or from the plot note', async () => {
     const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
     if (!c) throw new Error('the C04 case is missing');
-    const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'x.md' }], updated: [], setAside: [], questions: [], requests: [], rulesWorded: 0, yourChanges: 0 } } };
+    const lastRun = lastRunOf({ filed: [FILED], created: [{ path: 'x.md', what: 'made' }], requests: [], rulesWorded: 0, yourChanges: 0 });
     const dates = '18 October, 8 November, 7 December, 31 January';
     const run = (newsletter: string, plot?: string): { pass: boolean; unmet: string[] } => {
       const after: Record<string, string> = {

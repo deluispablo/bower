@@ -2,17 +2,25 @@
  * The complete corpus scorer (corpus-scorer-home): `scoreCase` in `runner/src/corpus.ts` scores every expectation of a
  * case, including the protected ranges, Drive properties, typed question subjects and per-press runs that only the test
  * driver used to check, from plain data (the starting folder and what each press left), and it reads no test runtime.
+ * It scores only expectations and reports in their current schema, and no placement or wildcard note passes vacuously
+ * (corpus-scorer-validation).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { expect, it } from 'vitest';
-import { scoreCase, type Expected } from '../src/corpus';
+import { loadCorpus, scoreCase, type Expected } from '../src/corpus';
 
 const RUNNER = resolve(import.meta.dirname, '..');
 const PERSONAL = 'Projects/Alex.md';
 const PERSON_TEXT = '---\r\ntitle: Alex\r\n---\r\n\r\n## My thoughts\r\nAlex likes café light.\r\n\r\n## Timeline\r\n';
 const PATHS = { a: 'Projects/A.md', b: 'Projects/B.md', c: 'Projects/C.md', p: PERSONAL, i: 'Inbox/Seeds.txt' };
-const report = (questions: unknown[]): unknown => ({ v: 1, run: { report: { questions } } });
+const LAST_RUN = '.bower/last-run.json';
+/** A finished run and its report rows, as the runner writes `last-run.json` today (corpus-scorer-validation AC2). */
+const RUN = { id: 'run-1', scope: 'all', phase: 'done', requestedAt: 0, phaseAt: 0 };
+const ROWS = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+const asked = (q: Record<string, string>): Record<string, unknown> => ({ text: 'Is this right?', yes: 'Yes', no: 'No', askedAt: 0, ...q });
+const report = (questions: Array<Record<string, string>>, rows: Record<string, unknown> = {}): unknown =>
+  ({ v: 1, run: { ...RUN, report: { ...ROWS, questions: questions.map(asked), ...rows } } });
 const press = (over: { after?: Record<string, string>; props?: Record<string, Record<string, string>>; lastRun?: unknown } = {}) =>
   ({ after: { [PERSONAL]: PERSON_TEXT }, props: {}, pathsById: PATHS, lastRun: report([]), ...over });
 const unmet = (expected: Expected, final = press(), runs?: Array<ReturnType<typeof press>>): string[] =>
@@ -41,7 +49,7 @@ it('corpus-scorer-home AC1: shared scorer enforces all existing driver-only expe
   expect(unmet(props)).toEqual([`${PERSONAL}: appProperty custom expected "Alex"`]);
   expect(unmet(props, press({ after: {} }))).toEqual([`missing file for properties: ${PERSONAL}`]);
   expect(unmet({ properties: [{ path: PERSONAL, absent: [], equals: {} }] })).toEqual([
-    `${PERSONAL}: properties.absent: expected a non-empty list`, `${PERSONAL}: properties.equals: expected at least one key`]);
+    'expected.properties[0].absent: expected a non-empty list', 'expected.properties[0].equals: expected at least one key']);
   // Typed question subjects, by the resolved Drive ids: each kind, a wrong id, an empty list and no report.
   const subjects = (questionSubjects: NonNullable<Expected['report']>['questionSubjects']): Expected => ({ report: { questionSubjects } });
   expect(unmet(subjects([{ kind: 'state', note: PERSONAL }]), press({ lastRun: report([{ id: 'q-state-p' }]) }))).toEqual([]);
@@ -54,7 +62,7 @@ it('corpus-scorer-home AC1: shared scorer enforces all existing driver-only expe
     press({ lastRun: report([{ id: 'q-ask-i' }, { id: 'q-request-change-1' }, { id: 'q-folder', text: 'Where do recipes go?' }]) }))).toEqual([]);
   expect(unmet(subjects([{ kind: 'inbox', path: PATHS.i }]), press({ lastRun: report([{ id: 'q-ask-a' }]) })))
     .toEqual([`report.questions: missing {"kind":"inbox","path":"${PATHS.i}"} subject`]);
-  expect(unmet(subjects([]))).toEqual(['report.questionSubjects: expected a non-empty list']);
+  expect(unmet(subjects([]))).toEqual(['expected.report.questionSubjects: expected a non-empty list']);
   expect(unmet(subjects([{ kind: 'folder' }]), press({ lastRun: null }))).toEqual(['report: no last-run.json report', 'report.questions: missing {"kind":"folder"} subject']);
   // The older pair expectation goes through the same typed match.
   const pair: Expected = { report: { pairSubject: { kind: 'pair', notes: [PATHS.a, PATHS.b] } } };
@@ -71,6 +79,123 @@ it('corpus-scorer-home AC1: shared scorer enforces all existing driver-only expe
   expect(unmet({ runs: [thoughts, {}] }, press(), [changed])).toEqual([`run 1: ${PERSONAL}: protected range changed: My thoughts`]);
   expect(unmet({ ...props, runs: [props] }, press({ props: { [PERSONAL]: { custom: 'Alex' } } }))).toEqual([]);
   expect(unmet({ ...props, runs: [props] })).toEqual([`${PERSONAL}: appProperty custom expected "Alex"`, `run 1: ${PERSONAL}: appProperty custom expected "Alex"`]);
+});
+
+it('corpus-scorer-validation AC1: every expectation field is recursively validated', async () => {
+  const invalid = (expected: unknown): string[] => unmet(expected as Expected);
+  // An unknown key at any depth is unmet, at its place: a note, a range, a placement, a report, a property, a file list,
+  // a press's answer and table.
+  expect(invalid({ notes: [{ path: PERSONAL, contain: ['café'] }] }), 'a nested unknown key is unmet').toEqual(['expected.notes[0]: Unrecognized key: "contain"']);
+  expect(invalid({
+    protectedRanges: [{ path: PERSONAL, range: { frontMatter: true, level: 2 } }],
+    placement: { files: ['*.md'], allowed: [{ under: 'Projects', link: 'Alex' }] },
+    report: { filed: 0, question: [] },
+    properties: [{ path: PERSONAL, equal: { custom: 'Alex' } }],
+    files: { presnt: [PERSONAL] },
+    runs: [{ answers: [{ request: 'Rent?', contain: ['1,450'] }] }, { tables: [{ path: PERSONAL, header: ['A'], rows: [], cells: [] }] }],
+  })).toEqual([
+    'expected.protectedRanges[0].range: Unrecognized key: "level"',
+    'expected.properties[0]: Unrecognized key: "equal"',
+    'expected.files: Unrecognized key: "presnt"',
+    'expected.placement.allowed[0]: Unrecognized key: "link"',
+    'expected.report: Unrecognized key: "question"',
+    'expected.runs[0].answers[0]: Unrecognized key: "contain"',
+    'expected.runs[1].tables[0]: Unrecognized key: "cells"',
+  ]);
+  // Wrong types, at their places.
+  expect(invalid({ report: { filed: '1' }, notes: [{ path: PERSONAL, contains: 'café' }], linksResolve: 'yes', unchanged: PERSONAL })).toEqual([
+    'expected.unchanged: Invalid input: expected array, received string',
+    'expected.notes[0].contains: Invalid input: expected array, received string',
+    'expected.linksResolve: Invalid input: expected boolean, received string',
+    'expected.report.filed: Invalid input: expected number, received string',
+  ]);
+  // Bounds: a count is a whole number from 0, a heading or folder is named, and a list that would pass empty has an entry.
+  expect(invalid({
+    report: { questionsExactly: -1 }, notes: [{ path: PERSONAL, timelineMin: 1.5 }], placement: { files: [], allowed: [{ under: '' }] },
+    protectedRanges: [{ path: PERSONAL, range: { heading: '' } }], tables: [{ path: PERSONAL, header: [], rows: [['a']] }],
+  })).toEqual([
+    'expected.tables[0].header: expected a non-empty list',
+    'expected.protectedRanges[0].range.heading: Too small: expected string to have >=1 characters',
+    'expected.placement.files: expected a non-empty list',
+    'expected.placement.allowed[0].under: Too small: expected string to have >=1 characters',
+    'expected.notes[0].timelineMin: Invalid input: expected int, received number',
+    'expected.report.questionsExactly: Too small: expected number to be >=0',
+  ]);
+  // Malformed presses: not a list, not an object, a press with its own runs.
+  expect(invalid({ runs: {} })).toEqual(['expected.runs: Invalid input: expected array, received object']);
+  expect(invalid({ runs: [null, { runs: [] }] })).toEqual([
+    'expected.runs[0]: Invalid input: expected object, received null',
+    'expected.runs[1]: Unrecognized key: "runs"',
+  ]);
+  // Malformed subjects, answers and tables.
+  expect(invalid({
+    report: { questionSubjects: [{ kind: 'pair', notes: [PATHS.a] }, { kind: 'person' }], pairSubject: { kind: 'state', note: PERSONAL } },
+    answers: [{ contains: ['1,450'] }], tables: [{ path: PERSONAL, header: ['A'], rows: [[1]] }],
+  })).toEqual([
+    'expected.answers[0].request: Invalid input: expected string, received undefined',
+    'expected.tables[0].rows[0][0]: Invalid input: expected string, received number',
+    'expected.report.pairSubject.kind: Invalid input: expected "pair"',
+    'expected.report.pairSubject.notes: Invalid input: expected tuple, received undefined',
+    'expected.report.pairSubject: Unrecognized key: "note"',
+    'expected.report.questionSubjects[0].notes: Too small: expected array to have >=2 items',
+    `expected.report.questionSubjects[1].kind: Invalid discriminator value. Expected 'pair' | 'state' | 'inbox' | 'request' | 'folder'`,
+  ]);
+  // An expectation that is not the schema scores nothing else: its other checks would be read from a guess.
+  expect(invalid({ files: { present: ['Z.md'] }, linksResolve: 'yes' })).toEqual(['expected.linksResolve: Invalid input: expected boolean, received string']);
+  // Guards: an empty expectation passes, and every case's expected.json is the schema.
+  expect(unmet({})).toEqual([]);
+  const cases = await loadCorpus(resolve(RUNNER, '../testing/corpus'));
+  expect(cases.length).toBeGreaterThan(0);
+  expect(cases.flatMap((c) => scoreCase(c, { after: {}, lastRun: null }).unmet.filter((line) => /^expected[.:]/.test(line)).map((line) => `${c.id}: ${line}`))).toEqual([]);
+});
+
+it('corpus-scorer-validation AC2: report contents count only after current schema validation', () => {
+  const counts: Expected = { report: { filed: 1, questionsExactly: 1 } };
+  const filed = { name: 'Seeds.txt', title: 'Seeds', to: 'Projects', kind: 'note' };
+  // A malformed row satisfies no count: a filed row with no fields, a question with only an id.
+  expect(unmet(counts, press({ lastRun: { v: 1, run: { ...RUN, report: { ...ROWS, filed: [{}], questions: [{ id: 'q-state-p' }] } } } })), 'a malformed report counts nothing')
+    .toEqual([`report: ${LAST_RUN} is not a last-run file`]);
+  expect(unmet(counts, press({ lastRun: report([{ id: 'q-state-p' }], { filed: [filed] }) }))).toEqual([]);
+  // Another version, a run with no phase, a report missing a list, a filed row of no known kind, the old bare shape.
+  for (const lastRun of [
+    { v: 2, run: { ...RUN, report: { ...ROWS, filed: [filed], questions: [asked({ id: 'q-state-p' })] } } },
+    { v: 1, run: { ...RUN, phase: undefined, report: { ...ROWS, filed: [filed], questions: [asked({ id: 'q-state-p' })] } } },
+    { v: 1, run: { ...RUN, report: { ...ROWS, setAside: undefined, filed: [filed], questions: [asked({ id: 'q-state-p' })] } } },
+    { v: 1, run: { ...RUN, report: { ...ROWS, filed: [{ ...filed, kind: 'video' }], questions: [asked({ id: 'q-state-p' })] } } },
+    { v: 1, run: { report: { filed: [filed], questions: [asked({ id: 'q-state-p' })] } } },
+  ]) expect(unmet(counts, press({ lastRun })), JSON.stringify(lastRun)).toEqual([`report: ${LAST_RUN} is not a last-run file`]);
+  // Typed subjects read only a report in the current shape.
+  expect(unmet({ report: { questionSubjects: [{ kind: 'state', note: PERSONAL }] } }, press({ lastRun: { v: 1, run: { report: { questions: [{ id: 'q-state-p' }] } } } })))
+    .toEqual([`report: ${LAST_RUN} is not a last-run file`, `report.questions: missing {"kind":"state","note":"${PERSONAL}"} subject`]);
+  // No file, or a run that ended with no report, is no report.
+  expect(unmet(counts, press({ lastRun: null }))).toEqual(['report: no last-run.json report']);
+  expect(unmet(counts, press({ lastRun: { v: 1, run: { ...RUN, phase: 'failed', failure: 'The model did not answer.' } } }))).toEqual(['report: no last-run.json report']);
+  // The requests file an answer is read from is its current shape too: a done row with no id or time is refused.
+  const answers: Expected = { answers: [{ request: 'Rent?', contains: ['1,450'] }] };
+  const requests = (done: unknown[]): ReturnType<typeof press> => press({ after: { [PERSONAL]: PERSON_TEXT, '.bower/requests.json': JSON.stringify({ v: 1, done }) } });
+  expect(unmet(answers, requests([{ id: 'change-1', at: 0, text: 'Rent?', done: 'Rent is 1,450.' }]))).toEqual([]);
+  expect(unmet(answers, requests([{ text: 'Rent?', done: 'Rent is 1,450.' }]))).toEqual(['answers: .bower/requests.json is not a requests file']);
+});
+
+it('corpus-scorer-validation AC3: placement requires a match and wildcard notes check every match', () => {
+  const garden: Expected = { placement: { files: ['*Garden*.md'], allowed: [{ under: 'Projects' }] } };
+  expect(unmet(garden), 'zero matched files fails').toEqual(['placement: no file matches [*Garden*.md]']);
+  const put = (files: Record<string, string>): ReturnType<typeof press> => press({ after: { [PERSONAL]: PERSON_TEXT, ...files } });
+  expect(unmet(garden, put({ 'Projects/Garden.md': 'Seeds.\n' }))).toEqual([]);
+  expect(unmet(garden, put({ 'Areas/Garden.md': 'Seeds.\n' }))).toEqual(['placed outside the rubric: Areas/Garden.md']);
+  // A file held in the Inbox is placed like any other: it passes only where the rubric names the Inbox as an outcome.
+  expect(unmet(garden, put({ 'Inbox/Garden.md': 'Seeds.\n' })), 'an inbox-held file is no vacuous pass').toEqual(['placed outside the rubric: Inbox/Garden.md']);
+  const held: Expected = { placement: { files: ['*Garden*.md'], allowed: [{ under: 'Projects' }, { under: 'Inbox' }] } };
+  expect(unmet(held, put({ 'Inbox/Garden.md': 'Seeds.\n' }))).toEqual([]);
+  // Each placement of a list needs its own match.
+  const two: Expected = { placement: [{ files: ['*Garden*.md'], allowed: [{ under: 'Projects' }] }, { files: ['*.pdf'], allowed: [{ under: 'Projects' }] }] };
+  expect(unmet(two, put({ 'Projects/Garden.md': 'Seeds.\n' }))).toEqual(['placement: no file matches [*.pdf]']);
+  // A wildcard note: every note it matches meets the expectation, each named by its own path; no match is a missing note.
+  const notes: Expected = { notes: [{ path: 'Projects/Garden*.md', contains: ['Seeds'], excludes: ['Weeds'] }] };
+  expect(unmet(notes, put({ 'Projects/Garden.md': 'Seeds.\n', 'Projects/Garden plot.md': 'Seeds and weeds.\n' }))).toEqual([]);
+  expect(unmet(notes, put({ 'Projects/Garden.md': 'Seeds.\n', 'Projects/Garden plot.md': 'Weeds.\n' })), 'every match is checked')
+    .toEqual(['Projects/Garden plot.md: lacks "Seeds"', 'Projects/Garden plot.md: has "Weeds"']);
+  expect(unmet(notes)).toEqual(['missing note: Projects/Garden*.md']);
 });
 
 /** Every module a source file reaches through its imports (relative ones resolved to files), with the bare specifiers it names. */

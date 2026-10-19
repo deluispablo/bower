@@ -327,8 +327,9 @@ async function walk(dir: string): Promise<{ text: Record<string, string>; binary
  * `case.json`, declared once with zod 4 (https://zod.dev, as the runner's model reply in `claude.ts`): strict objects
  * refuse unknown keys, so a misspelt or retired key (`folderFrom`, `speedBaseline`) fails instead of being ignored.
  */
+const PairSubject = z.strictObject({ kind: z.literal('pair'), notes: z.tuple([z.string(), z.string()]) });
 const Subject = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('pair'), notes: z.tuple([z.string(), z.string()]) }),
+  PairSubject,
   z.strictObject({ kind: z.literal('state'), note: z.string() }),
   z.strictObject({ kind: z.literal('inbox'), path: z.string() }),
   z.strictObject({ kind: z.literal('request') }),
@@ -355,6 +356,48 @@ const CaseMeta: z.ZodType<CorpusCase> = z.strictObject({
   })).optional(),
 });
 
+/**
+ * `expected.json`, declared once with zod like `case.json` (corpus-scorer-validation AC1): every object is strict at
+ * every depth, a count is a whole number from 0, and a list that would pass by being empty needs an entry. A press in
+ * `runs` has no `runs` of its own.
+ */
+const count = z.number().int().nonnegative();
+const texts = z.array(z.string());
+const SOME = 'expected a non-empty list';
+const PlacementShape = z.strictObject({
+  files: texts.min(1, SOME),
+  allowed: z.array(z.strictObject({ under: z.string().min(1), linking: z.string().min(1).optional() })).min(1, SOME),
+});
+const PressExpected = z.strictObject({
+  answers: z.array(z.strictObject({ request: z.string(), contains: texts.optional(), excludes: texts.optional(), links: texts.optional() })).optional(),
+  tables: z.array(z.strictObject({ path: z.string(), header: texts.min(1, SOME), rows: z.array(texts) })).optional(),
+  protectedRanges: z.array(z.strictObject({
+    path: z.string(), range: z.union([z.strictObject({ heading: z.string().min(1) }), z.strictObject({ frontMatter: z.literal(true) })]),
+  })).optional(),
+  properties: z.array(z.strictObject({
+    path: z.string(), absent: texts.min(1, SOME).optional(),
+    equals: z.record(z.string(), z.string()).refine((e) => Object.keys(e).length > 0, 'expected at least one key').optional(),
+  })).optional(),
+  files: z.strictObject({ present: texts.optional(), absent: texts.optional() }).optional(),
+  placement: z.union([PlacementShape, z.array(PlacementShape).min(1, SOME)]).optional(),
+  unchanged: texts.optional(),
+  notes: z.array(z.strictObject({
+    path: z.string(), contains: texts.optional(), excludes: texts.optional(), timeline: texts.optional(), timelineCount: count.optional(), timelineMin: count.optional(),
+  })).optional(),
+  linksResolve: z.boolean().optional(),
+  report: z.strictObject({
+    filed: count.optional(), filedAtLeast: count.optional(), created: texts.optional(), updated: texts.optional(), createdAtLeast: count.optional(),
+    updatedAtLeast: count.optional(), questionsAtMost: count.optional(), questionsExactly: count.optional(),
+    pairSubject: PairSubject.optional(),
+    questionSubjects: z.array(Subject).min(1, SOME).optional(), setAside: count.optional(), questions: texts.optional(), requests: texts.optional(),
+    rulesWorded: count.optional(), yourChanges: count.optional(), waiting: count.optional(),
+  }).optional(),
+});
+const ExpectedShape: z.ZodType<Expected> = PressExpected.extend({ runs: z.array(PressExpected).optional() });
+
+/** Where a zod issue sits, as a corpus author reads it (`.inbox[0].files`). */
+const issueAt = (path: readonly PropertyKey[]): string => path.map((p) => typeof p === 'number' ? `[${p}]` : `.${String(p)}`).join('');
+
 /** A case's `case.json`, validated before anything is read or seeded from it (corpus-registry AC2); `name` is its folder. */
 function caseMeta(name: string, text: string): CorpusCase {
   let json: unknown;
@@ -363,8 +406,7 @@ function caseMeta(name: string, text: string): CorpusCase {
   if (!parsed.success) {
     // The first issue, at its path (`case.json.inbox[0].files`): one plain line for the corpus author.
     const issue = parsed.error.issues[0];
-    const at = (issue?.path ?? []).map((p) => typeof p === 'number' ? `[${p}]` : `.${String(p)}`).join('');
-    throw new Error(`corpus case ${name}: case.json${at}: ${issue?.message ?? 'invalid'}`);
+    throw new Error(`corpus case ${name}: case.json${issueAt(issue?.path ?? [])}: ${issue?.message ?? 'invalid'}`);
   }
   if (parsed.data.id !== name) throw new Error(`corpus case ${name}: case.json id "${parsed.data.id}" is not its folder name`);
   return parsed.data;
@@ -423,12 +465,10 @@ const named = (name: string): string => name.split('#')[0] ?? '';
 /** The Timeline lines of a note: the bullets of its Timeline section, as the app's one note parser frames it. */
 export const timelineOf = timelineBullets;
 
+/** The report of a `last-run.json` that passes the runner's current schema (corpus-scorer-validation AC2); else none. */
 function reportOf(lastRun: unknown): Record<string, unknown> | null {
-  if (!lastRun || typeof lastRun !== 'object') return null;
-  const run = (lastRun as { run?: unknown }).run;
-  if (!run || typeof run !== 'object') return null;
-  const report = (run as { report?: unknown }).report;
-  return report && typeof report === 'object' ? (report as Record<string, unknown>) : null;
+  const report = isRunnerFile(SYSTEM.lastRun, lastRun) ? lastRun.run.report : undefined;
+  return report ? { ...report } : null;
 }
 
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -457,12 +497,18 @@ function resolves(target: string, after: Readonly<Record<string, string>>): bool
   });
 }
 
-const EXPECTED_KEYS = ['runs', 'protectedRanges', 'properties', 'files', 'placement', 'unchanged', 'notes', 'linksResolve', 'report', 'answers', 'tables'];
-const ANSWER_KEYS = ['request', 'contains', 'excludes', 'links'];
-const TABLE_KEYS = ['path', 'header', 'rows'];
-/** A misspelt key is unmet, never skipped; only these four places refuse one (c09-score AC3). */
-const unknownKeys = (value: unknown, known: string[], where: string): string[] =>
-  value && typeof value === 'object' ? Object.keys(value).filter((k) => !known.includes(k)).map((k) => `${where}: unknown key "${k}"`) : [];
+/**
+ * Whether prose states `fact` (corpus-scorer-validation AC4): the words around it are free, but a figure is whole, so
+ * "1,450" is not stated by "11,450" or "1,450.50", and an excluded "900" is not stated by "1,900".
+ */
+function says(text: string, fact: string): boolean {
+  for (let i = text.indexOf(fact); i >= 0; i = text.indexOf(fact, i + 1)) {
+    const joined = (/^\d/.test(fact) && /\d[.,]?$/.test(text.slice(Math.max(0, i - 2), i)))
+      || (/\d$/.test(fact) && /^[.,]?\d/.test(text.slice(i + fact.length, i + fact.length + 2)));
+    if (!joined) return true;
+  }
+  return false;
+}
 
 /** The files a `[[target]]` could mean: its whole path (a note without `.md`), else the files with that name. */
 function linkCandidates(target: string, after: Readonly<Record<string, string>>): string[] {
@@ -473,14 +519,14 @@ function linkCandidates(target: string, after: Readonly<Record<string, string>>)
 }
 
 function scoreAnswer(want: AnswerExpectation, rows: ReadonlyArray<{ text: string; done?: string }>, after: Readonly<Record<string, string>>): string[] {
-  const unmet = unknownKeys(want, ANSWER_KEYS, `answers "${want.request}"`);
+  const unmet: string[] = [];
   // A row with no `done`, or an empty one, is not done; with the same words twice, the one that has `done` counts.
   const found = rows.filter((r) => r.text === want.request && r.done);
   if (found.length !== 1) return [...unmet, found.length ? `answers: ${found.length} rows for "${want.request}"` : `answers: no done row for "${want.request}"`];
   const done = found[0]?.done ?? '';
   const at = `answers "${want.request}"`;
-  for (const c of want.contains ?? []) if (!done.includes(c)) unmet.push(`${at}: lacks "${c}"`);
-  for (const c of want.excludes ?? []) if (done.includes(c)) unmet.push(`${at}: has "${c}"`);
+  for (const c of want.contains ?? []) if (!says(done, c)) unmet.push(`${at}: lacks "${c}"`);
+  for (const c of want.excludes ?? []) if (says(done, c)) unmet.push(`${at}: has "${c}"`);
   if (want.links) {
     const got: string[] = [];
     let clear = true;
@@ -524,7 +570,7 @@ function tablesOf(text: string): Array<{ header: string[]; rows: string[][] }> {
 
 function scoreTable(want: TableExpectation, after: Readonly<Record<string, string>>): string[] {
   const at = `tables ${want.path}`;
-  const unmet = unknownKeys(want, TABLE_KEYS, at);
+  const unmet: string[] = [];
   const text = after[want.path];
   if (text === undefined) return [...unmet, `${at}: missing note`];
   const same = tablesOf(text).filter((t) => JSON.stringify(t.header) === JSON.stringify(want.header));
@@ -581,7 +627,7 @@ function protectedBytes(text: string | undefined, range: NonNullable<Expected['p
 /** One press against one set of expectations: every check, the protected ranges against the starting folder. */
 function scorePress(expected: Expected, before: Readonly<Record<string, string>>, press: PressResult): string[] {
   const { after, lastRun } = press;
-  const unmet: string[] = [...unknownKeys(expected, EXPECTED_KEYS, 'expected'), ...list(expected.runs).flatMap((r, i) => unknownKeys(r, EXPECTED_KEYS, `runs[${i}]`))];
+  const unmet: string[] = [];
   if (expected.answers) {
     let file: unknown = null;
     try { file = JSON.parse(after[SYSTEM.requests] ?? ''); } catch { /* not JSON: unmet below */ }
@@ -592,7 +638,9 @@ function scorePress(expected: Expected, before: Readonly<Record<string, string>>
   for (const p of expected.files?.present ?? []) if (matching(after, p).length === 0) unmet.push(`missing file: ${p}`);
   for (const p of expected.files?.absent ?? []) for (const found of matching(after, p)) unmet.push(`file should not exist: ${found}`);
   for (const { files, allowed } of [expected.placement ?? []].flat()) {
-    const placed = files.flatMap((p) => matching(after, p)).filter((p) => !p.startsWith('Inbox/'));
+    // A file held in the Inbox counts like any other: it passes only where `allowed` names the Inbox (AC3).
+    const placed = files.flatMap((p) => matching(after, p));
+    if (placed.length === 0) unmet.push(`placement: no file matches [${files.join(', ')}]`);
     for (const path of placed) {
       const rule = allowed.find((a) => isUnder(path, a.under));
       if (!rule) unmet.push(`placed outside the rubric: ${path}`);
@@ -612,18 +660,18 @@ function scorePress(expected: Expected, before: Readonly<Record<string, string>>
     else if (after[p] !== before[p]) unmet.push(`file changed: ${p}`);
   }
   for (const n of expected.notes ?? []) {
-    const at = matching(after, n.path)[0];
-    const text = at === undefined ? undefined : after[at];
-    if (text === undefined) {
-      unmet.push(`missing note: ${n.path}`);
-      continue;
+    const found = matching(after, n.path);
+    if (found.length === 0) unmet.push(`missing note: ${n.path}`);
+    // Every note a wildcard matches meets the expectation, each named by its own path (AC3).
+    for (const at of found) {
+      const text = after[at] ?? '';
+      for (const c of n.contains ?? []) if (!says(text, c)) unmet.push(`${at}: lacks "${c}"`);
+      for (const c of n.excludes ?? []) if (says(text, c)) unmet.push(`${at}: has "${c}"`);
+      const lines = timelineOf(text);
+      for (const t of n.timeline ?? []) if (!lines.some((l) => says(l, t))) unmet.push(`${at}: no Timeline line with "${t}"`);
+      if (n.timelineCount !== undefined && lines.length !== n.timelineCount) unmet.push(`${at}: ${lines.length} Timeline lines, expected ${n.timelineCount}`);
+      if (n.timelineMin !== undefined && lines.length < n.timelineMin) unmet.push(`${at}: ${lines.length} Timeline lines, expected at least ${n.timelineMin}`);
     }
-    for (const c of n.contains ?? []) if (!text.includes(c)) unmet.push(`${n.path}: lacks "${c}"`);
-    for (const c of n.excludes ?? []) if (text.includes(c)) unmet.push(`${n.path}: has "${c}"`);
-    const lines = timelineOf(text);
-    for (const t of n.timeline ?? []) if (!lines.some((l) => l.includes(t))) unmet.push(`${n.path}: no Timeline line with "${t}"`);
-    if (n.timelineCount !== undefined && lines.length !== n.timelineCount) unmet.push(`${n.path}: ${lines.length} Timeline lines, expected ${n.timelineCount}`);
-    if (n.timelineMin !== undefined && lines.length < n.timelineMin) unmet.push(`${n.path}: ${lines.length} Timeline lines, expected at least ${n.timelineMin}`);
   }
   if (expected.linksResolve) {
     for (const [p, text] of Object.entries(after)) {
@@ -637,7 +685,7 @@ function scorePress(expected: Expected, before: Readonly<Record<string, string>>
   const want = expected.report;
   if (want) {
     const report = reportOf(lastRun);
-    if (!report) unmet.push('report: no last-run.json report');
+    if (!report) unmet.push(lastRun !== null && !isRunnerFile(SYSTEM.lastRun, lastRun) ? `report: ${SYSTEM.lastRun} is not a last-run file` : 'report: no last-run.json report');
     else {
       if (want.filed !== undefined && list(report.filed).length !== want.filed) unmet.push(`report.filed: ${list(report.filed).length}, expected ${want.filed}`);
       if (want.filedAtLeast !== undefined && list(report.filed).length < want.filedAtLeast) unmet.push(`report.filed: ${list(report.filed).length}, expected at least ${want.filedAtLeast}`);
@@ -675,8 +723,6 @@ function scorePress(expected: Expected, before: Readonly<Record<string, string>>
     else if (!was.equals(now)) unmet.push(`${path}: protected range changed: ${name}`);
   }
   for (const want of expected.properties ?? []) {
-    if (want.absent?.length === 0) unmet.push(`${want.path}: properties.absent: expected a non-empty list`);
-    if (want.equals && Object.keys(want.equals).length === 0) unmet.push(`${want.path}: properties.equals: expected at least one key`);
     if (!(want.path in after)) { unmet.push(`missing file for properties: ${want.path}`); continue; }
     const props = press.props?.[want.path] ?? {};
     for (const key of want.absent ?? []) if (Object.hasOwn(props, key)) unmet.push(`${want.path}: appProperty ${key} should be absent`);
@@ -685,7 +731,6 @@ function scorePress(expected: Expected, before: Readonly<Record<string, string>>
     }
   }
   if (expected.report?.questionSubjects) {
-    if (expected.report.questionSubjects.length === 0) unmet.push('report.questionSubjects: expected a non-empty list');
     const questions = list(reportOf(lastRun)?.questions);
     for (const want of expected.report.questionSubjects) {
       if (!questions.some((q) => asked(q) && matchesSubject(q, want, press.pathsById ?? {}))) unmet.push(`report.questions: missing ${JSON.stringify(want)} subject`);
@@ -702,6 +747,9 @@ const asked = (q: unknown): q is Question => !!q && typeof q === 'object' && typ
  * the case lists `runs`, every press (earlier ones in `final.runs`, in order) against its own entry.
  */
 export function scoreCase(c: { expected: Expected; folder: Readonly<Record<string, string>> }, final: PressResult & { runs?: readonly PressResult[] }): Score {
+  // Expectations that are not the current schema score nothing: each issue is unmet, at its place (AC1).
+  const shape = ExpectedShape.safeParse(c.expected);
+  if (!shape.success) return { pass: false, unmet: shape.error.issues.map((issue) => `expected${issueAt(issue.path)}: ${issue.message}`) };
   const unmet = scorePress(c.expected, c.folder, final);
   if (c.expected.runs) {
     const runs = [...final.runs ?? [], final];
