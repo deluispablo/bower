@@ -413,7 +413,10 @@ it('orphan-pile-count-data: orphan count merges queued loose work and copied dec
   expect(piles.find((pile) => pile.id === missing.value.pileId)).toMatchObject({ setAside: 'not-arrived' });
   expect(piles.filter((pile) => pile.id === loose.id)).toHaveLength(1);
   expect((await declarations(f)).filter((record) => record.appProperties?.[PROP.recordPile] === loose.id)).toHaveLength(2);
-  expect(await summary(reader)).toEqual({ count: 1, complete: true });
+  // qa-prod-7-F3: this page's own queued send is on its way, never one that did not finish arriving.
+  expect(await summary(reader)).toEqual({ count: 0, complete: true });
+  // Another device, with nothing queued, counts the loose pile once across its two declaration copies.
+  expect(await summary(page(f))).toEqual({ count: 1, complete: true });
 });
 
 function disposition(f: Fixture, declared: { value: Declaration; sha256: string }): Disposition {
