@@ -521,7 +521,9 @@ describe('Q1b Home questions', () => {
       question({ id: 'q-pair-note.other', subject: undefined, text: 'Keep one note for both?' })]);
     const state = card('Write the update?');
     expect(within(state).getByRole('list', { name: "Bower's update" })).toHaveTextContent('The papers arrived.');
-    expect(within(state).getByRole('button', { name: 'Write it' })).toHaveClass('primary');
+    expect(within(state).getByRole('button', { name: 'Keep mine' })).toHaveClass('primary', 'small');
+    expect(within(state).getByRole('button', { name: 'Write it' })).toHaveClass('ghost', 'small');
+    expect(within(state).getByRole('button', { name: 'Write it' })).not.toHaveClass('primary');
     for (const label of [...options.map((o) => o.label), 'Something else…']) {
       expect(within(card()).getByRole('button', { name: label })).toHaveClass('ghost', 'small');
     }
@@ -534,7 +536,8 @@ describe('Q1b Home questions', () => {
     await home([question(), question({ id: 'q-ask-letter', subject: 'letter', text: 'Is this a letter?' })]);
     for (const text of ['Where should these papers go?', 'Is this a letter?']) {
       const row = card(text);
-      expect(within(row).getByRole('button', { name: 'File them' })).toHaveClass('primary', 'small');
+      expect(within(row).getByRole('button', { name: 'File them' })).toHaveClass('ghost', 'small');
+      expect(within(row).getByRole('button', { name: 'File them' })).not.toHaveClass('primary');
       expect(within(row).getByRole('button', { name: 'Leave them' })).toHaveClass('ghost', 'small');
       const other = within(row).getByRole('button', { name: 'Something else…' });
       expect(other).toHaveClass('ghost', 'small');
