@@ -8,22 +8,24 @@
     "absent": [
       "Inbox/*",
       "log.md",
+      ".bower/log.md",
       ".bower/log/2026.md"
     ]
   },
   "unchanged": [
-    "Resources/Gardening/Gardening.md",
-    ".bower/log.md"
+    "Resources/Gardening/Gardening.md"
   ],
   "notes": [
     {
       "path": ".bower/log/2026-10.md",
       "contains": [
+        "# Log\n2026-10-01 | create | Resources/Gardening/Beds / paths.md | Alex compared beds|paths. · op:0123456789ab\n",
         " | ingest | ",
         "Options / alternatives.txt"
       ],
       "excludes": [
-        "Options \\u007c alternatives.txt"
+        "Options \\u007c alternatives.txt",
+        "{\"v\":"
       ]
     }
   ],

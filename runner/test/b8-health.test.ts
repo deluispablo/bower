@@ -1,8 +1,9 @@
 /** B8b reds through production main and the corpus driver: lint and the health note (TL-P4-50 Q3-Q8), ported from b8-log a397198f. */
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
-import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, runWithClaude, seedCase, type CaseRun } from './corpus-run';
+import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { manifests, observe, writes, type Observation } from './b23-hot-observe';
 import { setup as planningSetup, run as planningRun, select, fileIntent, folder, note, report as planningReport } from './b1-planning-support';
@@ -12,6 +13,7 @@ import { hashRecordJson } from '../../src/data/contracts/record-json';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
 import { sha256Hex } from '../../src/data/contracts/hashes';
 import { LedgerExhausted } from '../src/timing';
+import { opKey } from '../../src/data/contracts/op-key';
 
 const HEALTH = 'Bower health.md';
 const CHECKLIST = 'Resources/Gardening/Checklist.md';
@@ -710,5 +712,97 @@ describe('B8b lint and the health note through main', () => {
     const lines = (next.after[HEALTH] ?? '').split('\n');
     expect(lines.some((line) => /broken link/i.test(line) && line.includes('Mulch notice.txt')), 'the next run reflects the applied rename').toBe(true);
     expect(lines.some((line) => line.includes('Seed swap')), 'the refused one still resolves').toBe(false);
+  });
+  it('corpus-fix-b8 AC3: settled recovery and findings refresh report actual health effects', async () => {
+    // A. settled-recovery with its fault setup: the hub edit refused with a conflict before it reaches Drive, and the
+    // month file's create landed with its response lost (F4, F8).
+    const MONTH = '.bower/log/2026-10.md';
+    const HUB = 'Resources/Gardening/Gardening.md';
+    const base = await setup('settled-recovery');
+    const lost = loss(base, MONTH);
+    const around = (fetch: typeof globalThis.fetch) => lost.around(async (input, init = {}) => {
+      if (base.traffic.at(-1)?.path === HUB && ['POST', 'PATCH'].includes(init.method ?? 'GET')) {
+        return new Response(JSON.stringify({ error: { code: 409, message: 'Made-up target refusal', errors: [{ reason: 'conflict' }] } }), { status: 409 });
+      }
+      return fetch(input, init);
+    });
+    const first = await runOnDrive(base.c, base.drive, base.root, { around, claude: caseReplies(base.c.id), pacing }, 1);
+    expect(lost.state.reached, 'main sends the month file').toBe(true);
+    expect(first.wire?.statuses.some((status) => status.phase === 'done'), 'no done before the log is confirmed').toBe(false);
+    expect(first.code).not.toBe(0);
+    expect(writes(base.traffic, HEALTH).map((e) => e.method), 'the health note is created before the log').toEqual(['POST']);
+    lost.state.enabled = false;
+    let calls = 0;
+    const second = await redispatchCase(base.c, first, 2, { around, pacing, claude: async () => { calls++; throw new Error('Recovery must not model.'); } });
+    expect(second.code).toBe(0);
+    expect(scoreCase(base.c, second).unmet, 'expected.json holds under its fault setup').toEqual([]);
+    const sent = base.traffic.length;
+    const third = await redispatchCase(base.c, second, 3, { around, pacing, claude: async () => { calls++; throw new Error('A done run must not model.'); } });
+    expect(third.code).toBe(0);
+    expect(calls, 'neither recovery attempt calls the model').toBe(0);
+    expect(base.traffic.slice(sent).filter((e) => ['POST', 'PATCH', 'DELETE'].includes(e.method)), 'attempt 3 writes nothing').toEqual([]);
+    expect(third.after).toEqual(second.after);
+    expect(writes(base.traffic, HEALTH).map((e) => e.method), 'one health create across the attempts').toEqual(['POST']);
+    expect(report(second)?.created.map((row) => row.path), 'the created health row survives recovery').toEqual(['Resources/Gardening/Mulch notice.md', HEALTH]);
+    expect(report(second)?.updated, 'nothing reports an update').toEqual([]);
+    expect(report(third)).toEqual(report(second));
+    const m = JSON.parse(Object.entries(second.after).find(([path]) => /\/manifest-[^/]+\.json$/.test(path))?.[1] ?? '{}') as ManifestV2;
+    expect(m.operations.some((op) => op.effect.kind === 'edit-text' && op.effect.path === HUB), 'the hub edit was planned').toBe(true);
+    const keys = m.operations.filter((op) => op.effect.kind === 'move' && op.effect.before.name === 'Mulch notice.txt'
+      || op.effect.kind === 'create-text' && op.effect.purpose === 'generated' && op.effect.name === 'Mulch notice.md')
+      .map((op) => opKey(base.root, m.runId, op.operationId));
+    expect(keys).toHaveLength(2);
+    const month = (second.after[MONTH] ?? '').split('\n').filter(Boolean);
+    expect(month[0]).toBe('# Log');
+    expect(month.slice(1).map((line) => line.slice(-12)), 'one line per applied operation, none for the refused hub edit').toEqual(keys);
+    expect(second.after[HUB], 'the hub keeps its seed bytes').toBe(base.c.folder[HUB]);
+    expect(second.after['Resources/Gardening/Mulch notice.txt'], 'the source keeps its inbox bytes').toBe(base.c.inboxFiles['Mulch notice.txt']);
+    expect(writes(base.traffic, HUB), 'the hub edit was sent and refused').not.toEqual([]);
+    expect(writes(base.traffic, 'Resources/Gardening/Mulch notice.md'), 'the companion is created once').toHaveLength(1);
+    expect(base.traffic.filter((e) => ['POST', 'PATCH'].includes(e.method) && e.path.endsWith('/Mulch notice.txt')), 'the source is moved once').toHaveLength(1);
+    expect(writes(base.traffic, MONTH), 'the month file is sent once').toHaveLength(1);
+
+    // B. findings-refresh: a finding bound to its note version, a refresh of only the changed note, then no change (F7).
+    const refresh = await fixture('findings-refresh');
+    expect(scoreCase(refresh, await runScripted(refresh)).unmet, 'every press of findings-refresh meets its expectations').toEqual([]);
+    const fresh = await setup('findings-refresh');
+    const one = await press(fresh);
+    const id = idOf(one, CHECKLIST) ?? '';
+    const version = (await fresh.drive.get(id)).modifiedTime;
+    const stored = (run: CaseRun): unknown => (JSON.parse(run.after['.bower/retrieval.json'] ?? '{}') as { files: Record<string, unknown> }).files[id];
+    const findings = (run: CaseRun): string[] => (run.after[HEALTH] ?? '').split('\n').filter((line) => line.startsWith('- '));
+    expect(stored(one), 'the finding is stored for Checklist\'s id and version').toMatchObject({ path: CHECKLIST, version, lint: { links: ['Missing checklist'] } });
+    expect(findings(one), 'exactly one finding').toEqual(['- Broken link in [[Resources/Gardening/Checklist|Checklist]]: no note is called Missing checklist.']);
+    expect(report(one)?.created.map((row) => row.path)).toEqual([HEALTH]);
+    await fresh.drive.writeText(id, supportedEdit(fresh).text, version);
+    fresh.traffic.length = 0;
+    const two = await press(fresh, 2);
+    expect(fresh.traffic.filter((e) => e.media && e.method === 'GET' && e.path.endsWith('.md') && !e.path.startsWith('.bower/') && e.path !== HEALTH)
+      .map((e) => e.path), 'only the changed note is read').toEqual([CHECKLIST]);
+    expect(stored(two)).toMatchObject({ version: (await fresh.drive.get(id)).modifiedTime, lint: { links: [] } });
+    expect(findings(two), 'the complete finding set is empty').toEqual([]);
+    expect(two.after[HEALTH]).toContain('No findings in the checked notes.');
+    expect(writes(fresh.traffic, HEALTH).map((e) => e.method), 'the same note is updated').toEqual(['PATCH']);
+    expect(idOf(two, HEALTH)).toBe(idOf(one, HEALTH));
+    expect(report(two)?.created).toEqual([]);
+    expect(report(two)?.updated.map((row) => row.path)).toEqual([HEALTH]);
+    const healthId = idOf(two, HEALTH) ?? '';
+    const was = await fresh.drive.get(healthId);
+    fresh.traffic.length = 0;
+    const three = await press(fresh, 3);
+    expect(writes(fresh.traffic, HEALTH), 'no health write').toEqual([]);
+    expect((await fresh.drive.get(healthId)).modifiedTime).toBe(was.modifiedTime);
+    expect(three.after[HEALTH]).toBe(two.after[HEALTH]);
+    expect(three.after[CHECKLIST]).toBe(supportedEdit(fresh).text);
+    expect(report(three)?.created).toEqual([]);
+    expect(report(three)?.updated).toEqual([]);
+    for (const run of [one, two, three]) expect(Object.keys(run.after).filter((path) => path.startsWith('.bower/log')), 'no log line or month file').toEqual([]);
+
+    // C. The rubrics describe what the runs do (R6).
+    const rubric = (name: string): string => readFileSync(resolve(import.meta.dirname, '../../testing/corpus', `c17-b8-${name}`, 'rubric.md'), 'utf8');
+    expect(rubric('settled-recovery'), 'the health note is created, and the fault setup is named').not.toMatch(/updated once|pending|supersedes the prep/i);
+    expect(rubric('settled-recovery')).toContain('The health note is created once, before the log, and its created row survives recovery; nothing reports an update.');
+    expect(rubric('findings-refresh'), 'no open policy or pending proof').not.toMatch(/Q7|pending|no current green claim/i);
+    expect(rubric('findings-refresh')).toContain('The third check has the same evidence: it sends no health write, keeps the health note\'s bytes and version, and');
   });
 });

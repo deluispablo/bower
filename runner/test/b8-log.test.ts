@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
-import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, seedCase, type CaseRun } from './corpus-run';
+import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { setup as planningSetup, run as planningRun, select, fileIntent, folder, note, report } from './b1-planning-support';
 import { observe, writes, type Observation } from './b23-hot-observe';
@@ -12,7 +12,7 @@ import { MANIFEST_V2_LIMIT, parseRunManifestV2 } from '../../src/data/contracts/
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
 import { RUNNER_WRITES } from '../../src/data/vault/layout';
-import { formatLogEvent } from '../../src/data/contracts/log-format';
+import { formatLogEvent, readLog } from '../../src/data/contracts/log-format';
 import { appendLog } from '../src/log';
 
 const MONTH = '.bower/log/2026-10.md';
@@ -39,6 +39,8 @@ const forwardKeys = (base: { root: string }, m: ManifestV2) => m.operations.filt
   || op.effect.kind === 'edit-text' && op.effect.path === HUB).map((op) => opKey(base.root, m.runId, op.operationId));
 /** An existing month: prose, CRLF, a line with another run's key, and no final newline (R11). */
 const SEEDED = '# Log\r\nAlex wrote this aside.\r\n2026-10-01 | create | Resources/Gardening/Old.md | Alex kept an old note. · op:0123456789ab';
+/** bounded-encoding's seeded month: one earlier line from another run, with a sanitized name and a bare pipe. */
+const SEED = '# Log\n2026-10-01 | create | Resources/Gardening/Beds / paths.md | Alex compared beds|paths. · op:0123456789ab\n';
 const filing = (extra: Record<string, unknown> = {}) => ({ ...empty, ...extra, things: [{ fileId: '$file:Mulch notice.txt',
   to: 'Resources/Gardening', name: 'Mulch notice.txt', note: { name: 'Mulch notice.md', summary: 'Mulch collection opens at the amber gate.',
     body: 'Alex can collect mulch from the amber gate at the Saltmere garden.\n\nSee also [[Gardening]]: the mulch is for the same garden.',
@@ -187,14 +189,14 @@ describe('B8a monthly log through main', () => {
     expect((await parseRunManifestV2(new TextEncoder().encode(JSON.stringify(m)), run.root, RUNNER_WRITES)).ok,
       'a declared index path cannot grant a personal note id').toBe(false);
   });
-  it('AC5 control: root personal log bytes and the legacy log stay untouched', async () => {
+  it('AC5 control: root personal log bytes stay untouched and no annual log is made', async () => {
     const c = await fixture('bounded-encoding');
     const personal = 'Alex keeps this personal log.\r\n';
     c.folder['log.md'] = personal;
     const run = await runScripted(c);
     expect(run.code).toBe(0);
     expect(run.after['log.md']).toBe(personal);
-    expect(run.after['.bower/log.md']).toBe(c.folder['.bower/log.md']);
+    expect(run.after['.bower/log.md'], 'no annual log is made').toBeUndefined();
   });
   it('AC5 control: the unmodified declared manifest remains valid', async () => {
     const run = await runScripted(await fixture('report-only-grammar'));
@@ -285,8 +287,8 @@ describe('B8a monthly log through main', () => {
     expect(text).not.toContain('Options | alternatives.txt');
     expect(text).not.toContain('\\u007c');
     for (const line of text.split('\n')) expect(new TextEncoder().encode(`${line}\n`).length).toBeLessThanOrEqual(4096);
-    expect(events(run).map((line) => line.split(' | ')[1]).sort()).toEqual(['create', 'ingest']);
-    expect(run.after['.bower/log.md'], 'the legacy log keeps its bytes').toBe(c.folder['.bower/log.md']);
+    expect(events(run).map((line) => line.split(' | ')[1]), 'the seeded line, then the ingest and the create').toEqual(['create', 'ingest', 'create']);
+    expect(run.after['.bower/log.md'], 'no annual log is made').toBeUndefined();
   });
 
   it('AC2 b8-month-text-never-frozen', async () => {
@@ -460,5 +462,26 @@ describe('B8a monthly log through main', () => {
     expect(r.code).toBe(0);
     expect(JSON.parse(r.after['.bower/tags.json'] ?? '{"tags":[]}')).toMatchObject({ tags: ['rainwater'] });
     expect(r.after[NOTICE]).toMatch(/rainwater/);
+  });
+  it('corpus-fix-b8 AC1: monthly encoding uses minimal delimiter-rich evidence', async () => {
+    const c = await fixture('bounded-encoding');
+    expect(Object.keys(c.folder).filter((path) => path.startsWith('.bower/log')), 'one seeded month and no annual log').toEqual([MONTH]);
+    expect(c.folder[MONTH]).toBe(SEED);
+    const run = await runScripted(c);
+    expect(run.code).toBe(0);
+    expect(scoreCase(c, run).unmet, 'bounded-encoding meets its expectations').toEqual([]);
+    const text = run.after[MONTH] ?? '';
+    expect(text.startsWith(SEED), 'every seeded byte is kept').toBe(true);
+    const m = manifest(run);
+    const keys = m.operations.filter((op) => op.effect.kind === 'move' && op.effect.before.name === 'Options | alternatives.txt'
+      || op.effect.kind === 'create-text' && op.effect.purpose === 'generated' && op.effect.name === 'Mulch options.md')
+      .map((op) => opKey(run.root, m.runId, op.operationId));
+    expect(keys).toHaveLength(2);
+    expect(text.slice(SEED.length).split('\n').filter(Boolean).map((line) => line.split(' | ')), 'the ingest, then the create: four readable fields each').toEqual([
+      ['2026-10-07', 'ingest', 'Resources/Gardening/Mulch options.txt', `From the inbox: Options / alternatives.txt · op:${keys[0] ?? ''}`],
+      ['2026-10-07', 'create', 'Resources/Gardening/Mulch options.md', `Alex compared mulch options. · op:${keys[1] ?? ''}`],
+    ]);
+    expect(readLog(text).keys, 'the seeded key, then this run\'s keys').toEqual(['0123456789ab', ...keys]);
+    expect(Object.keys(run.after).filter((path) => path.startsWith('.bower/log')), 'no annual log and no other month').toEqual([MONTH]);
   });
 });

@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "Recovered log and health reflect only settled writes",
   "covers": "model",
-  "source": "new (TL-P4-39 B8, F3/F14/U3; TL-P4-41 to TL-P4-48; scripted proof pending)",
+  "source": "new (TL-P4-39 B8, F3/F14/U3; TL-P4-41 to TL-P4-50); runs through main in the B8 runner tests",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
