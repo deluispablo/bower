@@ -4,7 +4,7 @@ The owner OKed this on 2026-10-10: the "Refined: least change" page of the "Bowe
 
 ## Q-UI-1. The question card gains options and "Something else…" (one home: Home's `Questions`, Home.tsx)
 
-- **Unchanged:** text, the `about` link and "Bower's update". A yes/no question keeps today's row: primary `yes`, ghost `no`.
+- **Unchanged:** text, the `about` link and "Bower's update". A yes/no question keeps today's row: `yes`, then `no`. The answer that leaves notes as they are is filled (primary), the other outlined (ghost); when Bower does not know which, both are outlined (ux-safe-question-actions).
 - **Options** (`Question.options`, at most 4): they replace the yes/no row with a vertical stack of `Button size="sm" variant="ghost"` at full width, left-aligned, label only (for example "Projects / Job hunt"). No option is primary. A gap of 8 px, and 10 px above, as `.question .row2`.
 - **"Something else…":** the last button of the stack, the same ghost sm, with its label in `--brand-line`. It shows only on a question about an inbox thing or pile, and never on state or pair questions.
 - **On a yes/no question** about an inbox thing or pile (owner OK 2026-10-10): a full-width ghost sm "Something else…" (label in `--brand-line`) sits 8 px below the yes/no row. It opens the same text box in place, and Cancel brings back the yes/no row.

@@ -4,7 +4,7 @@ import { report, undoToast } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
 import { answered, answerToast } from './answer-words';
 import { answerQuestion } from '@/data/answer-loop';
-import { askingKey, isQuestionSnapshot, subjectOf, type QuestionAnswer } from '@/data/contracts/questions';
+import { askingKey, isQuestionSnapshot, noChangeAnswer, subjectOf, type QuestionAnswer } from '@/data/contracts/questions';
 import { usePrefs } from '@/app/prefs';
 import { useStartRun } from '@/features/tidy/start-run';
 import { pileName } from '@/data/piles';
@@ -424,6 +424,7 @@ function QuestionCard({ question: q, link, inSheet, answer }: {
   const tooLong = text.length > 1000;
   const options = q.options?.length ? q.options : undefined;
   const ownWords = subjectOf(q).kind === 'inbox';
+  const keep = noChangeAnswer(q);
   const send = async (value: QuestionAnswer, label: string): Promise<void> => {
     if (working.current) return;
     working.current = true;
@@ -466,8 +467,8 @@ function QuestionCard({ question: q, link, inSheet, answer }: {
                 onClick={() => void send({ option: option.id }, option.label)}>{option.label}</Button>
             )) : (
               <>
-                <Button size="sm" disabled={busy} onClick={() => void send(true, q.yes)}>{q.yes}</Button>
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => void send(false, q.no)}>{q.no}</Button>
+                <Button size="sm" variant={keep === true ? 'primary' : 'ghost'} disabled={busy} onClick={() => void send(true, q.yes)}>{q.yes}</Button>
+                <Button size="sm" variant={keep === false ? 'primary' : 'ghost'} disabled={busy} onClick={() => void send(false, q.no)}>{q.no}</Button>
               </>
             )}
           </div>

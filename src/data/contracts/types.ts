@@ -173,6 +173,12 @@ export interface Question {
   /** A large request waiting for its yes (`q-request-<record id>`): the part a yes applies, never supplied by an answer. */
   request?: RequestPart;
   options?: Pick<QuestionOption, 'id' | 'label'>[];
+  /**
+   * The yes/no answer that changes no note (true: `yes`, false: `no`), when the asker knows it (ux-safe-question-actions).
+   * Absent on questions from before and on any question whose asker does not know: neither button is filled. Read only
+   * through `noChangeAnswer` (contracts/questions.ts).
+   */
+  noChange?: boolean;
   /** Pile words at asking, so an edit resets the asking. */
   words?: string;
   id: string;

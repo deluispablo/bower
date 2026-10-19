@@ -309,6 +309,7 @@ export function seedQuestions(now: number): Question[] {
       no: 'No, keep both',
       about: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md',
       askedAt: now - 2 * DAY,
+      noChange: false,
     },
     {
       id: 'q2',
@@ -316,6 +317,7 @@ export function seedQuestions(now: number): Question[] {
       yes: 'Keep both',
       no: 'Keep one',
       askedAt: now - 2 * DAY,
+      noChange: true,
     },
   ];
 }

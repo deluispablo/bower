@@ -28,8 +28,8 @@ export interface QuestionOption { id: string; label: string; action: { kind: 'fi
 export type PublicQuestion = Question;
 
 export function publicQuestion(q: Question): PublicQuestion {
-  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options, proposal, request } = q;
-  return { id, text, yes, no, askedAt,
+  const { id, text, yes, no, askedAt, about, subject, hash, state, shown, words, options, proposal, request, noChange } = q;
+  return { id, text, yes, no, askedAt, ...(noChange === undefined ? {} : { noChange }),
     ...(about === undefined ? {} : { about }), ...(subject === undefined ? {} : { subject }),
     ...(hash === undefined ? {} : { hash }), ...(state === undefined ? {} : { state }),
     ...(shown === undefined ? {} : { shown: { lines: [...shown.lines], md5: shown.md5,
@@ -75,7 +75,8 @@ export function isQuestionSnapshot(value: unknown): value is PublicQuestion[] {
     && Object.keys(v).every((k) => ['id', 'label'].includes(k))
     && typeof v.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.id) && text(v.label, 40);
   const card = (v: unknown): v is PublicQuestion => object(v)
-    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options', 'proposal', 'request'].includes(k))
+    && Object.keys(v).every((k) => ['id', 'text', 'yes', 'no', 'askedAt', 'about', 'subject', 'hash', 'state', 'shown', 'words', 'options', 'proposal', 'request', 'noChange'].includes(k))
+    && (v.noChange === undefined || typeof v.noChange === 'boolean')
     && text(v.id) && text(v.text, 200) && text(v.yes, 40) && text(v.no, 40)
     && typeof v.askedAt === 'number' && Number.isSafeInteger(v.askedAt) && v.askedAt >= 0
     && ['about', 'subject', 'hash', 'state'].every((k) => v[k] === undefined || text(v[k]))
@@ -270,6 +271,19 @@ export function subjectOf(q: Asked): Subject {
   if (id !== undefined) return { kind: 'inbox', id, ...(q.hash !== undefined ? { hash: q.hash } : {}) };
   const named = namedPairOf(q.text);
   return named ? { kind: 'pair', by: 'name', notes: named } : { kind: 'folder' };
+}
+
+/**
+ * The yes/no answer that leaves every note as it is, or undefined when Bower does not know it (ux-safe-question-actions):
+ * - a question with options has none (a choice is never filled);
+ * - a pair, state, request or proposal question: `false`, from its subject (answer-loop: no keeps both notes, keeps
+ *   your current state, applies no request part, grants no proposal); its stored `noChange` is not read;
+ * - any other (a thing or pile in the inbox, the folder): its stored `noChange`, else undefined.
+ */
+export function noChangeAnswer(q: Question): boolean | undefined {
+  if (q.options?.length) return undefined;
+  const kind = subjectOf(q).kind;
+  return kind === 'inbox' || kind === 'folder' ? q.noChange : false;
 }
 
 /** The key one open question per subject goes by: the pile's or thing's id in the inbox; none for any other subject. */

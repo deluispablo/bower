@@ -197,7 +197,7 @@ for (const source of ['demo', 'fake'] as const) {
       const yes = card.getByRole('button', { name: 'File them', exact: true });
       const no = card.getByRole('button', { name: 'Leave them', exact: true });
       const other = card.getByRole('button', { name: 'Something else…', exact: true });
-      await expect(yes).toHaveClass(/primary/); await expect(no).toHaveClass(/ghost/);
+      await expect(yes).toHaveClass(/ghost/); await expect(yes).not.toHaveClass(/primary/); await expect(no).toHaveClass(/ghost/);
       await expect(other).toHaveClass(/ghost/); await nativeTargets(card);
       const y = await yes.boundingBox(); const n = await no.boundingBox(); const o = await other.boundingBox();
       expect(y).not.toBeNull(); expect(n).not.toBeNull(); expect(o).not.toBeNull();
