@@ -5,7 +5,7 @@
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '@/app/ui-store';
 import { DemoWorld } from '@/data/demo/world';
 import type { TimeScale } from '@/data/demo/scenario';
@@ -21,12 +21,14 @@ import { useFirstTidyFailure } from './useFirstTidy';
 const NAME = 'Your first tidy-up';
 const worlds: DemoWorld[] = [];
 
+beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); });
 afterEach(() => {
   cleanup();
   worlds.splice(0).forEach((w) => w.dispose());
   useUi.setState({ tidyOpen: false, tidyReportRunId: null, replayRunId: null });
   useFirstTidyFailure.setState({ failure: null });
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 type Scenario = 'empty' | 'default' | 'back' | 'running' | 'fail-run';
@@ -165,6 +167,8 @@ describe('ux-first-tidy-checklist: the first tidy-up on Home', () => {
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(await within(dialog).findByRole('button', { name: /^Tidy up \d+ things$/ }));
     expect(await within(dialog).findByRole('button', { name: 'Close' })).toBeVisible();
+    // Stands in for a loaded CI shard: 200 ms more after Close shows, past the scene's 150 ms step timer.
+    await act(async () => { for (let i = 0; i < 2; i++) await new Promise((r) => { setTimeout(r, 99); }); });
     await settle();
     expect(mark).not.toHaveBeenCalledWith('reviewed');
     // The open sheet hides the page from the accessibility tree; the checklist is still there under it.

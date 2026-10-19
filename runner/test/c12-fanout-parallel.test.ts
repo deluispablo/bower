@@ -89,9 +89,11 @@ describe('four groups at once (c12-fanout-parallel)', () => {
         stage = 2;
       }
       return open;
-    });
+    }, { open: [4] });
     const r = await run(b, [selection, intent], { beforeReply: async (turn, frame) => {
       if (frame.value.selection !== undefined) started++;
+      // Stands in for a slow mkdir on a loaded pool: the 2nd writing call reaches the gate 500 event-loop turns late.
+      if (frame.value.selection !== undefined && started === 2) for (let i = 0; i < 500; i++) await new Promise<void>((resolve) => { setImmediate(resolve); });
       await held(turn, frame);
     } });
     expect(r.code).toBe(0);
@@ -110,6 +112,8 @@ describe('four groups at once (c12-fanout-parallel)', () => {
   it('AC2 c12-fanout-parallel-time: a 10 s selection then two parallel 10 s groups take about 20 s; model= is the sum of the reported durations', async () => {
     const b = await made({ Plum: 6, Fern: 3 }); await seedState(b);
     const to = { Plum: X, Fern: Y };
+    // The two overlapping writing calls take 10 s of the injected clock once.
+    const clocked = gate((open) => { vi.advanceTimersByTime(10_000); return open; }, { open: [2] });
     const r = await run(b, [placing(b, to), filing(b, to)], { beforeReply: async (turn, frame) => {
       if (turn === 1) { vi.advanceTimersByTime(10_000); return; }
       await clocked(turn, frame);
@@ -126,8 +130,6 @@ describe('four groups at once (c12-fanout-parallel)', () => {
     expect([...run1.matchAll(/\b\w+=(-?\d+)/g)].filter((m) => Number(m[1]) < 0), 'no phase is negative').toEqual([]);
   }, 60_000);
 });
-/** Each batch of overlapping writing calls takes 10 s of the injected clock once. */
-const clocked = gate((open) => { vi.advanceTimersByTime(10_000); return open; });
 
 describe('one plan whatever order replies come in (c12-fanout-parallel, guard)', () => {
   it('AC3 c12-fanout-parallel-order: replies released latest first give byte-identical operations, filed in admission order; a redispatch makes no model call', async () => {
@@ -135,7 +137,7 @@ describe('one plan whatever order replies come in (c12-fanout-parallel, guard)',
     const to = { Plum: X, Fern: Y, Sage: Z };
     const tidy = async (pick: (open: readonly Held[]) => readonly Held[]) => {
       const b = await made(piles); await seedState(b);
-      return { b, r: await run(b, [placing(b, to), filing(b, to)], { beforeReply: gate(pick) }) };
+      return { b, r: await run(b, [placing(b, to), filing(b, to)], { beforeReply: gate(pick, { open: [3] }) }) };
     };
     const ordered = await tidy(inOrder);
     const reversed = await tidy(latestFirst);
@@ -158,7 +160,7 @@ describe('one plan whatever order replies come in (c12-fanout-parallel, guard)',
     const tidy = async (pick: (open: readonly Held[]) => readonly Held[]) => {
       const b = await made(piles); await seedState(b);
       const replies: unknown[] = [placing(b, to), {}];
-      const held = gate(pick);
+      const held = gate(pick, { open: [3] });
       const r = await run(b, replies, { narrow: false, beforeReply: async (turn, frame) => {
         if (turn === 1) return;
         await held(turn, frame);
@@ -184,7 +186,7 @@ describe('a stop and a time-out (c12-fanout-parallel)', () => {
   it('AC4 c12-fanout-parallel-stop: a plain error in group 1 stops groups 5 and 6 from starting; the started groups settle; the run fails with it', async () => {
     const { b, selection, intent, group } = await topics(48);
     const fault = new Error('made-up spawn fault');
-    const held = gate((open) => { const one = open.find((h) => group(h.frame) === 0); return one ? [one] : open; });
+    const held = gate((open) => { const one = open.find((h) => group(h.frame) === 0); return one ? [one] : open; }, { open: [4] });
     const r = await run(b, [selection, intent], { beforeReply: async (turn, frame) => {
       await held(turn, frame);
       if (frame.value.selection !== undefined && group(frame) === 0) throw fault;
@@ -201,7 +203,7 @@ describe('a stop and a time-out (c12-fanout-parallel)', () => {
     const r = await run(b, [selection, intent], { beforeReply: gate((open) => {
       if (!passed && open[0]) { passed = true; vi.advanceTimersByTime(open[0].frame.call.timeoutMs); }
       return open;
-    }) });
+    }, { open: [4] }) });
     expect(writing(r).map(group).sort(), 'the 5th group gets no call').toEqual([0, 1, 2, 3]);
     waitsForNextRun(r, piles.slice(32), 32);
   }, 180_000);
@@ -212,7 +214,7 @@ describe('retries counted per group (c12-fanout-parallel)', () => {
     const b = await made({ Plum: 6, Fern: 3 }); await seedState(b);
     const to = { Plum: X, Fern: Y };
     const replies: unknown[] = [placing(b, to), {}];
-    const held = gate(inOrder);
+    const held = gate(inOrder, { open: [2] });
     const r = await run(b, replies, { narrow: false, beforeReply: async (turn, frame) => {
       if (turn === 1) return;
       await held(turn, frame);
@@ -247,7 +249,7 @@ describe('a config folder per call (c12-fanout-parallel)', () => {
     const to = { Plum: X, Fern: Y };
     const replies: unknown[] = [placing(b, to), {}];
     const at: Array<{ home: string; config: string; cwd: string; there: boolean }> = [];
-    const held = gate(inOrder);
+    const held = gate(inOrder, { open: [2] });
     const r = await run(b, replies, { narrow: false, beforeReply: async (turn, frame) => {
       const home = frame.call.env.HOME ?? '';
       at.push({ home, config: frame.call.env.CLAUDE_CONFIG_DIR ?? '', cwd: frame.call.cwd, there: existsSync(home) });
