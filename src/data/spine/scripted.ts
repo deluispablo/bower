@@ -1267,9 +1267,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     nextTable = { ...nextTable, rows: nextTable.rows.map((old) => old.id === row.id ? next : old) };
     tableRecords.add(v.requestId);
   }
-  // A request a checked reply installs views for (B11c) settles by its views-set edits, never by the generic handler.
+  // A request a checked reply installs or suggests views for (B11c, B11f) settles by them, never by the generic handler.
   const viewRequests = new Set(lines.filter((l) => l.rec.kind === 'request' && !columnRequests.has(l.rec.id)
-    && (opts.decisions.views ?? []).some((v) => v.requestId === l.rec.id)).map((l) => l.rec.id));
+    && [...opts.decisions.views ?? [], ...opts.decisions.suggestions?.views ?? []].some((v) => v.requestId === l.rec.id)).map((l) => l.rec.id));
   // Maps requests answer (B12): settled by their own edits, never by the generic handler; one whose membership is not
   // known waits whole (ruling 3).
   const maps = (opts.decisions.maps ?? []).filter((m) => !columnRequests.has(m.requestId) && !viewRequests.has(m.requestId)
