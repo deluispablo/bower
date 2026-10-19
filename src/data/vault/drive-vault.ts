@@ -140,6 +140,8 @@ export class DriveVault implements VaultSource {
   private fullDeclarations: {
     ix: VaultIndex;
     files: readonly DriveFile[];
+    /** This page's own sends when the snapshot was taken, sorted: never counted as not arrived (read-your-writes). */
+    own: readonly string[];
     read: Promise<{ declarations: Array<LooseDeclaration & { missingLoose: boolean }>; summary: { count: number; complete: boolean } }> | null;
     binned: Map<string, ReturnType<DriveApi['binnedByItem']>>;
   } | null = null;
@@ -179,6 +181,8 @@ export class DriveVault implements VaultSource {
   private bin = new Map<string, { file: DriveFile | null; change: string | null; top?: string; late?: DriveFile[]; pending?: Upload; pileKey?: string; declarations?: DriveFile[]; back?: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
+  /** Piles whose declaration this page is writing while their folder or upload entry is not in place yet. */
+  private adding = new Set<string>();
   private sendingPiles = new Set<string>();
   private making = new Map<string, Promise<string>>();
   /** Answers being recorded on this page, by question: a second tap waits for the first (TL-P4-08 addendum 8). */
@@ -831,6 +835,7 @@ export class DriveVault implements VaultSource {
         throw e;
       }))).filter((h) => keys.includes(h.file.appProperties?.[PROP.item] ?? ''));
       for (const declaration of found.declarations) {
+        if (kept.own.includes(declaration.declaration.pileId)) continue;
         try {
           const state = await orphanState(declaration, inbox, files, (id) => this.readBytesOnce(id),
             (f) => this.digestOf(f), binned, this.dispositionCache, removed);
@@ -858,9 +863,10 @@ export class DriveVault implements VaultSource {
   /** Row accounting and the summary share the current full-read snapshot, invalidated by the same evidence. */
   private declarationSnapshot(ix: VaultIndex): NonNullable<DriveVault['fullDeclarations']> {
     const evidence = [...this.known(ix), ...ix.journalFiles()];
+    const own = [...new Set([...this.adding, ...this.uploads.keys(), ...this.queuedItems().map((i) => i.pileId)])].sort();
     const kept = this.fullDeclarations;
-    if (kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i])) return kept;
-    return (this.fullDeclarations = { ix, files: evidence, read: null, binned: new Map() });
+    if (kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i]) && own.join() === kept.own.join()) return kept;
+    return (this.fullDeclarations = { ix, files: evidence, own, read: null, binned: new Map() });
   }
 
   /** Sends a removed pile's declaration copies to the Bin, remembering each one in case the Remove stops halfway. */
@@ -1137,9 +1143,19 @@ export class DriveVault implements VaultSource {
       throw new BowerError('unknown', 'Bower could not save this pile. Try again.');
     }
     const at = await this.systemFolder(SYSTEM.piles);
-    const written = await makeText(this.drive, this.drive, { parent: at, name: record.name, props: recordStamp(declaration.pileId, name === null ? 'loose' : 'folder') }, record.text);
-    this.checkCurrent();
-    (await this.index()).put(written);
+    // This page's own send from before its record exists; a save that fails here is never hidden.
+    this.adding.add(declaration.pileId);
+    let written: DriveFile | null = null;
+    try {
+      written = await makeText(this.drive, this.drive, { parent: at, name: record.name, props: recordStamp(declaration.pileId, name === null ? 'loose' : 'folder') }, record.text);
+      this.checkCurrent();
+      (await this.index()).put(written);
+    } catch (e) {
+      this.adding.delete(declaration.pileId);
+      // A written declaration with nothing behind it is not arrived: its readers look again.
+      if (written) this.emit();
+      throw e;
+    }
     return { pileId: declaration.pileId, declarationId: declaration.declarationId, contextKey, keys: members.map((m) => m.memberKey), hashes: members.map((m) => m.content.sha256) };
   }
 
@@ -1155,54 +1171,66 @@ export class DriveVault implements VaultSource {
     let path: string | undefined;
     const lone = !pileHasFolder({ id, text, createdAt, items: input.items.map((it, i) => ({ ...it, id: String(i) })) });
     let declared: Declared | null = null;
-    if (!lone) {
-      path = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ id, text, createdAt, items: [] })));
-      // A declared pile's declaration comes first: a failed write leaves nothing to send.
-      if (this.declarePiles) declared = await this.declare(input, text, inbox, nameOf(path), createdAt);
-      const folder = await makeFolder(this.drive, this.drive, { parent: inbox, name: nameOf(path), ...(declared ? { props: { [PROP.pile]: declared.pileId, [PROP.declaration]: declared.declarationId } } : {}) });
-      this.checkCurrent();
-      ix.put(folder);
-      id = declared?.pileId ?? folder.id;
-      parent = folder.id;
-      if (text) {
+    try {
+      if (!lone) {
+        path = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ id, text, createdAt, items: [] })));
+        // A declared pile's declaration comes first: a failed write leaves nothing to send.
+        if (this.declarePiles) declared = await this.declare(input, text, inbox, nameOf(path), createdAt);
         try {
-          ix.put(await makeText(this.drive, this.drive, { parent: folder.id, name: PILE_NOTE, ...(declared ? { props: { [PROP.item]: declared.contextKey } } : {}) }, text));
-        } catch (e) {
-          if (!this.current()) throw e;
-          // Half a pile helps nobody: its empty folder goes to the Bin, and you can save again.
-          await this.toBin(folder).catch((err: unknown) => console.error(err));
-          ix.drop(folder.id);
-          throw e;
+          const folder = await makeFolder(this.drive, this.drive, { parent: inbox, name: nameOf(path), ...(declared ? { props: { [PROP.pile]: declared.pileId, [PROP.declaration]: declared.declarationId } } : {}) });
+          this.checkCurrent();
+          ix.put(folder);
+          id = declared?.pileId ?? folder.id;
+          parent = folder.id;
+          if (text) {
+            try {
+              ix.put(await makeText(this.drive, this.drive, { parent: folder.id, name: PILE_NOTE, ...(declared ? { props: { [PROP.item]: declared.contextKey } } : {}) }, text));
+            } catch (e) {
+              if (!this.current()) throw e;
+              // Half a pile helps nobody: its empty folder goes to the Bin, and you can save again.
+              await this.toBin(folder).catch((err: unknown) => console.error(err));
+              ix.drop(folder.id);
+              throw e;
+            }
+          }
+        } finally {
+          // From here its folder, or its upload entry below with no await between, says it is on its way.
+          if (declared) this.adding.delete(declared.pileId);
         }
+      } else if (this.declarePiles && input.items.length === 1) {
+        // A loose single thing is declared too, before it is sent, so any device sees it until it arrives.
+        declared = await this.declare(input, '', inbox, null, createdAt);
+        id = declared.pileId;
       }
-    } else if (this.declarePiles && input.items.length === 1) {
-      // A loose single thing is declared too, before it is sent, so any device sees it until it arrives.
-      declared = await this.declare(input, '', inbox, null, createdAt);
-      id = declared.pileId;
-    }
-    const entries: Sending[] = input.items.map((it, i) => ({
-      key: declared?.keys[i] ?? `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
-      item: { id: declared?.keys[i] ?? `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
-      ...(it.body ? { body: it.body, forgetVersion: version } : {}),
-      ...(it.url ? { url: it.url } : {}),
-      ...(it.body && declared?.hashes[i] ? { sha256: declared.hashes[i] } : {}),
-    }));
-    if (entries.length) {
-      const u: Upload = { lone, createdAt, parent, entries, ...(declared ? { declaration: declared.declarationId } : {}) };
-      this.uploads.set(id, u);
-      // Queue.add resolves after the device transaction (or its explicit memory fallback), never after transfer.
-      // Stage every accepted Blob before reporting saved, even while the first transfer is held.
-      for (const e of entries) if (e.body) {
-        await this.startQueue();
-        this.checkCurrent();
-        const { name, props } = this.sendTarget(ix, id, u, e);
-        await this.stageQueued(id, u, e, e.body, name, props, version);
-        this.checkCurrent();
+      const entries: Sending[] = input.items.map((it, i) => ({
+        key: declared?.keys[i] ?? `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
+        item: { id: declared?.keys[i] ?? `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
+        ...(it.body ? { body: it.body, forgetVersion: version } : {}),
+        ...(it.url ? { url: it.url } : {}),
+        ...(it.body && declared?.hashes[i] ? { sha256: declared.hashes[i] } : {}),
+      }));
+      if (entries.length) {
+        const u: Upload = { lone, createdAt, parent, entries, ...(declared ? { declaration: declared.declarationId } : {}) };
+        this.uploads.set(id, u);
+        if (declared) this.adding.delete(declared.pileId);
+        // Queue.add resolves after the device transaction (or its explicit memory fallback), never after transfer.
+        // Stage every accepted Blob before reporting saved, even while the first transfer is held.
+        for (const e of entries) if (e.body) {
+          await this.startQueue();
+          this.checkCurrent();
+          const { name, props } = this.sendTarget(ix, id, u, e);
+          await this.stageQueued(id, u, e, e.body, name, props, version);
+          this.checkCurrent();
+        }
+        this.track(this.send(id, version));
       }
-      this.track(this.send(id, version));
+      this.emit();
+      return { id, text, createdAt, items: entries.map((e) => ({ ...e.item })), ...(path ? { path } : {}) };
+    } catch (e) {
+      // A written declaration whose save failed is counted again: Home and the Inbox look again.
+      if (declared) this.emit();
+      throw e;
     }
-    this.emit();
-    return { id, text, createdAt, items: entries.map((e) => ({ ...e.item })), ...(path ? { path } : {}) };
   }
 
   async removePile(id: string): Promise<void> {
