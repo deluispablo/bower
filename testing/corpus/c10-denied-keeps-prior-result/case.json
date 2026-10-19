@@ -3,7 +3,7 @@
   "capability": "C10",
   "title": "Web permission off with a saved result already present",
   "covers": "model",
-  "source": "new (C10 preparation; deterministic proposals pending full lookup harness proof)",
+  "source": "new (C10 requirement; unsupported today: Bower has no web lookup)",
   "scope": "instructions",
   "allowWeb": false,
   "inbox": [],

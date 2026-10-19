@@ -3,17 +3,10 @@
   "capability": "C10",
   "title": "A current result with its exact source and dates",
   "covers": "model",
-  "source": "new (C10 preparation; deterministic proposals pending full lookup harness proof)",
-  "scope": "all",
+  "source": "new (C10 requirement; unsupported today: Bower has no web lookup)",
+  "scope": "instructions",
   "allowWeb": true,
-  "inbox": [
-    {
-      "line": "",
-      "files": [
-        "Council tax web result.txt"
-      ]
-    }
-  ],
+  "inbox": [],
   "journal": [
     {
       "kind": "request",

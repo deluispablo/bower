@@ -3,7 +3,7 @@
   "capability": "C13",
   "title": "Undo a manifest move and an unchanged generated note",
   "covers": "model",
-  "source": "new (C13 preparation; snapshot only, scripted manifest lifecycle proof pending)",
+  "source": "new (C13 requirement; unsupported today: Undo of a whole tidy-up was dropped)",
   "scope": "undo",
   "allowWeb": false,
   "inbox": [],

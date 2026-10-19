@@ -35,13 +35,13 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c08-revise-keeps-personal-text | C08 | model | new (C08 prep; same-document revision, personal text and history) |
 | c09-burst-pipe | C09 | scripted | new (C09; a made-up policy answered from its original and its note) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
-| c10-fresh-result-cited | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
-| c10-stale-result-withheld | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
-| c10-denied-keeps-prior-result | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
+| c10-fresh-result-cited | C10 | model | new (C10 requirement; unsupported today: Bower has no web lookup) |
+| c10-stale-result-withheld | C10 | model | new (C10 requirement; unsupported today: Bower has no web lookup) |
+| c10-denied-keeps-prior-result | C10 | model | new (C10 requirement; unsupported today: Bower has no web lookup) |
 | c09-original-over-summary | C09 | scripted | new (C09 prep: original over stale summary) |
 | c09-two-source-answer | C09 | scripted | new (C09 prep: two sources, exact identities) |
 | c09-not-in-sources | C09 | scripted | new (C09 prep: honest missing evidence) |
-| c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
+| c10-lookup-fails | C10 | model | new (C10 requirement; unsupported today: Bower has no web lookup) |
 | c11-ambiguous-stays | C11 | scripted | new (TL-P4-08 point 1: an unclear pile stays in the inbox with a question) |
 | c11-document-is-not-policy | C11 | scripted | p2-journey:C11 (no policy change from a document) |
 | c11-rule-worded | C11 | scripted | p2-journey:C11 (rules) |
@@ -54,9 +54,9 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c12-text-budget-truthful | C12 | model | new (C12 lifecycle; the test driver injects the faults) |
 | c12-group-waits | C12 | model | new (C12 lifecycle; the test driver refuses the second group's reply) |
 | c12-admission-waits | C12 | model | new (C12 lifecycle; the test shrinks the admission estimate to 2) |
-| c13-manifest-move-and-create | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
-| c13-manifest-partial-edited-note | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
-| c13-manifest-state-with-personal-edit | C13 | model | new (C13 prep; scripted manifest lifecycle proof pending) |
+| c13-manifest-move-and-create | C13 | model | new (C13 requirement; unsupported today: Undo of a whole tidy-up was dropped) |
+| c13-manifest-partial-edited-note | C13 | model | new (C13 requirement; unsupported today: Undo of a whole tidy-up was dropped) |
+| c13-manifest-state-with-personal-edit | C13 | model | new (C13 requirement; unsupported today: Undo of a whole tidy-up was dropped) |
 | c15-short-pdfs-read-whole | C15 | model | new |
 | c15-image-only-pdf-asked | C15 | model | new (made-up one-page image-only PDF with no text layer, rebuilt 2026-10-08) |
 | c15-current-admitted-evidence | C15 | model | new (runner extraction of admitted source bytes) |
@@ -76,6 +76,13 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | b23-hot-question-answer | C17 / B3 | model | TL-P4-39 F3; reused real generated question → app answer → hot settlement |
 | b23-summary-words | C17 / B2 | model | TL-P4-39 B2; multiline words body and quoted scalar summary |
 | b23-hot-evidence-only | C17 / B3 | model | TL-P4-39 §1.1/F7; instruction-only rebuild excludes unsupported prior-hot claims |
+
+Eight cases record requirements Bower does not support today, so they are not run and no score of them is a result.
+Each rubric starts with "Unsupported today" and its reason:
+c10-fresh-result-cited, c10-stale-result-withheld, c10-denied-keeps-prior-result and c10-lookup-fails (Bower has no
+web lookup: the runner gives the model no web tool); c08-revise-keeps-personal-text (Bower does not revise a generated
+document: asking again makes a new note); c13-manifest-move-and-create, c13-manifest-partial-edited-note and
+c13-manifest-state-with-personal-edit (the owner dropped Undo of a whole tidy-up on 2026-10-16).
 
 `replies.json` supplies deterministic intent replies at the existing Claude provider boundary. `$file:NAME` binds an exact admitted name to its id. `between` edits or moves run on the same fake Drive between two production runner calls; an empty array runs twice without a personal edit. Existing cases keep their demo-provider path.
 

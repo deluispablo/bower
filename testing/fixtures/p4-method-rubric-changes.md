@@ -28,13 +28,13 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c08-revise-keeps-personal-text | changed | Revising a generated document is unsupported today; the case records create, personal edit, asked revision and replay as a requirement only. |
 | c09-burst-pipe | changed | An answer from the notes; nothing filed and no note changed, Bower's health note its only new file (corpus-fix-rubrics AC1). |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
-| c10-denied-keeps-prior-result | agrees | With web permission off there is no new evidence to change a note; saved sources stay immutable and the report explains the denial (points 3, 7, 8). |
-| c10-fresh-result-cited | agrees | The capture fits the existing project, its source note links the target, and a cited Timeline line records the new fact while preserving the person's state (points 1, 3, 4, 7; addendum 1). |
+| c10-denied-keeps-prior-result | changed | Unsupported today: Bower has no web lookup. The case records the denied lifecycle as a requirement: zero lookups with web lookups off, an honest denial answer, and the saved result kept exactly (points 3, 7, 8). |
+| c10-fresh-result-cited | changed | Unsupported today: Bower has no web lookup. The case records one permitted, recorded lookup whose dated result goes in a source note that links the target and one cited Timeline line, preserving the person's state; an uploaded capture is never the lookup (points 1, 3, 4, 7; addendum 1). |
 | c09-not-in-sources | agrees | Points 1, 3 and 6: the answer acknowledges missing evidence and cites the checked source without guessing; no inbox item or compiled-state update is involved. |
 | c09-original-over-summary | agrees | Points 3, 6 and 7: the answer cites the original's explicit deadline replacement and marks the stale summary; the unowned compiled state needs permission to change. |
 | c09-two-source-answer | agrees | Points 3 and 6: each answer claim cites its exact original, excluding the unrelated archived listing; no new document or note update is involved. |
-| c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
-| c10-stale-result-withheld | agrees | Expired evidence cannot establish a current fact; sources are preserved, no unsupported update is made, and the answer states the limitation (points 3, 7, 8). |
+| c10-lookup-fails | changed | Unsupported today: Bower has no web lookup. The case records a failed lookup answered honestly, with no note written and nothing invented. |
+| c10-stale-result-withheld | changed | Unsupported today: Bower has no web lookup. The case records a lookup whose page has expired: no current fact is established, sources are preserved and the answer states the limitation (points 3, 7, 8). |
 | c11-ambiguous-stays | changed | The question is bound to the letter's own pile through its reported subject, not to an allocated id; the recipe is filed. |
 | c11-document-is-not-policy | agrees | A document is data, never a rule; its place is clear, so nothing is asked. |
 | c11-request-is-one-time | changed | A later newsletter arrives in a second press; the one-time words do not reach it, no rule is recorded and Rules.md stays byte identical. |
@@ -47,9 +47,9 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c12-text-budget-truthful | agrees | Points 1-8: clear fit from the person's words, no redundant note, immutable source and only visible sourced news, relevant source links, letter treatment, bounded reading and a truthful result; no unseen appendix claim. |
 | c12-group-waits | agrees | Points 1, 2, 3, 7: both piles fit their folders by the person's words; the group that gets no valid reply waits whole and untouched with a plain row, no question, and the next press files it with one sourced line per receipt. |
 | c12-admission-waits | agrees | Points 1, 2, 3, 7: each notice fits the plot by the person's words; the pile past the run's room waits untouched, uncounted as a problem and unasked, and the next press files it with its sourced line once. |
-| c13-manifest-move-and-create | agrees | Undo reverses manifest effects, Bin only; points 1-8 are filing rules, not a requirement to refile a restored inbox source. Point 8 requires a truthful result. |
-| c13-manifest-partial-edited-note | agrees | Later personal text is protected and independent effects recover; point 8 requires the partial result, and point 1 permits an inbox return by undo without a question. |
-| c13-manifest-state-with-personal-edit | agrees | Point 3 supports owned state and preserved history; undo restores recorded previous state while retaining later personal prose. Timeline reversal policy is left to the lead. |
+| c13-manifest-move-and-create | changed | Unsupported today: the owner dropped Undo of a whole tidy-up. The case records the forward run, its manifest, the inverse (the source back to the inbox by id, the unchanged note to the Bin) and a replay as a requirement; points 1-8 are filing rules, not a requirement to refile a source the undo returns to the inbox. |
+| c13-manifest-partial-edited-note | changed | Unsupported today: the owner dropped Undo of a whole tidy-up. The case records the forward run, its manifest, Alex's later edit, the inverse of the independent move with a visible partial result, and a replay as a requirement; point 1 permits an inbox return by undo without a question. |
+| c13-manifest-state-with-personal-edit | changed | Unsupported today: the owner dropped Undo of a whole tidy-up. The case records the forward run through the planner, its manifest, Alex's later edit, the recorded previous Current state put back with the later personal prose kept, and a replay as a requirement (point 3). Timeline reversal policy stays open. |
 | c15-short-pdfs-read-whole | changed | The words ("papers for the move") establish fit; both one-page PDFs are shown whole with nothing cut, and each gets a grounded source note. |
 | c15-image-only-pdf-asked | changed | An image-only PDF with no words and no text layer is never placed by guess; it stays in the inbox with one question about its pile, and nothing waits. |
 | c05-person-edited-between-runs | changed | The edit happens between real runs; a later tidy-up with nothing new adds no news and no second question. |
@@ -275,6 +275,17 @@ record the method re-check, not an executed model result.
     name Bower's health note as its own bookkeeping; the B11 rubric says asking the suggestion answers the request,
     after request-settles-on-suggestion; the B12 rubric times discovery, the question, the yes and the rest at their
     four presses. Covers stays scripted for C06 and C09 and model for B11 and B12.
+
+## Corpus clean changes (`corpus-fix-unsupported`)
+
+22. **c10-fresh-result-cited, c10-stale-result-withheld, c10-denied-keeps-prior-result, c10-lookup-fails,
+    c13-manifest-move-and-create, c13-manifest-partial-edited-note and c13-manifest-state-with-personal-edit.** Reason:
+    the corpus audit (research and undo cases worded as preparation waiting for proof, an uploaded capture standing in
+    for a lookup, answers matched as substrings of raw JSON, and undo cases with no forward run behind their folder).
+    Now: each rubric starts with "Unsupported today" and its reason (Bower has no web lookup; the owner dropped Undo of
+    a whole tidy-up on 2026-10-16), then states the lifecycle as a requirement. C10 answers are parsed request answers,
+    and the C13 rubrics start from a forward run and its manifest. With c08-revise-keeps-personal-text these are the
+    eight excluded cases. Covers stays model.
 
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
