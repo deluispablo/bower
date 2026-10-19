@@ -247,6 +247,16 @@ record the method re-check, not an executed model result.
     three installed topics with no write, and authority-full-cap keeps all thirty, installs nothing from the document
     and files the personal note byte for byte as the person's. Covers stays model in both cases.
 
+## Corpus clean changes (`corpus-fix-b8`)
+
+19. **c17-b8-bounded-encoding, c17-b8-findings-refresh, c17-b8-report-only-grammar and c17-b8-settled-recovery.**
+    Reason: the corpus audit (a 378 KB annual log specimen that the monthly format replaced, four hand oracles no
+    test read, a settled-recovery oracle that called the health note updated, and status text that still called the
+    proofs unfinished). Now: bounded-encoding seeds one short month and appends to it with no annual log;
+    findings-refresh also expects no month file; every useful oracle requirement is asserted in the B8 runner tests
+    and the four oracle files are gone; settled-recovery runs with its refused hub edit and lost log response and
+    creates the health note once. Covers stays model in all four cases.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.
@@ -318,10 +328,10 @@ write permissions, automatic repairs or another report mechanism.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
-| c17-b8-settled-recovery | agrees | Points 1–8: fit the notice, preserve its original/history, link the useful source note, and report/log only applied outcomes; rejected hub work grants no success, recovery makes no duplicate fact or note (F3/U3). Fault proof remains pending. |
+| c17-b8-settled-recovery | changed | Points 1–8: fit the notice, preserve its original/history, link the useful source note, and report/log only applied outcomes; the refused hub edit grants no success, the health note is created once, and recovery after a lost log response makes no duplicate fact, note or line (F3/U3; corpus-fix-b8 AC3). |
 | c17-b8-report-only-grammar | agrees | Points 1–8: useful diagnostics reuse Bower health and the actual graph, never fill personal metadata, rewrite notes, repair links, invent related links or teach tags; semantic reads stay bounded and only the health create is reported (R2/U3). |
-| c17-b8-bounded-encoding | agrees | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields in the monthly log preserve primary outcomes without schema growth, fabricated facts or visible internal-file rows (F14). |
-| c17-b8-findings-refresh | agrees | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair or external-edit Bower log event (F3/F10/U3). No-change policy awaits Q7. |
+| c17-b8-bounded-encoding | changed | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields appended to the existing month keep its earlier line and preserve primary outcomes without schema growth, an annual log, fabricated facts or visible internal-file rows (F14; corpus-fix-b8 AC1). |
+| c17-b8-findings-refresh | changed | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair, log line or month file (F3/F10/U3; corpus-fix-b8 AC3). |
 
 ## B9 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
 

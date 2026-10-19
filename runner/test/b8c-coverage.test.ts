@@ -4,10 +4,11 @@
  * new evidence (dated names, duplicate summaries, summary validation). b8c-unreadable: a note Drive refuses for good is
  * recorded 'unreadable' for its version and named as such until it changes.
  */
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
-import { AT, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { AT, replySequence, runOnDrive, runScripted, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { empty, observe, pacing, type Observation } from './b23-hot-observe';
 import { lintEvidenceOk, type MaintenanceNote } from '../../src/data/contracts/run-manifest';
@@ -364,5 +365,37 @@ describe('B8c coverage and the Bower-note checks through main', () => {
       couldNotRead(`${GARDEN}/Plot diary`),
       `- Broken link in [[${GARDEN}/Beds|Beds]]: no note is called Missing plan.`,
     ]);
+  });
+  it('corpus-fix-b8 AC2: every useful former oracle requirement is executed', async () => {
+    const CORPUS = resolve(import.meta.dirname, '../../testing/corpus');
+    const B8 = ['c17-b8-settled-recovery', 'c17-b8-report-only-grammar', 'c17-b8-bounded-encoding', 'c17-b8-findings-refresh'];
+    const c = await loadCase(resolve(CORPUS, 'c17-b8-report-only-grammar'));
+    const scripted = await runScripted(c);
+    expect(scripted.code).toBe(0);
+    expect(scoreCase(c, scripted).unmet, 'report-only-grammar meets its expectations').toEqual([]);
+    const base = await folder();
+    const run = await base.press(1);
+    expect(run.code).toBe(0);
+    expect(lines(run).filter((line) => line.startsWith('- ')), 'one personal broken link and the three Bower-note checks on Loose thought').toEqual([
+      '- Broken link in [[Resources/Gardening/Plot diary|Plot diary]]: no note is called Missing plan.',
+      '- Missing summary: [[Resources/Gardening/Loose thought|Loose thought]] has no summary, so nothing says what it is at a glance.',
+      '- Too many tags: [[Resources/Gardening/Loose thought|Loose thought]] has 4; Bower keeps 3 at most.',
+      '- Nothing links to [[Resources/Gardening/Loose thought|Loose thought]].',
+    ]);
+    expect(B8.filter((id) => existsSync(resolve(CORPUS, id, 'oracle.json'))), 'the hand oracles live in the B8 runner tests').toEqual([]);
+    const row = (file: string, id: string): string | undefined => readFileSync(file, 'utf8').split('\n').find((line) => line.startsWith(`| ${id} |`));
+    expect(B8.map((id) => row(resolve(CORPUS, 'README.md'), id))).toEqual([
+      '| c17-b8-settled-recovery | C17 / B8 | model | TL-P4-39 F3/U3; run with a refused hub edit and a lost log response; the health note is created once and the month logs only applied work |',
+      '| c17-b8-report-only-grammar | C17 / B8 | model | TL-P4-39 B8; links outside fences, orphan, missing summary and tag overflow; personal bytes protected |',
+      '| c17-b8-bounded-encoding | C17 / B8 | model | TL-P4-39 F14; delimiter-rich name appended to an existing month, with no annual log |',
+      '| c17-b8-findings-refresh | C17 / B8 | model | TL-P4-41 feed/cache; supported personal edit clears a finding, third check has no health write |',
+    ]);
+    expect(B8.map((id) => row(resolve(CORPUS, '../fixtures/p4-method-rubric-changes.md'), id))).toEqual([
+      '| c17-b8-settled-recovery | changed | Points 1–8: fit the notice, preserve its original/history, link the useful source note, and report/log only applied outcomes; the refused hub edit grants no success, the health note is created once, and recovery after a lost log response makes no duplicate fact, note or line (F3/U3; corpus-fix-b8 AC3). |',
+      '| c17-b8-report-only-grammar | agrees | Points 1–8: useful diagnostics reuse Bower health and the actual graph, never fill personal metadata, rewrite notes, repair links, invent related links or teach tags; semantic reads stay bounded and only the health create is reported (R2/U3). |',
+      '| c17-b8-bounded-encoding | changed | Points 1–8: clear filing fits Gardening with a grounded linked note and unchanged original; reversible fields appended to the existing month keep its earlier line and preserve primary outcomes without schema growth, an annual log, fabricated facts or visible internal-file rows (F14; corpus-fix-b8 AC1). |',
+      '| c17-b8-findings-refresh | changed | Points 1–8: the supported personal edit remains exact, fresh evidence clears the actual defect, and unchanged diagnostics produce no false update; no redundant note, personal metadata adoption, policy, repair, log line or month file (F3/F10/U3; corpus-fix-b8 AC3). |',
+    ]);
+    expect(B8.map((id) => (JSON.parse(readFileSync(resolve(CORPUS, id, 'case.json'), 'utf8')) as { source: string }).source)).toEqual(B8.map(() => 'new (TL-P4-39 B8, F3/F14/U3; TL-P4-41 to TL-P4-50); runs through main in the B8 runner tests'));
   });
 });

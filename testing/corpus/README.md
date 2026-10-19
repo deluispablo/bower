@@ -189,10 +189,14 @@ registration and verdict selection remain upstream H1 work. See the B11 prep not
 
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
-| c17-b8-settled-recovery | C17 / B8 | model | TL-P4-39 F3/U3; rejected edit, lost log response and real health row; pending fault proof |
+| c17-b8-settled-recovery | C17 / B8 | model | TL-P4-39 F3/U3; run with a refused hub edit and a lost log response; the health note is created once and the month logs only applied work |
 | c17-b8-report-only-grammar | C17 / B8 | model | TL-P4-39 B8; links outside fences, orphan, missing summary and tag overflow; personal bytes protected |
-| c17-b8-bounded-encoding | C17 / B8 | model | TL-P4-39 F14; delimiter-rich name in the monthly log |
+| c17-b8-bounded-encoding | C17 / B8 | model | TL-P4-39 F14; delimiter-rich name appended to an existing month, with no annual log |
 | c17-b8-findings-refresh | C17 / B8 | model | TL-P4-41 feed/cache; supported personal edit clears a finding, third check has no health write |
+
+All four run through main in `runner/test/b8-log.test.ts`, `b8-health.test.ts`, `b8c-coverage.test.ts` and
+`b8c2-checks.test.ts`. Their hand `oracle.json` files are gone: the oracles live in those tests.
+`c17-b8-settled-recovery` meets its expectations only with its fault setup (corpus-fix-b8 AC3).
 
 ## B9 preparation cases — 2026-10-10
 
