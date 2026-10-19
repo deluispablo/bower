@@ -16,14 +16,21 @@ test('a signed-out visitor lands on the landing, signs in and gets in', async ({
   await expect(page.getByRole('heading', { name: /Hello, Alex/ })).toBeVisible();
 });
 
-test('first sign-in makes the five folders', async ({ page }) => {
+test('first sign-in makes the five folders', async ({ page, isMobile }) => {
+  // A late paint: the main navigation stays hidden for 1.5 s after it mounts, as on a loaded machine.
+  await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+    const style = document.createElement('style');
+    style.textContent = '@keyframes late-paint { from, to { visibility: hidden; } } nav[aria-label="Main"] { animation: late-paint 1.5s; }';
+    document.head.append(style);
+  }));
   await open(page, '/', 'first');
   await expect(page.getByRole('heading', { name: 'Where Bower keeps things' })).toBeVisible({ timeout: 8000 });
   await page.getByRole('button', { name: 'Make my Bower folder' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   // The five main folders exist now, as the folder tree shows them.
   const files = page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link', { name: 'Files', exact: true });
-  if (await files.isVisible()) await files.click();
+  // The phone shows the tree on Files; click() waits for the link (playwright.dev/docs/actionability). The desktop tree is beside Home.
+  if (isMobile) await files.click();
   for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) {
     await expect(page.getByRole('link', { name: new RegExp(`^${name}`) }).or(page.getByRole('treeitem', { name: new RegExp(`^${name}`) })).first(), name).toBeVisible();
   }
