@@ -5,7 +5,7 @@
  * on fake only: the demo stays an illustration and runs none of them.
  */
 import type { Page } from '@playwright/test';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -40,7 +40,7 @@ async function closeWhenDone(page: Page): Promise<void> {
 
 /** Tidies up everything waiting, from Home. */
 async function tidyUpAll(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things?$/ }).click();
   await closeWhenDone(page);
 }
@@ -91,9 +91,8 @@ test('C09: a question about your notes is answered', async ({ page }) => {
   test.skip(!isFake, 'the scripted journeys run on the pretend Drive and Worker');
   test.setTimeout(60_000);
   await open(page, '/');
-  const tidy = page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first();
-  const waiting = await tidy.textContent();
-  expect(waiting).toMatch(/^Tidy up \d+ things?$/);
+  const waiting = await page.getByRole('region', { name: 'Inbox' }).getByText(/^\d+ things? waiting/).textContent();
+  expect(waiting).toMatch(/^\d+ things? waiting/);
 
   const question = 'Which flat is closest to Ferrowick?';
   const chore = 'Put my visa papers together';
@@ -112,7 +111,7 @@ test('C09: a question about your notes is answered', async ({ page }) => {
   // Asking about stored notes adds nothing to the inbox.
   await page.goto('/');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  await expect(page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first()).toHaveText(waiting ?? '');
+  await expect(page.getByRole('region', { name: 'Inbox' }).getByText(/^\d+ things? waiting/)).toHaveText(waiting ?? '');
 });
 
 type Kept = { files: Array<{ meta: { name: string; parents: string[]; folder?: boolean }; trashed: boolean; content: unknown }> };

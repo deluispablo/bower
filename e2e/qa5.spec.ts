@@ -4,7 +4,7 @@
  */
 import type { Page } from '@playwright/test';
 import { animationsEnd, expectAxeClean } from './axe';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -30,7 +30,7 @@ test('the running situation shows its live phases', async ({ page }) => {
 
 test('an instant tidy-up ends at once', async ({ page }) => {
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 2500 });
 });
@@ -38,7 +38,7 @@ test('an instant tidy-up ends at once', async ({ page }) => {
 test('the run scene ends with an empty inbox', async ({ page }) => {
   test.setTimeout(60_000);
   await open(page, '/', 'default', 'demo');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 40_000 });
@@ -226,7 +226,7 @@ test.describe('the side panel', () => {
     await expect(panel.getByText(/waits for the next tidy-up/i).first()).toBeVisible();
     await expect(panel.getByText('Put my id papers together')).toBeVisible();
     await page.getByRole('link', { name: /^Home/ }).first().click();
-    await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+    await openTidy(page);
     await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
     await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 10_000 });
     await page.keyboard.press('Escape');
@@ -237,7 +237,7 @@ test.describe('the side panel', () => {
 
 test('the tidy-up question can be cancelled', async ({ page }) => {
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   const dialog = page.getByRole('dialog', { name: 'Tidy up 15 things?' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('Tidy up', { exact: true })).toHaveCount(0);
@@ -280,7 +280,7 @@ test("the outline lists Bower's sections and sources link", async ({ page, isMob
 
 test('one bird on screen when a tidy-up ends', async ({ page }) => {
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 5000 });
   // Every bird of the page under the dialog stays under its dimmed backdrop.

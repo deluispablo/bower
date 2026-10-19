@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import type { Pile, Question, RunReport, RunState } from '../src/data/contracts/types';
 import type { QuestionAnswer } from '../src/data/contracts/questions';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 import { animationsEnd, expectAxeClean } from './axe';
 import { resize } from './viewport';
 
@@ -79,7 +79,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', qs: Question[] =
 const homeCard = (page: Page): Locator => page.getByRole('main').getByRole('listitem').filter({ has: page.getByText(ASK, { exact: true }) });
 const sheetCard = (page: Page): Locator => page.getByRole('dialog').getByRole('listitem').filter({ has: page.getByText(ASK, { exact: true }) });
 async function start(page: Page): Promise<Locator> {
-  await page.getByRole('main').getByRole('button', { name: /^Tidy up \d+ things?$/, exact: true }).click();
+  await openTidy(page);
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: /^Tidy up \d+ things?$/, exact: true }).click();
   await expect(sheet).toHaveAccessibleName('Reading 1 thing');

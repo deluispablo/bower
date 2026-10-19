@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { animationsEnd, expectAxeClean } from './axe';
-import { expect, test } from './fixtures';
+import { expect, openTidy as launchTidy, test } from './fixtures';
 import { DESKTOP } from '../src/ui/media';
 
 const NOTE = 'Garden plans from Alex';
@@ -40,7 +40,7 @@ async function addNote(page: Page): Promise<Locator> {
 }
 
 async function openTidy(page: Page): Promise<Locator> {
-  await page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: 'Tidy up 1 thing', exact: true }).click();
+  await launchTidy(page);
   const sheet = page.getByRole('dialog', { name: 'Tidy up 1 thing?', exact: true });
   await page.clock.runFor(300);
   await expect(sheet).toBeVisible();

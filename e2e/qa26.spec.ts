@@ -8,7 +8,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expectAxeClean } from './axe';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const CHANGED = 'Some of its things changed after they were added. Remove it and add them again.';
 const NOT_ARRIVED = 'Some of its things have not arrived yet.';
@@ -93,7 +93,7 @@ async function elsewhere(page: Page, file: string, change: 'edit' | 'lose'): Pro
 
 /** Tidies up from Home and closes the result. */
 async function tidyUp(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things?$/ }).click();
   await expect(page.getByRole('dialog').getByText(/^Done\./).last()).toBeVisible({ timeout: 20_000 });
   await page.keyboard.press('Escape');

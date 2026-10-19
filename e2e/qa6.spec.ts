@@ -4,7 +4,7 @@ import { resize } from './viewport';
  * the QA list with "task": "qa-6", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -176,7 +176,7 @@ test('the tree names piles as Home does', async ({ page, isMobile }) => {
 for (const how of ['Escape', 'Close'] as const) {
   test(`closing a stopped tidy-up is the same however you close it (${how})`, async ({ page }) => {
     await open(page, '/', 'fail-run');
-    await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+    await openTidy(page);
     await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
     await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
     if (how === 'Escape') await page.keyboard.press('Escape');
@@ -191,7 +191,7 @@ test('a stopped tidy-up can be put away', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desktop side panel');
   await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   await open(page, '/', 'fail-run');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
   await page.keyboard.press('Escape');
@@ -235,7 +235,7 @@ test('a file added again after a reload is not doubled', async ({ page }) => {
 
 test("the run's end shows one bird and no stray card", async ({ page }) => {
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 5000 });

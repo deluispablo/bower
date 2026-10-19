@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import type { Note, Question, RunReport, TreeNode } from '../src/data/contracts/types';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 import { expectAxeClean } from './axe';
 
 const PATH = 'Areas/Home/Garden plot.md';
@@ -87,7 +87,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', row: 1 | 2 | 5 |
   await expect(page.locator('#boot')).toHaveCount(0);
   // Positive control: each original source boots Home and the existing tidy-up flow and result list.
   await expect(page.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
-  await page.getByRole('button', { name: /^Tidy up 1 thing$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: 'Tidy up 1 thing', exact: true }).click();
   await expect(page.getByRole('dialog').getByText('Reading 1 thing', { exact: true }).first()).toBeVisible();
   await page.evaluate(() => (window as unknown as { __c05Finish: () => void }).__c05Finish());

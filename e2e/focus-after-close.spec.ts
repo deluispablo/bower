@@ -6,7 +6,7 @@
  */
 import { expectAxeClean } from './axe';
 import type { Locator, Page } from '@playwright/test';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string): Promise<void> => {
   await page.goto(`${path}?scenario=default&time=instant`);
@@ -19,7 +19,7 @@ test('F1: closing the replay from the Home card keeps the keyboard on the page',
   test.skip(isFake, 'the demo default situation has 15 things to tidy and resets on load; the opener rule itself is unit-tested in focus.test.ts');
   for (const how of ['Escape', 'Skip']) {
     await open(page, '/');
-    await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+    await openTidy(page);
     await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
     await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible();
     await page.keyboard.press('Escape');

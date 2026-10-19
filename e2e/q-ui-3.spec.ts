@@ -1,5 +1,5 @@
 import { animationsEnd, expectAxeClean } from './axe';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 
 test.use({ viewport: { width: 1280, height: 720 } });
 
@@ -19,7 +19,7 @@ for (const source of ['demo', 'fake']) {
       await expect(inbox.getByRole('link', { name: new RegExp(`^${name}\\b`) })).toBeVisible();
     }
 
-    await inbox.getByRole('button', { name: 'Tidy up 24 things', exact: true }).click();
+    await openTidy(page);
     const sheet = page.getByRole('dialog', { name: 'Tidy up 24 things?', exact: true });
     await expect(sheet).toBeVisible();
     // The sheet also lists requests and pending rules (prod1-confirm-scope); the piles are their own list.
