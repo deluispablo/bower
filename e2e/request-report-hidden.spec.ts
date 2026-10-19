@@ -117,6 +117,12 @@ for (const source of ['demo', 'fake'] as const) {
         await expectAxeClean(page, { include: 'main', wcag22: true });
         // The existing result action lives in the desktop status bar. Open there, then check the sheet at this width.
         await resize(page, { width: 1440, height: 900 });
+        // ux-home-priorities R3: with nothing to report, the status line is plain words, not a button.
+        if (shape === 'empty') {
+          await expect(page.getByRole('contentinfo').getByRole('button')).toHaveCount(0);
+          await expect(page.getByRole('contentinfo')).toContainText('Nothing waiting');
+          return;
+        }
         // design9-last-tidy: a read of your changes shows no tidy-up time; every shape ends with what waits.
         const status = page.getByRole('contentinfo').getByRole('button', { name: shape === 'all' ? /Watch what Bower did/ : /waiting$/ });
         await status.click();
@@ -127,32 +133,25 @@ for (const source of ['demo', 'fake'] as const) {
           return;
         }
         const sheet = page.getByRole('dialog');
-        if (shape === 'empty') {
-          await expect(sheet).toHaveAccessibleName('Nothing in the inbox');
-          await expect(sheet.getByRole('list', { name: 'Left as you wrote them' })).toHaveCount(0);
+        await expect(sheet).toHaveAccessibleName(title);
+        if (hasLeft && detail === 'Everything has its place.') {
+          await expect(sheet.getByText(detail, { exact: true })).toHaveCount(0);
         } else {
-          await expect(sheet).toHaveAccessibleName(title);
-          if (hasLeft && detail === 'Everything has its place.') {
-            await expect(sheet.getByText(detail, { exact: true })).toHaveCount(0);
-          } else {
-            await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
-          }
-          await expect(sheet.getByText('Nothing in the inbox', { exact: true })).toHaveCount(0);
-          const rows = sheet.getByRole('list', { name: 'Left as you wrote them' });
-          if (hasLeft) {
-            await expect(rows.getByText(WHY, { exact: true })).toBeVisible();
-            await expect(rows.getByRole('link', { name: 'Allotment diary' })).toHaveAttribute('href', '/note/Areas/Home/Allotment%20diary.md');
-          } else {
-            await expect(rows).toHaveCount(0);
-          }
-          await expect(sheet.getByRole('button', { name: 'Watch what Bower did', exact: true })).toHaveCount(0);
+          await expect(sheet.getByText(detail, { exact: true })).toBeVisible();
         }
+        await expect(sheet.getByText('Nothing in the inbox', { exact: true })).toHaveCount(0);
+        const rows = sheet.getByRole('list', { name: 'Left as you wrote them' });
+        if (hasLeft) {
+          await expect(rows.getByText(WHY, { exact: true })).toBeVisible();
+          await expect(rows.getByRole('link', { name: 'Allotment diary' })).toHaveAttribute('href', '/note/Areas/Home/Allotment%20diary.md');
+        } else {
+          await expect(rows).toHaveCount(0);
+        }
+        await expect(sheet.getByRole('button', { name: 'Watch what Bower did', exact: true })).toHaveCount(0);
         await expectAxeClean(page, { include: '[role="dialog"]', wcag22: true });
-        if (shape !== 'empty') {
-          await sheet.getByRole('button', { name: 'Done', exact: true }).click();
-          await expect(heading).toHaveCount(0);
-          await expect(home.getByRole('button', { name: 'Got it', exact: true })).toHaveCount(0);
-        }
+        await sheet.getByRole('button', { name: 'Done', exact: true }).click();
+        await expect(heading).toHaveCount(0);
+        await expect(home.getByRole('button', { name: 'Got it', exact: true })).toHaveCount(0);
       });
     }
   }

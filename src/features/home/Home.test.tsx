@@ -70,10 +70,13 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     if (!row) throw new Error(`no row for ${name}`);
     return row;
   };
+  // Home shows the two newest piles until the person asks for the rest (ux-home-priorities AC2).
+  const showAll = async (): Promise<void> => { fireEvent.click(await screen.findByRole('button', { name: /^and \d+ more$/ })); };
 
   it('each set-aside pile says why, with its action; a ready pile says nothing', async () => {
     const { retryPile, removePile } = home(null);
     await screen.findByRole('link', { name: /Papers from Alex/ });
+    await showAll();
     expect(within(rowOf('Papers from Alex')).getByText('Some of its things changed after they were added. Remove it and add them again.')).toBeVisible();
     expect(within(rowOf('Receipts')).getByText('Some of its things have not arrived yet.')).toBeVisible();
     expect(within(rowOf('Letters')).getByText('Bower found two different lists of what is in this pile. Remove it and add it again.')).toBeVisible();
@@ -107,6 +110,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   it('each action names its pile, and focus follows the question to remove it', async () => {
     const { removePile } = home(null);
     await screen.findByRole('link', { name: /Papers from Alex/ });
+    await showAll();
     expect(within(rowOf('Receipts')).getByRole('button', { name: 'Try again' })).toHaveAccessibleDescription(/Receipts/);
     const remove = within(rowOf('Letters')).getByRole('button', { name: 'Remove this pile' });
     expect(remove).toHaveAccessibleDescription(/Letters/);
@@ -128,6 +132,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
 
   it('an empty pile is not said to have a note to put in the Bin', async () => {
     home(null);
+    await showAll();
     const sentence = await screen.findByText('Nothing is left in it. Remove it from your inbox.');
     const row = sentence.closest('li');
     if (!row) throw new Error('no row');
@@ -143,6 +148,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   it("this device's upload notice shows once, for the whole inbox", async () => {
     home(KEEP_OPEN);
     await screen.findByRole('link', { name: /Papers from Alex/ });
+    await showAll();
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     expect(await within(inbox).findAllByText(KEEP_OPEN)).toHaveLength(1);
     for (const p of PILES.filter((x) => x.text)) expect(rowOf(p.text).textContent).not.toContain(KEEP_OPEN);
@@ -151,6 +157,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   it('the place the notice is said stays on screen when there is none, so it is heard when it comes', async () => {
     home(null);
     await screen.findByRole('link', { name: /Papers from Alex/ });
+    await showAll();
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     expect(within(inbox).getByRole('status')).toHaveTextContent('');
   });

@@ -17,6 +17,7 @@ import { RightPanel } from '@/features/note/RightPanel';
 import { StatusBar } from '@/features/tidy/StatusBar';
 import { TidyButton } from '@/features/tidy/TidyButton';
 import { useFirstTidy } from '@/features/home/useFirstTidy';
+import { offersTidy } from '@/data/contracts/first-tidy';
 import s from './shell.module.css';
 
 const RIBBON = 52;
@@ -271,7 +272,8 @@ export function DesktopShell() {
               <Icon name="add" size={16} />
             </IconButton>
           <span className={s.grow} />
-          <TidyButton />
+          {/* On Home, while the checklist offers Tidy up, its button is the one launch. */}
+          {!(loc.pathname === '/' && offersTidy(progress.data)) && <TidyButton />}
           <IconButton ref={rightToggle} small label={shown.right ? 'Hide the right panel' : 'Show the right panel'} aria-expanded={rightFolded ? overlaySide === 'right' : undefined} onClick={() => toggle('right')}>
             <Icon name="sideRight" size={18} />
           </IconButton>

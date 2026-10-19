@@ -89,7 +89,7 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   // A tidy-up, from Home: confirm, watch it finish, close.
   await press(page, nav(page, 'Home', 'Home', isMobile));
   const tidy = /^Tidy up \d+ things$/;
-  await press(page, main.getByRole('button', { name: tidy }));
+  await press(page, page.getByRole('region', { name: 'Your first tidy-up' }).getByRole('button', { name: 'Tidy up', exact: true }));
   const sheet = page.getByRole('dialog');
   await expect(sheet).toBeVisible();
   await scan(page);

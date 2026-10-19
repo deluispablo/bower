@@ -69,8 +69,8 @@ it('request report: status bar reopens unseen instructions leftAsWritten instead
   expect(within(sheet).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
   fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
   await waitFor(() => expect(markSeen).toHaveBeenCalledWith(run.id));
-  fireEvent.click(within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ }));
-  expect(screen.getByRole('dialog', { name: 'Nothing in the inbox' })).toBeVisible();
+  await waitFor(() => expect(within(screen.getByRole('contentinfo')).queryByRole('button')).toBeNull());
+  expect(within(screen.getByRole('contentinfo')).getByText(/Nothing waiting$/)).toBeVisible();
 });
 
 it.each(['all', 'instructions'] as const)('request report: reopened %s sheet omits fallback detail with leftAsWritten', async (scope) => {
@@ -127,13 +127,12 @@ it('request report: all with filings retains Home replay and status bar replay',
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-it.each(['all', 'instructions'] as const)('request report: %s with no rows has no Home card and opens Nothing in the inbox', async (scope) => {
+it.each(['all', 'instructions'] as const)('request report: %s with no rows has no Home card and no footer button', async (scope) => {
   const { run } = await open(scope, empty());
-  const button = within(screen.getByRole('contentinfo')).getByRole('button', { name: /waiting$/ });
   expect(screen.queryByRole('heading', { name: runTitle(run) })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Got it' })).toBeNull();
-  fireEvent.click(button);
-  expect(screen.getByRole('dialog', { name: 'Nothing in the inbox' })).toBeVisible();
+  expect(within(screen.getByRole('contentinfo')).queryByRole('button')).toBeNull();
+  expect(within(screen.getByRole('contentinfo')).getByText(/Nothing waiting$/)).toBeVisible();
 });
 
 it.each([

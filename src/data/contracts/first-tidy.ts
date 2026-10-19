@@ -15,3 +15,6 @@ export function firstTidyFrom(marks: ReadonlySet<FirstTidyStep>, seen: { piles: 
   const added = started || marks.has('added') || seen.piles;
   return { added, started, reviewed };
 }
+
+/** The checklist's current step is "Press Tidy up": its Tidy up is then the one launch on Home. */
+export const offersTidy = (p: FirstTidy | null | undefined): boolean => !!p && p.added && !p.started;

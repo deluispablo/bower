@@ -30,6 +30,8 @@ import ui from '@/ui/ui.module.css';
 import s from './home.module.css';
 import { FirstTidyChecklist } from './FirstTidyChecklist';
 import { useFirstTidy } from './useFirstTidy';
+import { offersTidy } from '@/data/contracts/first-tidy';
+import { useIsDesktop } from '@/ui/media';
 import runStyles from '@/features/tidy/tidy.module.css';
 import noteStyles from '@/features/note/note.module.css';
 
@@ -85,6 +87,9 @@ export function Home() {
   // Suggestions wait until the first tidy-up has been reviewed (or its progress cannot be known), so they never flash.
   const progress = useFirstTidy();
   const showSuggestions = Boolean(progress.error) || progress.data === null || progress.data?.reviewed === true;
+  // One launch on screen: the desktop top bar, or the checklist while it offers Tidy up; the phone Inbox otherwise.
+  const desktop = useIsDesktop();
+  const launch = !desktop && !offersTidy(progress.data) && ready && waiting > 0 && !running && !inbox.error;
   return (
     <div className={s.page}>
       <header className={s.top}>
@@ -96,20 +101,20 @@ export function Home() {
       <div className={s.grid}>
         <div className={s.colMain}>
           <LoadError state={runState} />
-          <FirstTidyChecklist run={run} progress={progress.data} />
           {running && run && <RunningCard run={run} />}
-          <Inbox piles={inbox.piles} error={inbox} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} />
+          <FirstTidyChecklist run={run} progress={progress.data} />
+          <Questions />
+          <Inbox piles={inbox.piles} error={inbox} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} launch={launch} />
           {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
               under the person's finger moves when it lands (progressive rendering: each part shows when its data is there). */}
           {stopped && run && <StoppedCard run={run} />}
           {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
         </div>
         <div className={s.colSide}>
-          <SearchField />
           <YourChanges running={running} />
-          <Questions />
-          {showSuggestions && <Suggestions />}
+          <SearchField />
           <JustFiled run={run ?? null} />
+          {showSuggestions && <Suggestions />}
         </div>
       </div>
     </div>
@@ -191,8 +196,10 @@ function RunningCard({ run }: { run: RunState }) {
   );
 }
 
-function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] | undefined; error: Pick<Loaded<unknown>, 'error' | 'reload'>; waiting: number; ready: boolean; bird: boolean; running: boolean }) {
+function Inbox({ piles, error, waiting, ready, bird, running, launch }: { piles: Pile[] | undefined; error: Pick<Loaded<unknown>, 'error' | 'reload'>; waiting: number; ready: boolean; bird: boolean; running: boolean; launch: boolean }) {
   const { setTidy } = useUi();
+  // The two newest piles (the sources give them newest first); the rest behind one button that keeps focus.
+  const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const notice = useUploadNotice();
   const arrival = useArrivalLine();
@@ -222,7 +229,7 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
         </div>
       ) : piles.length > 0 ? (
         <ul className={s.piles}>
-          {piles.map((p) => (
+          {(open ? piles : piles.slice(0, 2)).map((p) => (
             <li key={p.id}>
               <Link to={`/pile/${p.id}`} className={s.pile}>
                 <PileStack items={p.items} />
@@ -251,13 +258,18 @@ function Inbox({ piles, error, waiting, ready, bird, running }: { piles: Pile[] 
           ))}
         </ul>
       ) : null}
+      {piles && piles.length > 2 && (
+        <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show fewer' : `and ${piles.length - 2} more`}
+        </Button>
+      )}
       <div className={s.row2}>
-        {ready && waiting > 0 && !running && !error.error && (
+        {launch && (
           <Button block onClick={() => setTidy(true)}>
             Tidy up {plural(waiting, 'thing')}
           </Button>
         )}
-        <Button variant="ghost" block={ready && (waiting === 0 || running)} onClick={() => nav('/add')}>
+        <Button variant="ghost" block={ready && !launch} onClick={() => nav('/add')}>
           <Icon name="add" size={18} /> Add a pile
         </Button>
       </div>

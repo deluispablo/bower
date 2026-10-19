@@ -259,6 +259,7 @@ describe('R8 Home never asks for a preview', () => {
     const sources = { ...real, vault: new Proxy(real.vault, { get: (t, k) => (k === 'imagePreview' ? imagePreview : Reflect.get(t, k)) }) } as Sources;
     expect((await real.vault.piles()).some((p) => p.items.some((it) => it.kind === 'image' && it.upload === undefined))).toBe(true);
     render(<MemoryRouter><DataProvider sources={sources}><Home /></DataProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /^and \d+ more$/ }));
     await screen.findByRole('link', { name: /Job offer and a flat near it/ }, { timeout: 3000 });
     await act(async () => new Promise((r) => setTimeout(r, 50)));
     expect(imagePreview).not.toHaveBeenCalled();

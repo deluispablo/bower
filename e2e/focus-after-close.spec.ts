@@ -121,9 +121,10 @@ test('focus: every route lands the keyboard on its h1, or on the control that na
  * d-v2-04 (APG modal dialog: on close, focus returns to the control that opened it). The sheet is
  * opened by keyboard from each button that opens it; every wait is for focus, never for time.
  */
-const openers = (page: Page, isMobile: boolean): Array<[string, Locator]> => {
-  const list: Array<[string, Locator]> = [['Home button', page.getByRole('main').getByRole('button', { name: /^Tidy up \d+ things$/ })]];
-  if (!isMobile) list.push(['tab-bar button', page.getByRole('button', { name: /^Tidy up \d+$/ })]);
+// On a first-time Home the checklist's Tidy up is the one launch; off Home, the desktop top bar (ux-home-priorities R2).
+const openers = (page: Page, isMobile: boolean): Array<[string, string, Locator]> => {
+  const list: Array<[string, string, Locator]> = [['checklist button', '/', page.getByRole('region', { name: 'Your first tidy-up' }).getByRole('button', { name: 'Tidy up', exact: true })]];
+  if (!isMobile) list.push(['tab-bar button', '/files/Projects', page.getByRole('button', { name: /^Tidy up \d+$/ })]);
   return list;
 };
 
@@ -137,14 +138,14 @@ for (const [name, how] of [
   ['closing the tidy sheet with not now returns focus to its opener', 'Not now'],
 ] as const) {
   test(name, async ({ page, isMobile }) => {
-    await open(page, '/');
-    for (const [label, opener] of openers(page, isMobile)) {
+    for (const [label, path, opener] of openers(page, isMobile)) {
+      await open(page, path);
       await expect(opener, label).toBeVisible();
       await opener.focus();
       await page.keyboard.press('Enter');
       const sheet = page.getByRole('dialog', { name: /^Tidy up \d+ things\?$/ });
       await expect(sheet, label).toBeVisible();
-      if (label === 'Home button') await axeClean(page);
+      if (label === 'checklist button') await axeClean(page);
       if (how === 'Escape') await page.keyboard.press('Escape');
       else await sheet.getByRole('button', { name: 'Not now' }).click();
       await expect(sheet, label).toHaveCount(0);

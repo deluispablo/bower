@@ -124,7 +124,7 @@ test.describe('messages wait for sheets', () => {
       await open(page, '/', 'default');
       const question = page.getByRole('region', { name: /questions? for you/ }).getByRole('listitem').filter({ hasText: /Keep both\?/ });
       const answer = question.getByRole('button', { name: 'Keep one', exact: true });
-      const tidy = page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: /^Tidy up \d+ things?$/ });
+      const tidy = page.getByRole('region', { name: 'Your first tidy-up' }).getByRole('button', { name: 'Tidy up', exact: true });
       await expect(answer).toBeVisible();
       await expect(tidy).toBeVisible();
       await pauseClock(page);
