@@ -30,7 +30,9 @@ for (const width of [375, 1440]) {
     await openTidy(page);
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
-    await expect(sheet.getByText(/^Done\. \d+ things filed\.$/).last()).toBeVisible();
+    await expect(sheet.getByText(/^Done\. \d+ things filed(, \d+ notes? updated)?\.$/).last()).toBeVisible();
+    // The long report is the one with its lists open (ux-results-polish).
+    await sheet.getByText('See the list', { exact: true }).click();
     const done = sheet.getByRole('button', { name: 'Done', exact: true });
     const watch = sheet.getByRole('button', { name: 'Watch what Bower did', exact: true });
     const clock = sheet.getByText(/^Finished /);
@@ -84,7 +86,8 @@ for (const [width, height] of [[375, 812], [1440, 520]]) {
     await openTidy(page);
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
-    await expect(sheet.getByText(/^Done\. \d+ things filed\.$/).last()).toBeVisible();
+    await expect(sheet.getByText(/^Done\. \d+ things filed(, \d+ notes? updated)?\.$/).last()).toBeVisible();
+    await sheet.getByText('See the list', { exact: true }).click();
     const done = sheet.getByRole('button', { name: 'Done', exact: true });
     await expect(done).toBeAttached();
 

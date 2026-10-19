@@ -41,3 +41,15 @@
 @keyframes set { 0% { transform: translateY(-14px) scale(1.05); opacity: 0.6; } 60% { transform: translateY(1px) scale(1.04, 0.94); opacity: 1; } 100% { transform: none; } }
 .slot { flex: none; width: 34px; height: 30px; border-radius: 8px; border: 1.5px dashed color-mix(in srgb, var(--text-muted) 40%, transparent); }
 .twig { position: absolute; left: 172px; right: 12px; bottom: 7px; height: 3px; border-radius: 2px; background: var(--twig); opacity: 0.55; }
+
+/* what each of the four main folders is for, said once above them */
+.para { color: var(--text-muted); font-size: 14px; margin-bottom: 4px; }
+
+/* a phone: no heap; each folder lists every thing by its whole name, wrapping, never clipped */
+.phone .shelf { flex-wrap: wrap; align-items: flex-start; }
+.phone .shelfName { width: auto; flex: 1 1 auto; }
+.phone .shelfPath { white-space: normal; }
+.phone .row { flex: 1 0 100%; flex-direction: column; align-items: stretch; overflow: visible; }
+.phone .placed .thing { max-width: none; height: auto; min-height: 30px; padding: 6px 10px; white-space: normal; }
+.phone .thingName { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.phone .slot, .phone .twig { display: none; }

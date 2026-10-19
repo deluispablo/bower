@@ -4,7 +4,7 @@ import { report } from '@/ui/report';
 import { useStartRun } from './start-run';
 import { pileName, thingsIn } from '@/data/piles';
 import { useInbox, useRequests, useRules, useRun, useSources, type Loaded } from '@/data/provider';
-import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
+import { BowerError, RUN_STEPS, type RunReport, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
 import { plural } from '@/app/words';
@@ -13,7 +13,7 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { PileStack } from '@/features/piles/PileStack';
 import { PoseBower } from '@/bird/Bower';
-import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
+import { hasReplay, isRunning, runClock, runDetail, runLinkRows, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import { RunLinks } from './RunLinks';
@@ -196,7 +196,7 @@ function RunView({ run }: { run: RunState }) {
           })}
         </ol>
       )}
-      {run.phase === 'done' && run.report && <RunLinks report={run.report} onOpen={() => setTidy(false)} />}
+      {run.phase === 'done' && run.report && <Report report={run.report} onOpen={() => setTidy(false)} />}
       <p className={s.clock}>{runClock(run, now)}</p>
       <div className={s.pinned}>
         {run.phase === 'done' && !hasReplay(run) ? (
@@ -248,5 +248,24 @@ function RunView({ run }: { run: RunState }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A finished report: what needs the person stays in view, and the notes made and brought up to date wait behind one
+ * native disclosure (GOV.UK Design System, Details: https://design-system.service.gov.uk/components/details/).
+ */
+function Report({ report, onOpen }: { report: RunReport; onOpen: () => void }) {
+  const { made, updated } = runLinkRows(report);
+  return (
+    <>
+      <RunLinks report={{ ...report, created: [], updated: [] }} onOpen={onOpen} />
+      {(made.length > 0 || updated.length > 0) && (
+        <details className={s.list}>
+          <summary>See the list</summary>
+          <RunLinks report={{ created: report.created, updated: report.updated }} onOpen={onOpen} />
+        </details>
+      )}
+    </>
   );
 }

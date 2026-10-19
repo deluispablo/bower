@@ -12,6 +12,7 @@ import type { Sources } from '@/data/sources';
 import type { FiledItem, RunReport, RunState, TreeNode } from '@/data/types';
 import { Home } from '@/features/home/Home';
 import { loadingSources } from '@/testing/loading-sources';
+import { DESKTOP } from '@/ui/media';
 import { Replay } from './Replay';
 import { StatusBar } from './StatusBar';
 import { TidySheet } from './TidySheet';
@@ -35,6 +36,12 @@ const partial = (extra: Partial<RunReport> = {}): RunReport => ({ ...empty(), fi
 const TREE: TreeNode[] = [{ name: 'Areas', path: 'Areas', type: 'folder', children: [
   { name: 'Seed order.pdf', path: 'Areas/Garden/Seed order.pdf', type: 'file', kind: 'pdf', modified: 1 } as TreeNode,
 ] } as TreeNode];
+
+/** The replay's heap is the desktop's (ux-results-polish): these replays run at desktop width, reduced motion optional. */
+function desktop(reduce = false): void {
+  const real = window.matchMedia;
+  vi.spyOn(window, 'matchMedia').mockImplementation((q: string) => ({ ...real(q), matches: q === DESKTOP || (reduce && q.includes('reduce')) }));
+}
 
 afterEach(() => {
   cleanup();
@@ -105,7 +112,7 @@ async function playToEnd(): Promise<HTMLElement> {
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
   }
   expect(within(court).getByRole('heading', { name: '4 things filed', level: 2 })).toBeVisible();
-  expect(within(court).getByRole('button', { name: 'Done' })).toBeVisible();
+  expect(within(court).getByRole('button', { name: 'Close' })).toBeVisible();
   return court;
 }
 
@@ -138,13 +145,14 @@ describe('AC1', () => {
 describe('AC2', () => {
   it('replay_does_not_claim_empty_inbox_when_work_waits', async () => {
     vi.useFakeTimers();
+    desktop();
     usePrefs.setState({ birdMoves: true });
     const { markSeen } = await open(partial({ waiting: 3 }));
     fireEvent.click(within(homeCard()).getByRole('button', { name: 'Watch what Bower did' }));
     await act(async () => {});
     assertReplayEnd(await playToEnd());
     // Watching again from the existing entry point after it was seen says the same.
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(markSeen).toHaveBeenCalledWith('partial-run');
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -155,6 +163,7 @@ describe('AC2', () => {
 
   it('the heap counts only filed items while it plays', async () => {
     vi.useFakeTimers();
+    desktop();
     await open(partial());
     fireEvent.click(within(homeCard()).getByRole('button', { name: 'Watch what Bower did' }));
     await act(async () => {});
@@ -163,8 +172,7 @@ describe('AC2', () => {
 
   it('reduced motion: the finished replay never claims an empty inbox', async () => {
     vi.useFakeTimers();
-    const real = window.matchMedia;
-    vi.spyOn(window, 'matchMedia').mockImplementation((q: string) => ({ ...real(q), matches: q.includes('reduce') }));
+    desktop(true);
     await open(partial({ waiting: 3 }));
     fireEvent.click(within(homeCard()).getByRole('button', { name: 'Watch what Bower did' }));
     assertReplayEnd(await playToEnd());
@@ -174,6 +182,7 @@ describe('AC2', () => {
 describe('AC3', () => {
   it('budget_waits_and_refusal_rows_are_not_double_counted', async () => {
     vi.useFakeTimers();
+    desktop();
     await open(partial({ waiting: 3 }));
     const card = homeCard();
     assertCounts(card);
@@ -237,6 +246,7 @@ describe('every saved row, literally (R-duplicates, R-literal)', () => {
 
   it('two rows with the same name stay two on Home, the sheet and the replay', async () => {
     vi.useFakeTimers();
+    desktop();
     await open(partial({ setAside: twins }));
     const card = homeCard();
     assertSetAside(card, twins);

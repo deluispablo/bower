@@ -13,7 +13,7 @@ const run = (scope: RunState['scope'], phase: RunState['phase']): RunState =>
 
 describe('AC1 a running read of your changes never claims rules', () => {
   it('AC1 design9-rules-wording-writing: the writing step says what is always true', () => {
-    expect(runDetail(run('instructions', 'writing'))).toBe('Doing what your changes call for. Your inbox waits for a tidy-up.');
+    expect(runDetail(run('instructions', 'writing'))).toBe('Doing what your changes call for.');
   });
 
   it('AC1 design9-rules-wording-reading: the reading step names no rules', () => {

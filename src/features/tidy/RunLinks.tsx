@@ -1,7 +1,8 @@
 import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { RunReport } from '@/data/types';
-import { useRequests } from '@/data/provider';
+import { useInbox, useRequests } from '@/data/provider';
+import { pileName } from '@/data/piles';
 import { Inline } from '@/features/note/markdown';
 import { useNoteLink } from '@/features/note/note-link';
 import { displayName, nameOf } from '@/data/tree';
@@ -44,12 +45,21 @@ export function RunLinks({ report, onOpen }: { report: Pick<RunReport, 'created'
  * name may be saved twice for different things: the row's place in the report keys it, never its name.
  */
 export function SetAsideRows({ rows }: { rows: RunReport['setAside'] }) {
-  if (!rows.length) return null;
+  return rows.length ? <AsideList rows={rows} /> : null;
+}
+
+/** A row names a pile by its folder or lone file: it reads as the Inbox names that pile while it waits there (qa-prod-8 F5). */
+function AsideList({ rows }: { rows: RunReport['setAside'] }) {
+  const { piles } = useInbox();
+  const said = (name: string): string => {
+    const pile = piles?.find((p) => p.path && nameOf(p.path) === name);
+    return pile ? pileName(pile) : name;
+  };
   return (
     <LabelledList label="Set aside">
       {rows.map((r, i) => (
         <li key={i}>
-          <span>{r.name}</span>
+          <span>{said(r.name)}</span>
           <span className="muted">{r.why}</span>
         </li>
       ))}
