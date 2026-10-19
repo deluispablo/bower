@@ -35,5 +35,37 @@
     ],
     "questionsAtMost": 1,
     "questionsExactly": 0
-  }
+  },
+  "runs": [
+    {
+      "files": {
+        "present": [
+          "Areas/Home/Committee notice.txt",
+          "Inbox/*/Water butt update.txt"
+        ]
+      },
+      "notes": [
+        {
+          "path": "Areas/Home/Garden plot.md",
+          "contains": [
+            "bower_state: ad0d49f0788bfc33",
+            "## Current state\n- The committee will replace the shared water butt.\n"
+          ],
+          "timelineCount": 2
+        }
+      ],
+      "report": {
+        "filed": 1,
+        "created": [
+          "Bower health.md"
+        ],
+        "updated": [
+          "Areas/Home/Garden plot.md"
+        ],
+        "questionsExactly": 0,
+        "waiting": 1
+      }
+    },
+    {}
+  ]
 }

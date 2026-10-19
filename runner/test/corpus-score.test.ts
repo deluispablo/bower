@@ -3,7 +3,8 @@
  * case, including the protected ranges, Drive properties, typed question subjects and per-press runs that only the test
  * driver used to check, from plain data (the starting folder and what each press left), and it reads no test runtime.
  * It scores only expectations and reports in their current schema, and no placement or wildcard note passes vacuously
- * (corpus-scorer-validation).
+ * (corpus-scorer-validation). A file is kept unchanged from an explicit baseline, the seed, the preceding press or the
+ * press's own start, and every press and the count of presses are scored (corpus-scorer-state).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -74,7 +75,7 @@ it('corpus-scorer-home AC1: shared scorer enforces all existing driver-only expe
   expect(unmet(two, press(), [asked])).toEqual([]);
   expect(unmet(two, asked, [press()])).toEqual(['run 1: report.questions: 0, expected exactly 1', 'run 2: report.questions: 1, expected exactly 0']);
   expect(unmet(two)).toEqual(['runs: 1, expected 2', 'run 1: report.questions: 0, expected exactly 1', 'run 2: missing press']);
-  expect(unmet(two, press(), [asked, asked])).toEqual(['runs: 3, expected 2', 'run 2: report.questions: 1, expected exactly 0']);
+  expect(unmet(two, press(), [asked, asked])).toEqual(['runs: 3, expected 2', 'run 2: report.questions: 1, expected exactly 0', 'run 3: extra press']);
   const changed = press({ after: { [PERSONAL]: PERSON_TEXT.replace('light', 'Light') } });
   expect(unmet({ runs: [thoughts, {}] }, press(), [changed])).toEqual([`run 1: ${PERSONAL}: protected range changed: My thoughts`]);
   expect(unmet({ ...props, runs: [props] }, press({ props: { [PERSONAL]: { custom: 'Alex' } } }))).toEqual([]);
@@ -196,6 +197,38 @@ it('corpus-scorer-validation AC3: placement requires a match and wildcard notes 
   expect(unmet(notes, put({ 'Projects/Garden.md': 'Seeds.\n', 'Projects/Garden plot.md': 'Weeds.\n' })), 'every match is checked')
     .toEqual(['Projects/Garden plot.md: lacks "Seeds"', 'Projects/Garden plot.md: has "Weeds"']);
   expect(unmet(notes)).toEqual(['missing note: Projects/Garden*.md']);
+});
+
+it('corpus-scorer-state AC1: unchanged comparisons select an explicit baseline', () => {
+  const NOTE = 'Projects/Garden.md';
+  const MADE = 'Projects/Garden plot.md';
+  const SEEDED = 'Alex grows herbs.\n';
+  const EDITED = 'Alex grows herbs and mint.\n';
+  /** A folder with each file's Drive id and a stand-in for the SHA-256 of its bytes. */
+  const at = (files: Record<string, [id: string, text: string]>): { after: Record<string, string>; files: Record<string, { id: string; sha256: string }> } => ({
+    after: Object.fromEntries(Object.entries(files).map(([p, [, text]]) => [p, text])),
+    files: Object.fromEntries(Object.entries(files).map(([p, [id, text]]) => [p, { id, sha256: `sha256 of ${text}` }])),
+  });
+  // Press 1 makes a note; Alex edits the seeded note between the presses; press 2 changes neither.
+  const first = { ...at({ [NOTE]: ['f1', SEEDED], [MADE]: ['f2', 'Plot.\n'] }), lastRun: report([]), start: at({ [NOTE]: ['f1', SEEDED] }) };
+  const second = { ...at({ [NOTE]: ['f1', EDITED], [MADE]: ['f2', 'Plot.\n'] }), lastRun: report([]), start: at({ [NOTE]: ['f1', EDITED], [MADE]: ['f2', 'Plot.\n'] }) };
+  const atSecond = (expected: Expected): string[] => scoreCase({ expected: { runs: [{}, expected] }, folder: { [NOTE]: SEEDED } }, { ...second, runs: [first] }).unmet;
+  expect(atSecond({ unchangedSinceStart: [NOTE, MADE] }), 'a between-press personal edit is measured from the press start').toEqual([]);
+  // Seed-relative `unchanged` keeps its meaning: the edited note differs from the seed, and a note a press made is not in it.
+  expect(atSecond({ unchanged: [NOTE] })).toEqual([`run 2: file changed: ${NOTE}`]);
+  expect(atSecond({ unchanged: [MADE] })).toEqual([`run 2: file changed: ${MADE}`]);
+  // The preceding press: what press 1 made is kept; the person's edit is a change since then.
+  expect(atSecond({ unchangedSincePrevious: [MADE] })).toEqual([]);
+  expect(atSecond({ unchangedSincePrevious: [NOTE, MADE] })).toEqual([`run 2: unchangedSincePrevious: ${NOTE} changed bytes`]);
+  // The top-level expectations score the final press against the same preceding press; a pattern checks every match.
+  expect(scoreCase({ expected: { unchangedSincePrevious: ['Projects/*'], runs: [{}, {}] }, folder: {} }, { ...second, runs: [first] }).unmet)
+    .toEqual([`unchangedSincePrevious: ${NOTE} changed bytes`]);
+  // Each pattern must match a file of its baseline, and a baseline with no snapshot fails closed.
+  expect(atSecond({ unchangedSinceStart: ['Areas/*'] })).toEqual(['run 2: unchangedSinceStart: no file matches Areas/*']);
+  const plain = { ...at({ [NOTE]: ['f1', SEEDED] }), lastRun: report([]) };
+  expect(scoreCase({ expected: { unchangedSincePrevious: [NOTE] }, folder: {} }, plain).unmet).toEqual(['unchangedSincePrevious: no snapshot of the preceding press']);
+  expect(scoreCase({ expected: { unchangedSinceStart: [NOTE] }, folder: {} }, plain).unmet).toEqual(['unchangedSinceStart: no snapshot of this press before it ran']);
+  expect(unmet({ unchangedSinceStart: [] })).toEqual(['expected.unchangedSinceStart: expected a non-empty list']);
 });
 
 /** Every module a source file reaches through its imports (relative ones resolved to files), with the bare specifiers it names. */

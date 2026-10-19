@@ -865,15 +865,25 @@ describe('B7 through production main', () => {
     expect(final.runs).toHaveLength(1);
     expect(first?.code).toBe(0);
     expect(final.code).toBe(0);
+    // What the replay keeps from the first press is the case's own scored expectation (corpus-scorer-state AC3).
     expect(scoreCase(c, final).unmet).toEqual([]);
-    const a = first?.after ?? {};
-    const b = final.after;
-    expect(Object.keys(a).filter((p) => !Object.hasOwn(b, p))).toEqual([]);
-    expect(final.dispatch?.runId).toBe('abc123-run1-2');
-    const RECORDS = '.bower/runs/abc123-run1-2/';
-    const changed = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((p) => a[p] !== b[p]).sort();
-    expect(changed.filter((p) => !p.startsWith(RECORDS))).toEqual(['.bower/changes/press-2.json', '.bower/last-run.json', '.bower/retrieval.json']);
-    expect(changed.filter((p) => p.startsWith(RECORDS))).not.toEqual([]);
+  });
+
+  it('corpus-scorer-state AC3: B7 replay uses the shared preceding-press assertion', async () => {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', GROWTH));
+    const NOTE = 'Resources/Gardening/Rain barrel guide.md';
+    expect(c.expected.runs?.[1]?.unchangedSincePrevious ?? [], 'the replay press keeps what the first press wrote')
+      .toEqual(expect.arrayContaining([TAGS, 'Resources/*', 'Bower health.md', '.bower/log/*']));
+    const final = await runScripted(c);
+    expect(final.runs).toHaveLength(1);
+    expect(final.score).toEqual({ pass: true, unmet: [] });
+    // The scored contract sees what the direct comparison saw: a replay that rewrote the topics or the new note fails.
+    const rewrote = (path: string) => ({ ...final, files: { ...final.files, [path]: { id: final.files?.[path]?.id ?? '', sha256: 'other bytes' } } });
+    expect(scoreCase(c, rewrote(TAGS)).unmet).toEqual([`run 2: unchangedSincePrevious: ${TAGS} changed bytes`]);
+    expect(scoreCase(c, rewrote(NOTE)).unmet).toEqual([`run 2: unchangedSincePrevious: ${NOTE} changed bytes`]);
+    // Measured from the seed instead, what the first press made could never be unchanged.
+    const fromSeed = { ...c.expected, runs: [c.expected.runs?.[0] ?? {}, { unchanged: [TAGS, NOTE] }] };
+    expect(scoreCase({ ...c, expected: fromSeed }, final).unmet).toEqual([`run 2: file changed: ${TAGS}`, `run 2: file changed: ${NOTE}`]);
   });
 
   it('corpus-fix-b7-capacity AC1: automatic additions obey capacity and reply order', async () => {

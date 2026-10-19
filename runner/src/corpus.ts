@@ -273,6 +273,13 @@ export interface Expected {
   placement?: Placement | Placement[];
   /** Paths of the starting folder that must be byte-identical after the run. */
   unchanged?: string[];
+  /**
+   * Files of the preceding press's folder that are physically the same after this press (corpus-scorer-state AC1): the
+   * same Drive id at the same path, the same bytes and the same appProperties. A path may use `*`; each must match.
+   */
+  unchangedSincePrevious?: string[];
+  /** The same, against this press's folder just before it ran: after the person's between steps. */
+  unchangedSinceStart?: string[];
   notes?: NoteExpectation[];
   /** Every `[[link]]` in every note the run wrote resolves to a note or file. */
   linksResolve?: boolean;
@@ -381,6 +388,8 @@ const PressExpected = z.strictObject({
   files: z.strictObject({ present: texts.optional(), absent: texts.optional() }).optional(),
   placement: z.union([PlacementShape, z.array(PlacementShape).min(1, SOME)]).optional(),
   unchanged: texts.optional(),
+  unchangedSincePrevious: texts.min(1, SOME).optional(),
+  unchangedSinceStart: texts.min(1, SOME).optional(),
   notes: z.array(z.strictObject({
     path: z.string(), contains: texts.optional(), excludes: texts.optional(), timeline: texts.optional(), timelineCount: count.optional(), timelineMin: count.optional(),
   })).optional(),
@@ -435,16 +444,26 @@ export async function loadCorpus(root: string): Promise<LoadedCase[]> {
   return Promise.all(names.map((n) => loadCase(join(root, n))));
 }
 
-/** What one press left, as the scorer reads it: a test driver's run or a live run's snapshot. */
-export interface PressResult {
-  /** Every file of the folder after the run (not folders, not the Bin), path to text. */
+/** The folder at one moment, as the scorer reads it: what a press left, or the folder just before a press ran. */
+interface Snapshot {
+  /** Every file of the folder (not folders, not the Bin), path to text. */
   after: Readonly<Record<string, string>>;
   /** Each file's Drive appProperties, by the same paths (none: no entry). */
   props?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** Shown paths by stable Drive id, for typed report questions. */
   pathsById?: Readonly<Record<string, string>>;
+  /** Each file's stable Drive id and the SHA-256 of its bytes, text or binary, by the same paths (corpus-scorer-state AC2). */
+  files?: Readonly<Record<string, { id: string; sha256: string }>>;
+  /** Drive ids of files the press started with that are now in the Drive Bin, so a binned file is told from a gone one. */
+  binned?: readonly string[];
+}
+
+/** What one press left, as the scorer reads it: a test driver's run or a live run's snapshot. */
+export interface PressResult extends Snapshot {
   /** The parsed `.bower/last-run.json`; null when there is none. */
   lastRun: unknown;
+  /** The folder just before this press ran: after the person's between steps, before the press's request. */
+  start?: Snapshot;
 }
 
 export interface ScoreInput extends PressResult {
@@ -476,7 +495,7 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const paths = (v: unknown): Array<{ path: string }> => list(v).flatMap((x) => (x && typeof x === 'object' && typeof (x as { path?: unknown }).path === 'string' ? [{ path: (x as { path: string }).path }] : []));
 
 /** The paths of the folder a pattern matches: an exact path, or a pattern with `*` for any run of characters. */
-function matching(after: Readonly<Record<string, string>>, pattern: string): string[] {
+function matching(after: Readonly<Record<string, unknown>>, pattern: string): string[] {
   if (!pattern.includes('*')) return pattern in after ? [pattern] : [];
   const re = new RegExp(`^${pattern.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
   return Object.keys(after).filter((p) => re.test(p));
@@ -624,8 +643,28 @@ function protectedBytes(text: string | undefined, range: NonNullable<Expected['p
   return bytes.subarray(first.start, end);
 }
 
-/** One press against one set of expectations: every check, the protected ranges against the starting folder. */
-function scorePress(expected: Expected, before: Readonly<Record<string, string>>, press: PressResult): string[] {
+/**
+ * How a file of `base` is not physically the same in `now` (corpus-scorer-state AC2): gone (in the Bin, moved, or
+ * missing), recreated under a new Drive id, or kept with other bytes or appProperties. None when it is the same.
+ */
+function drift(base: Snapshot, now: Snapshot, path: string, was: { id: string; sha256: string }): string[] {
+  const is = now.files?.[path];
+  if (!is) {
+    const moved = Object.entries(now.files ?? {}).find(([, f]) => f.id === was.id)?.[0];
+    return [now.binned?.includes(was.id) ? 'is in the Bin' : moved ? `moved to ${moved}` : 'is missing'];
+  }
+  if (is.id !== was.id) return ['was recreated with a new Drive id'];
+  const a = base.props?.[path] ?? {};
+  const b = now.props?.[path] ?? {};
+  const sameProps = Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([k, v]) => Object.hasOwn(b, k) && b[k] === v);
+  return [...(is.sha256 === was.sha256 ? [] : ['changed bytes']), ...(sameProps ? [] : ['changed properties'])];
+}
+
+/**
+ * One press against one set of expectations: every check, `unchanged` and the protected ranges against the starting
+ * folder, the explicit baselines against the preceding press and this press's start (corpus-scorer-state AC1).
+ */
+function scorePress(expected: Expected, before: Readonly<Record<string, string>>, press: PressResult, previous: Snapshot | undefined): string[] {
   const { after, lastRun } = press;
   const unmet: string[] = [];
   if (expected.answers) {
@@ -658,6 +697,23 @@ function scorePress(expected: Expected, before: Readonly<Record<string, string>>
   for (const p of expected.unchanged ?? []) {
     if (!(p in after)) unmet.push(`missing file: ${p} (expected unchanged)`);
     else if (after[p] !== before[p]) unmet.push(`file changed: ${p}`);
+  }
+  for (const [key, base, none] of [
+    ['unchangedSincePrevious', previous, 'no snapshot of the preceding press'],
+    ['unchangedSinceStart', press.start, 'no snapshot of this press before it ran'],
+  ] as const) {
+    const want = expected[key];
+    const files = base?.files;
+    if (!want) continue;
+    if (!base || !files) { unmet.push(`${key}: ${none}`); continue; }
+    for (const pattern of want) {
+      const found = matching(files, pattern);
+      if (found.length === 0) unmet.push(`${key}: no file matches ${pattern}`);
+      for (const path of found) {
+        const was = files[path];
+        if (was) for (const why of drift(base, press, path, was)) unmet.push(`${key}: ${path} ${why}`);
+      }
+    }
   }
   for (const n of expected.notes ?? []) {
     const found = matching(after, n.path);
@@ -744,21 +800,25 @@ const asked = (q: unknown): q is Question => !!q && typeof q === 'object' && typ
 
 /**
  * The one complete scorer (corpus-scorer-home): the final press against the case's top-level expectations, then, when
- * the case lists `runs`, every press (earlier ones in `final.runs`, in order) against its own entry.
+ * the case lists `runs`, every press (earlier ones in `final.runs`, in order) against its own entry, each with the press
+ * before it as its preceding press. Every press is scored (corpus-scorer-state AC4): with no `runs` only one press
+ * may be given, and a press with no entry, or an entry with no press, is unmet.
  */
 export function scoreCase(c: { expected: Expected; folder: Readonly<Record<string, string>> }, final: PressResult & { runs?: readonly PressResult[] }): Score {
   // Expectations that are not the current schema score nothing: each issue is unmet, at its place (AC1).
   const shape = ExpectedShape.safeParse(c.expected);
   if (!shape.success) return { pass: false, unmet: shape.error.issues.map((issue) => `expected${issueAt(issue.path)}: ${issue.message}`) };
-  const unmet = scorePress(c.expected, c.folder, final);
-  if (c.expected.runs) {
-    const runs = [...final.runs ?? [], final];
-    if (runs.length !== c.expected.runs.length) unmet.push(`runs: ${runs.length}, expected ${c.expected.runs.length}`);
-    for (const [i, expected] of c.expected.runs.entries()) {
-      const run = runs[i];
-      if (!run) { unmet.push(`run ${i + 1}: missing press`); continue; }
-      unmet.push(...scorePress(expected, c.folder, run).map((line) => `run ${i + 1}: ${line}`));
+  const runs = [...final.runs ?? [], final];
+  const unmet = scorePress(c.expected, c.folder, final, runs.at(-2));
+  const each = c.expected.runs;
+  if (runs.length !== (each?.length ?? 1)) unmet.push(`runs: ${runs.length}, expected ${each?.length ?? 1}`);
+  if (each) {
+    for (const [i, run] of runs.entries()) {
+      const expected = each[i];
+      if (!expected) unmet.push(`run ${i + 1}: extra press`);
+      else unmet.push(...scorePress(expected, c.folder, run, runs[i - 1]).map((line) => `run ${i + 1}: ${line}`));
     }
+    for (let i = runs.length; i < each.length; i++) unmet.push(`run ${i + 1}: missing press`);
   }
   return { pass: unmet.length === 0, unmet };
 }
