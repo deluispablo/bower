@@ -3362,7 +3362,6 @@ export async function build(decided: Decided): Promise<Ended> {
   /** Each edit by its note; by the records it comes from, in `needs` (their archives wait for it, rule 7, R3-4). */
   const editOf = new Map<string, string>();
   const fileOne = async ({ thing, to, name, note, merge }: (typeof filing)[number]): Promise<void> => {
-    const isNote = kindOf(name) === 'note';
     // A saved link's note first (R3-6): written once by its key, then the link file moves beside it.
     const created = note && note.text !== null
       ? await add({ kind: 'create-text', parent: targetOf(to), name: note.name, createKey: note.key, text: note.text, content: await utf8(note.text), purpose: 'generated' })
@@ -3372,7 +3371,7 @@ export async function build(decided: Decided): Promise<Ended> {
       before: seen(thing.file),
       parent: targetOf(to),
       name,
-      properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
+      properties: { bowerNew: '1', asAdded: null, origin: null, kind: null, pile: null },
     }, [...(created ? [created] : merge?.line === 'planned' ? [editOf.get(ix.idOf(merge.into) ?? '') ?? ''] : []),
       ...(tagOp && generated.some((note) => note.after.includes(thing.file.id) && parseNote(note.name, note.text).tags.length) ? [tagOp] : [])]);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
