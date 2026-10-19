@@ -175,9 +175,9 @@ describe('a map\'s members (c12-map-cards)', () => {
 });
 
 describe('the cap of 12 candidates a source (c12-map-cards)', () => {
-  it('ruling 7: with more than 12 neighbours a pinned note is still a candidate, and the neighbour that would be 12th is not', async () => {
+  it('ruling 7: with more than 40 neighbours a pinned note is still a candidate, and the neighbour that would be 40th is not', async () => {
     const PIN = 'Resources/Views/The Alex.md';
-    const offers = Object.fromEntries(Array.from({ length: 14 }, (_, i) => [`Projects/Offers/Offer ${String(i + 1).padStart(2, '0')}.md`, note(`Alex keeps remote offer record ${i + 1}.`)]));
+    const offers = Object.fromEntries(Array.from({ length: 42 }, (_, i) => [`Projects/Offers/Offer ${String(i + 1).padStart(2, '0')}.md`, note(`Alex keeps remote offer record ${i + 1}.`)]));
     const words = 'Remote offer records: what does the Alex note say?';
     const c: LoadedCase = { id: 'c12-map-cards', capability: 'C09', title: 'Alex asks about offers', covers: 'model', source: 'new', scope: 'instructions',
       allowWeb: false, dir: tmpdir(), folderBinary: {}, inboxBinary: {}, expected: {}, rubric: '', questions: [], journal: [], bowerOwned: [], inbox: [], inboxFiles: {},
@@ -201,8 +201,8 @@ describe('the cap of 12 candidates a source (c12-map-cards)', () => {
     const cards = (first.cards ?? []) as Card[];
     const picked = (sources[0]?.candidates ?? []).flatMap((id) => cards.find((x) => x.id === id)?.path ?? []);
     expect(sources, 'the request is the one source').toHaveLength(1);
-    expect(picked, 'at most 12 candidates').toHaveLength(12);
+    expect(picked, 'at most 40 candidates').toHaveLength(40);
     expect(picked, 'the pinned note is a candidate').toContain(PIN);
-    expect(picked.filter((p) => p.startsWith('Projects/Offers/')), 'the pin took a slot: 11 of the 14 neighbours').toHaveLength(11);
+    expect(picked.filter((p) => p.startsWith('Projects/Offers/')), 'the pin took a slot: 39 of the 42 neighbours').toHaveLength(39);
   }, 60_000);
 });

@@ -78,10 +78,10 @@ describe('a note\'s own words reach a request (qa-prod-5-F2)', () => {
     const found = candidatesOf(r, id);
     expect(found, 'the rowing link note is offered').toContain(h(b.id(ROWING)));
     expect(found, 'the swimming card note is offered').toContain(h(b.id(SWIM)));
-    // Ruling 10: both outrank the 12 Shed notes that still match "have" (on this fixture, n1 and n2 with cut=2).
+    // Ruling 10: both outrank the 12 Shed notes that still match "have" (on this fixture, n1 and n2; all 14 are offered).
     const places = tagged(r, id).filter((c) => [h(b.id(ROWING)), h(b.id(SWIM))].includes(c.split(':')[0] ?? '')).map((c) => c.split(':')[1]);
     expect(places, 'each dated note has its place in the row').toHaveLength(2);
-    expect(cutOf(r, id), 'the Shed notes still compete: some are cut').toBeGreaterThan(0);
+    expect(cutOf(r, id), 'all 14 offered under the 40').toBe(0);
   });
 
   it('AC2 body_terms_survive_an_unchanged_run: a second request over the unchanged folder offers both again, reading neither', async () => {
@@ -150,21 +150,21 @@ describe('every dated note fits or is counted (qa-prod-5-F2)', () => {
     expect(text).not.toContain('Bower read');
   });
 
-  it('AC4 overflow_is_counted_and_said: 15 matching notes offer 12, count 3 cut, and the document says 3 of 15', async () => {
+  it('AC4 overflow_is_counted_and_said: 45 matching notes offer 40, count 5 cut, and the document says 3 of 45', async () => {
     const due = (k: number): string => `Projects/Dues/Due ${k}.md`;
-    const folder = Object.fromEntries(Array.from({ length: 15 }, (_, i) => [due(i + 1), note(`Club fee due ${i + 1} November.`)]));
+    const folder = Object.fromEntries(Array.from({ length: 45 }, (_, i) => [due(i + 1), note(`Club fee due ${i + 1} November.`)]));
     const { b, id } = await request(folder);
     const ranked = b.ix.neighbourhood(REQUEST, Object.fromEntries(Object.entries(folder).map(([path, text]) => [b.id(path),
       { summary: /^summary: (.*)$/m.exec(text)?.[1] ?? '' }])), RUN);
     const three = ranked.slice(0, 3);
     const body = three.map((n) => { const k = /Due (\d+)/.exec(b.ix.pathOf(n) ?? '')?.[1]; return `- [[Due ${k}]]: club fee due ${k} November.`; }).join('\n');
     const r = await go(b, [select(b, id, 'Projects/Dues', three), doc(id, 'Projects/Dues', 'Club fees', body)]);
-    expect(candidatesOf(r, id), 'twelve offered').toHaveLength(12);
+    expect(candidatesOf(r, id), 'forty offered').toHaveLength(40);
     for (const n of three) expect(candidatesOf(r, id), 'precondition: the three wanted are offered').toContain(h(n));
-    expect(cutOf(r, id), 'three counted as cut').toBe(3);
+    expect(cutOf(r, id), 'five counted as cut').toBe(5);
     expect(r.code).toBe(0);
     const text = r.after['Projects/Dues/Club fees.md'] ?? '';
-    expect(text, 'the limit line closes the document').toContain(`${body}\n\nBower read 3 of the 15 notes that may matter here, so some may be missing.\n`);
+    expect(text, 'the limit line closes the document').toContain(`${body}\n\nBower read 3 of the 45 notes that may matter here, so some may be missing.\n`);
   });
 });
 
