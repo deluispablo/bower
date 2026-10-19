@@ -10,8 +10,6 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { Pacing } from '../../src/data/drive/transport';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { isJournalRecord } from '../../src/data/contracts/journal-record';
-import { fenceAfter, parseOwnership } from '../../src/data/contracts/ownership-format';
-import { subjectOf } from '../../src/data/contracts/questions';
 import type { Question, RunState } from '../../src/data/contracts/types';
 import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -20,10 +18,13 @@ import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
 import { phaseAwareClaude, type PlanningFixture } from './b1-planning-support';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
-import { CORPUS_EXECUTION, score, type CorpusBetween, type CorpusPress, type Expected, type LoadedCase, type QuestionSubjectExpectation, type Score } from '../src/corpus';
+import { CORPUS_EXECUTION, matchesSubject, scoreCase, type CorpusBetween, type CorpusPress, type LoadedCase, type Score } from '../src/corpus';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 export const AT = Date.UTC(2026, 9, 7, 9);
+
+/** The one complete scorer lives in `runner/src/corpus.ts` (corpus-scorer-home); the driver's consumers import it here too. */
+export { scoreCase };
 
 /**
  * What the model reads on a call (c12-prefix): its `--system-prompt-file`, then `\n`, then stdin; stdin alone for a call
@@ -486,94 +487,4 @@ export function caseReplies(id: string): ClaudeSpawn {
     spawn ??= replySequence(JSON.parse(await readFile(join(import.meta.dirname, '../../testing/corpus', id, 'replies.json'), 'utf8')) as unknown[]);
     return spawn(call);
   };
-}
-
-/** Compare typed subjects by id; paths are fixture selectors, never substring matches. */
-function matchesSubject(q: Question, want: QuestionSubjectExpectation, pathsById: Readonly<Record<string, string>>): boolean {
-  const subject = subjectOf(q);
-  if (subject.kind !== want.kind) return false;
-  switch (want.kind) {
-    case 'pair': return subject.kind === 'pair' && subject.by === 'id'
-      && JSON.stringify(subject.notes.map((id) => pathsById[id]).sort()) === JSON.stringify([...want.notes].sort());
-    case 'state': return subject.kind === 'state' && pathsById[subject.id] === want.note;
-    case 'inbox': return subject.kind === 'inbox' && pathsById[subject.id] === want.path;
-    case 'request': return subject.kind === 'request';
-    case 'folder': return subject.kind === 'folder';
-  }
-}
-
-/** Read-only byte selection: the ownership parser supplies front matter and the app's named section spans. */
-function protectedBytes(text: string | undefined, range: NonNullable<Expected['protectedRanges']>[number]['range']): Buffer | null {
-  if (text === undefined) return null;
-  const bytes = Buffer.from(text, 'utf8');
-  const ownership = parseOwnership(bytes);
-  if (ownership.status === 'invalid') return null;
-  if ('frontMatter' in range) return ownership.layout.front ? bytes.subarray(0, ownership.layout.frontEnd) : null;
-  const known = range.heading === 'Current state' ? ownership.layout.current
-    : range.heading === 'Timeline' ? ownership.layout.timeline
-    : range.heading === "Bower's note" ? ownership.layout.bowerNote : undefined;
-  if (known !== undefined) return known ? bytes.subarray(known.start, known.end) : null;
-  // Personal ATX headings: keep raw offsets, ignore fenced code, and refuse an ambiguous repeated heading.
-  const headings: Array<{ start: number; level: number; title: string }> = [];
-  let fence: ReturnType<typeof fenceAfter> = null;
-  for (let start = ownership.personal.start; start < ownership.personal.end;) {
-    const newline = bytes.indexOf(10, start);
-    const after = newline < 0 ? ownership.personal.end : Math.min(newline + 1, ownership.personal.end);
-    const line = bytes.subarray(start, after).toString('utf8').replace(/\r?\n$/, '');
-    const heading = !fence ? /^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+[ \t]*)?$/.exec(line) : null;
-    if (heading) headings.push({ start, level: heading[1]?.length ?? 0, title: heading[2] ?? '' });
-    fence = fenceAfter(line, fence);
-    start = after;
-  }
-  const found = headings.filter((h) => h.title === range.heading);
-  const first = found[0];
-  if (found.length !== 1 || !first) return null;
-  const end = headings.find((h) => h.start > first.start && h.level <= first.level)?.start ?? ownership.personal.end;
-  return bytes.subarray(first.start, end);
-}
-
-function scorePress(c: LoadedCase, run: CaseRun, expected: Expected): Score {
-  const unmet = score({ expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById }).unmet;
-  for (const { path, range } of expected.protectedRanges ?? []) {
-    const before = protectedBytes(c.folder[path], range);
-    const after = protectedBytes(run.after[path], range);
-    const name = 'heading' in range ? range.heading : 'front matter';
-    if (!before || !after) unmet.push(`${path}: missing or ambiguous protected range ${name}`);
-    else if (!before.equals(after)) unmet.push(`${path}: protected range changed: ${name}`);
-  }
-  for (const want of expected.properties ?? []) {
-    if (want.absent?.length === 0) unmet.push(`${want.path}: properties.absent: expected a non-empty list`);
-    if (want.equals && Object.keys(want.equals).length === 0) unmet.push(`${want.path}: properties.equals: expected at least one key`);
-    if (!(want.path in run.after)) { unmet.push(`missing file for properties: ${want.path}`); continue; }
-    const props = run.props[want.path] ?? {};
-    for (const key of want.absent ?? []) if (Object.hasOwn(props, key)) unmet.push(`${want.path}: appProperty ${key} should be absent`);
-    for (const [key, value] of Object.entries(want.equals ?? {})) {
-      if (!Object.hasOwn(props, key) || props[key] !== value) unmet.push(`${want.path}: appProperty ${key} expected ${JSON.stringify(value)}`);
-    }
-  }
-  if (expected.report?.questionSubjects) {
-    if (expected.report.questionSubjects.length === 0) unmet.push('report.questionSubjects: expected a non-empty list');
-    const report = (run.lastRun as { run?: { report?: { questions?: unknown } } } | null)?.run?.report;
-    const questions = Array.isArray(report?.questions) ? report.questions as unknown[] : [];
-    for (const want of expected.report.questionSubjects) {
-      if (!questions.some((q) => q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string'
-        && matchesSubject(q as Question, want, run.pathsById))) unmet.push(`report.questions: missing ${JSON.stringify(want)} subject`);
-    }
-  }
-  return { pass: unmet.length === 0, unmet };
-}
-
-/** Driver-only expectations build on the unchanged pure scorer; existing single-run cases score identically. */
-export function scoreCase(c: LoadedCase, final: CaseRun): Score {
-  const unmet = scorePress(c, final, c.expected).unmet;
-  if (c.expected.runs) {
-    const runs = [...final.runs ?? [], final];
-    if (runs.length !== c.expected.runs.length) unmet.push(`runs: ${runs.length}, expected ${c.expected.runs.length}`);
-    for (const [i, expected] of c.expected.runs.entries()) {
-      const run = runs[i];
-      if (!run) { unmet.push(`run ${i + 1}: missing press`); continue; }
-      unmet.push(...scorePress(c, run, expected).unmet.map((line) => `run ${i + 1}: ${line}`));
-    }
-  }
-  return { pass: unmet.length === 0, unmet };
 }

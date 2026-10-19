@@ -145,7 +145,8 @@ describe('c09-score AC3: an expectation the scorer does not know is unmet, never
     const after = { ...files, [REQUESTS]: requests([{ text: ASKED, done: ANSWER }]) };
     const press = answers({ contain: ['1,450'] });
     expect(unmet(run(press, after), `answers "${ASKED}": unknown key "contain"`)).toHaveLength(1);
-    expect(run(expecting({ runs: [press] }), after).unmet.filter((line) => line.includes('unknown key'))).toEqual([]);
+    // The one run is that press (corpus-scorer-home): its line names the press, and the top-level key check passes it.
+    expect(run(expecting({ runs: [press] }), after).unmet.filter((line) => line.includes('unknown key'))).toEqual([`run 1: answers "${ASKED}": unknown key "contain"`]);
   });
 
   it('AC3 c09-score-four-places: only the four places refuse a key; a note expectation is left as it is', () => {
