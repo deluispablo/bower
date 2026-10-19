@@ -1,10 +1,11 @@
 /**
- * The synthetic capability corpus (`testing/corpus/`, P4-A) and its structural scorer.
+ * The synthetic capability corpus (`testing/corpus/`, P4-A) and its one complete structural scorer.
  *
  * Why here: the runner is where a run's resulting folder and `last-run.json` are produced and where the scripted
- * provider already runs over a pretend Drive, so the scorer and its loader sit beside them. The scorer is pure (no
- * file system, no Drive): it takes a case's `expected.json`, the starting folder and the folder after a run, as maps
- * of path to text, plus the parsed `last-run.json`. A later entry (`original-baseline`, the model slices) reuses it.
+ * provider already runs over a pretend Drive, so the scorer and its loader sit beside them. The scorer (`scoreCase`) is
+ * pure (no file system, no Drive, no test runtime): it takes a case's `expected.json` and starting folder and what each
+ * press left (the folder as a map of path to text, each file's Drive properties, paths by Drive id and the parsed
+ * `last-run.json`), so the test driver and a live run score a case the same way (corpus-scorer-home).
  * Semantic expectations are not scored here: each case's `rubric.md` is for the quality reviewer.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -16,6 +17,7 @@ import { distinctPaths } from '../../src/data/spine/report';
 import { timelineBullets } from '../../src/data/vault/note-format';
 import { displayName, nameOf } from '../../src/data/contracts/tree';
 import { scanLinks, linkTarget } from '../../src/data/contracts/links';
+import { fenceAfter, parseOwnership } from '../../src/data/contracts/ownership-format';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 
 /** The capabilities the corpus covers: C04 to C15, and C17 for the second brain's B cases (TL-P4-39). */
@@ -391,16 +393,22 @@ export async function loadCorpus(root: string): Promise<LoadedCase[]> {
   return Promise.all(names.map((n) => loadCase(join(root, n))));
 }
 
-export interface ScoreInput {
-  /** Shown paths by stable Drive id, for typed pair report questions. */
+/** What one press left, as the scorer reads it: a test driver's run or a live run's snapshot. */
+export interface PressResult {
+  /** Every file of the folder after the run (not folders, not the Bin), path to text. */
+  after: Readonly<Record<string, string>>;
+  /** Each file's Drive appProperties, by the same paths (none: no entry). */
+  props?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Shown paths by stable Drive id, for typed report questions. */
   pathsById?: Readonly<Record<string, string>>;
+  /** The parsed `.bower/last-run.json`; null when there is none. */
+  lastRun: unknown;
+}
+
+export interface ScoreInput extends PressResult {
   expected: Expected;
   /** The starting folder before the run. */
   before: Readonly<Record<string, string>>;
-  /** Every file of the folder after the run (not folders, not the Bin), path to text. */
-  after: Readonly<Record<string, string>>;
-  /** The parsed `.bower/last-run.json`; null when there is none. */
-  lastRun: unknown;
 }
 
 export interface Score {
@@ -526,8 +534,53 @@ function scoreTable(want: TableExpectation, after: Readonly<Record<string, strin
   return unmet;
 }
 
-export function score(input: ScoreInput): Score {
-  const { expected, before, after, lastRun } = input;
+/** Compare typed subjects by id; paths are fixture selectors, never substring matches. */
+export function matchesSubject(q: Question, want: QuestionSubjectExpectation, pathsById: Readonly<Record<string, string>>): boolean {
+  const subject = subjectOf(q);
+  if (subject.kind !== want.kind) return false;
+  switch (want.kind) {
+    case 'pair': return subject.kind === 'pair' && subject.by === 'id'
+      && JSON.stringify(subject.notes.map((id) => pathsById[id]).sort()) === JSON.stringify([...want.notes].sort());
+    case 'state': return subject.kind === 'state' && pathsById[subject.id] === want.note;
+    case 'inbox': return subject.kind === 'inbox' && pathsById[subject.id] === want.path;
+    case 'request': return subject.kind === 'request';
+    case 'folder': return subject.kind === 'folder';
+  }
+}
+
+/** Read-only byte selection: the ownership parser supplies front matter and the app's named section spans. */
+function protectedBytes(text: string | undefined, range: NonNullable<Expected['protectedRanges']>[number]['range']): Buffer | null {
+  if (text === undefined) return null;
+  const bytes = Buffer.from(text, 'utf8');
+  const ownership = parseOwnership(bytes);
+  if (ownership.status === 'invalid') return null;
+  if ('frontMatter' in range) return ownership.layout.front ? bytes.subarray(0, ownership.layout.frontEnd) : null;
+  const known = range.heading === 'Current state' ? ownership.layout.current
+    : range.heading === 'Timeline' ? ownership.layout.timeline
+    : range.heading === "Bower's note" ? ownership.layout.bowerNote : undefined;
+  if (known !== undefined) return known ? bytes.subarray(known.start, known.end) : null;
+  // Personal ATX headings: keep raw offsets, ignore fenced code, and refuse an ambiguous repeated heading.
+  const headings: Array<{ start: number; level: number; title: string }> = [];
+  let fence: ReturnType<typeof fenceAfter> = null;
+  for (let start = ownership.personal.start; start < ownership.personal.end;) {
+    const newline = bytes.indexOf(10, start);
+    const after = newline < 0 ? ownership.personal.end : Math.min(newline + 1, ownership.personal.end);
+    const line = bytes.subarray(start, after).toString('utf8').replace(/\r?\n$/, '');
+    const heading = !fence ? /^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+[ \t]*)?$/.exec(line) : null;
+    if (heading) headings.push({ start, level: heading[1]?.length ?? 0, title: heading[2] ?? '' });
+    fence = fenceAfter(line, fence);
+    start = after;
+  }
+  const found = headings.filter((h) => h.title === range.heading);
+  const first = found[0];
+  if (found.length !== 1 || !first) return null;
+  const end = headings.find((h) => h.start > first.start && h.level <= first.level)?.start ?? ownership.personal.end;
+  return bytes.subarray(first.start, end);
+}
+
+/** One press against one set of expectations: every check, the protected ranges against the starting folder. */
+function scorePress(expected: Expected, before: Readonly<Record<string, string>>, press: PressResult): string[] {
+  const { after, lastRun } = press;
   const unmet: string[] = [...unknownKeys(expected, EXPECTED_KEYS, 'expected'), ...list(expected.runs).flatMap((r, i) => unknownKeys(r, EXPECTED_KEYS, `runs[${i}]`))];
   if (expected.answers) {
     let file: unknown = null;
@@ -600,15 +653,9 @@ export function score(input: ScoreInput): Score {
       if (want.updatedAtLeast !== undefined && updated < want.updatedAtLeast) unmet.push(`report.updated: ${updated}, expected at least ${want.updatedAtLeast}`);
       if (want.questionsAtMost !== undefined && list(report.questions).length > want.questionsAtMost) unmet.push(`report.questions: ${list(report.questions).length}, expected at most ${want.questionsAtMost}`);
       if (want.questionsExactly !== undefined && list(report.questions).length !== want.questionsExactly) unmet.push(`report.questions: ${list(report.questions).length}, expected exactly ${want.questionsExactly}`);
-      if (want.pairSubject) {
-        const wanted = [...want.pairSubject.notes].sort();
-        const matches = list(report.questions).some((q) => {
-          if (!q || typeof q !== 'object' || typeof (q as { id?: unknown }).id !== 'string') return false;
-          const subject = subjectOf(q as { id: string });
-          return subject.kind === 'pair' && subject.by === 'id'
-            && JSON.stringify(subject.notes.map((id) => input.pathsById?.[id]).sort()) === JSON.stringify(wanted);
-        });
-        if (!matches) unmet.push(`report.questions: missing pair subject [${wanted.join(', ')}]`);
+      const pair = want.pairSubject;
+      if (pair && !list(report.questions).some((q) => asked(q) && matchesSubject(q, pair, press.pathsById ?? {}))) {
+        unmet.push(`report.questions: missing pair subject [${[...pair.notes].sort().join(', ')}]`);
       }
       if (want.questions) {
         const got = list(report.questions).flatMap((q) => (q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string' ? [(q as { id: string }).id] : []));
@@ -620,5 +667,55 @@ export function score(input: ScoreInput): Score {
       if (want.waiting !== undefined && (report.waiting ?? 0) !== want.waiting) unmet.push(`report.waiting: ${String(report.waiting ?? 0)}, expected ${want.waiting}`);
     }
   }
+  for (const { path, range } of expected.protectedRanges ?? []) {
+    const was = protectedBytes(before[path], range);
+    const now = protectedBytes(after[path], range);
+    const name = 'heading' in range ? range.heading : 'front matter';
+    if (!was || !now) unmet.push(`${path}: missing or ambiguous protected range ${name}`);
+    else if (!was.equals(now)) unmet.push(`${path}: protected range changed: ${name}`);
+  }
+  for (const want of expected.properties ?? []) {
+    if (want.absent?.length === 0) unmet.push(`${want.path}: properties.absent: expected a non-empty list`);
+    if (want.equals && Object.keys(want.equals).length === 0) unmet.push(`${want.path}: properties.equals: expected at least one key`);
+    if (!(want.path in after)) { unmet.push(`missing file for properties: ${want.path}`); continue; }
+    const props = press.props?.[want.path] ?? {};
+    for (const key of want.absent ?? []) if (Object.hasOwn(props, key)) unmet.push(`${want.path}: appProperty ${key} should be absent`);
+    for (const [key, value] of Object.entries(want.equals ?? {})) {
+      if (!Object.hasOwn(props, key) || props[key] !== value) unmet.push(`${want.path}: appProperty ${key} expected ${JSON.stringify(value)}`);
+    }
+  }
+  if (expected.report?.questionSubjects) {
+    if (expected.report.questionSubjects.length === 0) unmet.push('report.questionSubjects: expected a non-empty list');
+    const questions = list(reportOf(lastRun)?.questions);
+    for (const want of expected.report.questionSubjects) {
+      if (!questions.some((q) => asked(q) && matchesSubject(q, want, press.pathsById ?? {}))) unmet.push(`report.questions: missing ${JSON.stringify(want)} subject`);
+    }
+  }
+  return unmet;
+}
+
+/** A report row that is a question: an object with a string id. */
+const asked = (q: unknown): q is Question => !!q && typeof q === 'object' && typeof (q as { id?: unknown }).id === 'string';
+
+/**
+ * The one complete scorer (corpus-scorer-home): the final press against the case's top-level expectations, then, when
+ * the case lists `runs`, every press (earlier ones in `final.runs`, in order) against its own entry.
+ */
+export function scoreCase(c: { expected: Expected; folder: Readonly<Record<string, string>> }, final: PressResult & { runs?: readonly PressResult[] }): Score {
+  const unmet = scorePress(c.expected, c.folder, final);
+  if (c.expected.runs) {
+    const runs = [...final.runs ?? [], final];
+    if (runs.length !== c.expected.runs.length) unmet.push(`runs: ${runs.length}, expected ${c.expected.runs.length}`);
+    for (const [i, expected] of c.expected.runs.entries()) {
+      const run = runs[i];
+      if (!run) { unmet.push(`run ${i + 1}: missing press`); continue; }
+      unmet.push(...scorePress(expected, c.folder, run).map((line) => `run ${i + 1}: ${line}`));
+    }
+  }
   return { pass: unmet.length === 0, unmet };
+}
+
+/** One press with no earlier ones, scored by the complete scorer; kept for the callers that score a single run. */
+export function score(input: ScoreInput): Score {
+  return scoreCase({ expected: input.expected, folder: input.before }, input);
 }

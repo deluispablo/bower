@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CORPUS_EXECUTION, loadCase, loadCorpus, score, type Expected } from '../src/corpus';
+import { CORPUS_EXECUTION, loadCase, loadCorpus, score, scoreCase, type Expected } from '../src/corpus';
 import { frameOf, replySequence, runOnDrive, runWithClaude, seedCase } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
@@ -56,6 +56,28 @@ it('corpus-registry AC3: unsupported cases are excluded before dispatch', async 
     .filter((f) => /scope (===|!==|=) 'undo'/.test(readFileSync(join(runner, dir, f), 'utf8'))).map((f) => `${dir}/${f}`));
   expect(remaps, 'no undo scope is written or remapped').toEqual([]);
 }, 60_000);
+
+it('corpus-scorer-home AC2: offline consumers call one complete scorer', async () => {
+  const corpus = await import('../src/corpus');
+  const driver = await import('./corpus-run');
+  expect(typeof Reflect.get(corpus, 'scoreCase'), 'the complete scorer is runner code').toBe('function');
+  expect(Reflect.get(driver, 'scoreCase'), "the driver's export is the same scorer").toBe(Reflect.get(corpus, 'scoreCase'));
+  // One press scored from plain data meets the checks only the driver used to make.
+  const path = 'Projects/Alex.md';
+  const text = '---\ntitle: Alex\n---\n\n## My thoughts\nAlex likes café light.\n';
+  const one = (expected: Expected, after: Record<string, string>, more: { props?: Record<string, Record<string, string>>; lastRun?: unknown } = {}) =>
+    score({ expected, before: { [path]: text }, after, lastRun: { v: 1, run: { report: { questions: [] } } }, ...more }).unmet;
+  expect(one({ protectedRanges: [{ path, range: { heading: 'My thoughts' } }] }, { [path]: text.replace('light', 'Light') })).toEqual([`${path}: protected range changed: My thoughts`]);
+  expect(one({ properties: [{ path, equals: { custom: 'Alex' } }] }, { [path]: text }, { props: { [path]: { custom: 'Sam' } } })).toEqual([`${path}: appProperty custom expected "Alex"`]);
+  expect(one({ report: { questionSubjects: [{ kind: 'folder' }] } }, { [path]: text })).toEqual(['report.questions: missing {"kind":"folder"} subject']);
+  expect(one({ runs: [{ files: { present: ['Z.md'] } }, {}] }, { [path]: text })).toEqual(['runs: 1, expected 2', 'run 1: missing file: Z.md', 'run 2: missing press']);
+  expect(one({ protectedRanges: [{ path, range: { heading: 'My thoughts' } }] }, { [path]: text })).toEqual([]);
+  // No second implementation: only the corpus module defines a scorer or one of its checks.
+  const runner = resolve(import.meta.dirname, '..');
+  const homes = ['src', 'test'].flatMap((dir) => readdirSync(join(runner, dir)).filter((f) => f.endsWith('.ts'))
+    .filter((f) => /^(export )?function (score|scoreCase|scorePress|protectedBytes|matchesSubject)\b/m.test(readFileSync(join(runner, dir, f), 'utf8'))).map((f) => `${dir}/${f}`));
+  expect(homes, 'one scorer').toEqual(['src/corpus.ts']);
+});
 
 it("the scorer counts questions exactly and checks a pair's subject", () => {
   const pairSubject = { kind: 'pair' as const, notes: ['Projects/A.md', 'Projects/B.md'] as [string, string] };
@@ -142,14 +164,6 @@ const pairAsk = { kind: 'tidy-intent', v: 1, things: [], asks: [{
 }] };
 const emptyIntent = { kind: 'tidy-intent', v: 1, things: [] };
 
-// Until the additive driver scorer exists, exercise the old scorer to expose the missing checks on assertions.
-async function checkCase(c: Awaited<ReturnType<typeof smallCase>>, run: Awaited<ReturnType<typeof runWithClaude>>) {
-  const driver = await import('./corpus-run');
-  const enhanced: unknown = Reflect.get(driver, 'scoreCase');
-  if (typeof enhanced === 'function') return enhanced(c, run) as ReturnType<typeof score>;
-  return score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById });
-}
-
 it('answers a pair question through the answer path between presses', async () => {
   const { replySequence } = await import('./corpus-run');
   const c = { ...await smallCase(), presses: [
@@ -206,11 +220,11 @@ it('checks the first press independently of the final report', async () => {
     { report: { questionsExactly: 0 } },
   ] } };
   const absent = await runWithClaude(c, replySequence([emptyIntent, emptyIntent]));
-  expect((await checkCase(c, absent)).pass).toBe(false);
+  expect(scoreCase(c, absent).pass).toBe(false);
   const present = await runWithClaude({ ...c, presses: [{ between: [{ kind: 'answer' as const,
     question: { kind: 'pair' as const, notes: [KEPT, OTHER] as [string, string] }, yes: false }] }] },
   replySequence([pairAsk, emptyIntent]));
-  expect(await checkCase(c, present)).toEqual({ pass: true, unmet: [] });
+  expect(scoreCase(c, present)).toEqual({ pass: true, unmet: [] });
   expect(present.score).toEqual({ pass: true, unmet: [] });
 });
 
@@ -219,10 +233,10 @@ it('a protected range fails on one changed byte', async () => {
   const c = { ...await smallCase(), between: [{ kind: 'edit' as const, path: PERSONAL, text: PERSON_TEXT.replace('light', 'Light') }],
     expected: { protectedRanges: [{ path: PERSONAL, range: { heading: 'My thoughts' } }] } };
   const run = await runWithClaude(c, replySequence([emptyIntent]));
-  expect((await checkCase(c, run)).pass).toBe(false);
-  expect(await checkCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT + '- 2026-10-07 · New line.\r\n' } }))
+  expect(scoreCase(c, run).pass).toBe(false);
+  expect(scoreCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT + '- 2026-10-07 · New line.\r\n' } }))
     .toEqual({ pass: true, unmet: [] });
-  expect((await checkCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT.replace(/\r\n/g, '\n') } })).pass)
+  expect(scoreCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT.replace(/\r\n/g, '\n') } }).pass)
     .toBe(false);
 });
 
@@ -230,23 +244,23 @@ it('compares front matter bytes and fails closed on a missing range or note', as
   const { replySequence } = await import('./corpus-run');
   const c = { ...await smallCase(), expected: { protectedRanges: [{ path: PERSONAL, range: { frontMatter: true as const } }] } };
   const run = await runWithClaude(c, replySequence([emptyIntent]));
-  expect(await checkCase(c, run)).toEqual({ pass: true, unmet: [] });
-  expect((await checkCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT.replace('Alex\r', 'ALEX\r') } })).pass)
+  expect(scoreCase(c, run)).toEqual({ pass: true, unmet: [] });
+  expect(scoreCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT.replace('Alex\r', 'ALEX\r') } }).pass)
     .toBe(false);
-  expect((await checkCase(c, { ...run, after: { ...run.after, [PERSONAL]: 'No front matter.\n' } })).pass).toBe(false);
-  expect((await checkCase(c, { ...run, after: {} })).pass).toBe(false);
+  expect(scoreCase(c, { ...run, after: { ...run.after, [PERSONAL]: 'No front matter.\n' } }).pass).toBe(false);
+  expect(scoreCase(c, { ...run, after: {} }).pass).toBe(false);
 });
 
 it('checks Drive properties directly, including absence', async () => {
   const { replySequence } = await import('./corpus-run');
   const c = { ...await smallCase(), expected: { properties: [{ path: PERSONAL, absent: ['by', 'bower_state'], equals: { custom: 'Alex' } }] } };
   const run = await runWithClaude(c, replySequence([emptyIntent]), { [PERSONAL]: { custom: 'Alex' } });
-  expect(await checkCase(c, run)).toEqual({ pass: true, unmet: [] });
+  expect(scoreCase(c, run)).toEqual({ pass: true, unmet: [] });
   const badProps: Array<Record<string, string>> = [{ custom: 'Alex', by: 'bower' }, { custom: 'Alex', bower_state: '' }, { custom: 'alex' }, {}];
   for (const props of badProps) {
-    expect((await checkCase(c, { ...run, props: { ...run.props, [PERSONAL]: props } })).pass).toBe(false);
+    expect(scoreCase(c, { ...run, props: { ...run.props, [PERSONAL]: props } }).pass).toBe(false);
   }
-  expect((await checkCase(c, { ...run, after: {} })).pass).toBe(false);
+  expect(scoreCase(c, { ...run, after: {} }).pass).toBe(false);
 });
 
 it('replays the original request id separately from a new tidy-up', async () => {
@@ -272,12 +286,12 @@ it('checks a typed state question by the resolved note id', async () => {
   const { replySequence } = await import('./corpus-run');
   const c = { ...await smallCase(), expected: { report: { questionSubjects: [{ kind: 'state' as const, note: PERSONAL }] } } };
   const run = await runWithClaude(c, replySequence([emptyIntent]));
-  expect((await checkCase(c, run)).pass).toBe(false);
+  expect(scoreCase(c, run).pass).toBe(false);
   const id = Object.entries(run.pathsById).find(([, path]) => path === PERSONAL)?.[0];
   const withQuestion = (question: unknown) => ({ ...run, lastRun: { run: { report: { questions: [question] } } } });
-  expect(await checkCase(c, withQuestion({ id: `q-state-${id}` }))).toEqual({ pass: true, unmet: [] });
-  expect((await checkCase(c, withQuestion({ id: 'q-state-other' }))).pass).toBe(false);
-  expect((await checkCase(c, withQuestion({ id: `q-ask-${id}`, subject: id }))).pass).toBe(false);
+  expect(scoreCase(c, withQuestion({ id: `q-state-${id}` }))).toEqual({ pass: true, unmet: [] });
+  expect(scoreCase(c, withQuestion({ id: 'q-state-other' })).pass).toBe(false);
+  expect(scoreCase(c, withQuestion({ id: `q-ask-${id}`, subject: id })).pass).toBe(false);
 });
 
 describe.each(['final', 'per-run'] as const)('empty expectations in the %s score', (where) => {
