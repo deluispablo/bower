@@ -232,10 +232,31 @@ it('checks the first press independently of the final report', async () => {
   expect(present.score).toEqual({ pass: true, unmet: [] });
 });
 
+it('corpus-scorer-state AC4: multi-press scoring evaluates every press and count', async () => {
+  const { replySequence } = await import('./corpus-run');
+  const c = { ...await smallCase(), between: [{ kind: 'edit' as const, path: PERSONAL, text: PERSON_TEXT.replace('light', 'Light') }], expected: { runs: [{}, {}] } };
+  const run = await runWithClaude(c, replySequence([emptyIntent, emptyIntent]));
+  const first = run.runs?.[0];
+  if (!first) throw new Error('The first press is missing.');
+  expect(run.score).toEqual({ pass: true, unmet: [] });
+  // The count: a missing press, an extra press, and several presses with no runs, each failing visibly.
+  expect(scoreCase(c, { ...run, runs: [] }).unmet).toEqual(['runs: 1, expected 2', 'run 2: missing press']);
+  expect(scoreCase(c, { ...run, runs: [first, first] }).unmet, 'an extra press is named').toEqual(['runs: 3, expected 2', 'run 3: extra press']);
+  expect(scoreCase({ ...c, expected: {} }, run).unmet, 'no press goes unscored').toEqual(['runs: 2, expected 1']);
+  // The base: after Alex's edit the second press keeps every file from its start, not from the preceding press or the seed.
+  const second = (expected: Expected): string[] => scoreCase({ ...c, expected: { runs: [{ unchangedSinceStart: [KEPT, OTHER, PERSONAL] }, expected] } }, run).unmet;
+  expect(second({ unchangedSinceStart: [KEPT, OTHER, PERSONAL], unchangedSincePrevious: [KEPT, OTHER] })).toEqual([]);
+  expect(second({ unchangedSincePrevious: [PERSONAL] })).toEqual([`run 2: unchangedSincePrevious: ${PERSONAL} changed bytes`]);
+  expect(second({ unchanged: [PERSONAL] })).toEqual([`run 2: file changed: ${PERSONAL}`]);
+  // A press scored in another's place: with the presses swapped, the first is not unchanged since the second.
+  expect(scoreCase({ ...c, expected: { runs: [{}, { unchangedSincePrevious: [PERSONAL] }] } }, { ...first, runs: [run] }).unmet)
+    .toEqual([`run 2: unchangedSincePrevious: ${PERSONAL} changed bytes`]);
+});
+
 it('a protected range fails on one changed byte', async () => {
   const { replySequence } = await import('./corpus-run');
   const c = { ...await smallCase(), between: [{ kind: 'edit' as const, path: PERSONAL, text: PERSON_TEXT.replace('light', 'Light') }],
-    expected: { protectedRanges: [{ path: PERSONAL, range: { heading: 'My thoughts' } }] } };
+    expected: { protectedRanges: [{ path: PERSONAL, range: { heading: 'My thoughts' } }], runs: [{}, {}] } };
   const run = await runWithClaude(c, replySequence([emptyIntent]));
   expect(scoreCase(c, run).pass).toBe(false);
   expect(scoreCase(c, { ...run, after: { ...run.after, [PERSONAL]: PERSON_TEXT + '- 2026-10-07 · New line.\r\n' } }))

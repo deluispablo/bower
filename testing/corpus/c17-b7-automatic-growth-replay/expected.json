@@ -80,6 +80,21 @@
         "Resources/Gardening/Gardening.md",
         "Resources/Gardening/Seed packet.md"
       ],
+      "unchangedSincePrevious": [
+        "Rules.md",
+        "Bower health.md",
+        "Resources/*",
+        ".bower/tags.json",
+        ".bower/questions.json",
+        ".bower/requests.json",
+        ".bower/suggestions.json",
+        ".bower/type-table.json",
+        ".bower/hashes.json",
+        ".bower/hot.md",
+        ".bower/index.md",
+        ".bower/log/*",
+        ".bower/runs/abc123-run1/*"
+      ],
       "report": {
         "filed": 0,
         "created": [],

@@ -10,7 +10,7 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { Pacing } from '../../src/data/drive/transport';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { isJournalRecord } from '../../src/data/contracts/journal-record';
-import type { Question, RunState } from '../../src/data/contracts/types';
+import { BowerError, type Question, type RunState } from '../../src/data/contracts/types';
 import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
@@ -118,6 +118,11 @@ export interface CaseRun {
   runs?: CaseRun[];
   /** Each file's appProperties after the run, by the same paths (none: no entry). */
   props: Record<string, Record<string, string>>;
+  /** Each file's Drive id and bytes' SHA-256, and the ids of `start`'s files now in the Bin (corpus-scorer-state AC2). */
+  files?: Seen['files'];
+  binned?: string[];
+  /** The folder just before the press ran: after the person's between steps, before its request. */
+  start?: Seen;
   lastRun: unknown;
   code: number;
   /** The pretend Drive the run worked on, and the folder's id in it, for what a test does after the run (an undo). */
@@ -322,6 +327,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
     return { ...await redispatchCase(c, replayOf, press, { around, claude, pacing }), requests: replayOf.requests, requestAction };
   }
   const current = await snapshot(drive, root);
+  const known = Object.values(current.files).map((f) => f.id);
   const requestAction = press > 1 && !answerStart ? await addRequest(drive, root, press, request) : undefined;
   const scope = answerStart?.scope ?? (press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope);
   const admitted = admission ? { kind: 'manifest' as const, manifest: admission } : await planAdmission(fakeRead(drive), root, { scope,
@@ -331,7 +337,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   wire.folderId = root;
   // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
   if (realTokens) wire.now = Date.now();
-  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1, drive, root, requestAction };
+  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root, known)), start: current, lastRun: null, code: -1, drive, root, requestAction };
   wire.manifest = admitted.manifest;
   const requests = (await Promise.all(admitted.manifest.journal.map((f) => drive.readText(f.fileId))))
     .map((text) => JSON.parse(text) as unknown).filter(isJournalRecord).filter((r) => r.kind === 'request')
@@ -342,9 +348,9 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
   const model = claude ? withPhases(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : {}), ...(pacing ? { pacing } : {}) });
-  const { after, props: kept, pathsById } = await snapshot(drive, root);
+  const { after, props: kept, pathsById, files, binned } = await snapshot(drive, root, known);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction, wire,
+  return { after, props: kept, pathsById, files, binned, start: current, lastRun, code, drive, root, requests, requestAction, wire,
     dispatch: { runId, scope, admission: admitted.manifest } };
 }
 
@@ -352,6 +358,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
 export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: number, options: Pick<CaseOptions, 'around' | 'claude' | 'pacing'> = {}): Promise<CaseRun> {
   const dispatch = previous.dispatch;
   if (!dispatch) throw new Error('A corpus run must have reached main before redispatch.');
+  const start = await snapshot(previous.drive, previous.root);
   const wire = driveV3(previous.drive, attempt, dispatch.runId);
   wire.folderId = previous.root;
   wire.manifest = dispatch.admission;
@@ -365,17 +372,29 @@ export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: 
     fetch: options.around ? options.around(wire.fetch) : wire.fetch,
     ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
   });
-  const observed = await snapshot(previous.drive, previous.root);
-  return { ...observed, code, lastRun: JSON.parse(observed.after[SYSTEM.lastRun] ?? 'null') as unknown,
+  const observed = await snapshot(previous.drive, previous.root, Object.values(start.files).map((f) => f.id));
+  return { ...observed, start, code, lastRun: JSON.parse(observed.after[SYSTEM.lastRun] ?? 'null') as unknown,
     drive: previous.drive, root: previous.root, dispatch, wire };
 }
 
-async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>>; pathsById: Record<string, string> }> {
-  const all = await drive.listAll(root);
+/** The folder at one moment (corpus-scorer-state AC2): each file's text, appProperties, Drive id and bytes' SHA-256, and the Bin. */
+interface Seen {
+  after: Record<string, string>;
+  props: Record<string, Record<string, string>>;
+  pathsById: Record<string, string>;
+  files: Record<string, { id: string; sha256: string }>;
+  /** Which of the `known` ids are in the Drive Bin: trashed, not gone. */
+  binned: string[];
+}
+
+async function snapshot(drive: FakeDrive, root: string, known: readonly string[] = []): Promise<Seen> {
+  // Drive's checksums of each file's bytes (as its listing's `sha256Checksum`), a binary's as well as a text's.
+  const all = await drive.listAll(root, { checksums: true });
   const byId = new Map(all.map((f) => [f.id, f]));
   const out: Record<string, string> = {};
   const pathsById: Record<string, string> = {};
   const props: Record<string, Record<string, string>> = {};
+  const files: Seen['files'] = {};
   for (const f of all) {
     const parts: string[] = [];
     for (let x = byId.get(f.id); x; x = byId.get(x.parents[0] ?? '')) {
@@ -386,8 +405,18 @@ async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record
     if (f.folder) continue;
     out[parts.join('/')] = await drive.readText(f.id);
     if (f.appProperties) props[parts.join('/')] = f.appProperties;
+    if (f.sha256) files[parts.join('/')] = { id: f.id, sha256: f.sha256 };
   }
-  return { after: out, props, pathsById };
+  const binned: string[] = [];
+  for (const id of known) {
+    if (byId.has(id)) continue;
+    const file = await drive.get(id, { binned: true }).catch((e: unknown) => {
+      if (e instanceof BowerError && e.code === 'not-found') return null;
+      throw e;
+    });
+    if (file?.trashed) binned.push(id);
+  }
+  return { after: out, props, pathsById, files, binned };
 }
 
 /** Bind only exact admitted names to ids; the intent still passes the existing Claude provider's validation. */
