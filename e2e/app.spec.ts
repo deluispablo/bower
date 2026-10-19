@@ -1,4 +1,4 @@
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 import { axeScan } from './axe';
 
 const open = async (page: import('@playwright/test').Page, path: string, scenario = 'default', time = 'instant') => {
@@ -31,7 +31,7 @@ test('first sign-in makes the five folders', async ({ page }) => {
 
 test('a tidy-up walks the phases, files the inbox and offers the replay', async ({ page }) => {
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible();
   await page.getByRole('button', { name: 'Watch what Bower did' }).click();
@@ -42,7 +42,7 @@ test('a tidy-up walks the phases, files the inbox and offers the replay', async 
 
 test('a failed run says why and moves nothing', async ({ page }) => {
   await open(page, '/', 'fail-run');
-  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Nothing was moved|The tidy-up stopped before changing anything/)).toBeVisible();
 });
@@ -120,7 +120,7 @@ test('a failed start says why and offers to try again', async ({ page, allowCons
   test.skip(!isFake, 'the Worker answering 500 is the fake source');
   allowConsole(/Worker answered 500/, 'the Worker answers 500 to the first press, on purpose');
   await open(page, '/', 'start-fails');
-  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await openTidy(page);
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
   await expect(sheet.getByRole('alert')).toHaveText("Something went wrong on Bower's side. Try again later.");

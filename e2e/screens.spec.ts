@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 
 // Screenshots of every screen for the design canvas. Runs only with SHOTS=<dir>.
 const DIR = process.env.SHOTS;
@@ -86,7 +86,8 @@ test('screens', async ({ page }, info) => {
   await shot(page, '13-settings', p);
 
   await go(page, '/');
-  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await openTidy(page);
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ })).toBeVisible();
   await page.waitForTimeout(500);
   await shot(page, '14-tidy-confirm', p);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();

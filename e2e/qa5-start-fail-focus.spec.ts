@@ -2,14 +2,14 @@
  * qa5-start-fail-focus (qa-5 Claude F2; WAI-ARIA APG modal dialog): when a tidy-up fails to start, the keyboard stays in
  * the sheet, on "Try again", in Chrome, which drops focus from a button that becomes disabled.
  */
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 test('qa5-start-fail-focus: AC2 start-fail-focus: a failed start leaves the keyboard on Try again, inside the sheet', async ({ page, allowConsole }) => {
   test.skip(!isFake, 'the Worker answering 500 is the fake source');
   allowConsole(/Worker answered 500/, 'the Worker answers 500 to the first press, on purpose');
   await page.goto('/?scenario=start-fails&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await openTidy(page);
   const sheet = page.getByRole('dialog');
   const start = sheet.getByRole('button', { name: /^Tidy up \d+ things$/ });
   await start.focus();

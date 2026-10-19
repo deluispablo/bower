@@ -6,7 +6,7 @@
  */
 import { expectAxeClean } from './axe';
 import type { Locator, Page } from '@playwright/test';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const NOTE_WORDS = 'Ask the landlord about the heating';
 const HUB_LINE = 'A new listing added to the shortlist.';
@@ -42,7 +42,7 @@ async function addNote(page: Page, words: string): Promise<void> {
 
 /** Tidies up from Home and waits, with the sheet open, for the result. */
 async function tidyUp(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things?$/ }).click();
   await expect(page.getByRole('dialog').getByText(/^Done\./).last()).toBeVisible({ timeout: 20_000 });
 }

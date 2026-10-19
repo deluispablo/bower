@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { Pile, RunReport, RunState } from '../src/data/contracts/types';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 import { expectAxeClean } from './axe';
 import { resize } from './viewport';
 
@@ -59,7 +59,7 @@ for (const source of ['demo', 'fake'] as const) {
       const pile: Pile = { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: 3000,
         items: [{ id: 'f', name: 'f.pdf', kind: 'pdf', origin: 'From this computer' }] };
       await openFixture(page, source, 'instructions', [pile]);
-      await page.getByRole('main').getByRole('button', { name: 'Tidy up 1 thing', exact: true }).click();
+      await openTidy(page);
       const ask = page.getByRole('dialog');
       await expect(ask).toHaveAccessibleName('Tidy up 1 thing?');
       await expect(ask.getByRole('button', { name: 'Tidy up 1 thing', exact: true })).toBeVisible();

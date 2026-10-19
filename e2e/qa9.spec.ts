@@ -4,7 +4,7 @@ import { resize } from './viewport';
  * entry of the QA list with "task": "qa-9", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -104,7 +104,7 @@ test('a link follows a rename through a tidy-up', async ({ page, isMobile }) => 
   await input.fill('Cobble Row flat');
   await input.press('Enter');
   await expect(tree.getByRole('treeitem', { name: /Cobble Row flat/ })).toBeVisible();
-  await page.locator('footer').getByRole('button').first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/15 things filed/).last()).toBeVisible({ timeout: 10_000 });
   await page.keyboard.press('Escape');

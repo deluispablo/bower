@@ -4,7 +4,7 @@ import { resize } from './viewport';
  * the QA list with "task": "qa-7", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -13,7 +13,7 @@ const open = async (page: Page, path: string, scenario = 'default', time = 'inst
 
 const stopARun = async (page: Page): Promise<void> => {
   await open(page, '/', 'fail-run');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
   await page.keyboard.press('Escape');

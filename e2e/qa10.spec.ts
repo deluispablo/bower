@@ -4,7 +4,7 @@ import { resize } from './viewport';
  * entry of the QA list with "task": "qa-10", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -63,7 +63,7 @@ test('the phone page menu button is as clear as Back', async ({ page, isMobile }
 test('the keyboard stays in the page after closing, answering, removing or saying no', async ({ page, isMobile }) => {
   test.skip(isMobile, 'keyboard use');
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -115,7 +115,8 @@ const unnamedButtons = (page: Page): Promise<string[]> =>
 
 test('no unnamed buttons: the tidy-up sheet and Add', async ({ page }) => {
   await open(page, '/');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ })).toBeVisible();
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(await unnamedButtons(page)).toEqual([]);
   await open(page, '/add');
@@ -180,7 +181,7 @@ test('one thing, one name: Home, the tree and the tidy-up sheet name things alik
   await expect(homePiles.first()).toBeVisible();
   const onHome = (await homePiles.allTextContents()).map((t) => t.trim());
   for (const t of await page.locator('section[aria-labelledby="recent"] [class*="pileText"]').allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,4}$/);
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   const sheetNames = page.getByRole('dialog').getByRole('list', { name: 'In the inbox', exact: true }).locator('li > span:not(.muted):not([aria-hidden])');
   // Web-first: allTextContents() does not wait, so wait for the sheet's list before reading it.
   await expect(sheetNames).toHaveCount(onHome.length);
@@ -233,7 +234,7 @@ test('a link that is not one is said so, next to the box', async ({ page }) => {
 
 test('words agree: a stopped run is "The tidy-up stopped" everywhere', async ({ page }) => {
   await open(page, '/', 'fail-run');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
   await page.keyboard.press('Escape');

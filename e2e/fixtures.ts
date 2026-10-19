@@ -3,8 +3,13 @@
  * fake Google Drive (`pnpm e2e:fake`). This `test` adds `source=` to every
  * address a test opens; the app keeps it for the tab after that.
  */
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 import { guardConsole, type AllowConsole } from './console-guard';
+
+/** Opens the tidy-up sheet from the one launch on screen: the checklist's, the Inbox's or the top bar's. Call it before a sheet is open. */
+export async function openTidy(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^Tidy up( \d+( things?)?)?$/, disabled: false }).first().click();
+}
 
 export const source = process.env.E2E_SOURCE;
 export const isFake = source === 'fake';

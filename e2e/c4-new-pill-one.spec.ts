@@ -1,6 +1,6 @@
 import { resize } from './viewport';
 import type { Locator } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 import { expectAxeClean } from './axe';
 
 async function look(pill: Locator) {
@@ -24,7 +24,7 @@ test('the new pill has one look everywhere', async ({ page, isMobile }) => {
   await page.goto('/?source=fake&scenario=default&time=instant');
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   // The scripted tidy-up marks both a filed thing and the project note's new Timeline line.
-  await page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things?$/ }).click();
   await expect(page.getByRole('dialog').getByText(/^Done\./).last()).toBeVisible({ timeout: 20_000 });
   await page.keyboard.press('Escape');

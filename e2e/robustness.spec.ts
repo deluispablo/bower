@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, isFake, test } from './fixtures';
+import { expect, isFake, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'demo') => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -11,7 +11,7 @@ const responsive = (page: Page) =>
 test('a failed tidy-up says why, never freezes, and trying again works', async ({ page }) => {
   test.setTimeout(90_000);
   await open(page, '/', 'fail-run');
-  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Nothing was moved|The tidy-up stopped before changing anything/)).toBeVisible({ timeout: 25_000 });
   await page.waitForTimeout(5000);
@@ -44,7 +44,7 @@ test('a sample pile and a note-only pile go to the inbox and get filed', async (
   const inbox = page.getByRole('region', { name: 'Inbox' });
   await expect(inbox.getByRole('link', { name: /Car insurance renewal/ })).toBeVisible();
   await expect(inbox.getByRole('link', { name: /bins go out/i })).toBeVisible();
-  await page.getByRole('button', { name: /^Tidy up 3 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 3 things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Done\. 3 things filed/).last()).toBeVisible({ timeout: 15_000 });
 });

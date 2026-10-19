@@ -3,7 +3,7 @@
  * entry of the QA list with "task": "qa-8", on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -45,7 +45,7 @@ test('focus after a stopped run is put away stays in the page', async ({ page, i
   await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ rightOpen: true })));
   for (const where of ['home', 'panel'] as const) {
     await open(page, '/', 'fail-run');
-    await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+    await openTidy(page);
     await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
     await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
     await page.keyboard.press('Escape');
@@ -124,7 +124,7 @@ test('tabs come back after a reload', async ({ page, isMobile }) => {
 
 test('Try again opens the tidy-up', async ({ page }) => {
   await open(page, '/', 'fail-run');
-  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
   await page.keyboard.press('Escape');

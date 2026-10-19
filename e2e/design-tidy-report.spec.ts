@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, openTidy, test } from './fixtures';
 import { expectAxeClean } from './axe';
 import { resize } from './viewport';
 
@@ -27,7 +27,7 @@ for (const width of [375, 1440]) {
   test(`design-tidy-report: Done and Watch stay in reach while the report scrolls, at ${width}`, async ({ page }) => {
     await resize(page, { width, height: width < 900 ? 812 : 900 });
     await page.goto('/?scenario=default&time=instant');
-    await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+    await openTidy(page);
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
     await expect(sheet.getByText(/^Done\. \d+ things filed\.$/).last()).toBeVisible();
@@ -81,7 +81,7 @@ for (const [width, height] of [[375, 812], [1440, 520]]) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: INSET } });
     await page.goto('/?scenario=default&time=instant');
-    await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+    await openTidy(page);
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
     await expect(sheet.getByText(/^Done\. \d+ things filed\.$/).last()).toBeVisible();
