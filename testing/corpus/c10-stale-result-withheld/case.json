@@ -3,7 +3,7 @@
   "capability": "C10",
   "title": "A recently retrieved page whose facts have expired",
   "covers": "model",
-  "source": "new (C10 preparation; deterministic proposals pending full lookup harness proof)",
+  "source": "new (C10 requirement; unsupported today: Bower has no web lookup)",
   "scope": "instructions",
   "allowWeb": true,
   "inbox": [],

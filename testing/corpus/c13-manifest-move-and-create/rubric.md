@@ -1,3 +1,8 @@
-Restore the source by its original id to the inbox under its original name, with exactly its original bytes. Put the unchanged generated note in the recoverable Drive Bin by its created id; never hard-delete. Report complete recovery only when both effects are confirmed.
-Rules.md and unrelated files are unchanged. This is an undo, so an inbox return needs no filing question (TL-P4-08 point 1 exception).
-The starting folder is a post-tidy-up snapshot, not proof that a run or manifest exists. Reconstruct the forward run using the exact proposal in the prep document, retain its actual manifest and checkpoint, then invoke the product undo entry point. Assert same ids, Bin recoverability, fences and the visible outcome separately from the existing folder scorer.
+Unsupported today: the owner dropped Undo of a whole tidy-up on 2026-10-16, so this case is not run; it records the requirement. The person asks Bower to correct a tidy-up or changes it themselves, and an undo request with no answer waits.
+If Undo of a tidy-up returns, the lifecycle is:
+1. Forward execution. A tidy-up files `Seed_collection_final(2).txt` from the inbox as `Resources/Gardening/Seed collection.txt` and creates the note `Seed collection.md` beside it. The starting folder is that result, not proof that a run happened.
+2. Captured manifest. The forward run's own manifest and checkpoint are kept, with the source's id and the note's created id.
+3. Person edit. None in this case.
+4. Inverse operation. "Undo the last tidy-up" restores the source by its id to the inbox under its original name, with exactly its original bytes, and puts the unchanged generated note in the recoverable Drive Bin by its created id; nothing is hard-deleted. An inbox return by undo needs no filing question (TL-P4-08 point 1 exception). Every inverse write is fenced like any other write.
+5. Preservation. Rules.md and unrelated files stay unchanged. Complete recovery is reported only when both effects are confirmed.
+6. Replay. Replaying the undo changes nothing more and reports no second recovery.

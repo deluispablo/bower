@@ -7,7 +7,9 @@
   "linksResolve": true,
   "report": {
     "filed": 0,
-    "created": [],
+    "created": [
+      "Bower health.md"
+    ],
     "updated": [],
     "setAside": 0,
     "questions": [],
@@ -15,9 +17,9 @@
       "Look up the current council tax band for the Larkspur Lane flat."
     ]
   },
-  "notes": [
+  "answers": [
     {
-      "path": ".bower/requests.json",
+      "request": "Look up the current council tax band for the Larkspur Lane flat.",
       "contains": [
         "Bower did not look anything up. Web lookups are off in Settings."
       ]

@@ -3,7 +3,7 @@
   "capability": "C10",
   "title": "A lookup that fails",
   "covers": "model",
-  "source": "new (failed and stale lookups are not scripted)",
+  "source": "new (C10 requirement; unsupported today: Bower has no web lookup)",
   "scope": "instructions",
   "allowWeb": true,
   "inbox": [],

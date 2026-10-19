@@ -4,9 +4,10 @@
   ],
   "linksResolve": true,
   "report": {
-    "filed": 1,
+    "filed": 0,
     "created": [
-      "Projects/Flat hunt/Council tax source.md"
+      "Projects/Flat hunt/Council tax source.md",
+      "Bower health.md"
     ],
     "updated": [
       "Projects/Flat hunt/Larkspur Lane flat.md"
@@ -19,11 +20,10 @@
   },
   "files": {
     "present": [
-      "Projects/Flat hunt/Council tax web result.txt",
       "Projects/Flat hunt/Council tax source.md"
     ],
     "absent": [
-      "Inbox/*"
+      "Projects/Flat hunt/Council tax web result.txt"
     ]
   },
   "notes": [
@@ -35,7 +35,7 @@
       ],
       "timeline": [
         "2026-10-02 \u00b7 Alex shortlisted the Larkspur Lane flat.",
-        "The Saltmere council page says council tax band C; checked on 2026-10-07. \u00b7 [[Council tax web result.txt]]"
+        "The Saltmere council page says council tax band C; checked on 2026-10-07. \u00b7 [[Council tax source]]"
       ],
       "timelineCount": 2
     },
@@ -47,13 +47,18 @@
         "Published: 2026-10-06. Applies until: 2026-10-31. Retrieved: 2026-10-07.",
         "[[Larkspur Lane flat]]"
       ]
-    },
+    }
+  ],
+  "answers": [
     {
-      "path": ".bower/requests.json",
+      "request": "Look up the current council tax band for the Larkspur Lane flat.",
       "contains": [
-        "Council tax band C",
-        "https://saltmere-council.example/bands/larkspur-lane",
+        "band C",
         "2026-10-07"
+      ],
+      "links": [
+        "Projects/Flat hunt/Council tax source.md",
+        "Projects/Flat hunt/Larkspur Lane flat.md"
       ]
     }
   ]
