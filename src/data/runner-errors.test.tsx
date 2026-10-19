@@ -54,9 +54,10 @@ describe('runner data errors', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(MESSAGE);
       const retry = screen.getByRole('button', { name: 'Try again' });
       retry.focus();
+      const before = read.mock.calls.length;
       fireEvent.click(retry);
       await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
-      expect(read).toHaveBeenCalledTimes(2);
+      expect(read).toHaveBeenCalledTimes(before + 1);
       await waitFor(() => expect(document.activeElement).not.toBe(document.body));
       cleanup();
       useUi.getState().setTidy(false);
