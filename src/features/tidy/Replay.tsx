@@ -23,7 +23,9 @@ import s from './replay.module.css';
  * the run's report, the way the landing's court works: the inbox is a messy
  * heap, each folder a shelf, and Bower picks things out of the heap one by
  * one and sets them on their shelf in a neat row. The rest land together at
- * the end. Skippable; "Watch again" from Home.
+ * the end. On a phone there is no heap: each folder lists every thing by its
+ * whole name from the start, and Bower visits each folder in turn. Closable;
+ * "Watch again" from Home.
  */
 export function Replay() {
   const { replayRunId, startReplay } = useUi();
@@ -77,7 +79,7 @@ function Court({ items, summary, updated, unfinished, setAside, onClose }: {
   const desktop = useIsDesktop();
   const bird = useRef<BowerController>(null);
   const stage = useRef<HTMLDivElement>(null);
-  const carried = items.slice(0, desktop ? 6 : 4);
+  const carried = desktop ? items.slice(0, 6) : [];
   const folders = useMemo(() => [...new Set(items.map((i) => i.to))], [items]);
   const [inHeap, setInHeap] = useState<Set<number>>(() => new Set(items.map((_, i) => i)));
   const [onShelf, setOnShelf] = useState<number[]>([]);
@@ -113,6 +115,12 @@ function Court({ items, summary, updated, unfinished, setAside, onClose }: {
             setOnShelf((x) => [...x, i]);
           })
           .holding(false);
+      });
+      // A phone has no heap: Bower visits each folder, whose things are already in place.
+      if (!desktop) folders.forEach((f) => {
+        b.then(() => q(`[data-shelf="${CSS.escape(f)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+          .flyTo(() => b.pointOn(q(`[data-shelf="${CSS.escape(f)}"]`), 0.9))
+          .peck(() => setLanding(f));
       });
       b.then(() => {
         setInHeap(new Set());
@@ -169,14 +177,14 @@ function Court({ items, summary, updated, unfinished, setAside, onClose }: {
             <p className="muted">{finished ? [summary, updated ? `${plural(updated, 'note')} brought up to date.` : '', unfinished].filter(Boolean).join(' ') : 'The tidy-up already ran. This is where everything went.'}</p>
           </div>
           <Button variant={finished ? 'primary' : 'ghost'} size="sm" onClick={onClose}>
-            {finished ? 'Done' : 'Skip'}
+            Close
           </Button>
         </header>
         <SetAsideRows rows={setAside} />
 
-        <div className={s.court}>
+        <div className={desktop ? s.court : `${s.court} ${s.phone}`}>
           {/* Only the filed things: what was set aside or waits is not in this heap, so it is never called the inbox. */}
-          <section className={s.heapBox} aria-label="Filed from your inbox">
+          {desktop && <section className={s.heapBox} aria-label="Filed from your inbox">
             <h3 className={s.label}>Filed from your inbox{heapLeft ? `, ${heapLeft} left` : ''}</h3>
             <div className={s.heap} data-perch>
               {items.map((it, i) =>
@@ -198,14 +206,16 @@ function Court({ items, summary, updated, unfinished, setAside, onClose }: {
               )}
               {heapLeft === 0 && <p className={s.emptyHeap}>All filed items reached their folders.</p>}
             </div>
-          </section>
+          </section>}
 
-          <section className={s.shelves} aria-label="Your folders">
+          <section className={s.shelves} aria-label="Your folders" {...(desktop ? {} : { 'data-perch': '' })}>
+            <p className={s.para}>Projects have an end, Areas go on, Resources are for later, Archive is done.</p>
             {folders.map((f) => {
-              const here = onShelf.filter((i) => items[i]?.to === f);
+              // A phone lists every thing from the start; the desktop's shelves fill as Bower carries.
+              const here = (desktop ? onShelf : items.map((_, i) => i)).filter((i) => items[i]?.to === f);
               return (
                 <div key={f} className={`${s.shelf} ${landing === f ? s.land : ''}`}>
-                  <p className={s.shelfName}>
+                  <p className={s.shelfName} data-shelf={f}>
                     <span className={s.dot} style={{ background: paraColor(f) }} />
                     <span className={s.shelfText}>
                       {shelfName(f)}
@@ -213,7 +223,7 @@ function Court({ items, summary, updated, unfinished, setAside, onClose }: {
                     </span>
                   </p>
                   <div className={s.row}>
-                    {here.slice(-4).map((i) => {
+                    {(desktop ? here.slice(-4) : here).map((i) => {
                       const it = items[i];
                       return it ? (
                         <span key={i} className={s.placed}>

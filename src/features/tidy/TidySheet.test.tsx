@@ -55,7 +55,7 @@ async function fixture(qs: Question[], opts: { run?: RunState; withHome?: boolea
   await settle();
   // Positive control for every sheet red: the original run still renders its clock and title.
   const sheet = screen.getByRole('dialog');
-  expect(sheet).toHaveAccessibleName(current.phase === 'done' ? 'Done. 0 things filed.' : 'Reading 1 thing');
+  expect(sheet).toHaveAccessibleName(current.phase === 'done' ? /^Done\. 0 things filed[.,]/ : 'Reading 1 thing');
   expect(within(sheet).getByText(current.phase === 'done' ? /^Finished / : /^Started /)).toBeVisible();
   return { sheet, answer, start, finish: async () => {
     await act(async () => {
@@ -116,7 +116,7 @@ describe('Q1b tidy questions', () => {
   it('Q1b The run ends with a question unanswered', async () => {
     const f = await fixture([ask()]);
     await f.finish();
-    expect(f.sheet).toHaveAccessibleName('Done. 0 things filed.');
+    expect(f.sheet).toHaveAccessibleName('Done. 0 things filed, 1 note updated.');
     expect(within(f.sheet).getByRole('status')).toHaveTextContent('1 note brought up to date and 1 new question for you.');
     const links = within(f.sheet).getByRole('list', { name: 'Brought up to date' });
     expect(within(links).getByRole('link', { name: 'Papers' })).toHaveAttribute('href', '/note/Areas/Home/Papers.md');

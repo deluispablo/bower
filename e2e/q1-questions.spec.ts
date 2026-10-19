@@ -306,8 +306,9 @@ for (const source of ['demo', 'fake'] as const) {
       await tokenColor(row.getByText("Bower couldn't place this", { exact: true }), '--text-muted');
       const sheet = await start(page);
       await page.evaluate(() => (window as unknown as { __q1Fixture: BrowserFixture }).__q1Fixture.finish());
-      await expect(sheet).toHaveAccessibleName('Done. 0 things filed.');
+      await expect(sheet).toHaveAccessibleName('Done. 0 things filed, 1 note updated.');
       await expect(sheet.getByRole('status')).toHaveText('1 note brought up to date and 1 new question for you.');
+      await sheet.getByText('See the list', { exact: true }).click();
       const links = sheet.getByRole('list', { name: 'Brought up to date', exact: true });
       await expect(links.getByRole('link', { name: 'Papers' })).toHaveAttribute('href', '/note/Areas/Home/Papers.md');
       expect(await sheetCard(page).evaluate((el) => {
@@ -336,6 +337,7 @@ for (const source of ['demo', 'fake'] as const) {
       { id: 'letters-folder', label: 'Projects / Letters' }] })], true);
     const sheet = await start(page);
     await page.evaluate(() => (window as unknown as { __q1Fixture: BrowserFixture }).__q1Fixture.finish());
+    await sheet.getByText('See the list', { exact: true }).click();
     await expect(sheet.getByRole('list', { name: 'New notes' }).getByRole('link')).toHaveCount(28);
     await sheetCard(page).getByRole('button', { name: 'Something else…' }).click();
     const field = sheet.getByRole('textbox', { name: 'In your own words' });

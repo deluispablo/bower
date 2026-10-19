@@ -91,6 +91,7 @@ async function openFixture(page: Page, source: 'demo' | 'fake', row: 1 | 2 | 5 |
   await page.getByRole('dialog').getByRole('button', { name: 'Tidy up 1 thing', exact: true }).click();
   await expect(page.getByRole('dialog').getByText('Reading 1 thing', { exact: true }).first()).toBeVisible();
   await page.evaluate(() => (window as unknown as { __c05Finish: () => void }).__c05Finish());
+  await page.getByRole('dialog').getByText('See the list', { exact: true }).click();
   await expect(page.getByRole('dialog').getByRole('list', { name: 'New notes' }).getByRole('link', { name: 'Control', exact: true })).toBeVisible();
 }
 

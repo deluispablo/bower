@@ -17,7 +17,7 @@ const active = (page: Page): Promise<string> => page.evaluate(() => `${document.
 
 test('F1: closing the replay from the Home card keeps the keyboard on the page', async ({ page }) => {
   test.skip(isFake, 'the demo default situation has 15 things to tidy and resets on load; the opener rule itself is unit-tested in focus.test.ts');
-  for (const how of ['Escape', 'Skip']) {
+  for (const how of ['Escape', 'Close']) {
     await open(page, '/');
     await openTidy(page);
     await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
@@ -31,7 +31,7 @@ test('F1: closing the replay from the Home card keeps the keyboard on the page',
     const replay = page.getByRole('dialog', { name: 'What Bower did in the tidy-up' });
     await expect(replay).toBeVisible();
     if (how === 'Escape') await page.keyboard.press('Escape');
-    else await replay.getByRole('button', { name: 'Skip' }).click();
+    else await replay.getByRole('button', { name: 'Close' }).click();
     await expect(replay).toHaveCount(0);
     await expect(watch).toHaveCount(0);
     // The card is gone with the opener: focus goes to the page's heading, never the body.

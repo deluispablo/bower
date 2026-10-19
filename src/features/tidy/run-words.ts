@@ -89,11 +89,17 @@ export function runTitle(r: RunState): string {
     case 'saving':
       return stepLabel(r, r.phase);
     case 'done':
-      return `Done. ${r.scope === 'instructions' ? 'Bower read your changes' : filedWords(r.report)}.`;
+      return `Done. ${r.scope === 'instructions' ? 'Bower read your changes' : `${filedWords(r.report)}${updatedWords(r.report)}`}.`;
     case 'failed':
       return 'The tidy-up stopped';
   }
 }
+
+/** The notes a finished tidy-up brought up to date, after its filed count: ", 2 notes updated"; empty when none. */
+const updatedWords = (report: RunReport | undefined): string => {
+  const n = report ? notesUpdated(report) : 0;
+  return n ? `, ${plural(n, 'note')} updated` : '';
+};
 
 /**
  * A pile of words already saved (c3-pair-ask, TL-P4-19 addendum 9): its lines were in one note already, by its name,
@@ -114,12 +120,12 @@ export function filedWords(report: RunReport | undefined): string {
 export function runDetail(r: RunState): string {
   if (r.scope === 'instructions' && r.phase !== 'done' && r.phase !== 'failed') {
     if (r.phase === 'reading') return 'Reading the changes you made and anything you asked.';
-    if (r.phase === 'writing') return 'Doing what your changes call for. Your inbox waits for a tidy-up.';
+    if (r.phase === 'writing') return 'Doing what your changes call for.';
     if (r.phase === 'saving') return 'Saving it in your Drive.';
   }
   switch (r.phase) {
     case 'queued':
-      return 'Waiting for a turn on the machine that does the work. Usually under a minute.';
+      return 'Waiting to start. Usually under a minute.';
     case 'reading':
       return 'Copying your inbox and reading what each thing is.';
     case 'writing':

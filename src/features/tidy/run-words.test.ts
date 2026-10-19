@@ -34,7 +34,7 @@ describe('what a run says', () => {
         questions: [{ id: 'q', text: 't', yes: 'y', no: 'n', askedAt: 0 }],
       },
     };
-    expect(runTitle(done)).toBe('Done. 3 things filed.');
+    expect(runTitle(done)).toBe('Done. 3 things filed, 1 note updated.');
     expect(runDetail(done)).toBe('1 note brought up to date and 1 new question for you.');
     expect(landedSummary(done)).toBe('Flat hunt got 2 and Money got 1.');
   });

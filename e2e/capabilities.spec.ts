@@ -45,6 +45,9 @@ async function tidyUp(page: Page): Promise<void> {
   await openTidy(page);
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things?$/ }).click();
   await expect(page.getByRole('dialog').getByText(/^Done\./).last()).toBeVisible({ timeout: 20_000 });
+  // The notes made and brought up to date wait behind "See the list" (ux-results-polish).
+  const more = page.getByRole('dialog').getByText('See the list', { exact: true });
+  if (await more.count()) await more.click();
 }
 
 test('the result links what it made', async ({ page }) => {
