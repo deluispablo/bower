@@ -21,7 +21,7 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c05-person-edited-between-runs | C05 | scripted | new (scripted intent replies through the planner) |
 | c05-merge-question-first | C05 | scripted | new (scripted intent replies through the planner) |
 | c05-merge-answer-no | C05 | scripted | new (scripted intent replies through the planner) |
-| c06-clipping-compared | C06 | scripted | bench:1-job-offer-clipping, adapted (made-up company) |
+| c06-clipping-compared | C06 | scripted | new (C06; a made-up clipping adds one sourced hub line and leaves the other offer unchanged) |
 | c06-stored-project-connection | C06 | scripted | new (C06; the source note links both hubs with a reason) |
 | c06-shared-name-unrelated | C06 | scripted | new (C06; one sourced line on the right Cedar note) |
 | c06-two-sources-attributed | C06 | scripted | new (C06; one sourced line per project) |
@@ -33,7 +33,7 @@ Made-up cases for the capabilities C04 to C13 (C12 is the lifecycle: faults, int
 | c08-report-with-sources | C08 | scripted | new (C08 prep; report through the existing thing.note boundary) |
 | c08-compare-missing-fact | C08 | scripted | new (C08 prep; comparison with a missing deposit and trade-off prose) |
 | c08-revise-keeps-personal-text | C08 | model | new (C08 prep; same-document revision, personal text and history) |
-| c09-burst-pipe | C09 | scripted | bench:5-question-about-filed-pdf, adapted (made-up policy) |
+| c09-burst-pipe | C09 | scripted | new (C09; a made-up policy answered from its original and its note) |
 | c09-closest-flat | C09 | scripted | p2-journey:C09 |
 | c10-fresh-result-cited | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |
 | c10-stale-result-withheld | C10 | model | new (C10 prep; scripted proposals pending lookup harness proof) |

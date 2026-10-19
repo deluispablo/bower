@@ -3,7 +3,7 @@
   "capability": "C09",
   "title": "Does my insurance cover a burst pipe",
   "covers": "scripted",
-  "source": "bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf)",
+  "source": "new (C09; a made-up policy answered from its original and its note)",
   "scope": "instructions",
   "allowWeb": false,
   "inbox": [],
