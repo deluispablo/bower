@@ -1,7 +1,15 @@
-Pending C17/B9 preparation, covers:model; the proposed marker/alsoCites reply fields are unsupported today.
+# Uncertainty and inference remain visibly qualified
 
-The notice explicitly states a conditional possible closure, so the first new line says “Uncertain:” and retains the condition and undecided status. The effect on the confirmed visit is a qualified inference from booking plus notice, so the second line visibly ends “(inferred)” before its extra source citation. Neither says cancellation, invents a forecast or confidence percentage, nor labels the sources contradictory. C07 owns that semantic distinction; B9 only preserves the declared qualification and provenance.
+The notice says the garden may close if heavy rain is forecast and that no decision has been made. Bower adds two
+lines to Saltmere visit in one edit. The first comes from the reply's uncertain marker: it starts "Uncertain:" and
+keeps the condition and the undecided status. The second comes from the inferred marker, with the booking as its
+extra source: it ends "(inferred)", then names the booking as a second source, before the notice's citation.
 
-The sourced Timeline lines meet the value gate without a redundant companion. Both source originals remain intact, the existing booking history remains, and Alex's prose stays byte identical. The scripted fixture does not propose states; its attributed conditional state is compatible with both claims, not a blanket ban on C05 state changes. Inferential writing remains subject to lead Q2 and cannot supply a preference, rule, schema, numeric calculation or permission. Rendering is ordinary literal Inline text with links, never a footnote or special warning card. A marker never automatically creates a Home question.
+Neither line says the visit is cancelled, invents a forecast or a confidence figure, or calls the sources
+contradictory; C07 owns that distinction. The same lines without their markers, or a line that calls the visit
+cancelled, fail the expectations. Both originals keep their bytes, the booking's history line stays, and Alex's
+prose, the Current state and the front matter stay byte for byte. Each line is ordinary text with links, never a
+footnote or a warning card, and a marker asks no question.
 
-B9c needs exact parse/display, finite line bounds including formatter additions, and explicit source-versus-inference review before scripted acceptance. Substrings alone cannot prove a correct inference or source identity.
+Method points 1–8 agree: conditional source news and a visibly qualified inference, each with its sources, and no
+redundant note.

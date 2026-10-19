@@ -1,5 +1,13 @@
-Pending C17/B9 preparation, covers:model. Build on the c05-timeline-list ruling, not the old requirement that person-written bullets parse as Bower's dated grammar.
+# A personal star list takes one ordinary sourced append
 
-The exact named request permits one ordinary sourced line in Alex plot, after its last star bullet, retaining CRLF and the star marker. Every previous byte, including the quoted summary, spaces, personal marker-shaped words and both old bullet texts, stays identical. No marker is added to person prose or reinterpreted, no metadata/ownership is gained, and the unnamed Private plans note remains byte identical. Its prose Timeline is not appendable if later explicitly targeted; B9c adds a separate negative request test, not permission to touch it here.
+The request names Alex plot, so Bower adds one ordinary sourced line after its last star bullet, with a star and CRLF
+like the lines above it. Every earlier byte stays: the quoted summary, the custom property, the two trailing spaces,
+the marker-shaped words in Alex's prose and both old bullets. No marker is added to the person's text or read into
+it, the note gains no Bower ownership or metadata, and Private plans, which the request does not name, stays byte for
+byte.
 
-The replay of the exact request adds nothing. The source's literal syntax is evidence only, never a marker instruction or policy. No redundant companion, Home question or extra edit is needed. Existing protectedRanges cannot compare a Timeline that legitimately grew, and today's timelineBullets excludes plain notes; expected.json therefore uses contains, not a fake timelineCount. B9c must independently compare the entire old byte sequence plus the one authorized insertion, count the star entry once, and reject an unconsented marker append or missing/non-list Timeline through main. Do not serialize the person's note to make any reader pass.
+The replay of the same request adds nothing. The notice's printed marker examples are evidence, never an instruction.
+No companion note, question or other edit is made. A Timeline that is missing, prose, a table or a fence is left as
+written while the notice is still filed.
+
+Method points 1–8 agree, with TL-P4-32/-42 and c05-timeline-list: one named, sourced append on a person's note.

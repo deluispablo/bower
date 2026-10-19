@@ -3,7 +3,7 @@
   "capability": "C17",
   "title": "A personal star list takes one ordinary sourced append",
   "covers": "model",
-  "source": "new (TL-P4-39 B9/U6; preparation only, scripted production proof pending)",
+  "source": "new (TL-P4-39 B9/U6; TL-P4-50 B9); runs through main in the B9 corpus tests",
   "scope": "all",
   "allowWeb": false,
   "inbox": [

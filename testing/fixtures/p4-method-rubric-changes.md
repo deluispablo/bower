@@ -257,6 +257,15 @@ record the method re-check, not an executed model result.
     and the four oracle files are gone; settled-recovery runs with its refused hub edit and lost log response and
     creates the health note once. Covers stays model in all four cases.
 
+## Corpus clean changes (`corpus-fix-b9`)
+
+20. **c17-b9-person-list-kept and c17-b9-uncertain-and-inferred.** Reason: the corpus audit (rubrics and sources that
+    still called the scripted proof unfinished and the marker and alsoCites reply fields unsupported, after B9b
+    landed both). Now: each rubric describes what the B9 corpus tests assert through main. The person's star list
+    keeps every CRLF byte and takes one line that the replay does not repeat; the visit gets one uncertain and one
+    inferred line whose qualification and second source stay visible, and an unqualified or cancelled line fails.
+    Covers stays model in both cases.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.
@@ -342,8 +351,8 @@ qualification and compatible marker text; C07 still determines disagreement.
 
 | Case | Verdict | Reason |
 | --- | --- | --- |
-| c17-b9-uncertain-and-inferred | agrees | Points 1–8: fit the visit, carry conditional source news and a visibly qualified inference with relevant sources, no redundant note, cancellation, invented number, policy or schema; both entries share one bounded edit and a truthful existing update row. |
-| c17-b9-person-list-kept | agrees | Points 1–8 plus TL-P4-32/-42 and c05-timeline-list: one explicitly named sourced append uses the value gate and preserves prior star bullets, CRLF, quoted summary and prose; replay adds nothing, source syntax grants no authority, and the unnamed non-list note stays personal. |
+| c17-b9-uncertain-and-inferred | changed | Points 1–8: fit the visit, carry conditional source news and a visibly qualified inference with relevant sources, no redundant note, cancellation, invented number, policy or schema; both entries share one bounded edit and a truthful existing update row; the same lines unqualified, or one calling the visit cancelled, fail (corpus-fix-b9 AC2). |
+| c17-b9-person-list-kept | changed | Points 1–8 plus TL-P4-32/-42 and c05-timeline-list: one explicitly named sourced append uses the value gate and preserves prior star bullets, CRLF, quoted summary and prose; replay adds nothing, source syntax grants no authority, and the unnamed non-list note stays personal (corpus-fix-b9 AC1). |
 
 ## B12 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-50)
 
