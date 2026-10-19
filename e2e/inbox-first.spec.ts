@@ -8,7 +8,9 @@ test('the inbox shows before a slow report', async ({ page, allowConsole }) => {
   test.setTimeout(90_000);
   allowConsole(/disposition was refused/, 'the made-up leftovers are not real dispositions');
   await page.goto('/?scenario=slow-report&time=instant');
-  const tidy = page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: /^Tidy up \d+ things?$/ });
+  // The phone Inbox keeps its Tidy up; on desktop the top bar launches, so readiness is the Inbox's count (ux-home-priorities R2-2).
+  const inbox = page.getByRole('region', { name: 'Inbox' });
+  const tidy = test.info().project.name === 'desktop' ? inbox.getByText(/^\d+ things? waiting/) : inbox.getByRole('button', { name: /^Tidy up \d+ things?$/ });
   // Within 3 s of the page starting: the pile names and their counts, from the listing alone. No Tidy up button and no
   // number yet: which piles are ready is not known, and a number that can drop is not shown (TL-P4-13).
   await expect(page.locator('section[aria-labelledby="inbox"] a[href^="/pile/"]').first()).toBeVisible({ timeout: 3000 });
@@ -20,6 +22,8 @@ test('the inbox shows before a slow report', async ({ page, allowConsole }) => {
   // Settled means its current step's button is drawn too, which waits for the last run's record.
   const checklist = page.getByRole('region', { name: 'Your first tidy-up' });
   await expect(checklist.getByRole('button', { name: 'See the report' })).toBeVisible({ timeout: 60_000 });
+  // The questions now sit above the Inbox: wait for them too. ux-loading-polish restores the strict no-shift check.
+  await expect(page.locator('#qs')).toBeVisible({ timeout: 60_000 });
   const before = await first.boundingBox();
   await expect(tidy).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/Tidy-up finished/)).toBeVisible({ timeout: 60_000 });

@@ -23,12 +23,14 @@ export function StatusBar() {
   else if (run && stoppedUnseen(run)) left = 'The tidy-up stopped. See why';
   else if (run && replayWaiting(run)) left = watchLine(run);
   else left = statusLine(run, waiting);
+  // A button only while a run or its report needs the person; otherwise the top bar is the one launch (plain words here).
+  const acts = running || stoppedUnseen(run) || replayWaiting(run) || reportWaiting(run);
   return (
     <footer className={s.status}>
-      {runState.error ? <LoadError state={runState} /> : <button type="button" className={s.statusBtn} onClick={() => (run && replayWaiting(run) ? startReplay(run.id) : setTidy(true, run && reportWaiting(run) ? run.id : undefined))}>
+      {runState.error ? <LoadError state={runState} /> : acts ? <button type="button" className={s.statusBtn} onClick={() => (run && replayWaiting(run) ? startReplay(run.id) : setTidy(true, run && reportWaiting(run) ? run.id : undefined))}>
         {running ? <span className={s.live} /> : stoppedUnseen(run) ? <span className={s.stopDot} /> : <BowerHead size={16} />}
         {left}
-      </button>}
+      </button> : <span className={s.statusText}><BowerHead size={16} />{left}</span>}
       <span className={s.statusRight}>
         {tree === undefined ? (
           <span>Opening your Bower folder…</span>

@@ -3,7 +3,7 @@
  * pile's kind looks the same wherever it is listed, whatever its context text. The stack's strokes use the theme-aware
  * line tokens, never the fills.
  */
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -44,6 +44,8 @@ const tree = (ui: React.ReactElement, piles: Pile[]) => <MemoryRouter><DataProvi
 /** The stack of each pile row on Home, in order. */
 async function homeStacks(piles: Pile[]): Promise<string[]> {
   render(tree(<Home />, piles));
+  // Home shows the two newest piles until the rest are asked for (ux-home-priorities AC2).
+  if (piles.length > 2) fireEvent.click(await screen.findByRole('button', { name: /^and \d+ more$/ }));
   await waitFor(() => expect(document.querySelectorAll('li a').length).toBeGreaterThanOrEqual(piles.length));
   const out = [...document.querySelectorAll('li a')].map((a) => a.firstElementChild?.outerHTML ?? '');
   cleanup();

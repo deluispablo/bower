@@ -88,10 +88,13 @@ describe('ux-first-tidy-checklist: the first tidy-up on Home', () => {
     expect(r.compareDocumentPosition(inbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('AC1 inbox_stays (guard): the Inbox keeps its own Tidy up', async () => {
+  it('AC1 inbox_defers (guard): while the checklist offers Tidy up, the Inbox has none', async () => {
     await mount(world('default'));
+    const r = await region();
+    expect(await within(r).findByRole('button', { name: 'Tidy up' })).toBeVisible();
+    await settle();
     const inbox = screen.getByRole('region', { name: 'Inbox' });
-    expect(await within(inbox).findByRole('button', { name: /^Tidy up \d+ things$/ })).toBeVisible();
+    expect(within(inbox).queryByRole('button', { name: /^Tidy up \d+ things?$/ })).toBeNull();
   });
 
   it('AC1 hidden_when_unknown_or_done (a, guard): a vault without firstTidy shows no checklist and logs nothing', async () => {

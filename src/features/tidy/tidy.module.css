@@ -37,6 +37,7 @@
 .status { min-height: 30px; grid-area: status; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 12px; background: var(--chrome); border-top: 1px solid var(--line); font-size: 13px; color: var(--text-muted); }
 .statusBtn { display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; cursor: pointer; }
 .statusBtn:hover { background: var(--hover); color: var(--heading); }
+.statusText { display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 8px; }
 .statusRight { display: flex; gap: 18px; }
 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
 .tidyBtn { display: inline-flex; align-items: center; gap: 8px; height: 30px; margin-bottom: 6px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--brand); color: var(--on-brand); font: 600 14px var(--font-body); cursor: pointer; white-space: nowrap; }

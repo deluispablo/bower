@@ -179,6 +179,7 @@ test('one thing, one name: Home, the tree and the tidy-up sheet name things alik
   await open(page, '/');
   const homePiles = page.locator('main a[href*="/pile/"] [class*="pileText"]');
   await expect(homePiles.first()).toBeVisible();
+  await page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: /^and \d+ more$/ }).click();
   const onHome = (await homePiles.allTextContents()).map((t) => t.trim());
   for (const t of await page.locator('section[aria-labelledby="recent"] [class*="pileText"]').allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,4}$/);
   await openTidy(page);

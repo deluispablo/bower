@@ -66,6 +66,7 @@ test('the inbox reads the same in the tree and on Home: same order, same names',
   const inTree = (await tree.locator('[data-path^="Inbox/"]').evaluateAll((els) => els.filter((e) => (e.getAttribute('data-path') ?? '').split('/').length === 2).map((e) => e.querySelector('[class*="name"]')?.textContent ?? ''))).map(start);
   const homePiles = page.locator('main a[href*="/pile/"] [class*="pileText"]');
   await expect(homePiles.first()).toBeVisible();
+  await page.getByRole('region', { name: 'Inbox' }).getByRole('button', { name: /^and \d+ more$/ }).click();
   const onHome = (await homePiles.allTextContents()).map(start);
   expect(inTree.length).toBeGreaterThan(1);
   expect(inTree).toEqual(onHome);
