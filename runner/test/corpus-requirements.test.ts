@@ -7,7 +7,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loadCase, loadCorpus, type Expected, type LoadedCase } from '../src/corpus';
-import { replySequence, runWithClaude } from './corpus-run';
+import { replySequence, runOnDrive, seedCase } from './corpus-run';
+import { fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const README = join(ROOT, 'README.md');
@@ -92,9 +93,13 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 /** A case's row in a corpus table: the line that starts with its id cell. */
 const row = (file: string, id: string): string | undefined => readFileSync(file, 'utf8').split('\n').find((line) => line.startsWith(`| ${id} |`));
 
-/** One press whose model reply is empty: its exit code, the done request rows, and the person's notes it changed. */
+/**
+ * One press whose model reply is empty: its exit code, the done request rows, and the person's notes it changed. The case
+ * is excluded, so the probe seeds and presses once itself (`runOnDrive`); the case driver refuses it (corpus-registry AC3).
+ */
 async function idle(c: LoadedCase): Promise<{ code: number; done: unknown[]; changed: string[] }> {
-  const run = await runWithClaude(c, replySequence([{ kind: 'tidy-intent', v: 1, things: [] }]));
+  const drive = fixedDrive();
+  const run = await runOnDrive(c, drive, await seedCase(drive, c), { claude: replySequence([{ kind: 'tidy-intent', v: 1, things: [] }]) }, 1);
   const done = (JSON.parse(run.after['.bower/requests.json'] ?? '{"done":[]}') as { done: unknown[] }).done;
   const changed = Object.keys(run.after).filter((p) => !p.startsWith('.bower/') && !p.startsWith('Inbox/') && run.after[p] !== c.folder[p]);
   return { code: run.code, done, changed };
@@ -132,7 +137,7 @@ it('corpus-fix-unsupported AC2: undo requirements start from an actual forward m
     const c = await loadCase(join(ROOT, id));
     expect([c.covers, existsSync(join(c.dir, 'replies.json'))], `${id}: model-marked, with no scripted replies`).toEqual(['model', false]);
     // No undo exists: with a valid scope and an empty reply the request waits and nothing moves.
-    expect(await idle({ ...c, scope: 'instructions' }), `${id}: the request waits`).toEqual({ code: 0, done: [], changed: ['Bower health.md'] });
+    expect(await idle(c), `${id}: the request waits`).toEqual({ code: 0, done: [], changed: ['Bower health.md'] });
     expect(c.rubric.slice(0, NO_UNDO.length), `${id}: the rubric says it is unsupported`).toBe(NO_UNDO);
     expect(c.rubric).toContain('If Undo of a tidy-up returns, the lifecycle is:');
     let at = 0;

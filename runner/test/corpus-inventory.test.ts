@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { CORPUS_EXECUTION } from '../src/corpus';
 
 const ROOT = resolve(import.meta.dirname, '../../testing/corpus');
 const README = join(ROOT, 'README.md');
@@ -42,6 +43,15 @@ function labelGaps(text: string, cases: Array<{ id: string; capability: string; 
   }).map((c) => c.id);
 }
 
+/** The README's denominators (corpus-registry AC4): what is retained, excluded, executable and live-ready, and every setup gap. */
+const DENOMINATORS = `The registry, \`CORPUS_EXECUTION\` in \`runner/src/corpus.ts\`, records each case's consumer test, setup, execution mode
+and live readiness apart from \`covers\`. Of the 90 retained cases, the eight above are excluded and 82 can execute; 74 of
+them are live-ready. Eight need a setup that only their consumer test supplies, so they are not live-ready:
+b1-maintenance-crash-resume (maintenance-reply-lost), c12-admission-waits (admission-estimate-2),
+c12-group-waits (group-reply-refused), c12-model-failure-retry (model-call-fails), c12-tool-interruption-recovery
+(filing-answer-lost), c17-b56-cv-profile and c17-b56-offer-job-search (career-profile-property), and
+c17-b8-settled-recovery (hub-edit-refused-log-lost).`;
+
 const dirs = readdirSync(ROOT, { withFileTypes: true })
   .filter((d) => d.isDirectory() && readdirSync(join(ROOT, d.name)).includes('case.json'))
   .map((d) => d.name);
@@ -75,5 +85,27 @@ describe('the corpus inventory', () => {
     // guard: passes before the fix
     expect(labelGaps('| x-1 | C08 | model | new |', [{ id: 'x-1', capability: 'C08', covers: 'scripted' }])).toEqual(['x-1']);
     expect(labelGaps('| x-1 | C08 | scripted | new |', [{ id: 'x-1', capability: 'C08', covers: 'scripted' }])).toEqual([]);
+  });
+
+  it('corpus-registry AC4: coverage denominators separate inventory and runnable cases', () => {
+    const all = Object.entries(CORPUS_EXECUTION ?? {});
+    const executable = all.filter(([, d]) => d.mode !== 'excluded');
+    expect({ retained: dirs.length, registered: all.length, excluded: all.length - executable.length, executable: executable.length,
+      live: executable.filter(([, d]) => d.live).length }, 'the denominators').toEqual({ retained: 90, registered: 90, excluded: 8, executable: 82, live: 74 });
+    // Each setup gap is listed and never live-ready: a run from the case's files alone lacks its setup.
+    const gaps = executable.filter(([, d]) => d.setup !== null);
+    expect(Object.fromEntries(gaps.map(([id, d]) => [id, { setup: d.setup, live: d.live }]))).toEqual({
+      'b1-maintenance-crash-resume': { setup: 'maintenance-reply-lost', live: false },
+      'c12-admission-waits': { setup: 'admission-estimate-2', live: false },
+      'c12-group-waits': { setup: 'group-reply-refused', live: false },
+      'c12-model-failure-retry': { setup: 'model-call-fails', live: false },
+      'c12-tool-interruption-recovery': { setup: 'filing-answer-lost', live: false },
+      'c17-b56-cv-profile': { setup: 'career-profile-property', live: false },
+      'c17-b56-offer-job-search': { setup: 'career-profile-property', live: false },
+      'c17-b8-settled-recovery': { setup: 'hub-edit-refused-log-lost', live: false },
+    });
+    for (const [id, d] of gaps) expect(DENOMINATORS, id).toMatch(new RegExp(`${id}[^(]*\\(${d.setup}\\)`));
+    expect(readme).toContain(DENOMINATORS);
+    expect(readme.replace(/\s+/g, ' '), 'C17 is registered').not.toContain('C17 registration');
   });
 });

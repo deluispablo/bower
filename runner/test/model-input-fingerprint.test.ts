@@ -287,7 +287,7 @@ describe('model input fingerprint', () => {
         for (const f of pile.files) await add(folder, f, {});
       }
 
-      const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => `admission-${spare}` });
+      const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope, clock: () => AT, newId: () => `admission-${spare}` });
       if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
 
       const calls: ClaudeCall[] = [];

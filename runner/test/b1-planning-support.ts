@@ -212,7 +212,7 @@ export async function setup(options: {
     expect(found, `seeded id for ${path}`).toBeDefined();
     return found ?? '';
   };
-  const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope,
+  const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope,
     clock: () => AT, newId: () => 'selection-admission' });
   expect(admitted.kind, 'positive control has an actual Worker admission').toBe('manifest');
   const admission: AdmissionManifest = admitted.kind === 'manifest' ? admitted.manifest :

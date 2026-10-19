@@ -287,6 +287,14 @@ record the method re-check, not an executed model result.
     and the C13 rubrics start from a forward run and its manifest. With c08-revise-keeps-personal-text these are the
     eight excluded cases. Covers stays model.
 
+## Corpus clean changes (`corpus-registry`)
+
+23. **c13-manifest-move-and-create, c13-manifest-partial-edited-note and c13-manifest-state-with-personal-edit.**
+    Reason: the corpus audit (a `scope: "undo"` that no run accepts, which the driver remapped to an instruction run).
+    Now: each case's forward press runs with `scope: "instructions"`; the undo it asks for stays the excluded flow, and
+    the case driver refuses all eight excluded cases before dispatch. The rubrics and verdicts are unchanged. Covers
+    stays model.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.

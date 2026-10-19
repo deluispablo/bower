@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { intentOf, type ClaudeCall, type ClaudeSpawn } from '../src/claude';
-import { loadCorpus, score, type LoadedCase } from '../src/corpus';
+import { CORPUS_EXECUTION, loadCorpus, score, type LoadedCase } from '../src/corpus';
 import { extract } from '../src/extract';
 import { dataOf, promptOf, runWithClaude } from './corpus-run';
 
@@ -154,7 +154,7 @@ describe('the second-brain method (TL-P4-08)', () => {
   });
 
   it('the C04 to C15 rubrics agree with the method', async () => {
-    const cases = (await loadCorpus(ROOT)).filter((c) => !c.speedBaseline && /^c(0[4-9]|1[0-5])-/.test(c.id));
+    const cases = (await loadCorpus(ROOT)).filter((c) => /^c(0[4-9]|1[0-5])-/.test(c.id));
     expect(cases.length).toBeGreaterThanOrEqual(26);
     const log = existsSync(LOG) ? readFileSync(LOG, 'utf8') : '';
     for (const c of cases) {
@@ -163,11 +163,11 @@ describe('the second-brain method (TL-P4-08)', () => {
       expect({ id: c.id, row: /^\| [a-z0-9-]+ \| (agrees|changed) \| .{10,}/.test(row ?? '') }).toEqual({ id: c.id, row: true });
       // Point 3: Bower rewrites a note's Current state when a document changes it; no rubric pins it untouched.
       expect({ id: c.id, pinned: /Current state[^.]*untouched/i.test(c.rubric) }).toEqual({ id: c.id, pinned: false });
-      // Point 1: a thing left in the inbox (other than by an undo) comes with a question.
+      // Point 1: a thing left in the inbox comes with a question, except in an excluded undo requirement (corpus-registry).
       const stays = (c.expected.files?.present ?? []).some((p) => p.startsWith('Inbox/'));
       const reports = [c.expected, ...(c.expected.runs ?? [])].map((e) => e.report);
       const asked = reports.some((r) => (r?.questions?.length ?? 0) > 0 || (r?.questionSubjects?.length ?? 0) > 0 || (r?.questionsExactly ?? 0) > 0);
-      if (stays && c.scope !== 'undo') expect({ id: c.id, asked }).toEqual({ id: c.id, asked: true });
+      if (stays && CORPUS_EXECUTION[c.id]?.mode !== 'excluded') expect({ id: c.id, asked }).toEqual({ id: c.id, asked: true });
       // Point 1: a loose thing with no words that Bower cannot read cannot be placed without guessing, so it is asked.
       for (const pile of c.inbox.filter((p) => !p.line.trim() && p.files.length === 1)) {
         const name = pile.files[0] ?? '';

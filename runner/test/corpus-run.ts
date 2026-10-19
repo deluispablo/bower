@@ -20,7 +20,7 @@ import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
 import { phaseAwareClaude, type PlanningFixture } from './b1-planning-support';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
-import { score, type CorpusBetween, type CorpusPress, type Expected, type LoadedCase, type QuestionSubjectExpectation, type Score } from '../src/corpus';
+import { CORPUS_EXECUTION, score, type CorpusBetween, type CorpusPress, type Expected, type LoadedCase, type QuestionSubjectExpectation, type Score } from '../src/corpus';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 export const AT = Date.UTC(2026, 9, 7, 9);
@@ -206,6 +206,9 @@ export async function seedCase(drive: FakeDrive, c: LoadedCase, props: Record<st
 }
 
 async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before, env: more = {} }: CaseOptions): Promise<CaseRun> {
+  // An excluded case is refused before anything is seeded or dispatched (corpus-registry AC3).
+  const execution = CORPUS_EXECUTION[c.id];
+  if (execution?.mode === 'excluded') throw new Error(`${c.id} is not run: ${execution.reason}.`);
   const drive = fixedDrive();
   const root = await seedCase(drive, c, props);
   await before?.(drive, root);
@@ -320,7 +323,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const current = await snapshot(drive, root);
   const requestAction = press > 1 && !answerStart ? await addRequest(drive, root, press, request) : undefined;
   const scope = answerStart?.scope ?? (press > 1 && !Object.keys(current.after).some((p) => p.startsWith('Inbox/')) ? 'instructions' : c.scope);
-  const admitted = admission ? { kind: 'manifest' as const, manifest: admission } : await planAdmission(fakeRead(drive), root, { scope: scope === 'undo' ? 'instructions' : scope,
+  const admitted = admission ? { kind: 'manifest' as const, manifest: admission } : await planAdmission(fakeRead(drive), root, { scope,
     clock: () => AT + press - 1, newId: () => `admission-${press}`, ...(answerStart?.subject ? { subject: answerStart.subject } : {}) });
   const runId = answerStart?.requestId ?? (press === 1 ? RUN_ID : `${RUN_ID}-${press}`);
   const wire = driveV3(drive, 1, runId);
@@ -341,7 +344,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const { after, props: kept, pathsById } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, props: kept, pathsById, lastRun, code, drive, root, requests, requestAction, wire,
-    dispatch: { runId, scope: scope === 'undo' ? 'instructions' : scope, admission: admitted.manifest } };
+    dispatch: { runId, scope, admission: admitted.manifest } };
 }
 
 /** Redispatch the exact run over its existing Drive and immutable admission; no admission or planning here. */

@@ -1,7 +1,9 @@
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadCase, loadCorpus, score, type Expected } from '../src/corpus';
-import { frameOf, runWithClaude } from './corpus-run';
+import { CORPUS_EXECUTION, loadCase, loadCorpus, score, type Expected } from '../src/corpus';
+import { frameOf, replySequence, runOnDrive, runWithClaude, seedCase } from './corpus-run';
+import { fixedDrive } from './drive-v3';
 
 it('corpus-delete-revision-undo AC2: inventory removal does not claim revision or undo execution', async () => {
   const cases = await loadCorpus(resolve(import.meta.dirname, '../../testing/corpus'));
@@ -20,6 +22,40 @@ it('corpus-delete-revision-undo AC2: inventory removal does not claim revision o
     expect(() => assertNoUnsupportedSuccess(promoted.filter((c) => c.covers === 'scripted').map((c) => c.id))).toThrow(id);
   }
 });
+
+it('corpus-registry AC3: unsupported cases are excluded before dispatch', async () => {
+  const LOOKUP = 'Bower has no web lookup: the runner gives the model no web tool';
+  const UNDO = 'the owner dropped Undo of a whole tidy-up on 2026-10-16';
+  const excluded = Object.fromEntries(Object.entries(CORPUS_EXECUTION ?? {}).flatMap(([id, d]) => d.mode === 'excluded' ? [[id, d.reason]] : []));
+  expect(excluded, 'the eight exclusions and their reasons').toEqual({
+    'c08-revise-keeps-personal-text': 'Bower does not revise a generated document: asking again makes a new note',
+    'c10-denied-keeps-prior-result': LOOKUP, 'c10-fresh-result-cited': LOOKUP, 'c10-lookup-fails': LOOKUP, 'c10-stale-result-withheld': LOOKUP,
+    'c13-manifest-move-and-create': UNDO, 'c13-manifest-partial-edited-note': UNDO, 'c13-manifest-state-with-personal-edit': UNDO,
+  });
+  const readme = readFileSync(resolve(import.meta.dirname, '../../testing/corpus/README.md'), 'utf8').replace(/\n/g, ' ');
+  for (const [id, reason] of Object.entries(excluded)) {
+    expect(readme, `${id}: the README gives its reason`).toContain(`(${reason}`);
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', id));
+    let calls = 0;
+    await expect(runWithClaude(c, async () => { calls++; throw new Error('An excluded case reached the model.'); }), id).rejects.toThrow(`${id} is not run: ${reason}.`);
+    expect(calls, `${id}: no model call`).toBe(0);
+  }
+  // C13's forward press runs with a valid run scope; the undo it asks for is the excluded flow, never a remapped scope.
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  for (const id of ['c13-manifest-move-and-create', 'c13-manifest-partial-edited-note', 'c13-manifest-state-with-personal-edit']) {
+    const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', id));
+    expect(c.scope, id).toBe('instructions');
+    const drive = fixedDrive();
+    const run = await runOnDrive(c, drive, await seedCase(drive, c), { claude: replySequence([{ kind: 'tidy-intent', v: 1, things: [] }]) }, 1);
+    expect({ id, code: run.code, scope: run.dispatch?.scope }).toEqual({ id, code: 0, scope: 'instructions' });
+  }
+  vi.restoreAllMocks();
+  const runner = resolve(import.meta.dirname, '..');
+  const remaps = ['src', 'test'].flatMap((dir) => readdirSync(join(runner, dir)).filter((f) => f.endsWith('.ts'))
+    .filter((f) => /scope (===|!==|=) 'undo'/.test(readFileSync(join(runner, dir, f), 'utf8'))).map((f) => `${dir}/${f}`));
+  expect(remaps, 'no undo scope is written or remapped').toEqual([]);
+}, 60_000);
 
 it("the scorer counts questions exactly and checks a pair's subject", () => {
   const pairSubject = { kind: 'pair' as const, notes: ['Projects/A.md', 'Projects/B.md'] as [string, string] };
