@@ -1,4 +1,7 @@
-/** C09/C08 scorer: answers read per request from requests.json as JSON, and tables read as rows (c09-score AC1-AC2). */
+/**
+ * C09/C08 scorer: answers read per request from requests.json as JSON, and tables read as rows (c09-score AC1-AC2); a
+ * fact is a whole figure while the prose around it is free (corpus-scorer-validation AC4).
+ */
 import { describe, expect, it } from 'vitest';
 import { score, type Expected } from '../src/corpus';
 
@@ -134,23 +137,46 @@ describe('c09-score AC2: a table is read as rows', () => {
 describe('c09-score AC3: an expectation the scorer does not know is unmet, never skipped', () => {
   it('AC3 c09-score-unknown-key: a misspelt key, at the top, in a press or in an answer, is unmet', () => {
     const after = { ...files, [REQUESTS]: requests([{ text: ASKED, done: ANSWER }]) };
-    expect(unmet(run(expecting({ answer: [{ request: ASKED, contains: ['1,450'] }] }), after), 'expected: unknown key "answer"')).toHaveLength(1);
-    expect(unmet(run(expecting({ runs: [{ table: [] }] }), after), 'runs[0]: unknown key "table"')).toHaveLength(1);
-    expect(unmet(run(answers({ contain: ['1,450'] }), after), `answers "${ASKED}": unknown key "contain"`)).toHaveLength(1);
+    expect(unmet(run(expecting({ answer: [{ request: ASKED, contains: ['1,450'] }] }), after), 'expected: Unrecognized key: "answer"')).toHaveLength(1);
+    expect(unmet(run(expecting({ runs: [{ table: [] }] }), after), 'expected.runs[0]: Unrecognized key: "table"')).toHaveLength(1);
+    expect(unmet(run(answers({ contain: ['1,450'] }), after), 'expected.answers[0]: Unrecognized key: "contain"')).toHaveLength(1);
     expect(run(expecting({ tables: [{ path: NOTE, header: HEADER, rows: ROWS, row: [] }] }), { [NOTE]: table(ROWS) }).unmet)
-      .toEqual([`tables ${NOTE}: unknown key "row"`]);
+      .toEqual(['expected.tables[0]: Unrecognized key: "row"']);
   });
 
-  it('AC3 c09-score-nested-typo: a typo inside a press\'s answer is caught when that press is scored, not at the top', () => {
+  it('AC3 c09-score-nested-typo: a typo inside a press\'s answer is caught at its place in that press', () => {
     const after = { ...files, [REQUESTS]: requests([{ text: ASKED, done: ANSWER }]) };
     const press = answers({ contain: ['1,450'] });
-    expect(unmet(run(press, after), `answers "${ASKED}": unknown key "contain"`)).toHaveLength(1);
-    // The one run is that press (corpus-scorer-home): its line names the press, and the top-level key check passes it.
-    expect(run(expecting({ runs: [press] }), after).unmet.filter((line) => line.includes('unknown key'))).toEqual([`run 1: answers "${ASKED}": unknown key "contain"`]);
+    expect(unmet(run(press, after), 'expected.answers[0]: Unrecognized key: "contain"')).toHaveLength(1);
+    // The expectations are checked whole before any press is scored (corpus-scorer-validation AC1): the line names the press.
+    expect(run(expecting({ runs: [press] }), after).unmet.filter((line) => line.includes('Unrecognized key'))).toEqual(['expected.runs[0].answers[0]: Unrecognized key: "contain"']);
   });
 
-  it('AC3 c09-score-four-places: only the four places refuse a key; a note expectation is left as it is', () => {
+  it('AC3 c09-score-every-place: a note expectation refuses a misspelt key too (corpus-scorer-validation AC1)', () => {
     const result = run(expecting({ notes: [{ path: NOTE, contain: ['x'] }] }), { [NOTE]: table(ROWS) });
-    expect(result.unmet.filter((line) => line.includes('unknown key'))).toEqual([]);
+    expect(result.unmet.filter((line) => line.includes('Unrecognized key'))).toEqual(['expected.notes[0]: Unrecognized key: "contain"']);
   });
+});
+
+it('corpus-scorer-validation AC4: wording flexibility cannot relax contractual evidence', () => {
+  const after = (done: string) => ({ ...files, [REQUESTS]: requests([{ text: ASKED, done }]) });
+  const facts = answers({ contains: ['1,450', '1,600'], excludes: ['900'] });
+  // Prose is free: other words, order and punctuation around the figures pass.
+  expect(run(facts, after('A 1,600 deposit, and rent of £1,450.')).unmet).toEqual([]);
+  // A figure is whole: inside a longer number it is not stated, nor is an excluded one.
+  expect(run(facts, after('Rent is 11,450 and the deposit 1,600.50.')).unmet, 'a fact is a whole figure')
+    .toEqual([`answers "${ASKED}": lacks "1,450"`, `answers "${ASKED}": lacks "1,600"`]);
+  expect(run(facts, after('Rent is 1,450; the deposit, 1,600, beats the 1,900 asked before.')).unmet, 'an excluded figure is whole too').toEqual([]);
+  expect(run(facts, after('Rent is 1,450, deposit 1,600, was 900.')).unmet).toEqual([`answers "${ASKED}": has "900"`]);
+  // The same in a note and its Timeline.
+  expect(run(expecting({ notes: [{ path: LISTING, contains: ['450'] }] }), files).unmet).toEqual([`${LISTING}: lacks "450"`]);
+  const dated = { [NOTE]: '---\nby: bower\n---\n\n## Timeline\n- 2026-10-07 · Rent 11,450 a month.\n' };
+  expect(run(expecting({ notes: [{ path: NOTE, timeline: ['1,450'] }] }), dated).unmet).toEqual([`${NOTE}: no Timeline line with "1,450"`]);
+  // Tables, citations and preserved bytes stay exact, whatever the prose allows.
+  const reworded = ROWS.map((row) => row.map((cell) => cell.replace(' a month', ' per month')));
+  expect(unmet(run(tables, { [NOTE]: table(reworded) }), `tables ${NOTE}: rows`)).toHaveLength(1);
+  const cited = `Rent is 1,450 in [[${LISTING}|the listing]], and the deposit 1,600 per the deposit terms.`;
+  expect(unmet(run(answers({ links: [LISTING, TERMS] }), after(cited)), `answers "${ASKED}": links [${LISTING}], expected`)).toHaveLength(1);
+  const kept = score({ expected: expecting({ unchanged: [LISTING] }), before: files, after: { ...files, [LISTING]: 'Rent: 1,450 a month.\r\n' }, lastRun: null });
+  expect(kept.unmet).toEqual([`file changed: ${LISTING}`]);
 });

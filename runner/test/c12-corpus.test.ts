@@ -208,7 +208,9 @@ describe('C12 group wait through main (c12-corpus AC13)', () => {
 });
 
 describe('the corpus scorer reads the waiting count (c12-corpus AC15)', () => {
-  const lastRun = (report: object) => ({ run: { report } });
+  // A finished run in the runner's current `last-run.json` shape (corpus-scorer-validation AC2).
+  const lastRun = (report: object) => ({ v: 1, run: { id: 'run-wait', scope: 'all', phase: 'done', requestedAt: 0, phaseAt: 0,
+    report: { filed: [], created: [], updated: [], setAside: [], questions: [], ...report } } });
   const input = (report: object) => ({ expected: { report: { waiting: 1 } }, before: {}, after: {}, lastRun: lastRun(report) });
   it('AC15 c12-corpus-waiting-scored: expected waiting 1 is unmet against none, and met against 1', () => {
     expect(score(input({ filed: [] })).unmet).toEqual(['report.waiting: 0, expected 1']);

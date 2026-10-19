@@ -178,7 +178,7 @@ describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
     // The unread photo whose name says nothing is asked about: it stays in the inbox, one question, the rest filed.
     const asked = report(run.lastRun, (r) => {
       r.filed = (r.filed as unknown[]).slice(1);
-      r.questions = [{ id: 'q-ask-f-4', text: 'Is the kitchen photo from the Wrenfield Road viewing?', yes: 'Yes', no: 'No' }];
+      r.questions = [{ id: 'q-ask-f-4', text: 'Is the kitchen photo from the Wrenfield Road viewing?', yes: 'Yes', no: 'No', askedAt: 0 }];
     });
     expect(score({ ...base, lastRun: asked, after: move(run.after, photo, 'Inbox/Job offer and a flat near it/IMG_2301.jpg') })).toEqual({ pass: true, unmet: [] });
 
