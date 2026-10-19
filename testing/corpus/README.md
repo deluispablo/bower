@@ -180,10 +180,10 @@ registration and verdict selection remain upstream H1 work. See the B11 prep not
 
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
-| c17-b7-reuse-known | C17 / B7 | model | TL-P4-39 B7; three existing topics on a new note, no vocabulary write |
+| c17-b7-reuse-known | C17 / B7 | model | TL-P4-49 topics; three installed topics are reused on a new note, with no topic write, log line or question |
 | c17-b7-automatic-growth-replay | C17 / B7 | model | TL-P4-49 automatic growth; rainwater joins the topics on first filing, and a later idle run changes only Bower's run records |
 | c17-b7-automatic-capacity-order | C17 / B7 | model | TL-P4-49 automatic growth; duplicate topics merge before the two-per-run limit, so rainwater and compost join in reply order and seed-saving is dropped |
-| c17-b7-authority-full-cap | C17 / B7 | model | TL-P4-39 F7/R2; thirty tags, document injection and personal Markdown preservation |
+| c17-b7-authority-full-cap | C17 / B7 | model | TL-P4-49 topics; thirty installed topics stay as they are and a document's instruction installs nothing; the filed personal note keeps every byte and stays the person's |
 
 ## B8 preparation cases — 2026-10-10
 
