@@ -1,8 +1,8 @@
 /**
  * qa-prod-2-diag: the timing output says, per source, what the provider offered the model and what it picked, as
  * hashed ids only (OWASP Logging Cheat Sheet, "data to exclude": no path, name, request word or token reaches a log).
- * Row: `selection: source=<h> candidates=<h:tag,...|none> cut=<n> wants=<h,...|none> required=<n>/<5, or 10 for a request> destination=<h|none> of=<i|none> new=<0|1>`.
- * `cut` counts what the provider left out of the source's list, which for a request is every ranked note past the first 12
+ * Row: `selection: source=<h> candidates=<h:tag,...|none> cut=<n> wants=<h,...|none> required=<n>/<5, or 20 for a request> destination=<h|none> of=<i|none> new=<0|1>`.
+ * `cut` counts what the provider left out of the source's list, which for a request is every ranked note past the first 40
  * (pins never cut); for a pile or thing the ranking itself stops at 12.
  * Made-up folders only.
  */
@@ -24,7 +24,7 @@ const h = (id: string): string => sha256Sync(id).slice(0, 6);
 type Printed = { consoleLines: string[] };
 const lines = (r: Printed): string[] => r.consoleLines.flatMap((l) => l.split('\n'));
 const selections = (r: Printed): string[] => lines(r).filter((l) => l.startsWith('selection:'));
-const SHAPE = /^selection: source=([0-9a-f]{6}) candidates=(none|[0-9a-f]{6}:(?:p|f|n\d+)(?:,[0-9a-f]{6}:(?:p|f|n\d+))*) cut=(\d+) wants=(none|[0-9a-f]{6}(?:,[0-9a-f]{6})*) required=(\d+)\/(?:5|10) destination=([0-9a-f]{6}|none) of=(\d+|none) new=([01])$/;
+const SHAPE = /^selection: source=([0-9a-f]{6}) candidates=(none|[0-9a-f]{6}:(?:p|f|n\d+)(?:,[0-9a-f]{6}:(?:p|f|n\d+))*) cut=(\d+) wants=(none|[0-9a-f]{6}(?:,[0-9a-f]{6})*) required=(\d+)\/(?:5|20) destination=([0-9a-f]{6}|none) of=(\d+|none) new=([01])$/;
 interface Row { ids: string[]; tags: string[]; cut: number; wants: string[]; required: number; destination: string; of: string; isNew: string }
 /** The row for one source: its fixed syntax is itself asserted. */
 function rowFor(r: Printed, source: string): Row {
@@ -205,8 +205,8 @@ describe('tags and the cut (qa-prod-2-diag)', () => {
     expect(row.tags, 'apple is all three and is p; zeta is rank 2, apple keeping rank 1').toEqual(['p', 'f', 'n2']);
   });
 
-  // 14 notes are a map (the folder's own, naming 12 or 11 more) plus members: map first, then members in its order.
-  const MEMBERS = ['ant', 'bee', 'cat', 'dog', 'eel', 'fox', 'gnu', 'hen', 'ibis', 'jay', 'koi', 'lynx'];
+  // 14 notes are a map (the folder's own, naming up to 40 more) plus members: map first, then members in its order.
+  const MEMBERS = ['ant', 'bee', 'cat', 'dog', 'eel', 'fox', 'gnu', 'hen', 'ibis', 'jay', 'koi', 'lynx', ...Array.from({ length: 28 }, (_, i) => `m${i + 13}`)];
   async function ledger(members: number, options: { matched?: boolean; original?: boolean } = {}) {
     const regions = { current: '', personal: 'PADDING\n', timeline: '', 'bower-note': '', 'moc-overview': '## Overview\nA ledger.\n', 'moc-figures': '## Figures\n0 notes.\n',
       'moc-members': `## Notes\n${MEMBERS.slice(0, members).map((m) => `- [[Item ${m}]]`).join('\n')}\n` };
@@ -222,32 +222,32 @@ describe('tags and the cut (qa-prod-2-diag)', () => {
     return { b, r, request, row: rowFor(r, request) };
   }
 
-  it('R-overflow: exactly 12 eligible notes are cut=0 and 13 are cut=1; the map comes before its members', async () => {
-    const twelve = await ledger(11);
-    expect(twelve.row.ids).toHaveLength(12);
-    expect(twelve.row.cut).toBe(0);
-    expect(twelve.row.tags, 'rank order: the map, then its members').toEqual(Array.from({ length: 12 }, (_, i) => `n${i + 1}`));
-    expect(twelve.row.ids[0], 'the map is first').toBe(h(twelve.b.id('Resources/Ledger/Register.md')));
-    const thirteen = await ledger(12);
-    expect(thirteen.row.ids).toHaveLength(12);
-    expect(thirteen.row.cut).toBe(1);
+  it('R-overflow: exactly 40 eligible notes are cut=0 and 41 are cut=1; the map comes before its members', async () => {
+    const forty = await ledger(39);
+    expect(forty.row.ids).toHaveLength(40);
+    expect(forty.row.cut).toBe(0);
+    expect(forty.row.tags, 'rank order: the map, then its members').toEqual(Array.from({ length: 40 }, (_, i) => `n${i + 1}`));
+    expect(forty.row.ids[0], 'the map is first').toBe(h(forty.b.id('Resources/Ledger/Register.md')));
+    const fortyOne = await ledger(40);
+    expect(fortyOne.row.ids).toHaveLength(40);
+    expect(fortyOne.row.cut).toBe(1);
   });
 
   it('R-overflow: a note both matched and a map member takes one slot, at its first rank', async () => {
-    const { b, row } = await ledger(12, { matched: true });
+    const { b, row } = await ledger(40, { matched: true });
     expect(new Set(row.ids).size, 'each note once').toBe(row.ids.length);
     expect(row.ids.slice(0, 2), 'the matched member, then the map').toEqual(['Resources/Ledger/Item ant.md', 'Resources/Ledger/Register.md'].map((p) => h(b.id(p))));
     expect(row.tags.slice(0, 3)).toEqual(['n1', 'n2', 'n3']);
-    expect(row.cut, '13 distinct eligible notes').toBe(1);
+    expect(row.cut, '41 distinct eligible notes').toBe(1);
   });
 
   it('R-overflow: a request\'s original adds a candidate at the next rank and no cut', async () => {
-    const without = await ledger(12);
-    const withOriginal = await ledger(12, { original: true });
+    const without = await ledger(40);
+    const withOriginal = await ledger(40, { original: true });
     expect(withOriginal.row.cut, 'originals are not counted in the cut').toBe(without.row.cut);
-    expect(withOriginal.row.ids, 'beside the 12 kept').toHaveLength(13);
+    expect(withOriginal.row.ids, 'beside the 40 kept').toHaveLength(41);
     expect(withOriginal.row.ids.at(-1)).toBe(h(withOriginal.b.id('Resources/Ledger/Zebra scan.txt')));
-    expect(withOriginal.row.tags.at(-1), 'its rank continues past the 13 notes, cut or not').toBe('n14');
+    expect(withOriginal.row.tags.at(-1), 'its rank continues past the 41 notes, cut or not').toBe('n42');
   });
 
   it('R-overflow: more than 12 pins all survive, tagged p, with no cut', async () => {

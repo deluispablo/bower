@@ -49,7 +49,7 @@ function sentBytes(body: RequestInit["body"]): number {
 /**
  * What the provider offered the model for one source and what the accepted selection took, by raw id (hashed here).
  * `tag`: p pinned, f profile, else nK, the one-based rank in the expanded neighbourhood (not a raw BM25 rank). `cut` counts
- * what the provider left out of the source's list, which for a request is every ranked note past the first 12 (pins never
+ * what the provider left out of the source's list, which for a request is every ranked note past the first 40 (pins never
  * cut); for a pile or thing the ranking itself stops at 12. `of`: the lowest one-based candidate whose parents include the destination (folder
  * coincidence, not the model's reasoning); `required` is the selection check's own count.
  */
@@ -59,7 +59,7 @@ export interface SelectionFacts {
   cut: number;
   wants: readonly string[];
   required: number;
-  /** The source's selection limit (`SELECTION_NOTES`: 5, or 10 for a request). */
+  /** The source's selection limit (`SELECTION_NOTES`: 5, or 20 for a request). */
   limit: number;
   destination: string | null;
   of: number | null;

@@ -1,5 +1,5 @@
 /**
- * brain-14: a request may read ten notes and says when it read fewer (rulings 0-10, round 2). A request source may want
+ * brain-14: a request may read twenty notes and says when it read fewer (rulings 0-10, round 2). A request source may want
  * up to `SELECTION_NOTES.request` notes (pins, destination hub and profile counted); other sources keep five. No new call:
  * a request whose reading was limited gets Bower's one plain line, written by code (qa-prod-2 F15, qa-prod-3 F15).
  * Harness: b1-planning-support and qa-prod-3-F1's timers. Made-up folders and figures only.
@@ -29,6 +29,8 @@ const DAYS = [1, 3, 6, 9, 12, 15, 18, 20, 22, 24, 28];
 const due = (d: number): string => `${HOME}/Dues ${d} Nov.md`;
 const DUES = { [HUB]: note('Alex runs the home.', '# Home\n'), ...Object.fromEntries(DAYS.map((d) => [due(d), note(`Alex pays dues on ${d} November.`)])) };
 const DUES_REQUEST = 'List all my dues in November with their dates.';
+const DAYS_21 = Array.from({ length: 21 }, (_, i) => i + 1);
+const DUES_21 = { [HUB]: note('Alex runs the home.', '# Home\n'), ...Object.fromEntries(DAYS_21.map((d) => [due(d), note(`Alex pays dues on ${d} November.`)])) };
 
 const FINANCE = 'Areas/Finance';
 const INVOICES = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F'].map((x, i) =>
@@ -69,7 +71,7 @@ const doc = (id: string, to: string, title: string, body: string) =>
 const go = (b: Base, replies: unknown[]) => run(b, replies, { admission: { ...b.admission, at: RUN } });
 const duesBody = (days: number[]): string => days.map((d) => `- [[Dues ${d} Nov]]: due ${d} November.`).join('\n');
 
-describe('a request may read ten notes (brain-14)', () => {
+describe('a request may read twenty notes (brain-14)', () => {
   it('AC1 six-note comparison can obtain its sixth note', async () => {
     const { b, id } = await request(INVOICES, INVOICE_REQUEST);
     const paths = Object.keys(INVOICES);
@@ -91,18 +93,18 @@ describe('a request may read ten notes (brain-14)', () => {
     const r = await go(b, [select(b, id, HOME, nine.map((d) => b.id(due(d)))), doc(id, HOME, 'November dues', duesBody(nine))]);
     expect(candidatePaths(r, id), 'precondition: 12 candidates').toHaveLength(12);
     expect(r.code).toBe(0);
-    expect(selectionRow(r, id)).toMatch(/ required=10\/10 /);
+    expect(selectionRow(r, id)).toMatch(/ required=10\/20 /);
   });
 
   // guard
-  it('AC2 guard: eleven notes for a request are refused', async () => {
+  it('AC2 guard: eleven notes for a request are accepted (qa-prod-7-F1)', async () => {
     const { b, id } = await request(DUES, DUES_REQUEST);
     const ten = DAYS.slice(0, 10);
     const r = await go(b, [select(b, id, HOME, ten.map((d) => b.id(due(d)))), doc(id, HOME, 'November dues', duesBody(ten))]);
     expect(candidatePaths(r, id), 'precondition: 12 candidates').toHaveLength(12);
-    expect(r.code).toBe(1);
-    expect(r.after[`${HOME}/November dues.md`]).toBeUndefined();
-    expect(selectionRow(r, id)).toBeUndefined();
+    expect(r.code).toBe(0);
+    expect(r.after[`${HOME}/November dues.md`] ?? '').toContain(duesBody(ten));
+    expect(selectionRow(r, id)).toMatch(/ required=11\/20 /);
   });
 
   // guard
@@ -157,20 +159,20 @@ describe('a request may read ten notes (brain-14)', () => {
 
 describe('a limited request says so (brain-14 AC5)', () => {
   it('AC5 capped document says so', async () => {
-    const { b, id } = await request(DUES, DUES_REQUEST);
-    const nine = DAYS.slice(0, 9);
-    const r = await go(b, [select(b, id, HOME, nine.map((d) => b.id(due(d)))), doc(id, HOME, 'November dues', duesBody(nine))]);
-    expect(candidatePaths(r, id), 'precondition: 12 candidates').toHaveLength(12);
-    expect(r.after[`${HOME}/November dues.md`] ?? '').toContain(`${duesBody(nine)}\n\n${line(10, 12)}\n`);
+    const { b, id } = await request(DUES_21, DUES_REQUEST);
+    const nineteen = DAYS_21.slice(0, 19);
+    const r = await go(b, [select(b, id, HOME, nineteen.map((d) => b.id(due(d)))), doc(id, HOME, 'November dues', duesBody(nineteen))]);
+    expect(candidatePaths(r, id), 'precondition: 22 candidates').toHaveLength(22);
+    expect(r.after[`${HOME}/November dues.md`] ?? '').toContain(`${duesBody(nineteen)}\n\n${line(20, 22)}\n`);
   });
 
   it('AC5 guard: a capped answer says so', async () => {
-    const { b, id } = await request(DUES, DUES_REQUEST);
-    const nine = DAYS.slice(0, 9);
+    const { b, id } = await request(DUES_21, DUES_REQUEST);
+    const nineteen = DAYS_21.slice(0, 19);
     const text = 'Your November dues start with [[Dues 1 Nov]]: it lists the first one.';
-    const r = await go(b, [select(b, id, HOME, nine.map((d) => b.id(due(d)))), { ...empty, answers: [{ requestId: id, text }] }]);
-    expect(candidatePaths(r, id), 'precondition: 12 candidates').toHaveLength(12);
-    expect(done(r)).toContainEqual(`${text} ${line(10, 12)}`);
+    const r = await go(b, [select(b, id, HOME, nineteen.map((d) => b.id(due(d)))), { ...empty, answers: [{ requestId: id, text }] }]);
+    expect(candidatePaths(r, id), 'precondition: 22 candidates').toHaveLength(22);
+    expect(done(r)).toContainEqual(`${text} ${line(20, 22)}`);
   });
 
   it('AC5 a wanted note that does not fit says so', async () => {

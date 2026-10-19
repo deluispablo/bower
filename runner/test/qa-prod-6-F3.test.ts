@@ -56,13 +56,12 @@ const WORDS = [
   ['Areas/Home/Saltmere council garden waste permit renewal.md', 'Garden waste permit renewal, due 30 November.', 'due 30 November'],
 ] as const;
 const SIX = [...LINKS.map(([path]) => path), ...WORDS.map(([path]) => path)];
-const NOISE = ['ant', 'bee', 'cat', 'dog', 'eel', 'fox', 'gnu', 'hen', 'ibis', 'jay', 'koi', 'lynx'];
 const SIX_FOLDER = {
   ...Object.fromEntries(LINKS.map(([path, slug, words]) => [path, linkNote(slug, words)])),
   ...Object.fromEntries(WORDS.map(([path, summary]) => [path, note(summary)])),
   'Areas/Home/Larkspur Plumbing invoice 4471.md': note('Plumbing repair, due 28 October.'),
 };
-const HAVE_SHED = Object.fromEntries(NOISE.map((n) => [`Projects/Shed/Shed ${n}.md`, note(`Alex will have to do the ${n} shelf with care.`)]));
+const HAVE_SHED = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`Projects/Shed/Shed ${i + 1}.md`, note(`Alex will have to do shelf ${i + 1} with care.`)]));
 const SIX_BODY = [...LINKS.map(([path, , , said]) => `- [[${name(path)}]]: ${said}.`), ...WORDS.map(([path, , said]) => `- [[${name(path)}]]: ${said}.`)].join('\n');
 
 /** An earlier Bower result note: a dense dues checklist, as the document branch writes one. */
@@ -101,10 +100,10 @@ describe('a request never ranks Bower\'s earlier results (qa-prod-6-F3)', () => 
     const found = candidatesOf(r, id);
     for (const path of EARLIER) expect(found, `${name(path)} is no candidate`).not.toContain(h(b.id(path)));
     for (const path of SIX) expect(found, `${name(path)} is offered`).toContain(h(b.id(path)));
-    // R5: the six dues, Larkspur and the 12 Shed notes compete; the five results are not counted as cut.
+    // R5: the six dues, Larkspur and the 40 Shed notes compete; the five results are not counted as cut.
     const of = Object.keys(folder).length - EARLIER.length;
-    expect(found, 'twelve offered').toHaveLength(12);
-    expect(cutOf(r, id), 'cut leaves the results out').toBe(of - 12);
+    expect(found, 'forty offered').toHaveLength(40);
+    expect(cutOf(r, id), 'cut leaves the results out').toBe(of - 40);
     expect(r.code).toBe(0);
     expect(r.after[`${DUES_TO}/Before December.md`] ?? '', '"of" leaves the results out').toMatch(new RegExp(`Bower read \\d+ of the ${of} notes that may matter here`));
   });
@@ -150,7 +149,7 @@ const sized = (n: number): string => `${'A'.repeat(n - 1)}.`;
 
 describe('a limited document\'s summary says some may be missing (qa-prod-6-F3)', () => {
   const due = (k: number): string => `Projects/Dues/Due ${k}.md`;
-  const DUES = Object.fromEntries(Array.from({ length: 15 }, (_, i) => [due(i + 1), note(`Club fee due ${i + 1} November.`)]));
+  const DUES = Object.fromEntries(Array.from({ length: 43 }, (_, i) => [due(i + 1), note(`Club fee due ${i + 1} November.`)]));
   const limited = async (summaries: string[]) => {
     const { b, id } = await request(DUES);
     const ranked = b.ix.neighbourhood(REQUEST, Object.fromEntries(Object.entries(DUES).map(([path, text]) => [b.id(path),
@@ -166,7 +165,7 @@ describe('a limited document\'s summary says some may be missing (qa-prod-6-F3)'
     const { r, body, text } = await limited(['Club fees due in November.']);
     expect(r.code).toBe(0);
     expect(summaryOf(text), 'the stored summary says so').toBe(`Club fees due in November.${TAIL}`);
-    expect(text, 'the limit line still closes the document').toContain(`${body}\n\nBower read 3 of the 15 notes that may matter here, so some may be missing.\n`);
+    expect(text, 'the limit line still closes the document').toContain(`${body}\n\nBower read 3 of the 43 notes that may matter here, so some may be missing.\n`);
   });
 
   it('AC4 a summary with no full stop gains one before the tail', async () => {
