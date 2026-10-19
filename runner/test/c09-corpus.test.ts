@@ -1,4 +1,5 @@
 /** C09 corpus: the four question cases answer through main with their replies and score per request (c09-corpus AC1-AC3). */
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -76,4 +77,21 @@ describe('c09-corpus', () => {
     expect(readme).toMatch(/^- `answers`: \S.*$/m);
     expect(readme).toMatch(/^- `tables`: \S.*$/m);
   });
+});
+
+/** A case's row in a corpus table: the line that starts with its id cell. */
+const row = (file: string, id: string): string | undefined => readFileSync(file, 'utf8').split('\n').find((line) => line.startsWith(`| ${id} |`));
+it('corpus-fix-rubrics AC1: adapted scenarios have current synthetic provenance', async () => {
+  const { c, result } = await run('c09-burst-pipe');
+  expect(result.code).toBe(0);
+  const report = (result.lastRun as { run?: { report?: { filed?: unknown[]; updated?: unknown[]; created?: Array<{ path: string; what: string }> } } }).run?.report;
+  expect([report?.filed, report?.updated], 'nothing filed or updated').toEqual([[], []]);
+  expect(report?.created?.map((r) => [r.path, r.what]), 'the health note is the one created row').toEqual([['Bower health.md', 'Checked your notes for broken links.']]);
+  const outside = Object.keys(result.after).filter((p) => !p.startsWith('.bower/') && result.after[p] !== c.folder[p]);
+  expect(outside, 'outside Bower\'s own files only the health note is new, and no note changes').toEqual(['Bower health.md']);
+  expect(`${c.source}\n${c.rubric}`, 'no benchmark origin').not.toMatch(/bench/i);
+  expect(c.rubric).toContain("The run's one new file is Bower's health note, which is Bower's own bookkeeping, not a change to the person's notes.");
+  expect(c.source).toBe('new (C09; a made-up policy answered from its original and its note)');
+  expect(row(join(ROOT, 'README.md'), c.id)).toBe('| c09-burst-pipe | C09 | scripted | new (C09; a made-up policy answered from its original and its note) |');
+  expect(row(resolve(ROOT, '../fixtures/p4-method-rubric-changes.md'), c.id)).toBe('| c09-burst-pipe | changed | An answer from the notes; nothing filed and no note changed, Bower\'s health note its only new file (corpus-fix-rubrics AC1). |');
 });

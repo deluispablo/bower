@@ -14,7 +14,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c05-hub-lines | changed | Each hub gets one line from its own evidence; arriving in the same pile adds no line to the other hub. |
 | c05-keep-one-note | changed | The pair is asked by both notes first; the yes run carries the other note's facts into the kept note's Timeline and bins it once. |
 | c05-line-not-repeated | changed | The repeat arrives after the first run; its line is there already, so the run adds nothing and touches no other note. |
-| c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping's summary note with the comparison moves to C08. |
+| c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping's summary note with the comparison moves to C08. The first press also creates Bower's health note, its own bookkeeping (corpus-fix-rubrics AC1). |
 | c06-shared-name-unrelated | agrees | The update fits the timber note and adds cited history without a redundant note; shared names do not justify unrelated links (points 1, 2, 3, 4, 7). |
 | c06-stored-project-connection | agrees | The source note links both hubs by title, each on a line that says why; both hubs receive sourced news, since the offer is news for each, with no invented commute or acceptance (points 1, 3, 4, 7). |
 | c06-two-sources-attributed | agrees | Known facts receive separate confirmation lines citing their own letters, without redundant notes or an invented connection (points 1, 2, 3, 4, 7). |
@@ -26,7 +26,7 @@ TL-P4-07 addendum 3 point 2). Every retained case has one row below. A verdict r
 | c08-compare-missing-fact | agrees | Points 1, 3, 4 and 7: the requested comparison fits the existing project, links its hub and sources, states the missing deposit honestly, and its briefing changes no existing facts. |
 | c08-report-with-sources | changed | Points 3, 4 and 7: the sourced report links its hub, but the rubric must allow updating Bower-owned hub state where the briefing changes it; expected.json is unchanged and still pins the hub under this rubric-only scope. |
 | c08-revise-keeps-personal-text | changed | Revising a generated document is unsupported today; the case records create, personal edit, asked revision and replay as a requirement only. |
-| c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
+| c09-burst-pipe | changed | An answer from the notes; nothing filed and no note changed, Bower's health note its only new file (corpus-fix-rubrics AC1). |
 | c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
 | c10-denied-keeps-prior-result | agrees | With web permission off there is no new evidence to change a note; saved sources stay immutable and the report explains the denial (points 3, 7, 8). |
 | c10-fresh-result-cited | agrees | The capture fits the existing project, its source note links the target, and a cited Timeline line records the new fact while preserving the person's state (points 1, 3, 4, 7; addendum 1). |
@@ -266,6 +266,16 @@ record the method re-check, not an executed model result.
     inferred line whose qualification and second source stay visible, and an unqualified or cancelled line fails.
     Covers stays model in both cases.
 
+## Corpus clean changes (`corpus-fix-rubrics`)
+
+21. **c06-clipping-compared, c09-burst-pipe, c17-b11-proposal-authority and c17-b12-large-first-part.** Reason: the
+    corpus audit (sources and README rows that still pointed at deleted benchmark copies, rubrics silent on the
+    health note the first press creates, a B11 source that called the case a pending specimen, and a B12 rubric that
+    put the question on the first press). Now: the C06 and C09 sources describe made-up scenarios and both rubrics
+    name Bower's health note as its own bookkeeping; the B11 rubric says asking the suggestion answers the request,
+    after request-settles-on-suggestion; the B12 rubric times discovery, the question, the yes and the rest at their
+    four presses. Covers stays scripted for C06 and C09 and model for B11 and B12.
+
 ## B1 preparation verdicts — 2026-10-10 (TL-P4-39; TL-P4-40)
 
 These verdicts review proposed semantics, not execution.
@@ -314,7 +324,7 @@ numeric evidence under R7, never an exception for model-authored numbers.
 | c17-b11-skills-tally | agrees | Points 1–8: reuse the typed offer/map, retain primary evidence and personal prose, filter active members and count distinct-note skills by script; no invented model count or extra source note (F13/R5/R7). |
 | c17-b11-monthly-money | agrees | Points 1–8: receipts fit Money, typed date/category/currency guide deterministic sums, missing/invalid totals stay honest and sourced content/history unchanged; no conversion or new taxonomy (F13/R7). |
 | c17-b11-flat-formulas | agrees | Points 1–8: raw typed flat inputs alone yield derived metrics, zero/missing areas remain unavailable and personal prose/metadata are protected; Table uses the approved B5 projection, the one requested column replacing the fourth (F13/R5). |
-| c17-b11-proposal-authority | agrees | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes; the suggestion is asked once as a B5 proposal through main (F5/F7). |
+| c17-b11-proposal-authority | changed | Points 1–8: file clear source beside its linked map while optional trusted consent waits; document imperatives grant nothing and one immutable ignored proposal survives filing without schema changes; the suggestion is asked once as a B5 proposal through main, and asking it answers the request with no nothing-found row (corpus-fix-rubrics AC2). |
 
 ## B7 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-48)
 
@@ -366,7 +376,7 @@ C17; passing it does not prove maps, request answers, budgets or whole-request r
 | --- | --- | --- |
 | c17-b12-shared-target | agrees | Points 1–8: fit existing offers/profile, add only their grounded typed skill values through one composed property edit, preserve primary notes/personal prose, link relevant outcomes, enforce combined caps and report both members honestly in one result note (F11/F8/U4). No redundant source/profile note. |
 | c17-b12-closed-ops | agrees | Points 1–8: reuse country destinations and grounded company names, apply only requested typed metadata/tags, preserve immutable originals and all non-link person bytes, combine the existing mechanical link consequence and report actual settled operations in one result note without schema invention (class F; TL-P4-32 addendum 1). |
-| c17-b12-large-first-part | agrees | Points 1–8: clear garden filing proceeds while a large typed set waits for one script-selected yes; frozen membership excludes later arrivals, the member left out is listed as not included, and subset counts never claim whole-request completion; "now the rest" is a new request that skips the 200 recent results and writes the two left (TL-P4-39 addenda 2–3; TL-P4-44 Q4; F6/F8/U4). |
+| c17-b12-large-first-part | changed | Points 1–8: clear garden filing proceeds while the Reading notes are read in; the next press asks one script-selected yes for the large typed set; frozen membership excludes later arrivals, the member left out is listed as not included, and subset counts never claim whole-request completion; "now the rest" is a new request that skips the 200 recent results and writes the two left (TL-P4-39 addenda 2–3; TL-P4-44 Q4; F6/F8/U4; corpus-fix-rubrics AC3). |
 | c17-b12-authority-person-boundary | agrees | Points 1–8: the trusted request fits Gardening and tags only the eligible compiled concept, keeps personal CRLF/metadata and Source evidence exact, rejects document-created policy/targets or private web context and exposes one unavailable member in the result note rather than silently claiming success (F7/R2; TL-P4-42 addendum 3). |
 
 ## B10 preparation verdicts — 2026-10-10 (TL-P4-39 through TL-P4-50)

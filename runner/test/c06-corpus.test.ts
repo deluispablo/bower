@@ -3,7 +3,7 @@
  * production main in TL-P4-34's form (a reason beside every link, hub lines only for news), each with a replay press.
  * AC25 (the scorer's identity check) and the clipping's relation line were cut on 2026-10-16.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -103,4 +103,23 @@ it.each(CASES)('AC24 c06-case: $id scores clean through main, selection then exe
 it.each(CASES)('AC24 guard c06-case: $id seeds every note it names', async ({ id, changed, same }) => {
   const c = await load(id);
   for (const path of [...changed, ...same].filter((p) => !p.endsWith('Saltmere offer.md'))) expect(c.folder[path], `${path} is seeded`).toBeDefined();
+});
+
+/** A case's row in a corpus table: the line that starts with its id cell. */
+const row = (file: string, id: string): string | undefined => readFileSync(file, 'utf8').split('\n').find((line) => line.startsWith(`| ${id} |`));
+/** A press's created and updated rows. */
+const rowsOf = (run: CaseRun) => (run.lastRun as { run?: { report?: { created?: Array<{ path: string; what: string }>; updated?: Array<{ path: string }> } } }).run?.report;
+it('corpus-fix-rubrics AC1: adapted scenarios have current synthetic provenance', async () => {
+  const c = await load('c06-clipping-compared');
+  const final = await runWithClaude(c, caseReplies(c.id));
+  const first = pressOne(final);
+  expect([first.code, final.code]).toEqual([0, 0]);
+  expect(rowsOf(first)?.created?.map((r) => [r.path, r.what]), 'press 1 creates only the health note').toEqual([['Bower health.md', 'Checked your notes for broken links.']]);
+  expect(rowsOf(first)?.updated?.map((r) => r.path), 'and updates only the hub').toEqual([CLIPPING_HUB]);
+  expect(rowsOf(final)?.created, 'the replay creates nothing').toEqual([]);
+  expect(`${c.source}\n${c.rubric}`, 'no benchmark origin').not.toMatch(/bench/i);
+  expect(c.rubric).toContain("The first press also creates Bower's health note, which is Bower's own bookkeeping, not a change to the person's notes.");
+  expect(c.source).toBe('new (C06; a made-up clipping adds one sourced hub line and leaves the other offer unchanged)');
+  expect(row(join(ROOT, 'README.md'), c.id)).toBe('| c06-clipping-compared | C06 | scripted | new (C06; a made-up clipping adds one sourced hub line and leaves the other offer unchanged) |');
+  expect(row(resolve(ROOT, '../fixtures/p4-method-rubric-changes.md'), c.id)).toBe('| c06-clipping-compared | changed | Points 1, 2, 7: the clipping files with the job hunt and the hub gets one line with its news, citing it; the Ferrowick offer stays unchanged. The clipping\'s summary note with the comparison moves to C08. The first press also creates Bower\'s health note, its own bookkeeping (corpus-fix-rubrics AC1). |');
 });

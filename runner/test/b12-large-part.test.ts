@@ -1,6 +1,6 @@
 /** B12d through production main: a set over 200 notes waits for one yes; a yes runs exactly the stored first part (TL-P4-39 addendum 3, TL-P4-52 Q2, Q9). */
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -628,3 +628,36 @@ async function resealed(stored: Manifest, fileId: string, change: (e: Record<str
   const remapped = JSON.parse([...renamed].reduce((t, [from, to]) => t.split(from).join(to), json)) as Manifest;
   return { ...remapped, operations: m.operations };
 }
+
+/** A case's row in a corpus table: the line that starts with its id cell. */
+const row = (file: string, id: string): string | undefined => readFileSync(file, 'utf8').split('\n').find((line) => line.startsWith(`| ${id} |`));
+it('corpus-fix-rubrics AC3: B12 rubric matches the actual four-press sequence', async () => {
+  const id = 'c17-b12-large-first-part';
+  const c = await loadCase(join(ROOT, id));
+  const replies = caseReplies(id);
+  // Each press runs main in its own working directory; a call is labelled by the request words it shows the model.
+  const calls = new Map<string, string[]>();
+  const run = await runWithClaude(c, async (call) => {
+    calls.set(call.cwd, [...calls.get(call.cwd) ?? [], call.input.includes('Now do the rest') ? 'the rest' : call.input.includes('Set review_state to reviewed') ? 'the request' : 'no request']);
+    return replies(call);
+  });
+  const runs = [...run.runs ?? [], run];
+  const report = (r: CaseRun) => (r.lastRun as { run?: { report?: { questions?: Array<{ text: string }>; created?: Array<{ path: string }> } } }).run?.report;
+  const reviewed = (r: CaseRun) => Object.entries(r.after).filter(([p, t]) => p.startsWith('Resources/Reading/') && !p.includes('/Request - ') && t.includes('review_state: reviewed')).length;
+  const done = (r: CaseRun) => (JSON.parse(r.after[SYSTEM.requests] ?? '{"done":[]}') as { done: Array<{ id: string }> }).done.map((x) => x.id);
+  expect(runs.map((r) => r.code), 'four presses').toEqual([0, 0, 0, 0]);
+  expect([...calls.values()], 'two calls on presses 1, 2 and 4; the yes makes none').toEqual([['no request', 'no request'], ['the request', 'the request'], ['the rest', 'the rest']]);
+  expect(runs.map((r) => report(r)?.questions?.map((q) => q.text) ?? []), 'only the second press asks').toEqual([[], ['There are 201 reading notes. Start with the 200 most recent?'], [], []]);
+  expect(runs.map((r) => report(r)?.created?.map((x) => x.path) ?? []), 'what each press creates').toEqual([['Resources/Gardening/Garden notice.md'], ['Bower health.md'],
+    ['Resources/Reading/Request - Review Reading.md'], ['Resources/Reading/Request - Review the rest.md']]);
+  expect(runs.map(reviewed), 'Reading notes reviewed after each press').toEqual([0, 0, 200, 202]);
+  expect(runs.map(done), 'the request settles with the yes; the rest is its own request').toEqual([[], [], ['change-1'], ['press-4', 'change-1']]);
+  expect(run.score).toEqual({ pass: true, unmet: [] });
+  const rubric = readFileSync(join(ROOT, id, 'rubric.md'), 'utf8');
+  expect(rubric, 'the rubric times each step at its press').not.toMatch(/two model calls for the first press|The first reply asks|filed normally while the Reading question waits/);
+  expect(rubric).toContain('Four presses: discovery, the question, the yes and the rest.');
+  for (const step of ['1. Discovery. The first press', '2. The question. Once all 201 notes are known, the second press', '3. The yes.', '4. The rest.']) expect(rubric).toContain(step);
+  expect(rubric).toContain('no model call');
+  expect(row(join(ROOT, 'README.md'), id)).toBe('| c17-b12-large-first-part | C17 / B12 | model | TL-P4-39 addenda 2–3, TL-P4-44 Q4; 201→200 yes with no model call, the late arrival left out, Reading 201 listed as not included; then "now the rest" as a new request that skips the 200 recent results (b12-recent) |');
+  expect(row(resolve(ROOT, '../fixtures/p4-method-rubric-changes.md'), id)).toBe('| c17-b12-large-first-part | changed | Points 1–8: clear garden filing proceeds while the Reading notes are read in; the next press asks one script-selected yes for the large typed set; frozen membership excludes later arrivals, the member left out is listed as not included, and subset counts never claim whole-request completion; "now the rest" is a new request that skips the 200 recent results and writes the two left (TL-P4-39 addenda 2–3; TL-P4-44 Q4; F6/F8/U4; corpus-fix-rubrics AC3). |');
+}, 240_000);

@@ -3,7 +3,7 @@
   "capability": "C06",
   "title": "A job clipping compared with the offers already there",
   "covers": "scripted",
-  "source": "bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping)",
+  "source": "new (C06; a made-up clipping adds one sourced hub line and leaves the other offer unchanged)",
   "scope": "all",
   "allowWeb": false,
   "inbox": [
