@@ -50,6 +50,8 @@ What to write:
   (the note named as its folder, or its project's or area's note) when there is one, and 0 to 5 related notes shown below,
   each on a line that says why, as "See also [[X]]: <why>.": never a bare link, never a note not shown. Name a note by its
   title, or by its path when two notes share it. A hub gets a Timeline line only when the thing is news for it.
+  A note of type moc takes no line, and filing a thing beside one is not enough: it still needs its "note" or a line
+  on another note below that it updates or confirms.
 - "lines" (optional): at most 20 Timeline lines, each at most 200 characters with no link, only on the notes
   below; "cites" names a thing you file, and Bower links it as the source, a pile of words only, or a request asking for this line
   on this note. A request's words are never filed as a thing. A note's Timeline only grows. Look in each

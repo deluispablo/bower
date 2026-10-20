@@ -405,6 +405,8 @@ function promptInstructions(): string {
     '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 0 to 5 related notes shown below,',
     '  each on a line that says why, as "See also [[X]]: <why>.": never a bare link, never a note not shown. Name a note by its',
     '  title, or by its path when two notes share it. A hub gets a Timeline line only when the thing is news for it.',
+    '  A note of type moc takes no line, and filing a thing beside one is not enough: it still needs its "note" or a line',
+    '  on another note below that it updates or confirms.',
     `- "lines" (optional): at most ${AUTHORED.lines} Timeline lines, each at most ${AUTHORED.line} characters with no link, only on the notes`,
     '  below; "cites" names a thing you file, and Bower links it as the source, a pile of words only, or a request asking for this line',
     '  on this note. A request\'s words are never filed as a thing. A note\'s Timeline only grows. Look in each',
@@ -1241,7 +1243,7 @@ export interface Seen {
   fileNames?: ReadonlyMap<string, string>;
   /** Shown notes whose whole text says they are Bower's (a marker goes only there). */
   bowerNotes?: ReadonlySet<string>;
-  /** Folders whose shown Bower MOC lists what is filed there: a thing filed into one needs no note of its own (TL-P4-47 Q5). */
+  /** Folders whose shown Bower MOC lists what is filed there; the MOC takes no Timeline line, and filing there still needs a note or line (brain-17). */
   mocFolders?: ReadonlySet<string>;
   names?: ReadonlySet<string>;
   texts?: ReadonlyMap<string, string>;
@@ -2206,12 +2208,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const path = pathIn(seen, l.alsoCites);
       return markerText(l.marker, l.text, kept.find((k) => k.other === path)?.kept.split('/').at(-1) ?? nameIn(seen, l.alsoCites)).length <= AUTHORED.line;
     }) || `a Timeline line past ${AUTHORED.line} characters with the label and source Bower adds, named as kept: shorten its words`),
-    // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
+    // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2);
+    // filing beside a MOC is no exemption, since the MOC only lists it (brain-17).
     () => {
       const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
       for (const [id, place] of placed) {
-        if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || seen.mocFolders?.has(place.to) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
-        return at(no('noNote', `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`, true), admitted.get(id)?.pileId);
+        if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
+        return at(no('noNote', `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it updates or confirms (never a MOC)`, true), admitted.get(id)?.pileId);
       }
       return null;
     },
@@ -3338,9 +3341,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
               ...(selection.allowedTargets[subject] ?? []).map((id) => seen.noteTexts?.get(ix.pathOf(id) ?? ''))].filter((t): t is string => t !== undefined);
             if (ask.options !== undefined || quote.length < QUOTES.shortest || quote.length > QUOTES.longest || !quoteIn(quote, supplied)) return at(no('askOptions'), from('asks', ask));
           }
-          // A MOC lists its notes itself and never takes a Timeline line: refuse the line so the thing is filed bare.
-          if (rows('lines').some((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
-            && indexed[ix.idOf(row.note) ?? '']?.type === 'moc')) return no('lineNote', 'a line on a MOC, which takes none: file the thing into its folder without a note or line');
+          // A MOC lists its notes itself and never takes a Timeline line: the line goes on a note the thing updates, or the thing gets its note (brain-17).
+          const onMoc = rows('lines').find((row) => typeof row.note === 'string' && seen.mocFolders?.has(row.note.slice(0, row.note.lastIndexOf('/')))
+            && indexed[ix.idOf(row.note) ?? '']?.type === 'moc');
+          if (onMoc) return at(no('lineNote', 'a line on a MOC, which takes none: give it on a note below that the thing updates or confirms, or give the thing its own "note"'), from('lines', onMoc));
           // brain-16 R2-3: a source note takes no Timeline line (note-edit drops it unsaid); the line goes on its folder's hub.
           const onSource = rows('lines').find((row) => {
             const front = typeof row.note === 'string' ? frontValues(seen.noteTexts?.get(row.note) ?? '') : null;
