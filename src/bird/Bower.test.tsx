@@ -429,7 +429,9 @@ it('the focus gaze ends when focus leaves the control', () => {
   vi.spyOn(b.box, 'getBoundingClientRect').mockReturnValue(rect(0, 0, Z));
   const irisY = (): number => nums(b.box.querySelector('.b-iris')?.getAttribute('transform'))[1] ?? 0;
   b.run(1);
-  act(() => button.focus());
+  // Keyboard focus (a Tab keydown first), so the control is :focus-visible.
+  const tabTo = (): void => act(() => { fireEvent.keyDown(document.body, { key: 'Tab' }); button.focus(); });
+  tabTo();
   b.run(0.3);
   expect(irisY()).toBeGreaterThan(0.8);
   // Focus leaves to the page: the gaze ends, with no pointer input.
@@ -438,7 +440,7 @@ it('the focus gaze ends when focus leaves the control', () => {
   expect(Math.abs(irisY())).toBeLessThan(0.2);
   // Focus back, then the page scrolls: the control is now above Bower, and the gaze follows it, not the rect
   // it first read.
-  act(() => button.focus());
+  tabTo();
   b.run(0.3);
   expect(irisY()).toBeGreaterThan(0.8);
   at.mockReturnValue(rect(280, -320, 40));
@@ -570,7 +572,8 @@ it('the iris returns from a lost focus gaze in a working pose', () => {
   const iris = (): number[] => nums(b.box.querySelector('.b-iris')?.getAttribute('transform'));
   b.run(1);
   const [restX = NaN, restY = NaN] = iris();
-  act(() => button.focus());
+  // Keyboard focus (a Tab keydown first), so the control is :focus-visible.
+  act(() => { fireEvent.keyDown(document.body, { key: 'Tab' }); button.focus(); });
   b.run(0.3);
   expect(iris()[1] ?? 0).toBeGreaterThan(0.8);
   // Focus leaves: within 0.5 s of engine time the iris is back at the pose's own rest.

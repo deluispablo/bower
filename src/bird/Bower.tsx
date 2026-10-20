@@ -175,10 +175,11 @@ function useBirdEngine(els: EngineEls, home: TargetFn, size: number, moves: bool
     };
     // The focused control's place is read each frame, so the gaze follows it as the page scrolls or
     // lays out again, and ends when focus leaves it. A key with nothing focused still counts as input,
-    // and leaves a live pointer gaze as it is.
+    // and leaves a live pointer gaze as it is; so does focus a pointer gave (main, on a click), which
+    // is not :focus-visible, so a tap's pointer gaze holds.
     const onFocus = (ev: Event): void => {
       const el = ev.type === 'keydown' ? document.activeElement : ev.target;
-      if (!(el instanceof Element) || el === document.body || el === document.documentElement) {
+      if (!(el instanceof Element) || el === document.body || el === document.documentElement || !el.matches(':focus-visible')) {
         engine.current?.look(null, 'focus');
         return;
       }
