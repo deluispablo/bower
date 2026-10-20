@@ -44,7 +44,7 @@ import { VIEW_LIMITS, computedBy, setFault, viewFault, type Predicate } from '..
 import { frontValues, lintFacts, propertyValue, summaryScalar, timelineBullets, validSummary, valueOk } from '../../src/data/contracts/note-format';
 import { normalizeTag } from '../../src/data/contracts/tag-format';
 import { failureKind } from '../../src/data/drive/transport';
-import { inSetFolder, setMembers, type SetNote } from './views';
+import { calculate, inSetFolder, setMembers, type SetNote } from './views';
 import { NOTE_TEMPLATES, type NoteTemplate } from '../../src/data/contracts/note-templates';
 import { markerText, parseTimelineLine } from '../../src/data/contracts/timeline-line';
 import { scanLinks, replaceLinks, formerNames, linkTarget } from '../../src/data/contracts/links';
@@ -438,6 +438,8 @@ function promptInstructions(): string {
     '- "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request\'s fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].',
     '  Write every part the request needs; link only the notes and files shown below, by name or whole path, never a note or thing this reply files or writes; write only their figures. A request you give a document takes no answer, map or view.',
     '  Answers, document summaries and document bodies follow the same evidence rules. Whole numbers and multiple citations are not exceptions. Every source link must resolve to supplied evidence.',
+    '  For a requested count, sum or difference, return the operation and cited operands. Bower calculates and renders the result. Do not supply an unchecked result or combine incompatible units or currencies.',
+    '  Write it in the text as {{sum: €10 [[A]]; €20 [[B]]}}, {{difference: <first>; <second>}} or {{count: [[A]]; [[B]]}}.',
     // C09 (R15, ruling 15): originals are evidence for answers, never a note's link, line or target.
     '- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" and "documents" only. Cite one as [[its whole path]], or',
     '  [[its full name]] when no other file has it; never link it from a note, give it a line or a state, or write to it.',
@@ -2177,8 +2179,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
    * Each sentence part (split at sentence ends and ";") that links notes is stated as coming from them: its figures are in
    * those notes as shown, or in the request. One with no link holds only figures of the request or a note or file shown.
    * Whole numbers and parts that link two or more notes are no exception: a count, total or difference not written in a
-   * source is refused until code computes it (brain-09). An ordered list's marker ("1. ") and a reference or footnote label
-   * ("[1]", "[^1]") are no figures.
+   * source is refused; one the reply asks Bower to compute is `calculated` below, its operands checked here as written. An
+   * ordered list's marker ("1. ") and a reference or footnote label ("[1]", "[^1]") are no figures.
    */
   const figureIn = (text: string, requestId: string): string | null => {
     if (seen.words === undefined) return null;
@@ -2200,6 +2202,60 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       }
     }
     return null;
+  };
+  /**
+   * brain-09: a requested count, sum or difference, written as {{count: [[A]]; [[B]]}}, {{sum: €10 [[A]]; €20 [[B]]}} or
+   * {{difference: <first>; <second>}} (operands split by ";"), is computed here and rendered as its result and the notes it
+   * cites, so the reply never supplies the result; `figureIn` has checked each operand's figure against its sources. A count
+   * is of the distinct notes or files its links resolve to; a sum or difference takes one figure per operand, all with one
+   * unit (`calculate`, B11's arithmetic). A string is why it cannot be computed: no total is made up.
+   */
+  const calculated = (text: string): string | { text: string } => {
+    const CALCULATION = /\{\{\s*(\w+)\s*:([^{}]*)\}\}/g;
+    let why = /\{\{\s*\w+\s*:/.test(text.replace(CALCULATION, '')) ? 'a calculation Bower cannot read: write {{count: ...}}, {{sum: ...}} or {{difference: ...}}, its operands split by ";"' : null;
+    const rendered = text.replace(CALCULATION, (all, op: string, inner: string) => {
+      const operands = inner.split(';').map((o) => ({ o, cited: [...scanLinks(o)].flatMap((m) => {
+        const one = linkIdentity(linkTarget(m[1] ?? '').replace(/\.md$/, ''), seen.files?.keys() ?? []);
+        return one && typeof one === 'object' ? [{ link: m[0], path: 'note' in one ? one.note : one.file }] : [];
+      }) }));
+      const cited = operands.flatMap((x) => x.cited);
+      // Each note or file once, as first written.
+      const sources = cited.filter((c, i) => cited.findIndex((d) => d.path === c.path) === i).map((c) => c.link);
+      const tail = sources.length ? ` (${sources.join(', ')})` : '';
+      if (op === 'count') {
+        if (operands.some((x) => x.cited.length !== 1)) why ??= 'a count whose items are not each one link to a note or file shown: count only linked notes';
+        return `${new Set(operands.map((x) => x.cited[0]?.path)).size}${tail}`;
+      }
+      if (op !== 'sum' && op !== 'difference') {
+        why ??= `a calculation Bower cannot read: "${op}" is not count, sum or difference`;
+        return all;
+      }
+      const figures = operands.flatMap(({ o }) => {
+        const form = replaceLinks(o, () => ' ').replace(/\s+/g, ' ').trim();
+        const tokens = form.match(NUMBER) ?? [];
+        const token = tokens.length === 1 ? tokens[0] : undefined;
+        return token !== undefined && /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$/.test(token)
+          ? [{ form, token, amount: Number(token.replace(/,/g, '')), unit: form.replace(token, '#').replace(/\s/g, '').toLowerCase() }] : [];
+      });
+      const [first] = figures;
+      if (!first || figures.length !== operands.length) why ??= `a ${op} with an operand that is not one figure: give each operand one figure, as 1,234.56 with its sign or unit, and its source link`;
+      else if (op === 'difference' && figures.length !== 2) why ??= 'a difference that does not take exactly two figures: the first less the second';
+      const result = calculate(op, figures);
+      if (!first || typeof result === 'string') {
+        why ??= result === 'currency' ? `a ${op} of figures in different currencies or units: Bower adds only figures with one currency or unit; give them one by one`
+          : `a ${op} too large to compute: give the figures one by one`;
+        return all;
+      }
+      const decimals = Math.max(...figures.map((f) => f.token.split('.')[1]?.length ?? 0));
+      const value = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: figures.some((f) => f.token.includes(',')) }).format(Math.abs(result.amount));
+      return `${result.amount < 0 ? '-' : ''}${first.form.replace(first.token, value)}${tail}`;
+    });
+    return why ?? { text: rendered };
+  };
+  /** A checked text as Bower keeps it: each calculation replaced by its result. */
+  const rendered = (text: string): string => {
+    const c = calculated(text);
+    return typeof c === 'string' ? text : c.text;
   };
   // prod1-answer-links (R2): a shown note's path (with or without .md), its <name>.md or a shown original's whole path,
   // standing alone in the answer's words outside links and not in the request's own words: it must be cited by a link.
@@ -2237,7 +2293,11 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const n = figureIn(a.text, a.requestId);
       return !n || quoting(`a number that is in none of its sources: "${n}" in the answer; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
-  ], (a) => answered.set(seen.requests?.get(a.requestId)?.id ?? '', withLimit(seen, a.requestId, a.text.trim(), ' '))));
+    rule('numbers', (a) => {
+      const c = calculated(a.text);
+      return typeof c !== 'string' || quoting(`${c}, in the answer`);
+    }),
+  ], (a) => answered.set(seen.requests?.get(a.requestId)?.id ?? '', withLimit(seen, a.requestId, rendered(a.text).trim(), ' '))));
   // C08 (R6-R8): a document answers one of this run's requests, once, as an answer does (an answer, map or view for it is
   // the document's refusal), in a folder shown; its text bounds, links (the one link rule) and figures as an answer's.
   const documented = new Map<string, { to: string; title: string; what: string; body: string }>();
@@ -2267,7 +2327,11 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       const n = inSummary ?? figureIn(d.body, d.requestId);
       return !n || quoting(`a number that is in none of its sources: "${n}" in ${inSummary ? 'the summary of ' : ''}the document "${d.title.trim()}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
-  ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: summaryWithLimit(seen, d.requestId, d.summary.trim()), body: withLimit(seen, d.requestId, d.body, '\n\n') })));
+    rule('numbers', (d) => {
+      const c = [d.summary, d.body].map(calculated).find((x) => typeof x === 'string');
+      return c === undefined || quoting(`${c}, in the document "${d.title.trim()}"`);
+    }),
+  ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: summaryWithLimit(seen, d.requestId, rendered(d.summary).trim()), body: withLimit(seen, d.requestId, rendered(d.body), '\n\n') })));
   // live-refusal-wording: a request Bower will not do, once, given no answer, document, map, view, Timeline line or thing
   // (the whole request is declined), as a request named twice or not shown is no request of this run.
   // Checked on the reply as sent (below), so the refusal never depends on the order or validity of the other sections.

@@ -80,6 +80,8 @@ What to write:
 - "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request's fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].
   Write every part the request needs; link only the notes and files shown below, by name or whole path, never a note or thing this reply files or writes; write only their figures. A request you give a document takes no answer, map or view.
   Answers, document summaries and document bodies follow the same evidence rules. Whole numbers and multiple citations are not exceptions. Every source link must resolve to supplied evidence.
+  For a requested count, sum or difference, return the operation and cited operands. Bower calculates and renders the result. Do not supply an unchecked result or combine incompatible units or currencies.
+  Write it in the text as {{sum: €10 [[A]]; €20 [[B]]}}, {{difference: <first>; <second>}} or {{count: [[A]]; [[B]]}}.
 - "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" and "documents" only. Cite one as [[its whole path]], or
   [[its full name]] when no other file has it; never link it from a note, give it a line or a state, or write to it.
 - Every summary, line and question is one short plain line, the outcome first.
