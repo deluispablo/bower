@@ -11,6 +11,7 @@ import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { answerKind, askAgainNow, isNoAnswer, mayHaveLanded, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
+import { limiter, READ_AHEAD } from '../spine/read';
 import { ancestryLookup, BIN_KEYS, changesError, decodePrefix, drainChanges, DRIVE_MESSAGES, driveError, driveFailure, PREFIX_BYTES, resolveDriveScope, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveChange, type DriveChanges, type DriveFile, type DrivePatch, type DriveScope, type Fence, type ResumableTarget, type SessionStatus, type WriteOptions } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
@@ -315,19 +316,24 @@ export class DriveHttp implements DriveApi {
     const inside = new Set(this.known.get(rootId) ?? (await this.listAll(rootId)).map((f) => f.id)).add(rootId);
     const hits = new Map<string, BinnedItem>();
     // A file in a folder that is itself in the Bin is trashed too (`trashed` true, `explicitlyTrashed` false), and its
-    // folder is in no listing: its place is found by walking up the folders it names, a few `files.get` at most.
-    const below = ancestryLookup(inside, async (id) => {
+    // folder is in no listing: its place is found by walking up the folders it names, a few `files.get` at most. The
+    // hits' walks run together, `READ_AHEAD` gets at a time (Drive v3 "Usage limits"); a get that fails, other than a
+    // missing folder, stops the gets still waiting. A `beforeGet` grant counts the fetches already made, so a look
+    // with one asks one get at a time.
+    const limit = limiter(beforeGet ? 1 : READ_AHEAD, (e) => !(e instanceof BowerError && e.code === 'not-found'));
+    const below = ancestryLookup(inside, (id) => limit(async () => {
       beforeGet?.();
       return this.parents(id);
-    }, BIN_DEPTH);
+    }), BIN_DEPTH);
     for (let i = 0; i < keys.length; i += BIN_KEYS) {
       const has = keys.slice(i, i + BIN_KEYS).map((k) => `appProperties has { key='bowerItem' and value=${quote(k)} }`).join(' or ');
       // A Bin answer cut at the page cap would lose hits silently: the read says it is incomplete instead.
       const cut = (): never => { throw driveError('unknown'); };
-      for (const file of await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS, undefined, cut)) {
-        if (file.folder || !(await Promise.all(file.parents.map((p) => below(p)))).some(Boolean)) continue;
-        hits.set(file.id, { file, size: file.sha256 !== undefined ? (file.size ?? null) : null, sha256: file.sha256 ?? null });
-      }
+      const files = await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS, undefined, cut);
+      const placed = await Promise.all(files.map(async (file) => !file.folder && (await Promise.all(file.parents.map((p) => below(p)))).some(Boolean)));
+      files.forEach((file, n) => {
+        if (placed[n]) hits.set(file.id, { file, size: file.sha256 !== undefined ? (file.size ?? null) : null, sha256: file.sha256 ?? null });
+      });
     }
     return [...hits.values()];
   }
