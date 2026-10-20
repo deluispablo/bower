@@ -46,11 +46,15 @@ it('B1a contract: 2: selection is closed candidate ids with five wants and exact
     { wants: ['outside-note'] }, { wants: ['Resources/Plot.md'] }, { wants: ['new-note'] },
     { wants: context.candidates.slice(0, 6) }, { destination: 'Resources/Gardening' }, { destination: 'new-folder' },
     { destination: { parentId: 'outside-folder', name: 'New' } }, { destination: { parentId: 'folder-1', name: '../New' } },
-    { kind: 'invented-type' }, { itemId: 'new-source' }, { extra: 'unclosed' },
+    { itemId: 'new-source' }, { extra: 'unclosed' }, { wants: ['map-1', 'map-1'] },
   ]) expect(validate({ ...valid, items: [{ ...valid.items[0], ...patch }] }, context), JSON.stringify(patch)).toMatchObject({ ok: false });
   expect(validate({ ...valid, extra: true }, context)).toMatchObject({ ok: false });
   const unknown = { ...valid, items: [{ ...valid.items[0], kind: 'unknown', destination: { parentId: 'folder-1', name: 'New' } }] };
   expect(validate(unknown, context)).toMatchObject({ ok: true, value: unknown });
+  // qa-prod-11-F1: an unlisted kind is read as unknown, and the destination hub may be wanted though it is not listed.
+  expect(validate({ ...valid, items: [{ ...valid.items[0], kind: 'invented-type' }] }, context)).toMatchObject({ ok: true, value: { items: [{ kind: 'unknown' }] } });
+  const hub = { ...valid, items: [{ ...valid.items[0], wants: ['note-1', 'note-2', 'note-3', 'note-4', 'map-1'] }] };
+  expect(validate(hub, { ...context, candidates: context.candidates.filter((id) => id !== 'map-1') })).toEqual({ ok: true, value: hub, allowedTargets: { 'source-1': ['note-1', 'note-2', 'note-3', 'note-4', 'map-1', 'folder-1'] } });
   // A words-only source and answer/pair pins share that source's five, not a new allowance.
   const words = { items: [{ itemId: 'words-only', kind: 'unknown', destination: 'folder-1', wants: ['note-1', 'note-2', 'note-3'] }], asks: [] };
   const pinned = { ...context, pinned: { 'words-only': ['note-4', 'note-5'] } };

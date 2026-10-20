@@ -1174,7 +1174,6 @@ export const REFUSALS = {
   // F5 (ruling 6): the selection's checks and the execution's selection bounds, each with what to change.
   selectionKeys: 'a selection with keys outside its shape: give {"items":[{"itemId","kind","destination","wants"}],"asks":[]}',
   selectionItem: 'a selection item that is not a listed source, or a source selected twice',
-  selectionKind: 'a selection "kind" that is not "unknown" or a listed type id',
   selectionPlace: 'a selection "destination" that is not a listed folder id, or a new {parentId, name} under a folder not listed for the source or named like one already there',
   selectionWants: 'a selection that wants a note not listed for its source, one note twice, or more than five notes (twenty for a request) with its pinned notes and destination hub',
   selectionBasis: 'a selection "basis" that is not a copied rule line or the source\'s own words',
@@ -2975,10 +2974,30 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         answers.filter((a) => a.sourceId === s.itemId || subjectKey(a.question) === s.itemId).flatMap(answerPins)])) };
     // The validator's own set size per item of the last check; only the accepted reply's is published.
     const requiredBy = new Map<string, number>();
+    // qa-prod-11-F1: a refused selection by class only, with no id and none of the person's words (sec-hardening L4).
+    const selectionShape = (value: unknown): string => (isRecord(value) && Array.isArray(value.items) ? value.items : []).map((item: unknown, n) => {
+      if (!isRecord(item)) return `item ${n + 1}: not an object`;
+      const itemId = String(item.itemId); const to = item.destination;
+      const folder = context.folders.find((f) => f.id === (typeof to === 'string' ? to : isRecord(to) ? String(to.parentId) : ''));
+      const listed = shown.sources?.find((s) => s.itemId === itemId)?.candidates ?? [];
+      const wants = Array.isArray(item.wants) ? item.wants.map(String) : [];
+      const classOf = (id: string): string => id === folder?.hubId ? 'destination hub' : context.pinned[itemId]?.includes(id) ? 'pin'
+        : listed.includes(id) ? 'listed for this source' : context.candidates.includes(id) ? "another source's candidate"
+          : context.folders.some((f) => f.id === id) ? 'folder id' : 'not shown';
+      return `item ${n + 1}: itemId ${context.itemIds.includes(itemId) ? 'listed' : 'not listed'}, kind ${item.kind === 'unknown' ? 'unknown'
+        : context.kinds.includes(String(item.kind)) ? 'listed' : 'unlisted'}, destination ${!folder ? 'not listed' : typeof to === 'string' ? 'listed folder'
+        : 'new folder'}, wants ${wants.length} of ${selectionLimit(context, itemId)}${wants.length ? `: ${wants.map(classOf).join(', ')}` : ''}`;
+    }).join('; ') || 'no items';
+    // One line per refused attempt, whichever check refused it.
     const selectionCheck = (value: unknown): ReturnType<typeof selectionOf> => {
+      const result = checkSelection(value);
+      if (!result.ok) console.error(`Selection shape or ids refused (${result.kind}): ${selectionShape(value)}.`);
+      return result;
+    };
+    const checkSelection = (value: unknown): ReturnType<typeof selectionOf> => {
       requiredBy.clear();
       const result = selectionOf(value, context);
-      if (!result.ok) { console.error('Selection shape or ids refused.'); return result; }
+      if (!result.ok) return result;
       // A cut map cannot show that a new folder is needed: that item waits unplaced, nothing is created (TL-P4-47 Q6).
       result.value.items = result.value.items.filter((item) => !foldersCut || typeof item.destination === 'string');
       result.allowedTargets = Object.fromEntries(Object.entries(result.allowedTargets).filter(([id]) => result.value.items.some((item) => item.itemId === id)));
@@ -2986,10 +3005,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         // A note left out this run is simply not read; a line on it is refused by the reply check.
         item.wants = item.wants.filter((id) => !leftOut.has(id));
         const candidates = shown.sources?.find((s) => s.itemId === item.itemId)?.candidates ?? [];
-        if (item.wants.some((id) => !candidates.includes(id))) return no('selectionWants');
-        if (item.basis && !sourceBasisOk(item.basis, item.itemId, sources.find((s) => s.itemId === item.itemId)?.words)) return no('selectionBasis');
         const destinationId = typeof item.destination === 'string' ? item.destination : item.destination.parentId;
         const hub = hubId(destinationId);
+        if (item.wants.some((id) => id !== hub && !candidates.includes(id))) return no('selectionWants');
+        if (item.basis && !sourceBasisOk(item.basis, item.itemId, sources.find((s) => s.itemId === item.itemId)?.words)) return no('selectionBasis');
         const profile = profileFor(rowFor(item))?.id;
         const required = [...new Set([...item.wants, ...context.pinned[item.itemId] ?? [], ...(hub ? [hub] : []),
           ...(profile ? [profile] : [])])];
@@ -3591,9 +3610,11 @@ export function selectionOf(value: unknown, context: SelectionContext):
     const folder = context.folders.find((f) => f.id === folderId);
     const wants = [...new Set([...item.wants, ...(context.pinned[item.itemId] ?? [])])];
     if (seen.has(item.itemId) || !context.itemIds.includes(item.itemId)) return no('selectionItem');
-    if (item.kind !== 'unknown' && !context.kinds.includes(item.kind)) return no('selectionKind');
+    // A kind not listed files like the closest kind (the fixed prompt): read as unknown, its row comes from the match words (qa-prod-11-F1).
+    if (!context.kinds.includes(item.kind)) item.kind = 'unknown';
     if (!folder) return no('selectionPlace');
-    if (wants.length > selectionLimit(context, item.itemId) || wants.some((id) => !context.candidates.includes(id)) || new Set(item.wants).size !== item.wants.length) return no('selectionWants');
+    // The destination hub is Bower's own target, counted once: wanting it needs no listing (qa-prod-11-F1).
+    if (wants.length > selectionLimit(context, item.itemId) || wants.some((id) => id !== folder.hubId && !context.candidates.includes(id)) || new Set(item.wants).size !== item.wants.length) return no('selectionWants');
     seen.add(item.itemId);
     allowedTargets[item.itemId] = [...new Set([...wants, folder.id, ...(folder.hubId ? [folder.hubId] : [])])];
   }
