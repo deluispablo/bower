@@ -23,6 +23,21 @@ describe('Settings', () => {
     expect(groupOf(screen.getByText('Delete your Bower account'))).toBe('Leaving Bower');
   });
 
+  it('AC2 no_web_switch: Settings offers no web lookup, since the runner denies every web tool', () => {
+    cleanup();
+    render(<MemoryRouter><DataProvider sources={loadingSources()}><Settings /></DataProvider></MemoryRouter>);
+    expect(screen.getAllByRole('switch').map((el) => el.getAttribute('aria-label'))).toEqual(['Tell me when a tidy-up ends', 'Bower moves']);
+    expect(screen.queryByText(/on the web/)).toBeNull();
+  });
+
+  it('AC4 folder_row: the folder row says Bower, in My Drive, as one title', () => {
+    cleanup();
+    render(<MemoryRouter><DataProvider sources={loadingSources()}><Settings /></DataProvider></MemoryRouter>);
+    const row = screen.getByText('Bower, in My Drive');
+    expect(row.closest('div')?.textContent).toBe('Bower, in My Drive');
+    expect(screen.queryByText('In My Drive')).toBeNull();
+  });
+
   it('shows who is signed in, not a name written in the code', async () => {
     const base = loadingSources();
     const sources = { ...base, session: { ...base.session, current: async () => ({ name: 'Sam', email: 'sam@example.com' }) } } as Sources;

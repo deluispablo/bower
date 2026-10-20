@@ -191,8 +191,8 @@ export type ScriptedRequest =
   | { kind: 'compare'; asks: RegExp; uses: readonly string[]; note: { to: string; title: string; what: string }; answer: string }
   | { kind: 'lookup'; asks: RegExp; uses: readonly [string]; found: { text: string; url: string }; answer: string };
 
-/** What a lookup says when the web is off in Settings: nothing was looked up. */
-export const NOT_LOOKED_UP = 'Bower did not look anything up. Web lookups are off in Settings.';
+/** What a lookup says while the web is off, as it always is today: nothing was looked up. */
+export const NOT_LOOKED_UP = 'Bower did not look anything up. Looking things up on the web is still to come.';
 
 export const SCRIPTED_REQUESTS: readonly ScriptedRequest[] = [
   {

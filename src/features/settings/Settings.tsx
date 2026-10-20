@@ -91,7 +91,7 @@ export function Settings() {
       <h1 className={s.title}>Settings</h1>
 
       <h2 className={s.h2}>Your Bower folder</h2>
-      <Row title="Bower" sub="In My Drive">
+      <Row title="Bower, in My Drive">
         <Button
           size="sm"
           variant="ghost"
@@ -108,14 +108,8 @@ export function Settings() {
       </Row>
       <LoadError state={rulesState} />
 
+      {/* No web-lookup switch: the runner denies Claude every web tool (runner/src/claude.ts NO_EFFECT_DENY). */}
       <h2 className={s.h2}>Tidying up</h2>
-      <Row asLabel title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
-        <Switch
-          on={prefs.lookUpWeb}
-          label="Look things up on the web"
-          onChange={(v) => prefs.set({ lookUpWeb: v })}
-        />
-      </Row>
       <Row
         asLabel
         title="Tell me when a tidy-up ends"

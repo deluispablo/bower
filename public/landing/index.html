@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="dark">
 <title>Bower</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script src="./support.js"></script>
@@ -175,7 +176,7 @@ details[open] .pl{transform:rotate(45deg)}
 
   <div class="htext">
     <h1 class="d" style="margin:0;max-width:9.6em;font-weight:800;font-size:clamp(48px,6.6vw,92px);line-height:.94;white-space:pre-line">{{ headline }}</h1>
-    <p style="margin:26px 0 0;max-width:25em;font-size:20px;line-height:1.5;color:var(--mist)">Save photos, PDFs, links and notes as they come. Tap once, and Bower names each one and files it in your own Google Drive.</p>
+    <p style="margin:26px 0 0;max-width:25em;font-size:20px;line-height:1.5;color:var(--mist)">Save photos, PDFs, links and notes as they come. Press Tidy up, and Bower names each one and files it in your own Google Drive.</p>
     <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:30px">
       <a class="btn btn-p" href="#run">Set up your own Bower</a>
       <a class="btn btn-g" href="#tidy">Try a tidy-up</a>
@@ -198,8 +199,8 @@ details[open] .pl{transform:rotate(45deg)}
 <section id="tidy" data-sec="tidy" class="sec" style="background:var(--deep)">
   <div class="wrap">
     <div class="split" style="margin-bottom:44px">
-      <h2 class="d h2">Throw it all in. Tap once.</h2>
-      <p style="margin:6px 0 0">Save things as they come, from your phone or computer. When you are ready, tap Tidy up: Bower reads what it can, names each one for what it is and files it in your Drive, in folders by how soon you need things (Projects, Areas, Resources, Archive), unless your rules say otherwise. Try it here.</p>
+      <h2 class="d h2">Throw it all in. Press Tidy up.</h2>
+      <p style="margin:6px 0 0">Save things as they come, from your phone or computer. When you are ready, press Tidy up: Bower reads what it can, names each one for what it is and files it in your Drive, in folders by how soon you need things (Projects, Areas, Resources, Archive), unless your rules say otherwise. Try it here.</p>
     </div>
     <div class="panel" data-perch=".5">
       <div class="tcols">
@@ -1123,7 +1124,7 @@ class Component extends DCLogic {
       { name: 'Your Google Drive', role: 'your notes', color: '#5fcfbc', keeps: 'Every note, every file and every rule. Plain files that you own.', never: 'Anything you cannot open and read yourself.' }
     ];
     const run = [
-      ['12.5%', '37.5%', 'You tap Tidy up on your phone.', [0]],
+      ['12.5%', '37.5%', 'You press Tidy up on your phone.', [0]],
       ['37.5%', '62.5%', 'Cloudflare checks it is you and wakes Bower up.', [1]],
       ['87.5%', '62.5%', 'Bower makes a temporary copy of your folder.', [3, 2]],
       ['62.5%', '62.5%', 'It reads, names and files each thing, on that copy.', [2]],
@@ -1167,7 +1168,7 @@ class Component extends DCLogic {
       archSel: arch[st.archSel],
       archSteps: run.map(function (r, i) { return { on: i === rs && r[0] !== r[1], from: r[0], to: r[1] }; }),
       runCount: rs < 0 ? 'A tidy-up, step by step' : rs >= run.length ? 'Done' : 'Step ' + (rs + 1) + ' of ' + run.length,
-      runText: rs < 0 ? 'Watch where your things go when you tap Tidy up.' : rs >= run.length ? 'Your notes are back in your Drive, and only there.' : run[rs][2],
+      runText: rs < 0 ? 'Watch where your things go when you press Tidy up.' : rs >= run.length ? 'Your notes are back in your Drive, and only there.' : run[rs][2],
       runLabel: rs >= 0 && rs < run.length ? 'Running' : rs >= run.length ? 'Watch again' : 'Watch a tidy-up',
       runTidy: function () {
         if (self.state.runStep >= 0 && self.state.runStep < run.length) return;
@@ -1179,7 +1180,7 @@ class Component extends DCLogic {
         { q: 'Does it cost anything?', a: 'Running Bower is free on the Cloudflare and GitHub free tiers. Bower itself uses a Claude subscription, which whoever runs your Bower brings.' },
         { q: 'Who can use it?', a: 'Whoever sets up a Bower invites people by email; beyond their own accounts, Google must first approve the app. Each person signs in with Google and gets their own folder in their own Drive.' },
         { q: 'Does Bower see my whole Drive?', a: 'Bower works in one folder you choose. Google asks for Drive access because Bower must also see the notes other apps, such as Obsidian, add to that folder.' },
-        { q: 'Does it do things on its own?', a: 'No. Nothing is filed until you tap Tidy up. Each tidy-up also checks the health of the folder; nothing runs on a timer.' },
+        { q: 'Does it do things on its own?', a: 'No. Nothing is filed until you press Tidy up. Each tidy-up also checks the health of the folder; nothing runs on a timer.' },
         { q: 'Can I keep using Obsidian?', a: 'Yes. Point Obsidian at the same folder. Bower hides Obsidian\'s own files, never touches them, and picks up your edits at the next tidy-up.' },
         { q: 'What can I add?', a: 'Photos, PDFs, links and any other file, with a line of your own. Bower reads notes and PDFs; the rest it files by name and your words.' },
         { q: 'What is PARA?', a: 'A way to organise by how soon you need things, made popular by its author: Projects have an end, Areas go on, Resources are for later, the Archive is done.' },

@@ -16,8 +16,8 @@ const SVG_ATTRS = /\s(d|fill|stroke|opacity|marker-end|points|transform|viewBox)
 const COPY = [
   ['using PARA unless your rules say otherwise', 'in folders by how soon you need things (Projects, Areas, Resources, Archive), unless your rules say otherwise'],
   // The runner reads only text and PDFs; pictures and other kinds are filed by name and words (runner/src/extract.ts).
-  ['Tap once, and Bower reads each one, names it and files it in your own Google Drive.', 'Tap once, and Bower names each one and files it in your own Google Drive.'],
-  ['Save things as they come, from any app. When you are ready, tap Tidy up: Bower reads each one, names it', 'Save things as they come, from your phone or computer. When you are ready, tap Tidy up: Bower reads what it can, names each one'],
+  ['Tap once, and Bower reads each one, names it and files it in your own Google Drive.', 'Press Tidy up, and Bower names each one and files it in your own Google Drive.'],
+  ['Save things as they come, from any app. When you are ready, tap Tidy up: Bower reads each one, names it', 'Save things as they come, from your phone or computer. When you are ready, press Tidy up: Bower reads what it can, names each one'],
   // No share target in the app manifest (vite.config.ts): things come in pasted, uploaded or from the camera (Add.tsx).
   ['Shared from the browser', 'A link you pasted'],
   ['Shared from Mail', 'Uploaded from your phone'],
@@ -42,6 +42,9 @@ const COPY = [
   ['The only thing that runs by itself is a weekly health check of the folder.', 'Each tidy-up also checks the health of the folder; nothing runs on a timer.'],
   ['the brand, the bird and the code', 'the brand, the bowerbird and the code'],
   ['one drawing with twelve poses', 'one drawing with nine poses'],
+  // Nothing happens in one tap: the person presses the Tidy up button (also turns an earlier fix's "Tap once" into this).
+  ['Tap once', 'Press Tidy up'],
+  ['tap Tidy up', 'press Tidy up'],
 ];
 let fixed = html.replace(SVG_ATTRS, (_m, attr, value) => ` sc-camel-${attr}="${value}"`);
 for (const [from, to] of COPY) fixed = fixed.split(from).join(to);
@@ -49,6 +52,10 @@ for (const [from, to] of COPY) fixed = fixed.split(from).join(to);
 const MAIN = /<div class="pg"(?![^>]*\brole="main")/;
 fixed = fixed.replace(MAIN, '<div class="pg" role="main"');
 const main = Number(MAIN.test(html));
+// The export draws only its dark theme: say so before the first paint, so the browser's canvas, scrollbars and
+// controls are dark in a light system too (https://web.dev/articles/color-scheme).
+const SCHEME = '<meta name="color-scheme" content="dark">';
+if (!fixed.includes(SCHEME)) fixed = fixed.replace('<meta charset="utf-8">', (m) => `${m}\n${SCHEME}`);
 // Headerless minimal exports stay valid; the real header always offers sign-in.
 fixed = fixed.replace(/(<header\b[^>]*>[\s\S]*?<nav aria-label="Main"[^>]*>)([\s\S]*?)(<\/nav>)/, (match, start, links, end) => {
   if (links.includes('href="/sign-in"')) return match;
