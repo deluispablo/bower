@@ -9,7 +9,7 @@ The owner OKed this on 2026-10-10, with the majority rule for mixed folders. It 
   - Status is today's column: it shows only when something here has a status, with today's pill. A type that declares `status` does not spend one of its 4 on it.
 - **The type columns:** the row's declared `table` subset, in its order, at most 4. The header is the property's label, as today (`p.label`).
 - **Never a column:** the technical keys type, status (outside its own column), summary, tags, created, updated, source and related. Today's `kind` and `folder` stay excluded too.
-- **A column the person asks for:** it replaces the 4th. The run report says so through today's request line (`"<request>" done` in `runDetail`); there is no new string.
+- **A column the person asks for:** it replaces the 4th. The run report says so through today's request line (`"<request>" answered` in `runDetail`, or "N things you asked answered", and the request under "What you asked"); there is no new string.
 
 ## Which type a folder uses
 
@@ -37,7 +37,7 @@ The owner OKed this on 2026-10-10, with the majority rule for mixed folders. It 
 | A tie between two types | The columns of the row that comes first in the type table. |
 | A folder with no typed notes | Today's columns, minus the technical keys. |
 | Money and numbers | "€48,000", right-aligned with tabular figures; sorting orders them by amount. |
-| A column the person asked for | It stands in the 4th place; the report's detail says `"<request>" done`. |
+| A column the person asked for | It stands in the 4th place; the report's detail says `"<request>" answered`, and "What you asked" lists it. |
 | Phone at 375 | The same table, scrolling sideways as today. |
 
 Accessibility: unchanged structure (th buttons with `aria-sort`). Axe at WCAG 2.2 on a typed folder, on demo and fake, at 375 and 1440.
