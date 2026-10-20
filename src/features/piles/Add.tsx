@@ -78,9 +78,10 @@ export function Add() {
   const reasonId = useId();
   const [text, setText, clearIf] = useSessionDraft('bower:add-draft');
   // Beside a stop not seen yet, its card's Try again is the one launch (phone-stopped-launch): the saved message offers none.
+  // Until Add's run read answers (`last` undefined) the run is unknown, so it offers none either; the Inbox launch stays.
   const { data: last } = useRun();
-  const stopped = useRef(false);
-  useEffect(() => { stopped.current = stoppedUnseen(last); }, [last]);
+  const offer = useRef(false);
+  useEffect(() => { offer.current = last !== undefined && !stoppedUnseen(last); }, [last]);
   // The things in the draft are kept for the visit too (in the real app, files are already
   // in the upload queue, so only their list needs keeping).
   const [items, setItemsState] = useState<Draft[]>(() => {
@@ -226,7 +227,7 @@ export function Add() {
         const body = get(key);
         return { name, kind, origin, ...(body ? { body } : {}), ...(url ? { url } : {}) };
       }),
-    }, items.map((d) => d.key), ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', clearIf, () => !stopped.current);
+    }, items.map((d) => d.key), ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', clearIf, () => offer.current);
     setBusy(true);
   };
 

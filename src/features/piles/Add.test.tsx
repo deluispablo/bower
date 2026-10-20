@@ -245,7 +245,7 @@ function renderHeld(members: DraftFixture[], outcome: 'resolve' | 'reject') {
   sessionStorage.setItem('bower:add-draft', context);
   if (members.length) sessionStorage.setItem('bower:add-items', JSON.stringify(members));
   const base = loadingSources();
-  const view = render(<MemoryRouter initialEntries={['/add']}><DataProvider sources={{ ...base, vault: { ...base.vault, addPile, duplicates: async () => [] } }}><CurrentRoute /><Link to="/elsewhere">Go elsewhere</Link><Link to="/add">Go to Add</Link><Routes><Route path="/add" element={<Add />} /><Route path="/" element={<p>Saved inbox page</p>} /><Route path="/elsewhere" element={<p>Somewhere else</p>} /></Routes></DataProvider></MemoryRouter>);
+  const view = render(<MemoryRouter initialEntries={['/add']}><DataProvider sources={{ ...base, vault: { ...base.vault, addPile, duplicates: async () => [] }, runs: { ...base.runs, current: async () => null } }}><CurrentRoute /><Link to="/elsewhere">Go elsewhere</Link><Link to="/add">Go to Add</Link><Routes><Route path="/add" element={<Add />} /><Route path="/" element={<p>Saved inbox page</p>} /><Route path="/elsewhere" element={<p>Somewhere else</p>} /></Routes></DataProvider></MemoryRouter>);
   return { addPile, view };
 }
 const route = () => screen.getByLabelText('Current route');
