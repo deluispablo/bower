@@ -1,6 +1,7 @@
 /**
- * Runs a corpus case with the scripted provider over the runner's pretend Drive v3 (as `main.test.ts` does) and
- * returns what the scorer needs: the folder after the run and the parsed `last-run.json`.
+ * Runs a corpus case with the scripted provider over the runner's pretend Drive v3 (as `main.test.ts` does), or in live
+ * mode with the model transport as it is (`runLive`), and returns what the scorer needs: the folder after the run and the
+ * parsed `last-run.json`.
  */
 import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
@@ -130,6 +131,19 @@ export interface CaseRun {
   root: string;
 }
 
+/**
+ * What the executor reads of a case (corpus-live-runtime AC3): its starting folder, inbox, journal, questions and presses.
+ * Never its id, title, expectations, rubric or folder on disk (`replies.json`, tag results): the scorer reads those after.
+ */
+export type CaseInput = Pick<LoadedCase, 'scope' | 'allowWeb' | 'inbox' | 'journal' | 'questions' | 'bowerOwned' | 'between' | 'presses'
+  | 'folder' | 'folderBinary' | 'inboxFiles' | 'inboxBinary'>;
+
+/** A new object with only `CaseInput`'s fields, so a cast cannot reach what the executor must not read. */
+function caseInput(c: CaseInput): CaseInput {
+  const { scope, allowWeb, inbox, journal, questions, bowerOwned, between, presses, folder, folderBinary, inboxFiles, inboxBinary } = c;
+  return { scope, allowWeb, inbox, journal, questions, bowerOwned, between, presses, folder, folderBinary, inboxFiles, inboxBinary };
+}
+
 export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false, before?: Before, env?: Record<string, string>): Promise<CaseRun> {
   return runCase(c, { around, realTokens, ...(before ? { before } : {}), ...(env ? { env } : {}) });
 }
@@ -140,6 +154,15 @@ export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalT
  */
 export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: Record<string, Record<string, string>>, before?: Before): Promise<CaseRun> {
   return runCase(c, { claude, ...(props ? { props } : {}), ...(before ? { before } : {}) });
+}
+
+/**
+ * Live mode (corpus-live-runtime): every press through main with `claude` as the model transport as it is, for every
+ * call (selection, execution, consolidation, judge, synopsis, picture): no phase synthesis, no fixture on the call, no
+ * `replies.json`. The scorer reads the loaded case after the run.
+ */
+export async function runLive(c: LoadedCase, claude: ClaudeSpawn): Promise<CaseRun> {
+  return runCase(c, { claude, live: true });
 }
 
 /** What a test does to the folder once the case is in it and before admission (the person binning a file). */
@@ -162,13 +185,15 @@ interface CaseOptions {
   before?: Before;
   /** More environment for the runner (what the executor provides, for example the region). */
   env?: Record<string, string>;
+  /** `claude` reaches main as it is (`runLive`); otherwise the planner's phases are told apart for it (`withPhases`). */
+  live?: boolean;
 }
 
 /**
  * Puts a case's folder on `drive` as `runCase` does (its notes, Bower's files, questions, journal and inbox) under a new
  * `Bower` folder in `parent`; its id. The real-adapter world seeds a case with it (`real-world.ts`).
  */
-export async function seedCase(drive: FakeDrive, c: LoadedCase, props: Record<string, Record<string, string>> = {}, parent = 'root'): Promise<string> {
+export async function seedCase(drive: FakeDrive, c: CaseInput, props: Record<string, Record<string, string>> = {}, parent = 'root'): Promise<string> {
   const root = (await drive.createFolder(parent, 'Bower')).id;
   const folders = new Map<string, string>();
   const inbox = await ensureFolder(drive, root, folders, 'Inbox');
@@ -186,7 +211,9 @@ export async function seedCase(drive: FakeDrive, c: LoadedCase, props: Record<st
   for (const [path, bytes] of Object.entries(c.folderBinary)) {
     const parts = path.split('/');
     const name = parts.pop() ?? path;
-    await drive.upload(await ensureFolder(drive, root, folders, parts.join('/')), name, new Blob([bytes.slice()]));
+    // A binary is owned as a text is (corpus-live-runtime AC1): by `bowerOwned`, with the run's extra properties.
+    const own = c.bowerOwned.includes(path) ? { by: 'bower' } : undefined;
+    await drive.upload(await ensureFolder(drive, root, folders, parts.join('/')), name, new Blob([bytes.slice()]), undefined, own || props[path] ? { ...own, ...props[path] } : undefined);
   }
   for (const [i, line] of c.journal.entries()) {
     const rec = { v: 1, id: `change-${i + 1}`, device: 'device-1', at: AT - 60_000 + i, kind: line.kind, what: line.kind === 'answer' ? 'Answered a question' : line.kind === 'rule' ? 'A rule' : `Asked Bower: "${line.text}"`, text: line.text, ...(line.questionId ? { questionId: line.questionId } : {}) };
@@ -211,19 +238,22 @@ export async function seedCase(drive: FakeDrive, c: LoadedCase, props: Record<st
   return root;
 }
 
-async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before, env: more = {} }: CaseOptions): Promise<CaseRun> {
+async function runCase(loaded: LoadedCase, { around, realTokens = false, claude, props = {}, before, env: more = {}, live }: CaseOptions): Promise<CaseRun> {
   // An excluded case is refused before anything is seeded or dispatched (corpus-registry AC3).
-  const execution = CORPUS_EXECUTION[c.id];
-  if (execution?.mode === 'excluded') throw new Error(`${c.id} is not run: ${execution.reason}.`);
+  const execution = CORPUS_EXECUTION[loaded.id];
+  if (execution?.mode === 'excluded') throw new Error(`${loaded.id} is not run: ${execution.reason}.`);
+  // Live mode never falls back to the scripted replies (corpus-live-runtime AC4).
+  if (live && !claude) throw new Error('Live mode needs a model transport.');
+  const c = caseInput(loaded);
   const drive = fixedDrive();
   const root = await seedCase(drive, c, props);
   await before?.(drive, root);
   let scripted = claude;
   if (!scripted) {
-    try { scripted = replySequence(JSON.parse(await readFile(join(c.dir, 'replies.json'), 'utf8')) as unknown[]); }
+    try { scripted = replySequence(JSON.parse(await readFile(join(loaded.dir, 'replies.json'), 'utf8')) as unknown[]); }
     catch (e) { if (!(e instanceof Error && 'code' in e && e.code === 'ENOENT')) throw e; }
   }
-  const options = { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more };
+  const options = { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more, live };
   const first = await runOnDrive(c, drive, root, options, 1);
   const runs = [first];
   const presses = c.presses ?? (c.between ? [{ between: c.between }] : []);
@@ -247,7 +277,7 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   }
   const last = runs.at(-1) ?? first;
   const result = runs.length === 1 ? last : { ...last, runs: runs.slice(0, -1) };
-  return { ...result, score: scoreCase(c, result) };
+  return { ...result, score: scoreCase(loaded, result) };
 }
 
 /** A words pile added to the Inbox between presses, as `seedCase` adds the case's piles. */
@@ -286,7 +316,7 @@ type AnswerVaultClass = new (opts: { drive: FakeDrive; rootId: () => Promise<str
 type AnswerLoop = (vault: AnswerVault, runs: { start(scope: 'all' | 'instructions', opts: { requestId: string; subject?: string }): Promise<RunState> },
   id: string, yes: boolean, opts: { allowWeb: boolean }) => Promise<{ outcome: { kind: string; error?: unknown } } | null>;
 
-async function submitAnswer(c: LoadedCase, previous: CaseRun, step: Extract<CorpusBetween, { kind: 'answer' }>): Promise<CaseOptions['answerStart']> {
+async function submitAnswer(c: CaseInput, previous: CaseRun, step: Extract<CorpusBetween, { kind: 'answer' }>): Promise<CaseOptions['answerStart']> {
   const questions = JSON.parse(previous.after[SYSTEM.questions] ?? '{"questions":[]}') as { questions: Question[] };
   const matches = questions.questions.filter((q) => 'id' in step.question ? q.id === step.question.id : matchesSubject(q, step.question, previous.pathsById));
   if (matches.length !== 1) throw new Error(`between: expected one question from the previous press, found ${matches.length}`);
@@ -319,12 +349,12 @@ async function addRequest(drive: FakeDrive, root: string, press: number, request
 }
 
 /** Each press admits the current folder and uses the production runner/planner/write path. */
-export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, replayOf, answerStart, pacing, admission }: CaseOptions, press: number): Promise<CaseRun> {
+export async function runOnDrive(c: CaseInput, drive: FakeDrive, root: string, { around, realTokens = false, claude, env: more = {}, request, replayOf, answerStart, pacing, admission, live }: CaseOptions, press: number): Promise<CaseRun> {
   if (request?.kind === 'replay') {
     if (!replayOf || replayOf.drive !== drive || replayOf.root !== root
       || !replayOf.requests?.some((r) => r.id === request.id)) throw new Error(`replay: missing run for request ${request.id}`);
     const requestAction = await addRequest(drive, root, press, request);
-    return { ...await redispatchCase(c, replayOf, press, { around, claude, pacing }), requests: replayOf.requests, requestAction };
+    return { ...await redispatchCase(c, replayOf, press, { around, claude, pacing, live }), requests: replayOf.requests, requestAction };
   }
   const current = await snapshot(drive, root);
   const known = Object.values(current.files).map((f) => f.id);
@@ -346,8 +376,8 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: runId, attempt: 1, ticket: TICKET, scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const model = claude ? withPhases(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : {}), ...(pacing ? { pacing } : {}) });
+  const model = claude && !live ? withPhases(claude, () => ({ drive, root, admission: admitted.manifest })) : undefined;
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env, ...more }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive, root, admission: admitted.manifest } })) } : claude ? { claude } : {}), ...(pacing ? { pacing } : {}) });
   const { after, props: kept, pathsById, files, binned } = await snapshot(drive, root, known);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, props: kept, pathsById, files, binned, start: current, lastRun, code, drive, root, requests, requestAction, wire,
@@ -355,7 +385,7 @@ export async function runOnDrive(c: LoadedCase, drive: FakeDrive, root: string, 
 }
 
 /** Redispatch the exact run over its existing Drive and immutable admission; no admission or planning here. */
-export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: number, options: Pick<CaseOptions, 'around' | 'claude' | 'pacing'> = {}): Promise<CaseRun> {
+export async function redispatchCase(c: CaseInput, previous: CaseRun, attempt: number, options: Pick<CaseOptions, 'around' | 'claude' | 'pacing' | 'live'> = {}): Promise<CaseRun> {
   const dispatch = previous.dispatch;
   if (!dispatch) throw new Error('A corpus run must have reached main before redispatch.');
   const start = await snapshot(previous.drive, previous.root);
@@ -367,10 +397,10 @@ export async function redispatchCase(c: LoadedCase, previous: CaseRun, attempt: 
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: dispatch.runId, attempt, ticket: TICKET, scope: dispatch.scope, allow_web: c.allowWeb } }));
   const claude = options.claude;
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-  const model = claude ? withPhases(claude, () => ({ drive: previous.drive, root: previous.root, admission: dispatch.admission })) : undefined;
+  const model = claude && !options.live ? withPhases(claude, () => ({ drive: previous.drive, root: previous.root, admission: dispatch.admission })) : undefined;
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, {
     fetch: options.around ? options.around(wire.fetch) : wire.fetch,
-    ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
+    ...(model ? { claude: (call: ClaudeCall) => model(Object.assign(call, { fixture: { drive: previous.drive, root: previous.root, admission: dispatch.admission } })) } : claude ? { claude } : {}), ...(options.pacing ? { pacing: options.pacing } : {}),
   });
   const observed = await snapshot(previous.drive, previous.root, Object.values(start.files).map((f) => f.id));
   return { ...observed, start, code, lastRun: JSON.parse(observed.after[SYSTEM.lastRun] ?? 'null') as unknown,
