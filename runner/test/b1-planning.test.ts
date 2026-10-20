@@ -45,7 +45,7 @@ it('b1-scripted-two-step-reply-freezes-every-execution-target', async () => {
     '# Schedule\n\n## Current state\n\n## Timeline\n', true) } });
   const intent = { ...fileIntent(b, 'Projects/Remote search/Developer offers'), lines: [
     { note: HUB, text: 'Alex received the remote offer.', cites: b.sources[0]?.itemId },
-    { note: schedule, text: 'Alex will review the offer on Saturday.' },
+    { note: schedule, text: 'Alex will review the offer on Saturday.', cites: b.sources[0]?.itemId },
   ] };
   const calls: Frame[] = [];
   const spawn = phaseAwareClaude(async (call) => {

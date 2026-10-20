@@ -54,7 +54,8 @@ What to write:
   on another note below that it updates or confirms.
 - "lines" (optional): at most 20 Timeline lines, each at most 200 characters with no link, only on the notes
   below; "cites" names a thing you file, and Bower links it as the source, a pile of words only, or a request asking for this line
-  on this note. A request's words are never filed as a thing. A note's Timeline only grows. Look in each
+  on this note. Every line needs this evidence, whatever its words: "cites", or with a marker its "alsoCites".
+  A request's words are never filed as a thing. A note's Timeline only grows. Look in each
   thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.
   A disagreement is two claims about the same thing, detail and period that cannot both hold: never change the note
   silently and never pick one by its date. Give one line with marker "contradiction" stating both claims, citing the
@@ -65,7 +66,7 @@ What to write:
 - "states" (optional): a note's whole "## Current state" as it should read now, at most 8 lines of at most
   200 characters with no link, only for a note below whose state the thing changes (a status, a count, a date),
   at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the
-  person has not edited it; otherwise it asks them.
+  person has not edited it; otherwise it asks them. Give one only when that note's whole Current state is shown, not cut.
 - "answers" (optional): "answers":[{"requestId":"<the request's fileId>","text":"<one plain line>"}], one for a request in "requests"
   below that asks a question about the folder, or that you cannot do as asked (say why) (not the person's "answers" to Bower's questions). Answer from the notes and files shown only, in one
   line of at most 1,000 characters with words, no web address; link each note or file you used as [[its name]], or [[its whole path]] when the

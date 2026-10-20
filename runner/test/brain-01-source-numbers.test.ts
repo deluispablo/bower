@@ -118,6 +118,8 @@ it('unavailable secondary text supplies no figures', () => {
 it('numeric retained state survives source departure', () => {
   const c = context(); c.taken.piles = []; c.seen.texts = new Map();
   c.seen.noteTexts = new Map([[HUB, 'Retained reference 900.']]); c.seen.shownNotes = 'Retained reference 900.';
+  // brain-05: a state with no source needs the person's answer about its note (a yes to Write it).
+  c.seen.answered = new Set([HUB, OTHER]);
   passes(c, { ...empty, states: [{ note: HUB, lines: ['Reference is 900.'] }] });
   refuses(c, { ...empty, states: [{ note: OTHER, lines: ['Reference is 900.'] }] });
 });

@@ -39,7 +39,7 @@ import { normalizeModelInput } from './model-input';
 import { type JournalRecord, isJournalRecord, isWithdrawal, takenBack } from '../../src/data/contracts/journal-record';
 import { formulaInstalled, MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName, WAITING_WHY } from '../../src/data/contracts/run-manifest';
 import { z } from 'zod';
-import { AUTHORED_LINE_MAX, STATE_WRITE, entryOk, newsLineCited, propertyKeyOk, sameJson, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
+import { AUTHORED_LINE_MAX, STATE_WRITE, currentStateOf, entryOk, propertyKeyOk, sameJson, timelineDate, viewsDeclared, viewsInstalled } from '../../src/data/contracts/note-edit';
 import { VIEW_LIMITS, computedBy, setFault, viewFault, type Predicate } from '../../src/data/contracts/view-format';
 import { frontValues, lintFacts, propertyValue, summaryScalar, timelineBullets, validSummary, valueOk } from '../../src/data/contracts/note-format';
 import { normalizeTag } from '../../src/data/contracts/tag-format';
@@ -70,7 +70,7 @@ import type { MaintenanceNote } from '../../src/data/contracts/run-manifest';
 import { indexedFront, noteRefusal, ownershipError, parseNote, readTypeTable } from '../../src/data/contracts/note-format';
 import { checkCreationName } from '../../src/data/contracts/tree';
 import { ABOUT_SECTIONS, type aboutContext, consolidationDue, consolidationInput, consolidationOk, learnedContext, lineFaults, normalizedText, parseObservations, sectionWords } from '../../src/data/contracts/observations';
-import { ABOUT_REGIONS, createOwnershipContext, fenceAfter, type Fence } from '../../src/data/contracts/ownership-format';
+import { ABOUT_REGIONS, createOwnershipContext, fenceAfter, parseOwnership, type Fence } from '../../src/data/contracts/ownership-format';
 import { propertyValuesOk } from '../../src/data/contracts/note-format';
 import { mocMembership, mocSnapshot } from '../../src/data/contracts/note-edit';
 import { readTagList } from '../../src/data/contracts/tag-format';
@@ -409,7 +409,8 @@ function promptInstructions(): string {
     '  on another note below that it updates or confirms.',
     `- "lines" (optional): at most ${AUTHORED.lines} Timeline lines, each at most ${AUTHORED.line} characters with no link, only on the notes`,
     '  below; "cites" names a thing you file, and Bower links it as the source, a pile of words only, or a request asking for this line',
-    '  on this note. A request\'s words are never filed as a thing. A note\'s Timeline only grows. Look in each',
+    '  on this note. Every line needs this evidence, whatever its words: "cites", or with a marker its "alsoCites".',
+    '  A request\'s words are never filed as a thing. A note\'s Timeline only grows. Look in each',
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  A disagreement is two claims about the same thing, detail and period that cannot both hold: never change the note',
     '  silently and never pick one by its date. Give one line with marker "contradiction" stating both claims, citing the',
@@ -420,7 +421,7 @@ function promptInstructions(): string {
     `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_WRITE.lines} lines of at most`,
     `  ${STATE_WRITE.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
     '  at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the',
-    '  person has not edited it; otherwise it asks them.',
+    '  person has not edited it; otherwise it asks them. Give one only when that note\'s whole Current state is shown, not cut.',
     // C09 (R12, superseded by c12-prefix: one fixed text): how to answer a request.
     '- "answers" (optional): "answers":[{"requestId":"<the request\'s fileId>","text":"<one plain line>"}], one for a request in "requests"',
     '  below that asks a question about the folder, or that you cannot do as asked (say why) (not the person\'s "answers" to Bower\'s questions). Answer from the notes and files shown only, in one',
@@ -738,6 +739,19 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
     notes.push({ path, text: shown.text, cut: shown.cut, ...(sources ? { sources } : {}) });
   }
   return notes;
+}
+
+/**
+ * brain-05 R-A: whether a note shown with `cut` characters left out still shows its whole Current state, as the one
+ * ownership parser frames it, or has none; a note it cannot frame shows none whole.
+ */
+function stateShownWhole(text: string, cut: number): boolean {
+  if (cut === 0) return true;
+  const bytes = new TextEncoder().encode(text);
+  const own = parseOwnership(bytes);
+  if (own.status === 'invalid') return false;
+  const current = own.layout.current;
+  return current === null || new TextDecoder().decode(bytes.subarray(0, current.end)).length <= text.length - cut;
 }
 
 /**
@@ -1105,7 +1119,7 @@ export const REFUSALS = {
   lineNote: 'a line on a note it was not shown',
   lineText: 'a Timeline line that is not one short line',
   lineCites: 'a line whose "cites" is none of these: a thing it files, a pile of words only that is not also made a note, a request that names the line\'s note',
-  lineUncited: 'a news line that cites nothing: every Timeline line cites the thing or pile it is from',
+  lineUncited: 'a Timeline line with no evidence, whatever its words: give "cites" (the thing, pile or request it is from), or with a marker its "alsoCites"',
   lineMarker: 'a "marker" that is not "contradiction", "uncertain" or "inferred", or a label Bower adds written in the text',
   lineAlsoCites: 'an "alsoCites" that is not one exact path of the line\'s own note or another file it links, given with a "marker"',
   noNote: 'a thing with text and no note',
@@ -1248,6 +1262,12 @@ export interface Seen {
   fileNames?: ReadonlyMap<string, string>;
   /** Shown notes whose whole text says they are Bower's (a marker goes only there). */
   bowerNotes?: ReadonlySet<string>;
+  /** brain-05 R-A: shown notes whose Current state was cut where shown: a state for one is refused. */
+  stateCut?: ReadonlySet<string>;
+  /** brain-05 R-C: each shown note's Current state lines, read whole: a state that repeats them changes nothing. */
+  stateLines?: ReadonlyMap<string, readonly string[]>;
+  /** brain-05 R-B: the notes an answer of the person's in this run is about: it is the evidence for a line or state there. */
+  answered?: ReadonlySet<string>;
   /** Folders whose shown Bower MOC lists what is filed there; the MOC takes no Timeline line, and filing there still needs a note or line (brain-17). */
   mocFolders?: ReadonlySet<string>;
   names?: ReadonlySet<string>;
@@ -2004,7 +2024,8 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       || !!seen.requestNotes?.get(l.cites)?.has(l.note)
       || !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))),
     // The news rule reads the line's own words, before any label (round 2).
-    rule('lineUncited', (l) => newsLineCited({ text: l.text.trim(), source: l.cites ?? null })),
+    // brain-05 R-B, R-D: its evidence is a cited thing, pile or request, a checked "alsoCites", or an answer of the person's about its note, whatever its words.
+    rule('lineUncited', (l) => l.cites !== undefined || l.alsoCites !== undefined || !!seen.answered?.has(l.note)),
     rule('numbers', (l) => !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))
       || grounded(l.cites, [l.text], 'the Timeline line on', { note: l.note, secondary: authoredOf(l).alsoCites })),
     rule('quote', (l) => !!seen.presentLines?.has(JSON.stringify([l.note, decorated(authoredOf(l), seen), l.cites]))
@@ -2021,6 +2042,10 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('stateTwice', (st) => !current.some((x) => x.path === st.note)),
     rule('stateText', (st) => st.lines.every((x) => lineOk(x, STATE_WRITE.line) && unlinked(x))),
     rule('stateCites', (st) => st.cites === undefined || placed.has(st.cites) || cited.has(st.cites)),
+    // brain-05 R-A, R-C: Bower rewrites only a Current state it showed whole, and only on evidence.
+    rule('stateNote', (st) => !seen.stateCut?.has(st.note) || 'a state for a note whose Current state was cut where shown: give its change as a Timeline line only'),
+    rule('stateCites', (st) => st.cites !== undefined || !!seen.answered?.has(st.note) || sameJson(st.lines.map((x) => x.trim()), seen.stateLines?.get(st.note))
+      || 'a state that cites nothing: cite the thing or pile it is from'),
     rule('numbers', (st) => grounded(st.cites, st.lines, 'the Current state of', { note: st.note })),
     rule('quote', (st) => quoted(st.quotes, st.cites, 'the Current state of', { note: st.note })),
   ], (st) => { if (notes.has(st.note) && !seen.suppressed?.has(st.note)) current.push({ path: st.note, lines: st.lines.map((x) => x.trim()), cites: st.cites ?? null }); }));
@@ -3218,12 +3243,23 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const { sets: mapSets, noteTypes, prepare: prepareMaps, skipped: mapSkipped } = mapsReader(read, listing, ix, indexed, folders, shown.types ?? [], recent);
         // Whose note it is reads the whole note (one read per version, already cached), never the cut shown to the model.
         const bowerNotes = new Set<string>();
+        const stateCut = new Set<string>();
+        const stateLines = new Map<string, readonly string[]>();
         for (const n of shown.notes) {
           const file = ix.file(n.path);
           if (!file || file.folder) continue;
           try {
-            if (parseNote(n.path, await read.readText(file.id), run.context ? { context: run.context, fileId: file.id } : undefined).byBower) bowerNotes.add(n.path);
-          } catch (e) { console.error(e); }
+            const text = await read.readText(file.id);
+            const fetched = run.context ? { context: run.context, fileId: file.id } : undefined;
+            if (!stateShownWhole(text, n.cut)) stateCut.add(n.path);
+            const state = currentStateOf(new TextEncoder().encode(text), fetched, true);
+            if (state) stateLines.set(n.path, state.lines);
+            if (parseNote(n.path, text, fetched).byBower) bowerNotes.add(n.path);
+          } catch (e) {
+            console.error(e);
+            // An unread note's Current state is not known to be shown whole.
+            if (n.cut > 0) stateCut.add(n.path);
+          }
         }
         // brain-14 ruling 9, R3-2: a request whose reading was limited says so: its full twenty, or a wanted note not shown
         // whole while some other candidate also stayed unread or cut (its own cut notes alone are no missing notes).
@@ -3242,7 +3278,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         }));
         const seen: Seen = { limited, types: shown.types, tagList, notes: new Set(shown.notes.map((n) => n.path)), personalNotes: shown.personalNotes,
           suppressed: shown.suppressed, retrySources: shown.retrySources, presentLines: shown.presentLines,
-          noteTexts: new Map(shown.notes.map((n) => [n.path, n.text])), fileTexts: new Map((shown.files ?? []).map((f) => [f.path, f.text])), moves: shown.moves ?? [], bowerNotes,
+          noteTexts: new Map(shown.notes.map((n) => [n.path, n.text])), fileTexts: new Map((shown.files ?? []).map((f) => [f.path, f.text])), moves: shown.moves ?? [], bowerNotes, stateCut, stateLines,
+          answered: new Set(answers.flatMap((a) => [...(a.note ? [a.note.path] : []), ...(a.pair?.paths ?? [])])),
           fileNames: new Map(listing.flatMap((f) => (f.folder ? [] : [[f.id, f.name] as const]))),
           files: new Map(listing.flatMap((f) => { const path = f.folder ? undefined : ix.pathOf(f.id); return path === undefined ? [] : [[path, f.id] as const]; })),
           names: shown.names ?? new Set(), texts, originals: shown.originals, folders: new Set(shown.folders),

@@ -57,8 +57,9 @@ const proposingStates = (states: Array<{ note: string; lines: string[] }>, citin
       { fileId: offer, to: 'Projects/Job hunt/Applications', basis: HUB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Start 2 November. [[Job hunt]]' } },
       { fileId: ids.get('listing-88213.example.url') ?? 'none', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
     ],
-    // By default the hub's line cites nothing, so the Current-state fallback stands alone; `citing` has it cite the offer.
-    lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', ...(citing ? { cites: offer } : {}) }],
+    // By default the hub's line cites the other thing (brain-05: every line has evidence), so the Current-state fallback
+    // for the offer stands alone; `citing` has it cite the offer.
+    lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', cites: citing ? offer : ids.get('listing-88213.example.url') ?? 'none' }],
     states: states.map((st) => ({ ...st, cites: offer })),
   };
   return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
