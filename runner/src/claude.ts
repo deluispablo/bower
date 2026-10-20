@@ -1163,12 +1163,15 @@ export type RefusalKind = keyof typeof REFUSALS;
  * reply-level until it is listed, and so is any kind that cannot be traced to an admitted source.
  * `askNotAdmitted` is item-level only when located: a question that names a request of the run holds that request; one about
  * an id the run does not know stays reply-level (qa-prod-8-F1).
+ * A view is located by its requestId: one for a request the run does not know, and the execution check's whole-map viewLimit, name no source and stay reply-level (qa-prod-9-F1).
  * shortcut: an unlocated row stays reply-level; if live logs show "names no pile or request", locate it by the one selection source whose allowedTargets hold its note
+ * shortcut: map, document and answer *Keys/*Binding/*Limit kinds stay reply-level; list them the same way when a live log shows one
  */
 const ITEM_LEVEL: ReadonlySet<RefusalKind> = new Set<RefusalKind>([
   'nameChangesKind', 'rawName', 'numbers', 'quote', 'newFolder', 'noteForNote', 'noteName', 'noteSummary', 'noteBody', 'noteSections', 'noteLink',
   'noteMdLink', 'noteWeb', 'noNote', 'lineNote', 'lineText', 'lineCites', 'lineUncited', 'lineMarker', 'lineAlsoCites', 'stateNote',
-  'stateText', 'stateCites', 'askNotes', 'askNotAdmitted', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'documentText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget', 'scope']);
+  'stateText', 'stateCites', 'askNotes', 'askNotAdmitted', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'documentText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget', 'scope',
+  'viewKeys', 'viewBinding', 'viewLimit']);
 /**
  * `quoted`: the reason quotes the reply or a note, so it is told to the model and never logged (sec-hardening L4).
  * `source`: the pile (`pileId`) or request (journal file id) the refused row names, when it names one.
