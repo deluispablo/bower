@@ -296,6 +296,18 @@ export function viewBlock(view: unknown, row: TypeRow, members: Note[] | 'unread
   return head + table + (lines.length ? `\n${lines.map((l) => `${l}\n`).join('')}` : '');
 }
 
+/**
+ * brain-09: a sum or difference (the first less the rest) of the figures a reply cites, each with its unit (a currency sign
+ * or a word, as written), with B11's reasons: a second unit is `currency`, no operand `missing`, past 10^15 `not-finite`.
+ */
+export function calculate(op: 'sum' | 'difference', figures: ReadonlyArray<{ amount: number; unit: string }>): { amount: number } | Reason {
+  const [first, ...rest] = figures;
+  if (!first) return 'missing';
+  if (rest.some((f) => f.unit !== first.unit)) return 'currency';
+  const n = rest.reduce((total, f) => (op === 'sum' ? total + f.amount : total - f.amount), first.amount);
+  return !Number.isFinite(n) || Math.abs(n) > BOUND ? 'not-finite' : { amount: round(n) };
+}
+
 type Computed = { value: number | Money | string } | Reason;
 /** Exact intermediates, each finite and within 10^15; only the taken branch of an `if` is computed. */
 function compute(e: Expression, row: TypeRow, properties: Record<string, string>, asOf: string): Computed {

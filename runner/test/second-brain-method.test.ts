@@ -80,9 +80,10 @@ describe('the second-brain method (TL-P4-08)', () => {
     // raised from 16,750 by brain-04: the map question sentence, 16,995 today;
     // raised from 17,000 by brain-17: the MOC sentence, 17,165 today;
     // raised from 17,250 by qa-prod-9-F2: the views way out and the answers widening, 17,507 today;
-    // raised from 17,750 by brain-06: the state delta (replaces/because), 18,058 today).
+    // raised from 17,750 by brain-06: the state delta (replaces/because), 18,058 today;
+    // raised from 18,250 by brain-09: the calculation sentence and its grammar, 18,511 today).
     const fixed = text.split('\n__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__\n')[0] ?? '';
-    expect(fixed.length, 'the fixed text, above the boundary').toBeLessThan(18_250);
+    expect(fixed.length, 'the fixed text, above the boundary').toBeLessThan(18_750);
   });
 
   it('an ambiguous thing stays in the inbox with a question and the run goes on', async () => {
