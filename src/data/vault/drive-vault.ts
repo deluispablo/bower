@@ -826,9 +826,17 @@ export class DriveVault implements VaultSource {
           throw e;
         })), path, contextBinned);
       // One Bin lookup serves every declaration of this read, started by the first that asks; its failure is logged once.
+      // It is the snapshot's, keyed by its sorted keys, so a read again for a change in this page's own sends reuses it.
       let bin: ReturnType<DriveApi['binnedByItem']> | null = null;
       const binFailure: { error?: unknown } = {};
-      const binned = async (keys: readonly string[]) => (await (bin ??= this.drive.binnedByItem(root, [...new Set(found.declarations.flatMap((d) => binKeys(d.declaration, files)))]).catch((e: unknown) => {
+      const lookup = (): ReturnType<DriveApi['binnedByItem']> => {
+        const wanted = [...new Set(found.declarations.flatMap((d) => binKeys(d.declaration, files)))].sort();
+        const key = JSON.stringify(wanted);
+        const read = kept.binned.get(key) ?? this.drive.binnedByItem(root, wanted);
+        kept.binned.set(key, read);
+        return read;
+      };
+      const binned = async (keys: readonly string[]) => (await (bin ??= lookup().catch((e: unknown) => {
         if ((e instanceof BowerError && e.code === 'auth') || !this.current()) throw e;
         console.error(e);
         binFailure.error = e;
@@ -865,8 +873,10 @@ export class DriveVault implements VaultSource {
     const evidence = [...this.known(ix), ...ix.journalFiles()];
     const own = [...new Set([...this.adding, ...this.uploads.keys(), ...this.queuedItems().map((i) => i.pileId)])].sort();
     const kept = this.fullDeclarations;
-    if (kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i]) && own.join() === kept.own.join()) return kept;
-    return (this.fullDeclarations = { ix, files: evidence, own, read: null, binned: new Map() });
+    const same = kept?.ix === ix && evidence.length === kept.files.length && evidence.every((f, i) => f === kept.files[i]);
+    if (same && own.join() === kept.own.join()) return kept;
+    // The Bin's answers do not depend on `own`, which only skips declarations after the lookup: they stay.
+    return (this.fullDeclarations = { ix, files: evidence, own, read: null, binned: same ? kept.binned : new Map() });
   }
 
   /** Sends a removed pile's declaration copies to the Bin, remembering each one in case the Remove stops halfway. */
