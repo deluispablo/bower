@@ -607,7 +607,7 @@ describe('B12a refusals: shape, binding, limit', () => {
   const THIRTY = JSON.stringify({ v: 1, tags: [...TAGS.tags, ...Array.from({ length: 26 }, (_, i) => `topic${i + 1}`)] }, null, 2);
   const NO_CHANGE = 'no change for a set that has notes';
   const GENERIC = 'a map with keys outside the intent ({requestId, title, set: {type, folderId, recursive, where}, then "ops" for every note of the set, '
-    + 'with a "question": {text, yes, no} when the set is over 200, or "results": [{memberId, ops}], not both; an op is {kind: "property", key, mode: "set" or "union", value}, '
+    + 'with a "question": {text, yes, no} when the set is over 200 or the request does not establish its change, or "results": [{memberId, ops}], not both; an op is {kind: "property", key, mode: "set" or "union", value}, '
     + '{kind: "tag", mode: "add" or "remove", value}, {kind: "move", parentId} or, in "results" only, {kind: "rename", name}, each with a "targetId" inside "results"}) '
     + 'or a set the grammar refuses';
   const BINDING = "a map whose request is not one of the person's requests below, whose folder is not one of the main folders, or whose note is not in its set or shown below";

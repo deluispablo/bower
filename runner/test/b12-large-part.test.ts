@@ -33,6 +33,8 @@ const TABLE = { v: 1, rows: [{ id: 'offer', match: ['job offer'], template: 'con
 const ACTIVE = { op: 'eq', property: 'status', value: 'active' };
 const REVIEWED = { kind: 'property', key: 'review_state', mode: 'set', value: 'reviewed' };
 const QUESTION = { text: 'There are 201 active offers. Start with the 200 most recent?', yes: 'Start with these', no: 'Leave them' };
+/** brain-04: the stored question is the model's words, then Bower's own for the frozen change. */
+const SAID = `${QUESTION.text} A yes sets review state to reviewed.`;
 const WORDS = 'Mark every active offer in Job hunt as reviewed; ask me first if there are many.';
 const offer = (name: string, created = '2026-10-01', by = true) => `---\n${by ? 'by: bower\n' : ''}type: offer\nsummary: ${name} offers Alex remote work.\nstatus: active\n`
   + `created: ${created}\nreview_state: new\n---\n\n## Notes\n${name} offers Alex remote work.\n`;
@@ -169,7 +171,7 @@ describe('B12d a set over 200 notes asks once; a yes runs exactly its stored fir
     const { f, run } = await asked({}, { [SYSTEM.questions]: JSON.stringify({ v: 1, questions: [EXISTING] }) });
     expect(questions(run)[0], 'the open question already there, whole').toEqual(EXISTING);
     const q = questions(run)[1];
-    expect(q, 'one question about the request').toMatchObject({ id: `q-request-${run.record}`, text: QUESTION.text, yes: QUESTION.yes, no: QUESTION.no });
+    expect(q, 'one question about the request').toMatchObject({ id: `q-request-${run.record}`, text: SAID, yes: QUESTION.yes, no: QUESTION.no });
     const stored = q?.request as { id: string; title: string; members: string[]; total: number } | undefined;
     expect(stored?.id).toBe(run.record);
     expect(stored?.total).toBe(201);
@@ -533,11 +535,12 @@ describe('B12d a set over 200 notes asks once; a yes runs exactly its stored fir
 });
 
 describe('B12d refusals', () => {
-  it('AC24 b12-large-part-question-small: a question for a set of 200 or fewer is refused once (mapLimit); the corrected reply applies', async () => {
+  it('AC24 b12-large-part-question-small: a question for a set of 200 or fewer asks too (brain-04): its part is the whole set, nothing is written', async () => {
     const f = await folder({ [offerPath(1)]: offer('Offer 1') });
-    const run = await press(f, async (ctx, attempt) => attempt === 0 ? asking(ctx) : asking(ctx, { question: undefined }));
-    expect(refusals().slice(0, 2)).toEqual(['mapLimit', 'a question for a set of 200 notes or fewer']);
-    expect(reviewed(run)).toHaveLength(2);
+    const run = await press(f, (ctx) => asking(ctx));
+    expect(refusals()).toEqual([]);
+    expect(questions(run).map((q) => [q.id, q.text, (q.request as { total: number }).total])).toEqual([[`q-request-${run.record}`, SAID, 2]]);
+    expect(reviewed(run)).toEqual([]);
     expect(phase(run)).toBe('done');
   });
 
@@ -556,7 +559,7 @@ describe('B12d refusals', () => {
     expect(refusals().slice(0, 2), 'the move reason, never the hint to give a question').toEqual(['mapLimit',
       'a move or rename for a set over 200 notes: only properties and tags can wait for one yes, so ask for a move or rename in a set of 200 notes or fewer']);
     expect(refusals(), 'refused once').toHaveLength(2);
-    expect(questions(run).map((q) => q.text), 'the property-only reply asks').toEqual([QUESTION.text]);
+    expect(questions(run).map((q) => q.text), 'the property-only reply asks').toEqual([SAID]);
     expect(reviewed(run)).toEqual([]);
     expect(phase(run)).toBe('done');
   }, 120_000);
@@ -570,15 +573,17 @@ describe('B12d refusals', () => {
     await grow(f);
     const run = await press(f, async (ctx, attempt) => asking(ctx, attempt === 0 ? { question } : {}));
     expect(refusals().slice(0, 2)).toEqual(['askText', 'a question that is not one short plain line']);
-    expect(questions(run).map((q) => q.text)).toEqual([QUESTION.text]);
+    expect(questions(run).map((q) => q.text)).toEqual([SAID]);
   }, 120_000);
 
-  it('AC24 b12-large-part-question-at-max: a question of exactly 200 characters and answers of 40 are asked as written', async () => {
+  it('AC24 b12-large-part-question-at-max: a question of exactly 200 characters with Bower\'s change (brain-04) and answers of 40 are asked as written', async () => {
     const f = await folder();
     await grow(f);
-    const question = { text: `${'A'.repeat(199)}?`, yes: 'Y'.repeat(40), no: 'N'.repeat(40) };
+    const change = SAID.slice(QUESTION.text.length);
+    const question = { text: `${'A'.repeat(199 - change.length)}?`, yes: 'Y'.repeat(40), no: 'N'.repeat(40) };
     const run = await press(f, (ctx) => asking(ctx, { question }));
-    expect(questions(run)[0]).toMatchObject(question);
+    expect(questions(run)[0]).toMatchObject({ ...question, text: `${question.text}${change}` });
+    expect(questions(run)[0]?.text).toHaveLength(200);
   }, 120_000);
 });
 
@@ -647,7 +652,7 @@ it('corpus-fix-rubrics AC3: B12 rubric matches the actual four-press sequence', 
   const done = (r: CaseRun) => (JSON.parse(r.after[SYSTEM.requests] ?? '{"done":[]}') as { done: Array<{ id: string }> }).done.map((x) => x.id);
   expect(runs.map((r) => r.code), 'four presses').toEqual([0, 0, 0, 0]);
   expect([...calls.values()], 'two calls on presses 1, 2 and 4; the yes makes none').toEqual([['no request', 'no request'], ['the request', 'the request'], ['the rest', 'the rest']]);
-  expect(runs.map((r) => report(r)?.questions?.map((q) => q.text) ?? []), 'only the second press asks').toEqual([[], ['There are 201 reading notes. Start with the 200 most recent?'], [], []]);
+  expect(runs.map((r) => report(r)?.questions?.map((q) => q.text) ?? []), 'only the second press asks').toEqual([[], ['There are 201 reading notes. Start with the 200 most recent? A yes sets review state to reviewed.'], [], []]);
   expect(runs.map((r) => report(r)?.created?.map((x) => x.path) ?? []), 'what each press creates').toEqual([['Resources/Gardening/Garden notice.md'], ['Bower health.md'],
     ['Resources/Reading/Request - Review Reading.md'], ['Resources/Reading/Request - Review the rest.md']]);
   expect(runs.map(reviewed), 'Reading notes reviewed after each press').toEqual([0, 0, 200, 202]);
