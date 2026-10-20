@@ -15,7 +15,8 @@ test('no New note control on desktop or phone', async ({ page }) => {
     await page.goto('/files?scenario=default&time=instant');
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
     await noNewNote(page);
-    await expect(page.getByRole('button', { name: 'New folder', exact: true })).toBeVisible();
+    // ux-controls-polish: the phone's tree tools are one named menu.
+    await expect(page.getByRole('button', { name: width === 1280 ? 'New folder' : 'Folder tools', exact: true })).toBeVisible();
     // The unchanged right panel has a pre-existing h3 after this page's h1 (see entry notes).
     // Match the folder specs' main scope; scan each opened menu or sheet separately below.
     await expectAxeClean(page, { include: 'main', wcag22: true });

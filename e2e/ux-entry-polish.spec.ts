@@ -187,6 +187,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const on = await paint('Bower moves');
     expect(on.checked).toBe('true');
     expect(on.track).toBe(await resolved(page, '--brand'));
-    expect(on.knob).toBe('rgb(255, 255, 255)');
+    // ux-controls-polish AC5: the knob is on-brand, 3:1 on the teal (white was 1.89:1).
+    expect(on.knob).toBe(await resolved(page, '--on-brand'));
+    expect(contrast(on.knob, on.track)).toBeGreaterThanOrEqual(3);
   });
 }

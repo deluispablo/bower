@@ -70,15 +70,15 @@ const note =(links: string[], backlinks: string[]): Note => ({
 const show = (n: Note): void => {
   render(<MemoryRouter><LinkedList note={n} /></MemoryRouter>);
 };
-/** The links listed under a heading, by their visible title, with whether each is marked two-way. */
-const under = (heading: string): Array<[string, boolean]> => {
-  const h = screen.getByRole('heading', { name: heading });
-  const list = h.nextElementSibling;
+/** The links listed under a heading, by their visible title (ux-controls-polish: no row carries a two-way mark). */
+const under = (heading: string): string[] => {
+  const h = screen.queryByRole('heading', { name: heading });
+  const list = h?.nextElementSibling;
   if (!list || list.tagName !== 'UL') return [];
-  return within(list as HTMLElement).getAllByRole('link').map((a) => [
-    a.firstElementChild?.textContent ?? '',
-    /Links both ways/.test(a.textContent ?? ''),
-  ]);
+  return within(list as HTMLElement).getAllByRole('link').map((a) => {
+    expect(a.textContent).not.toMatch(/Links both ways/);
+    return a.firstElementChild?.textContent ?? '';
+  });
 };
 
 describe('design-note-page: heading level', () => {
@@ -104,32 +104,34 @@ describe('design-note-page: heading level', () => {
 });
 
 describe('design-note-page: links to and linked from', () => {
-  it('AC3 note-links-once: a note in both lists shows once, under Links to, marked "Links both ways"', () => {
+  it('AC3 note-links-once: a note in both lists shows once, under "Links both ways" (ux-controls-polish AC4)', () => {
     show(note(['Projects/Flat hunt/Flat 3.md', 'Projects/Flat hunt/Flat 7.md'], ['Projects/Flat hunt/Flat 7.md', 'About me.md']));
-    expect(under('Links to')).toEqual([['Flat 3', false], ['Flat 7', true]]);
-    expect(under('Linked from')).toEqual([['About me', false]]);
+    expect(under('Links both ways')).toEqual(['Flat 7']);
+    expect(under('Links to')).toEqual(['Flat 3']);
+    expect(under('Linked from')).toEqual(['About me']);
     expect(screen.getAllByRole('link', { name: /Flat 7/ })).toHaveLength(1);
     expect(screen.getByRole('link', { name: /Flat 7/ })).toHaveAttribute('href', '/note/Projects/Flat%20hunt/Flat%207.md');
   });
 
   it('AC3 note-links-all-both: when every note linking here is also linked to, Linked from says so instead of "nothing"', () => {
     show(note(['Projects/Flat hunt/Flat 7.md'], ['Projects/Flat hunt/Flat 7.md']));
-    expect(under('Links to')).toEqual([['Flat 7', true]]);
+    expect(under('Links both ways')).toEqual(['Flat 7']);
     expect(screen.queryByText('Nothing links here yet.')).toBeNull();
-    // design8-links-both-ways: the sentence names the notes marked both ways.
-    expect(screen.getByText('Only the notes marked both ways link here.')).toBeInTheDocument();
+    // design8-links-both-ways, ux-controls-polish: both one-way lists name the two-way group.
+    expect(screen.getAllByText('Only the notes that link both ways.')).toHaveLength(2);
   });
 
   it('R5 note-links-by-path: two notes with the same title in different places both stay', () => {
     show(note(['Projects/Flat hunt/Notes.md', 'Archive/Notes.md'], ['Archive/Notes.md']));
-    expect(under('Links to')).toEqual([['Notes', false], ['Notes', true]]);
+    expect(under('Links to')).toEqual(['Notes']);
+    expect(under('Links both ways')).toEqual(['Notes']);
     expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 
   it('R5 note-links-one-way: one-way links and the empty cases read as today', () => {
     show(note(['Projects/Flat hunt/Flat 3.md'], ['About me.md']));
-    expect(under('Links to')).toEqual([['Flat 3', false]]);
-    expect(under('Linked from')).toEqual([['About me', false]]);
+    expect(under('Links to')).toEqual(['Flat 3']);
+    expect(under('Linked from')).toEqual(['About me']);
     expect(screen.queryByText(/Links both ways/)).toBeNull();
     cleanup();
     show(note([], []));

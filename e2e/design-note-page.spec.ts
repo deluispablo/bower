@@ -67,7 +67,7 @@ for (const path of NOTES) {
   });
 }
 
-test('design-note-page: linked notes show each note once on a phone, two-way ones marked', async ({ page }) => {
+test('design-note-page: linked notes show each note once on a phone, two-way ones in their own group', async ({ page }) => {
   await resize(page, { width: 375, height: 812 });
   await page.goto(`/note/${NOTES[0]}?scenario=default&time=instant`);
   const linked = page.getByRole('main').locator('section', { has: page.getByRole('heading', { name: 'Linked notes', exact: true }) });
@@ -75,7 +75,10 @@ test('design-note-page: linked notes show each note once on a phone, two-way one
   const paths = await linked.getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''));
   expect(paths.length, 'the note has linked notes').toBeGreaterThan(1);
   expect(paths.filter((t, i) => paths.indexOf(t) !== i), 'each note once, by its path').toEqual([]);
-  // In the demo the flats link back to their project, so they are marked as linking both ways (the pretend
-  // Drive's flats do not link back).
-  if (!isFake) await expect(linked.getByRole('link', { name: /Flat 3, 12 Larkspur Lane/ })).toContainText('Links both ways');
+  // In the demo the flats link back to their project, so they are listed under "Links both ways", said once
+  // (ux-controls-polish AC4; the pretend Drive's flats do not link back).
+  if (!isFake) {
+    await expect(linked.getByRole('heading', { name: 'Links both ways', exact: true }).locator('xpath=following-sibling::ul[1]').getByRole('link', { name: /Flat 3, 12 Larkspur Lane/ })).toBeVisible();
+    await expect(linked.getByText('Links both ways', { exact: true })).toHaveCount(1);
+  }
 });

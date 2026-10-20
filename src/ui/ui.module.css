@@ -40,7 +40,37 @@
   flex: none;
 }
 .iconBtn:hover, .iconBtn[aria-pressed='true'], .iconBtn[data-state='open'] { background: var(--surface-strong); color: var(--heading); }
-.iconBtn.sm { width: 32px; height: 30px; border-radius: 7px; }
+.iconBtn.sm { width: 32px; height: 32px; border-radius: 7px; }
+
+/* the name of a control shown only as an icon, on hover and keyboard focus: one home (ui/hint.ts).
+   Below the control, on a transparent bridge so the pointer can move onto it (WCAG 1.4.13); never on a touch tap. */
+.hint { position: relative; }
+.hint::after {
+  content: attr(aria-label);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 70;
+  transform: translateX(-50%);
+  border-top: 6px solid transparent;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--raised) padding-box;
+  box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--line);
+  color: var(--heading);
+  font: 500 13px/1.4 var(--font-body);
+  white-space: nowrap;
+  visibility: hidden;
+}
+/* the last control of a row may sit at the window's edge: its hint ends where it ends */
+.hint:last-child::after { left: auto; right: 0; transform: none; }
+@media (hover: hover) {
+  .hint:hover::after { visibility: visible; transition: visibility 0s 0.3s; }
+}
+.hint:focus-visible::after { visibility: visible; }
+/* Escape hides it (ui/hint.ts); an open menu or panel of its own covers it */
+:global(:root[data-hint-off]) .hint::after,
+.hint[aria-expanded='true']::after { visibility: hidden; }
 
 /* the segmented control: one home (ui/Segmented.tsx) */
 .segmented { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); }
@@ -235,8 +265,9 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   transition: background 0.2s;
 }
 .switch span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); transition: transform 0.2s var(--ease-out); }
-.switch[aria-checked='true'] { background: var(--brand); }
-.switch[aria-checked='true'] span { transform: translateX(20px); background: #fff; }
+/* on: the teal fill edged in the teal line (3:1 on a light ground) under an on-brand knob (9.9:1 on teal) */
+.switch[aria-checked='true'] { background: var(--brand); box-shadow: inset 0 0 0 1.5px var(--brand-line); }
+.switch[aria-checked='true'] span { transform: translateX(20px); background: var(--on-brand); }
 
 /* a native checkbox, drawn by us so its unticked edge can be an inset ring; keyboard, name and state stay the browser's */
 .taskBox {

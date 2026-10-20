@@ -88,10 +88,11 @@ it('AC21 c06-links-panel-whole: a long reason or one with markdown is kept whole
   expect(row(list('Links to'), RENT).textContent, 'a link inside a reason gives no reason of its own').toBe(`Rent review${AT_HUB}`);
 });
 
-it('AC21 c06-links-panel-both-ways: a row that links both ways shows its reason and keeps its mark', () => {
+it('AC21 c06-links-panel-both-ways: a row that links both ways shows its reason, under its group (ux-controls-polish AC4)', () => {
   const list = panel(noteOf('See also [[Plan]]: the roof plan.', [PLAN], [PLAN]));
-  const plan = row(list('Links to'), PLAN);
-  expect(plan.textContent, 'control: the mark is there today').toContain('Links both ways');
+  const plan = row(list('Links both ways'), PLAN);
+  // ux-controls-polish: the group's heading says it once; the row carries no mark of its own.
+  expect(plan.textContent).not.toContain('Links both ways');
   expect(reasonOf(plan)).toBe('the roof plan.');
 });
 
