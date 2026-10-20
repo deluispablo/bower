@@ -4,12 +4,15 @@
  * driver used to check, from plain data (the starting folder and what each press left), and it reads no test runtime.
  * It scores only expectations and reports in their current schema, and no placement or wildcard note passes vacuously
  * (corpus-scorer-validation). A file is kept unchanged from an explicit baseline, the seed, the preceding press or the
- * press's own start, and every press and the count of presses are scored (corpus-scorer-state).
+ * press's own start, and every press and the count of presses are scored (corpus-scorer-state). The C06 sweeps compare
+ * this whole score, and a health report, placement, ownership or replay failure fails the sweep that consumes the case
+ * (corpus-scorer-sweeps).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { expect, it } from 'vitest';
-import { loadCorpus, scoreCase, type Expected } from '../src/corpus';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadCase, loadCorpus, scoreCase, type Expected } from '../src/corpus';
+import { runScripted, type CaseRun } from './corpus-run';
 
 const RUNNER = resolve(import.meta.dirname, '..');
 const PERSONAL = 'Projects/Alex.md';
@@ -229,6 +232,62 @@ it('corpus-scorer-state AC1: unchanged comparisons select an explicit baseline',
   expect(scoreCase({ expected: { unchangedSincePrevious: [NOTE] }, folder: {} }, plain).unmet).toEqual(['unchangedSincePrevious: no snapshot of the preceding press']);
   expect(scoreCase({ expected: { unchangedSinceStart: [NOTE] }, folder: {} }, plain).unmet).toEqual(['unchangedSinceStart: no snapshot of this press before it ran']);
   expect(unmet({ unchangedSinceStart: [] })).toEqual(['expected.unchangedSinceStart: expected a non-empty list']);
+});
+
+/** The lines of a runner test that filter a score's unmet lines: a sweep compares the whole score (corpus-scorer-sweeps). */
+const filtersUnmet = (file: string): number[] => readFileSync(join(RUNNER, 'test', file), 'utf8').split('\n')
+  .flatMap((line, i) => (/\bunmet\b.*\.filter\(/.test(line) ? [i + 1] : []));
+
+it('corpus-scorer-sweeps AC1: sweep A requires the complete score to pass', () => {
+  expect(filtersUnmet('c06-sweep-a.test.ts'), 'sweep A filters no unmet line').toEqual([]);
+  expect(readFileSync(join(RUNNER, 'test/c06-sweep-a.test.ts'), 'utf8'), 'sweep A compares the whole score').toContain('...run.score }).toEqual({ id, pass: true, unmet: [] })');
+});
+
+describe('a sweep sees every failure', () => {
+  // The runs keep the device outbox in localStorage and log their progress.
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const stored = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+    });
+  });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it('corpus-scorer-sweeps AC3: non-text failures cannot disappear from a sweep', async () => {
+    type Report = { run: { report: { created: Array<{ path: string }> } } };
+    const HEALTH = 'Bower health.md';
+    const OFFER = 'Projects/Zinnia path/Ferrowick offer.txt';
+    const NOTES = 'Resources/Gardening/Alex notes.md';
+    const TAGS = '.bower/tags.json';
+    // Each control breaks one non-text expectation of a case a sweep scores, on the case's real scripted run.
+    const controls: Array<[kind: string, id: string, sweep: string, broken: (run: CaseRun) => CaseRun, unmet: string[]]> = [
+      ['health report', 'c17-b8-bounded-encoding', 'c06-sweep-b.test.ts', (run) => {
+        const last = run.lastRun as Report;
+        return { ...run, lastRun: { ...last, run: { ...last.run, report: { ...last.run.report, created: last.run.report.created.filter((row) => row.path !== HEALTH) } } } };
+      }, ['report.created: [Resources/Gardening/Mulch options.md], expected [Resources/Gardening/Mulch options.md, Bower health.md]']],
+      ['placement', 'b1-index-job-offer', 'c06-sweep-a.test.ts', (run) => {
+        const { [OFFER]: text = '', ...rest } = run.after;
+        return { ...run, after: { ...rest, 'Archive/Ferrowick offer.txt': text } };
+      }, [`missing file: ${OFFER}`, 'placed outside the rubric: Archive/Ferrowick offer.txt']],
+      ['ownership', 'c17-b7-authority-full-cap', 'c06-sweep-b.test.ts', (run) => ({ ...run, props: { ...run.props, [NOTES]: { ...run.props[NOTES], by: 'bower' } } }),
+        [`${NOTES}: appProperty by should be absent`]],
+      ['replay', 'c17-b7-automatic-growth-replay', 'c06-sweep-b.test.ts', (run) => {
+        const was = run.files?.[TAGS];
+        return { ...run, files: { ...run.files, ...(was ? { [TAGS]: { ...was, sha256: '0'.repeat(64) } } : {}) } };
+      }, [`run 2: unchangedSincePrevious: ${TAGS} changed bytes`]],
+    ];
+    for (const [kind, id, sweep, broken, lines] of controls) {
+      const c = await loadCase(join(RUNNER, '../testing/corpus', id));
+      const run = await runScripted(c);
+      expect({ kind, ...scoreCase(c, run) }).toEqual({ kind, pass: true, unmet: [] });
+      expect({ kind, ...scoreCase(c, broken(run)) }).toEqual({ kind, pass: false, unmet: lines });
+      expect({ kind, sweep, filters: filtersUnmet(sweep) }, 'the consuming sweep compares the whole score').toEqual({ kind, sweep, filters: [] });
+    }
+  }, 120_000);
 });
 
 /** Every module a source file reaches through its imports (relative ones resolved to files), with the bare specifiers it names. */

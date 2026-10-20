@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
-import { caseReplies, runWithClaude, scoreCase } from './corpus-run';
+import { caseReplies, runWithClaude } from './corpus-run';
 
 beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -30,18 +30,23 @@ const authored = (value: unknown): string[] => (Array.isArray(value) ? value.fla
   : value && typeof value === 'object' ? Object.entries(value).flatMap(([key, v]) => ((key === 'body' || key === 'summary') && typeof v === 'string' ? [v] : authored(v)))
     : []);
 
-const CASES = ['c17-b7-authority-full-cap', 'c17-b7-automatic-growth-replay', 'c17-b7-automatic-capacity-order', 'c17-b7-reuse-known', 'c17-b8-bounded-encoding', 'c17-b8-settled-recovery'];
+/** Run from their own files: no registered setup (corpus-registry). */
+const CASES = ['c17-b7-authority-full-cap', 'c17-b7-automatic-growth-replay', 'c17-b7-automatic-capacity-order', 'c17-b7-reuse-known', 'c17-b8-bounded-encoding'];
+/**
+ * Needs its registered setup (a refused hub edit and a lost log response, `hub-edit-refused-log-lost`): its consumer,
+ * b8-health, runs these replies under it and requires the complete score; run without it, it is not this case.
+ */
+const RECOVERY = 'c17-b8-settled-recovery';
 const TESTS = ['b8-health.test.ts'];
 
-it.each(CASES)('AC2 c06-sweep-b: %s authors no bare link line', (id) => {
+it.each([...CASES, RECOVERY])('AC2 c06-sweep-b: %s authors no bare link line', (id) => {
   const replies: unknown = JSON.parse(readFileSync(resolve(ROOT, 'testing/corpus', id, 'replies.json'), 'utf8'));
   expect(authored(replies).flatMap((text) => text.split('\n')).filter(bare)).toEqual([]);
 });
 
-// corpus.test.ts skips these `covers: model` cases. Their expected.json predates the health note and the tag oracles of
-// b7-incorporation (and settled-recovery needs b8-log's person move), so a clean score is not this sweep's to assert:
-// what it changes is the words, so each reworded reply must still be accepted, filed as written, and meet expected.json's text lines.
-it.each(CASES)('AC2 c06-sweep-b: %s completes with its reworded replies and files each body as written', async (id) => {
+// corpus.test.ts skips these `covers: model` cases: each reworded reply must still be accepted, filed as written, and
+// meet the whole score, nothing filtered (corpus-scorer-sweeps AC2).
+it.each(CASES)('corpus-scorer-sweeps AC2: sweep B requires the complete score to pass (%s)', async (id) => {
   const c = await loadCase(resolve(ROOT, 'testing/corpus', id));
   const run = await runWithClaude(c, caseReplies(id));
   expect({ id, code: run.code }).toEqual({ id, code: 0 });
@@ -49,7 +54,7 @@ it.each(CASES)('AC2 c06-sweep-b: %s completes with its reworded replies and file
   expect(bodies.length, 'the replies author links').toBeGreaterThan(0);
   const filed = Object.values(run.after).join('\n');
   for (const body of bodies) expect(filed, body).toContain(body);
-  expect(scoreCase(c, run).unmet.filter((line) => /contains|\[\[/.test(line)), 'a note text expectation').toEqual([]);
+  expect({ id, ...run.score }).toEqual({ id, pass: true, unmet: [] });
 });
 
 /** Every `body:` or `summary:` string literal (any quote, escapes kept) of a test source, split into its lines. */
