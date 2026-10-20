@@ -2,10 +2,11 @@ import { useEffect, useId, useRef, useState, type DragEvent } from 'react';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
 import { useNavigate } from 'react-router';
-import { useSources } from '@/data/provider';
+import { useRun, useSources } from '@/data/provider';
 import type { FileKind, NewPile, Pile } from '@/data/types';
 import { kindOf } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
+import { stoppedUnseen } from '@/features/tidy/run-words';
 import { plural } from '@/app/words';
 import { BowerLayer, type BowerController } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
@@ -36,7 +37,7 @@ interface Draft {
 let inFlight: { text: string; done: Promise<boolean> } | null = null;
 
 /** Sends the pile and runs its global effects once; they do not depend on any screen being open. */
-function start(addPile: (pile: NewPile) => Promise<Pile>, pile: NewPile, keys: string[], said: string, clearIf: (sent: string) => void): void {
+function start(addPile: (pile: NewPile) => Promise<Pile>, pile: NewPile, keys: string[], said: string, clearIf: (sent: string) => void, offer: () => boolean): void {
   inFlight = {
     text: pile.text,
     done: (async () => {
@@ -49,7 +50,7 @@ function start(addPile: (pile: NewPile) => Promise<Pile>, pile: NewPile, keys: s
         } catch {
           // expected: Without storage there is no list to remove.
         }
-        toast(said, { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
+        toast(said, offer() ? { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) } : undefined);
         return true;
       } catch (e) {
         report(e, 'That did not save. Try again.');
@@ -76,6 +77,10 @@ export function Add() {
   const nav = useNavigate();
   const reasonId = useId();
   const [text, setText, clearIf] = useSessionDraft('bower:add-draft');
+  // Beside a stop not seen yet, its card's Try again is the one launch (phone-stopped-launch): the saved message offers none.
+  const { data: last } = useRun();
+  const stopped = useRef(false);
+  useEffect(() => { stopped.current = stoppedUnseen(last); }, [last]);
   // The things in the draft are kept for the visit too (in the real app, files are already
   // in the upload queue, so only their list needs keeping).
   const [items, setItemsState] = useState<Draft[]>(() => {
@@ -221,7 +226,7 @@ export function Add() {
         const body = get(key);
         return { name, kind, origin, ...(body ? { body } : {}), ...(url ? { url } : {}) };
       }),
-    }, items.map((d) => d.key), ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', clearIf);
+    }, items.map((d) => d.key), ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', clearIf, () => !stopped.current);
     setBusy(true);
   };
 
