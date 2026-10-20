@@ -60,9 +60,8 @@ it.each(TESTS)('AC1 c06-sweep-a: %s authors no bare link line in a reply body', 
   expect(bareLines(texts)).toEqual([]);
 });
 
-// These cases are `covers: model`, so the corpus loop never scores them: score every press here. The index lines in
-// their expected.json are the model's work (the scripted driver writes none, before and after this sweep), so only
-// those may stay unmet; a body, link, move or question expectation that the new words break fails here.
+// These cases are `covers: model`, so the corpus loop never scores them: score every press here, and the whole score
+// (corpus-scorer-sweeps AC1): nothing is filtered, so any expectation the new words break fails here.
 describe('the swept replies still score', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -80,6 +79,6 @@ describe('the swept replies still score', () => {
     const c = await loadCase(join(CORPUS, id));
     const run = await runScripted(c);
     expect({ code: run.code, presses: (run.runs ?? []).map((r) => r.code) }).toEqual({ code: 0, presses: (run.runs ?? []).map(() => 0) });
-    expect({ id, unmet: (run.score?.unmet ?? []).filter((line) => !line.startsWith('index.md: lacks "- [[')) }).toEqual({ id, unmet: [] });
+    expect({ id, ...run.score }).toEqual({ id, pass: true, unmet: [] });
   }, 60_000);
 });
