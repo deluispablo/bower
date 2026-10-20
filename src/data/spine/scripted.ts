@@ -2542,8 +2542,9 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const to = target ? parentOf(ix.pathOf(target.id) ?? '') : first.to;
     if (!generatedPlace(to)) continue;
     const citations = contributions.map(({ name }) => renderLink(thingName(name)));
-    const body = contributions.flatMap(({ thing }, i) => (d.profiles?.get(thing.file.id) ?? [])
-      .map((sentence) => `${sentence} ${citations[i]}\n`)).join('');
+    const entries = contributions.map(({ thing }, i) => (d.profiles?.get(thing.file.id) ?? [])
+      .map((sentence) => `${sentence} ${citations[i]}\n`));
+    const body = entries.flat().join('');
     if (!target) {
       const template = row.profile?.template;
       const related = await groundedAuthoredLinks(to, { name: 'Profile.md', summary: 'Profile from documents.', body: '', template });
@@ -2570,11 +2571,22 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     const span = ownership.status !== 'invalid' ? ownership.payloads?.profile : undefined;
     if (!span || !parseNote(path, new TextDecoder().decode(bytes), fetched(target.id)).byBower) continue;
     const previous = new TextDecoder().decode(bytes.subarray(span.start, span.end));
-    const history = [...scanLinks(previous)].map(([link]) => link).filter((link) => link !== '[[]]');
-    const retained = [...new Set(history)].filter((link) => !citations.includes(link));
-    const text = body + (retained.length ? `${retained.join(' ')}\n` : '');
-    if (!profileTextOk(text)) return refused('a profile beyond its 400 word bound');
-    if (text === previous) continue;
+    // brain-07: every earlier cited sentence stays; a sentence-plus-source entry the region already holds is not added again.
+    const kept = !previous.trim() ? '' : previous.endsWith('\n') ? previous : `${previous}\n`;
+    let text = kept;
+    for (const [i, { thing }] of contributions.entries()) {
+      const added = (entries[i] ?? []).filter((entry) => !`\n${text}`.includes(`\n${entry}`)).join('');
+      if (!added) continue;
+      // An addition too long for any profile is the reply's to fix (refused, so the runner asks again).
+      if (!profileTextOk(added)) return refused('a profile beyond its 400 word bound');
+      // brain-07 R-9: no room left: the document files without its profile lines; it stays their source, and old prose is never cut.
+      if (!profileTextOk(text + added)) {
+        console.error(`A profile had no room for the lines of ${thing.file.id}; the document was filed without them.`);
+        continue;
+      }
+      text += added;
+    }
+    if (text === kept) continue;
     const change: Change = { kind: 'profile-rewrite', recordIds: [], previous, text };
     const existing = edits.find((edit) => edit.file.id === target.id);
     const changes = [...existing?.changes ?? [], change];
