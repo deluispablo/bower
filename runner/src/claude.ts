@@ -423,7 +423,7 @@ function promptInstructions(): string {
     '  person has not edited it; otherwise it asks them.',
     // C09 (R12, superseded by c12-prefix: one fixed text): how to answer a request.
     '- "answers" (optional): "answers":[{"requestId":"<the request\'s fileId>","text":"<one plain line>"}], one for a request in "requests"',
-    '  below that asks a question about the folder (not the person\'s "answers" to Bower\'s questions). Answer from the notes and files shown only, in one',
+    '  below that asks a question about the folder, or that you cannot do as asked (say why) (not the person\'s "answers" to Bower\'s questions). Answer from the notes and files shown only, in one',
     '  line of at most 1,000 characters with words, no web address; link each note or file you used as [[its name]], or [[its whole path]] when the',
     '  name is shared. A figure you say a note gives must be in that note; a count, total or difference of linked notes\' figures is fine.',
     '  Say plainly what the notes do not say. A request you answer takes no map or view.',
@@ -474,7 +474,7 @@ function promptInstructions(): string {
       // brain-04: a request's clarification is its map's question (B12d's frozen part), never an "asks" entry.
       + 'When its request\'s words do not establish the changes, the map gives "question":{"text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"} and "ops" of properties and tags only: '
       + 'Bower adds those changes to its text, changes nothing until a yes, and a yes applies only them.',
-    // B11 R14 (qa-prod-8-F1b): the views grammar, as REFUSALS.viewKeys and contracts/view-format.ts check it.
+    // B11 R14 (qa-prod-8-F1b): the views grammar, as REFUSALS.viewKeys and contracts/view-format.ts check it; qa-prod-9-F2: the way out when no view fits.
     'Views: a person\'s request for a figure over many notes of one type (a count, a total, an earliest date) is answered by "views":[{"requestId":"<the request\'s fileId>",'
       + '"home":{"kind":"moc","fileId":"<the id of a moc below>"} or {"kind":"type-row","rowId":"<type id>"},"mode":"install" or "propose","definition":<the view>}]. '
       + 'A moc holds {"v":1,"id":"<slug>","kind":"aggregate","title":"<a short plain line>","set":<as a map\'s>,"groupBy":[{"property":"<declared>","bucket":<optional, a date\'s "week", "month", "quarter" or "year">}],'
@@ -482,7 +482,9 @@ function promptInstructions(): string {
       + 'A type row holds a formula {"v":1,"id":"<slug>","kind":"formula","type":"<its rowId>","outputs":[{"property":"<a new key>","type":"number", "money" or "date","expr":<an expression>}]}, with, when installed, an optional "column": one of its outputs. '
       + 'An expression is {"property"}, {"number"}, {"op":"+", "-", "*", "/" or "dateDiff","left","right"}, {"op":"daysUntil","value"} or {"op":"if","when":<a condition>,"then","else"}; '
       + 'a condition is {"op":"eq", "ne", "lt", "lte", "gt", "gte" or "contains","property","value"}, {"op":"in","property","values"}, {"op":"exists","property"}, {"op":"all" or "any","of":[<conditions>]} or {"op":"not","of":<a condition>}. '
-      + `To ask before saving, "mode" is "propose" with "text", "yes" and "no": Bower asks it once and installs it on a yes; "install" takes none of them. At most ${VIEW_LIMITS.perHome} views per home.`,
+      + `To ask before saving, "mode" is "propose" with "text", "yes" and "no": Bower asks it once and installs it on a yes; "install" takes none of them. At most ${VIEW_LIMITS.perHome} views per home. `
+      + 'A view uses only properties its type row declares in the type table below, and a "moc" home is one of Bower\'s maps below, never another note. '
+      + 'When no view fits, give none: answer the request in "answers", in one plain line, saying what is missing (a property no type declares, or no map of Bower\'s).',
   ].join('\n');
 }
 
