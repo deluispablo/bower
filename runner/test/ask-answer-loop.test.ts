@@ -102,8 +102,11 @@ function runsOf(w: RealWorld): AppRuns {
 }
 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
-interface Shown { piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>; answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }> }
+interface Shown { piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>; notes?: Array<{ path: string; text: string }>; answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string; notes?: string[] }> }
 const shownOf = (call: ClaudeCall): Shown => JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Shown;
+/** brain-06: a state names the lines it replaces: here every line of the hub's Current state as shown. */
+const shownHubState = (call: ClaudeCall): string[] =>
+  currentStateOf(new TextEncoder().encode(shownOf(call).notes?.find((n) => n.path === HUB)?.text ?? ''), undefined, true)?.lines ?? [];
 
 /** The model: keeps one note only when it is shown the person's yes to that question, and files nothing else. */
 const keepWhenAnswered: ClaudeSpawn = async (call) => {
@@ -170,7 +173,8 @@ const writeWhenAnswered: ClaudeSpawn = async (call) => {
   const answers = shownOf(call).answers;
   stateSeen.push(answers);
   const yes = (answers ?? []).some((a) => a.answer === 'Write it' && a.note === HUB);
-  const intent = { kind: 'tidy-intent', v: 1, things: [], ...(yes ? { states: [{ note: HUB, lines: UPDATE }] } : {}) };
+  // The person's yes is the evidence for replacing their lines (brain-05 R-B, brain-06).
+  const intent = { kind: 'tidy-intent', v: 1, things: [], ...(yes ? { states: [{ note: HUB, lines: UPDATE, replaces: shownHubState(call) }] } : {}) };
   return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
 };
 
@@ -213,7 +217,8 @@ const proposeUpdate: ClaudeSpawn = async (call) => {
   // citing the offer: a news line Bower writes in its place cites its source (TL-P4-19 addendum 20).
   const offer = shownOf(call).piles.flatMap((p) => p.things).find((t) => t.name === 'Offer_letter_final(2).pdf')?.fileId;
   const things = offer ? [{ fileId: offer, to: 'Projects/Job hunt/Applications', basis: HUB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. [[Job hunt]]' } }] : [];
-  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things, states: [{ note: HUB, lines: UPDATE, ...(offer ? { cites: offer } : {}) }] }) };
+  // brain-06: it replaces the hub's shown lines, with the offer's words as its "because" (checked as the offer's words only).
+  return { code: 0, stderr: '', cut: null, stdout: envelope({ kind: 'tidy-intent', v: 1, things, states: [{ note: HUB, lines: UPDATE, replaces: shownHubState(call), ...(offer ? { cites: offer, because: 'Industrial Designer at Ferrowick.' } : {}) }] }) };
 };
 /** The hub-lines folder with the hub's section edited by the person since Bower last wrote it, and nothing asked yet. */
 async function shownWorld(): Promise<RealWorld> {

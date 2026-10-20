@@ -254,7 +254,8 @@ describe('a change kind of its own for Current state (C05)', () => {
   it('an unmarked Current state is never adopted without a rule', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const c = await hubCase();
-    const long = Array.from({ length: 8 }, (_, i) => `Flat ${'abcdefgh'[i] ?? ''} on the shortlist, with a long description of its rooms, its light, its street and the walk to the station.`);
+    // brain-06 R-5: the shown line plus 7 added lines is the 8-line write bound.
+    const long = Array.from({ length: 7 }, (_, i) => `Flat ${'abcdefgh'[i] ?? ''} on the shortlist, with a long description of its rooms, its light, its street and the walk to the station.`);
     const run = await runWithClaude(c, proposingStates([{ note: HUB, lines: NEW_STATE }, { note: FLAT, lines: long }]));
 
     expect(run.code).toBe(0);

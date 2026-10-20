@@ -247,6 +247,8 @@ it('numeric consent retry preserves the approved change', async () => {
   delete c.presses; c.expected = {};
   c.inboxFiles[sourceName] += '\nReplacement capacity 900 litres.';
   const state = 'The replacement holds 900 litres.';
+  // brain-06: the first proposal names the person's line it replaces; the yes writes that shown update.
+  const OLD = 'Alex will keep the shared water butt until the replacement arrives.';
   c.presses = [{ between: [{ kind: 'answer', question: { kind: 'state', note: path }, yes: true }] }, { request: { kind: 'tidy', text: 'Update Garden plot.' } }];
   const calls: string[] = [];
   const result = await runWithClaude(c, phaseAwareClaude((call, step, _attempt, phase) => {
@@ -254,7 +256,7 @@ it('numeric consent retry preserves the approved change', async () => {
     const ctx = frameOf(call) as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
     const source = ctx.piles.flatMap((p) => p.things).find((t) => t.name === sourceName)?.fileId;
     return reply(step === 0 ? { ...empty, things: [{ fileId: source, to: 'Areas/Home', name: sourceName }],
-      lines: [{ note: path, text: state, cites: source }], states: [{ note: path, lines: [state], cites: source }] }
+      lines: [{ note: path, text: state, cites: source }], states: [{ note: path, lines: [state], replaces: [OLD], because: 'The replacement water butt has arrived.', cites: source }] }
       : { ...empty, states: [{ note: path, lines: [state] }] });
   }));
   const runs = [...result.runs ?? [], result];

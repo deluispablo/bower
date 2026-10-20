@@ -50,6 +50,10 @@
           "The replacement water butt has arrived.",
           "The committee asks Alex to return the shared water butt."
         ],
+        "replaces": [
+          "The committee will replace the shared water butt."
+        ],
+        "because": "The replacement water butt has arrived.",
         "cites": "$file:Water butt update.txt"
       }
     ]
