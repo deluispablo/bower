@@ -337,7 +337,10 @@ export class LiveRuns implements RunSource {
     // validates it (RFC 9111 §4.3), and only a miss lists again. A run seen going ended after the listing: list first.
     let file = this.going === wire.id ? null : await this.vault.lastRun();
     if (!current()) return;
-    if (file?.run.id !== wire.id) {
+    // A failed run leaves no report there (the runner writes `last-run.json` only once a run is done): one not seen going
+    // ended before this page's listing, which already holds whatever it changed, so a miss is not listed again.
+    const settled = wire.phase === 'failed' && this.going !== wire.id;
+    if (file?.run.id !== wire.id && !settled) {
       try { await this.refreshFolder(); }
       catch (e) {
         // Expected: disposal stops the listing; current() can still return its last no-effect state.
