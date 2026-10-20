@@ -1,7 +1,8 @@
 /**
- * design8-links-both-ways (designer, post-qa-7, P3-5): on a note page, Links to marks two rows "Links both ways", then
- * Linked from says "No other notes link here.", which reads as if nothing links here. When every note linking here is
- * one of those, Linked from says so. Made-up notes only.
+ * design8-links-both-ways (designer, post-qa-7, P3-5), as grouped by ux-controls-polish AC4: the notes that link both
+ * ways are listed once, in their own "Links both ways" group, with no mark on a row. When every note linking here is one
+ * of them, Linked from says "Only the notes that link both ways." instead of "No other notes link here.", which reads as
+ * if nothing links here. Made-up notes only.
  */
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';

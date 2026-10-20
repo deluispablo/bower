@@ -8,7 +8,9 @@ test('the inbox shows before a slow report', async ({ page, allowConsole }) => {
   test.setTimeout(90_000);
   allowConsole(/disposition was refused/, 'the made-up leftovers are not real dispositions');
   await page.goto('/?scenario=slow-report&time=instant');
-  // The phone Inbox keeps its Tidy up; on desktop the top bar launches, so readiness is the Inbox's count (ux-home-priorities R2-2).
+  // The phone Inbox keeps its Tidy up, except beside an unseen stop, whose card's Try again is the one control. On desktop
+  // the top bar launches, or the Inbox does while the top bar is an unseen report's replay (qa-prod-10-F2), so readiness
+  // is the Inbox's count, which shows either way (ux-home-priorities R2-2).
   const inbox = page.getByRole('region', { name: 'Inbox' });
   const tidy = test.info().project.name === 'desktop' ? inbox.getByText(/^\d+ things? waiting/) : inbox.getByRole('button', { name: /^Tidy up \d+ things?$/ });
   // The start-up screen holds Home until its first reads land, at most 8 s from the start (ux-home-opening); then the
