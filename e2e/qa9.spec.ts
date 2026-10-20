@@ -91,7 +91,7 @@ test('on screen: the result of a tidy-up names the request it did', async ({ pag
   await page.getByLabel('Your request').fill('Which flat is closest to Ferrowick?');
   await page.getByRole('button', { name: 'Send' }).click();
   await page.getByRole('button', { name: /Let Bower do it now/ }).first().click();
-  await expect(page.getByRole('dialog')).toContainText('"Which flat is closest to Ferrowick?" done', { timeout: 10_000 });
+  await expect(page.getByRole('dialog')).toContainText('"Which flat is closest to Ferrowick?" answered', { timeout: 10_000 });
 });
 
 test('a link follows a rename through a tidy-up', async ({ page, isMobile }) => {

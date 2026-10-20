@@ -156,8 +156,8 @@ export function runDetail(r: RunState): string {
       if (saved.length === 1) parts.push(`1 thing already saved as ${thingName(saved[0]?.as ?? '')}`);
       else if (saved.length) parts.push(`${plural(saved.length, 'thing')} already saved`);
       const asked = rep.requests ?? [];
-      if (asked.length === 1) parts.push(`"${asked[0] ?? ''}" done`);
-      else if (asked.length) parts.push(`${plural(asked.length, 'thing')} you asked done`);
+      if (asked.length === 1) parts.push(`"${asked[0] ?? ''}" answered`);
+      else if (asked.length) parts.push(`${plural(asked.length, 'thing')} you asked answered`);
       if (rep.rulesWorded) parts.push(`${plural(rep.rulesWorded, 'rule')} worded`);
       // The changes it names above are not counted again here.
       const other = asked.length || rep.rulesWorded ? 'other ' : '';

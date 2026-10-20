@@ -1,5 +1,5 @@
 /**
- * qa-live-claude-F9-answer: the run report shows what Bower said for each request, under "Done for you", with the
+ * qa-live-claude-F9-answer: the run report shows what Bower said for each request, under "What you asked", with the
  * request's words and its done line, links opening their note (plan F3-F9, rulings 1-3, FA-R4 to FA-R8).
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -14,7 +14,7 @@ import { RunLinks } from './RunLinks';
 
 afterEach(cleanup);
 
-const LABEL = 'Done for you';
+const LABEL = 'What you asked';
 const Q = 'How much is the rent at Flat 3?';
 const R = 'File the council tax letter under Money.';
 const NOTE = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
@@ -39,7 +39,7 @@ async function show(report: Report, requests: () => Promise<Request[]>, onOpen?:
 }
 
 describe('qa-live-claude-F9-answer', () => {
-  it('FA-1: a report with only requests lists the words and the answer under "Done for you"; its link opens the note and calls onOpen', async () => {
+  it('FA-1: a report with only requests lists the words and the answer under "What you asked"; its link opens the note and calls onOpen', async () => {
     const onOpen = vi.fn();
     await show({ created: [], updated: [], requests: [Q] } as Report, async () => [{ id: 'r1', text: Q, at: 10, done: DONE }], onOpen);
     const list = screen.getByRole('list', { name: LABEL });
