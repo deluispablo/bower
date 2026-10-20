@@ -1,4 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import { useUi } from '@/app/ui-store';
 import { findNode, thingName } from '@/data/tree';
 import { useTree } from '@/data/provider';
@@ -15,11 +16,20 @@ export function BookmarksPanel() {
   const { data: tree } = treeState;
   const act = useFileActions();
   if (treeState.error) return <LoadError state={treeState} />;
-  if (!tree) return <div className={s.panel}><p className={s.hint}>Looking…</p></div>;
+  // The bookmarks are kept on this device, so none known means none: no need to wait for the folder.
   if (!bookmarks.length)
     return (
       <div className={s.panel}>
         <p className={s.hint}>Nothing bookmarked yet. Right-click a note or folder and choose Bookmark.</p>
+      </div>
+    );
+  if (!tree)
+    return (
+      <div className={s.panel}>
+        <Skeleton label="Opening bookmarks">
+          {/* One row each: 8 px padding round a 15 px name line and a 13 px place line. */}
+          {bookmarks.map((b) => <Bone key={b} style={{ height: 'calc(16px + 1.5 * 28px)', padding: 8, backgroundClip: 'content-box' }} />)}
+        </Skeleton>
       </div>
     );
   return (

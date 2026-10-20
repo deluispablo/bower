@@ -1,4 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useInbox, useQuestions, useRequests, useRulesSection, useRun, useSources } from '@/data/provider';
 import { noteRoute } from '@/app/paths';
@@ -57,7 +58,10 @@ export function BowerPanel() {
             </Button>
           </div>
         ) : run === undefined && runLoading ? (
-          <p className="muted">Looking…</p>
+          // The size of the resting line that follows: one line with an empty inbox, two otherwise.
+          <Skeleton label="Opening the activity panel">
+            <Bone style={{ height: inboxEmpty ? '1lh' : '2lh' }} />
+          </Skeleton>
         ) : (
           <p className="muted">{inboxEmpty ? 'Resting. Nothing waiting in the inbox.' : 'Resting. Tidy up when the inbox has what you want filed.'}</p>
         )}

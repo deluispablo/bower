@@ -1,4 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import { useTree } from '@/data/provider';
 import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
 import { crumbs } from '@/app/paths';
@@ -9,6 +10,7 @@ import { Sheet } from '@/ui/Sheet';
 import { useFileActions } from './file-actions';
 import { NameForm } from './NameForm';
 import { nameRules } from './name-rules';
+import s from './files.module.css';
 
 /** Rename and New folder from a page share one name sheet. */
 export function NameSheet() {
@@ -44,7 +46,13 @@ export function NameSheet() {
   return (
     <Sheet open={!!naming} onOpenChange={(o) => !o && setNaming(null)} title={what} description={`In ${crumbs(where)}`}>
       {renaming && <LoadError state={treeState} />}
-      {renaming && tree === undefined && !treeState.error && <p className="muted">Looking…</p>}
+      {renaming && tree === undefined && !treeState.error && (
+        // In the name form's own layout: its 48 px box over its 44 px buttons.
+        <Skeleton label="Opening the name form" className={s.nameForm}>
+          <Bone style={{ height: 48 }} />
+          <Bone style={{ height: 44 }} />
+        </Skeleton>
+      )}
       {naming && (!renaming || (tree !== undefined && !treeState.error)) && <NameForm key={JSON.stringify(naming)} start={start} links={links} label={renaming ? 'Rename' : 'Make the folder'} onSave={(n) => void save(n)} onCancel={() => setNaming(null)} />}
     </Sheet>
   );

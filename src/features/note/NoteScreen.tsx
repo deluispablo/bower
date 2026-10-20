@@ -12,6 +12,8 @@ import { useIsDesktop } from '@/ui/media';
 import { useUi } from '@/app/ui-store';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton, Button, buttonLinkClass } from '@/ui/Button';
+import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import { PoseBower } from '@/bird/Bower';
 import { Inline, Markdown, presentedBody } from './markdown';
 import { useResolver } from './resolve';
@@ -73,10 +75,22 @@ function PhoneBar({ folder, path }: { folder: string; path: string }) {
   );
 }
 
+/** Where a note is: the phone's bar, or the desktop's crumbs. */
+function Place({ folder, path }: { folder: string; path: string }) {
+  const desktop = useIsDesktop();
+  if (!desktop) return <PhoneBar folder={folder} path={path} />;
+  return (
+    <p className={s.crumbs}>
+      <Link to={folderRoute(folder)}>{crumbs(folder) || 'Your Bower folder'}</Link>
+    </p>
+  );
+}
+
 function NoteView({ path }: { path: string }) {
   const act = useFileActions();
   const { data: run } = useRun();
-  const { data: note, error, loading } = useNote(path);
+  const noteState = useNote(path);
+  const { data: note, error, loading } = noteState;
   const { data: tree } = useTree();
   const desktop = useIsDesktop();
   const resolve = useResolver();
@@ -90,8 +104,9 @@ function NoteView({ path }: { path: string }) {
     if (opened) void vault.markSeen(path).catch((e: unknown) => report(e, 'That did not work. Try again.'));
   }, [opened, path, vault]);
 
-  if (error && !note) return <div className={s.page}><p>{error.message}</p></div>;
-  if (!note || (loading && note.path !== path)) return <NoteSkeleton />;
+  // Where it is comes from the address, so it stands in its place while the note opens or if it cannot be read.
+  if (error && !note) return <div className={s.page}><Place folder={folder} path={path} /><LoadError state={noteState} /></div>;
+  if (!note || (loading && note.path !== path)) return <div className={s.page}><Place folder={folder} path={path} /><NoteSkeleton /></div>;
   const marked = newLineIndexes(note, fresh?.path === note.path ? fresh.rows : []);
 
   const link = (target: string, label: string, key: string) => {
@@ -124,12 +139,7 @@ function NoteView({ path }: { path: string }) {
 
   return (
     <article className={s.page}>
-      {!desktop && <PhoneBar folder={folder} path={path} />}
-      {desktop && (
-        <p className={s.crumbs}>
-          <Link to={folderRoute(folder)}>{crumbs(folder) || 'Your Bower folder'}</Link>
-        </p>
-      )}
+      <Place folder={folder} path={path} />
       <h1 className={s.title}>{note.title}</h1>
       {path === ABOUT_ME && <p className="muted">Bower reads this note to understand you.</p>}
       {note.summary && (
@@ -350,10 +360,12 @@ function FileView({ node }: { node: TreeNode }) {
 
 function NoteSkeleton() {
   return (
-    <div className={s.page} aria-busy="true" aria-label="Opening the note">
-      {[30, 70, 90, 60, 85, 75].map((w, i) => (
-        <span key={i} style={{ display: 'block', height: i === 1 ? 34 : 16, width: `${w}%`, margin: '14px 0', borderRadius: 8, background: 'var(--surface)' }} />
+    <Skeleton label="Opening the note" className={s.skel}>
+      {/* The title's own size and margins (one line), then lines of text from where the note's first part starts. */}
+      <Bone className={s.title} style={{ height: '1lh', width: '60%' }} />
+      {[90, 60, 85, 75].map((w) => (
+        <Bone key={w} style={{ height: 16, width: `${w}%`, margin: '8px 0 14px' }} />
       ))}
-    </div>
+    </Skeleton>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSources, useRulesSection, useUser } from '@/data/provider';
 import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import { usePrefs } from '@/app/prefs';
 import { plural } from '@/app/words';
 import { Button } from '@/ui/Button';
@@ -16,7 +17,7 @@ import { Link, useNavigate } from 'react-router';
 import s from './settings.module.css';
 
 /** `asLabel`: the whole row is its switch's label, so a tap anywhere on it toggles the switch. */
-function Row({ title, sub, asLabel, children }: { title: string; sub?: string; asLabel?: boolean; children: ReactNode }) {
+function Row({ title, sub, asLabel, children }: { title: string; sub?: ReactNode; asLabel?: boolean; children: ReactNode }) {
   const Tag = asLabel ? 'label' : 'div';
   return (
     <Tag className={s.row}>
@@ -100,7 +101,7 @@ export function Settings() {
         </Button>
       </Row>
       {/* A count only once both reads answered and the rules note has no text of its own. */}
-      <Row title="Rules" sub={rulesState.error || prose ? undefined : rules && prose === '' ? plural(rules.length, 'rule') : 'Looking…'}>
+      <Row title="Rules" sub={rulesState.error || prose ? undefined : rules && prose === '' ? plural(rules.length, 'rule') : <Skeleton label="Opening your rules"><Bone style={{ height: '1lh', width: '5em' }} /></Skeleton>}>
         <Button size="sm" variant="ghost" onClick={() => nav('/bower')}>
           See them
         </Button>

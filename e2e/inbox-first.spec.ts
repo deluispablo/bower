@@ -14,16 +14,12 @@ test('the inbox shows before a slow report', async ({ page, allowConsole }) => {
   // The start-up screen holds Home until its first reads land, at most 8 s from the start (ux-home-opening); then the
   // Inbox is on screen, from the listing at least. A number that can drop is never shown (TL-P4-13).
   await expect(page.locator('section[aria-labelledby="inbox"] a[href^="/pile/"]').first()).toBeVisible({ timeout: 10_000 });
-  // Readiness, the report and the questions may come after, and the list does not move when the button arrives.
+  // Readiness, the report, the first tidy-up checklist and the questions may come after, and the list does not move when
+  // they arrive: it is measured as soon as it shows (ux-loading-polish, the strict no-shift check).
   const first = page.locator('section[aria-labelledby="inbox"] a[href^="/pile/"]').first();
-  // The first tidy-up checklist (shown here: a run happened, its report not yet opened) can arrive after the Inbox when
-  // the last run's record loads slowly; wait for it to settle. ux-loading-polish restores the strict no-shift check.
-  // Settled means its current step's button is drawn too, which waits for the last run's record.
+  const before = await first.boundingBox();
   const checklist = page.getByRole('region', { name: 'Your first tidy-up' });
   await expect(checklist.getByRole('button', { name: 'See the report' })).toBeVisible({ timeout: 60_000 });
-  // The questions now sit above the Inbox: wait for them too. ux-loading-polish restores the strict no-shift check.
-  await expect(page.locator('#qs')).toBeVisible({ timeout: 60_000 });
-  const before = await first.boundingBox();
   await expect(tidy).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/Tidy-up finished/)).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('#qs')).toBeVisible({ timeout: 60_000 });

@@ -35,6 +35,8 @@
 .status { display: inline-block; padding: 1px 10px; border-radius: 999px; background: var(--surface-strong); font-size: 13px; }
 .up { transform: rotate(-90deg); }
 
-.skel { display: block; margin: 12px 0; border-radius: 10px; background: var(--surface); }
+.skel { display: block; }
+/* the page menu's place while the folder opens (explorer.module.css .pageMore) */
+.menuSlot { flex: none; width: 44px; height: 44px; }
 .bookmarks { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 18px 10px; }
 .bookmarks button { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--surface-strong); color: var(--heading); font: 600 14px var(--font-body); cursor: pointer; }

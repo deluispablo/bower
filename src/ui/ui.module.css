@@ -278,3 +278,6 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   font-size: 13px;
   font-weight: 600;
 }
+
+/* still shapes while something opens: one home (ui/Skeleton.tsx); each caller gives the size */
+.bone { display: block; border-radius: 10px; background: var(--surface); }

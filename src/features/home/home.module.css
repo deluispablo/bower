@@ -29,10 +29,10 @@
 .pileSub { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-muted); }
 .sep { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.6; }
 .skel { display: grid; gap: 10px; margin-top: 14px; }
-.skel span { display: block; height: 52px; border-radius: 12px; background: var(--surface); }
+.skel span { height: 52px; border-radius: 12px; }
 /* Still shapes in the place of the questions' heading and first card, while they are read. */
 .skelQuestions { display: grid; gap: 10px; }
-.skelQuestions span { display: block; height: 24px; width: 40%; border-radius: 8px; background: var(--surface); }
+.skelQuestions span { height: 24px; width: 40%; border-radius: 8px; }
 .skelQuestions span + span { height: 132px; width: auto; border-radius: 16px; }
 .search { width: 100%; cursor: pointer; }
 .search span { flex: 1; }
