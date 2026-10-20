@@ -369,7 +369,7 @@ function promptInstructions(): string {
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
     // F5 (ruling 8): the bounds the selection checks enforce, said before the first reply.
     'A "to" is its selected destination\'s path; a line or state goes only on a note selected for what it cites; ask as selected,',
-    'with its options, or ask once about a source whose supplied evidence shows a doubt selection could not settle:',
+    'with its options, or ask once about a thing or pile whose supplied evidence shows a doubt selection could not settle:',
     'give "evidence":{"quote":"<its words, copied>"}, file nothing of that source and never reopen an answer.',
     'When selecting, a request\'s destination is the folder of a note it wants.',
     '',
@@ -390,6 +390,7 @@ function promptInstructions(): string {
     '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
     '   When 2 to 4 folders of the map fit, options may select {folderId,label} from those folders. Bower supplies option ids and actions.',
     '   What is asked about stays in the inbox untouched with its pile\'s words until answered. File the rest; never wait.',
+    '   "asks" are only about a thing, a pile or two notes below, never about a request: a view a request wants asked first is proposed in "views".',
     '',
     'What to write:',
     '- Value: a thing that only confirms what a note below already says makes no new note. File the thing beside that note',
@@ -468,6 +469,15 @@ function promptInstructions(): string {
       + '"ops":[<one rule for every note of the set>]}], or, instead of "ops", "results":[{"memberId":"<a note of the set>","ops":[<ops, each with a "targetId": that note or one shown below>]}]. An op is {"kind":"property","key":"<declared>","mode":"set" or "union","value":<value>}, {"kind":"tag","mode":"add" or "remove","value":"<tag>"}, {"kind":"move","parentId":"<a main folder id>"} or, in "results" only and on the result\'s own note, {"kind":"rename","name":"<a plain name>.md"}. '
       + 'A map changes only what its "scope" names, quoted word for word from its request; a file, note or rule never widens it. '
       + 'Bower finds the notes of the set itself; never list them. At most one map per request, 8 ops per note, 200 notes per set.',
+    // B11 R14 (qa-prod-8-F1b): the views grammar, as REFUSALS.viewKeys and contracts/view-format.ts check it.
+    'Views: a person\'s request for a figure over many notes of one type (a count, a total, an earliest date) is answered by "views":[{"requestId":"<the request\'s fileId>",'
+      + '"home":{"kind":"moc","fileId":"<the id of a moc below>"} or {"kind":"type-row","rowId":"<type id>"},"mode":"install" or "propose","definition":<the view>}]. '
+      + 'A moc holds {"v":1,"id":"<slug>","kind":"aggregate","title":"<a short plain line>","set":<as a map\'s>,"groupBy":[{"property":"<declared>","bucket":<optional, a date\'s "week", "month", "quarter" or "year">}],'
+      + '"measures":[{"id":"<slug>","label":"<a short plain line>","op":"<an op>","property":"<declared>"}]}, the ops "count" (no property), "countValues", "top" (with "limit"), "sum", "average", "median", "min", "max", "range", "earliest" and "latest". '
+      + 'A type row holds a formula {"v":1,"id":"<slug>","kind":"formula","type":"<its rowId>","outputs":[{"property":"<a new key>","type":"number", "money" or "date","expr":<an expression>}]}, with, when installed, an optional "column": one of its outputs. '
+      + 'An expression is {"property"}, {"number"}, {"op":"+", "-", "*", "/" or "dateDiff","left","right"}, {"op":"daysUntil","value"} or {"op":"if","when":<a condition>,"then","else"}; '
+      + 'a condition is {"op":"eq", "ne", "lt", "lte", "gt", "gte" or "contains","property","value"}, {"op":"in","property","values"}, {"op":"exists","property"}, {"op":"all" or "any","of":[<conditions>]} or {"op":"not","of":<a condition>}. '
+      + `To ask before saving, "mode" is "propose" with "text", "yes" and "no": Bower asks it once and installs it on a yes; "install" takes none of them. At most ${VIEW_LIMITS.perHome} views per home.`,
   ].join('\n');
 }
 
@@ -1098,7 +1108,7 @@ export const REFUSALS = {
   stateText: `a state that is not 1 to ${STATE_WRITE.lines} short lines`,
   stateCites: 'a state citing a thing it does not file, or a pile of words no Timeline line cites',
   askKeys: 'a question with keys outside the intent: give it a "fileId", a "pileId" or two "notes", only one of them',
-  askNotAdmitted: 'a question about a thing or pile it was not admitted to take',
+  askNotAdmitted: 'a question about a thing or pile it was not admitted to take; a request is answered, given a document, a map or a view, never asked about in "asks"',
   askNotes: 'a question about notes that is not about two different notes below',
   askTwice: 'a thing, pile or pair of notes asked about twice',
   askAlsoFiles: 'a question about a thing or pile it also files',
