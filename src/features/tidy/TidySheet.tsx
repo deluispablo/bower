@@ -36,8 +36,9 @@ export function TidySheet() {
   const showRun = !!run && (running || (tidyReportRunId === run.id && run.phase === 'done') || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
   const inbox = useInbox();
-  const waiting = inbox.waiting ?? 0;
-  const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing in the inbox';
+  const { waiting } = inbox;
+  // Until the Inbox read answers the count is unknown, not 0: the sheet is named only by what it does.
+  const ask = waiting === undefined ? 'Tidy up' : waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing in the inbox';
   const onOpenChange = (open: boolean): void => {
     // Closing a finished run with nothing to replay: it has been seen. A stopped one stays on Home
     // (with Try again) until "Got it", however the sheet was closed.

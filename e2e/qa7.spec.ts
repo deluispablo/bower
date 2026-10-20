@@ -26,7 +26,7 @@ test("the panel's put away is Got it: one stopped run, one way to dismiss it", a
   const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
   const home = page.getByRole('alert').getByRole('heading', { name: 'The tidy-up stopped' });
   await expect(home).toBeVisible();
-  await panel.getByRole('button', { name: 'Put it away' }).click();
+  await panel.getByRole('button', { name: 'Got it' }).click();
   await expect(panel.getByText(/tidy-up stopped/)).toHaveCount(0);
   await expect(home).toHaveCount(0);
   await expect(page.locator('footer').getByText(/The tidy-up stopped/)).toHaveCount(0);

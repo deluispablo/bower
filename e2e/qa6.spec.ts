@@ -196,7 +196,7 @@ test('a stopped tidy-up can be put away', async ({ page, isMobile }) => {
   await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
   await page.keyboard.press('Escape');
   const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
-  await panel.getByRole('button', { name: 'Put it away' }).click();
+  await panel.getByRole('button', { name: 'Got it' }).click();
   await expect(panel.getByText(/tidy-up stopped/)).toHaveCount(0);
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });

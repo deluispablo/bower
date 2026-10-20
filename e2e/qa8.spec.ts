@@ -50,7 +50,7 @@ test('focus after a stopped run is put away stays in the page', async ({ page, i
     await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
     await page.keyboard.press('Escape');
     if (where === 'home') await page.getByRole('alert').getByRole('button', { name: 'Got it' }).click();
-    else await page.getByRole('complementary').getByRole('button', { name: 'Put it away' }).click();
+    else await page.getByRole('complementary').getByRole('button', { name: 'Got it' }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => document.activeElement?.id), { message: where }).toBe('main');
   }

@@ -28,7 +28,7 @@ export function BowerPanel() {
   const link = useNoteLink();
   const { setTidy } = useUi();
   const { runs } = useSources();
-  // Put away is Home's Got it: the stopped run is seen, everywhere.
+  // Home's Got it, in the same words: the stopped run is seen, everywhere.
   const putAway = (id: string): void => void runs.markSeen(id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'));
   const nav = useNavigate();
   // Home shows the questions and their error itself (d-v2-14).
@@ -54,7 +54,7 @@ export function BowerPanel() {
               <span className="muted">{run.failure ?? 'Nothing was moved. Tidy up again when you are ready.'}</span>
             </button>
             <Button size="sm" variant="ghost" onClick={() => putAway(run.id)}>
-              Put it away
+              Got it
             </Button>
           </div>
         ) : run === undefined && runLoading ? (
