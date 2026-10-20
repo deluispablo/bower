@@ -411,10 +411,10 @@ describe('c02-upload-count-ui Inbox contract', () => {
     const fullRead = new Promise<Pile[]>((resolve) => { finishPiles = resolve; });
     show(new Promise((resolve) => { finishSummary = resolve; }), [pile], false, fullRead);
     await settle();
-    expect(screen.getByText('Looking…')).toBeVisible();
+    expect(screen.queryByText(waiting)).toBeNull();
     expect(screen.queryByText(sentence)).toBeNull();
     await act(async () => { finishSummary({ count, complete: true }); });
-    expect(screen.getByText('Looking…')).toBeVisible();
+    expect(screen.queryByText(waiting)).toBeNull();
     expect(screen.queryByText(sentence)).toBeNull();
     await act(async () => { finishPiles([pile]); });
     const line = screen.getByText(sentence, { exact: true });

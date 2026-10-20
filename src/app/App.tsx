@@ -93,9 +93,9 @@ function Gatekeeper() {
       } catch (e) {
         if (!current()) return;
         console.error(e);
-        bootFail(e instanceof BowerError && e.code === 'offline' ? 'offline' : 'error', () =>
-          setAttempt((a) => a + 1),
-        );
+        const offline = e instanceof BowerError && e.code === 'offline';
+        // Signing out is the way out of a session that keeps failing; it tells the session, which checks again.
+        bootFail(offline ? 'offline' : 'error', () => setAttempt((a) => a + 1), offline ? undefined : () => session.signOut());
       }
     };
     void check();
@@ -113,8 +113,9 @@ function Gatekeeper() {
     };
   }, [session, place, attempt]);
 
+  // Sign-in shows at once; Home holds the start-up screen itself until its reads land (boot.ts).
   useEffect(() => {
-    if (gate) bootDone();
+    if (gate) bootDone(!gate.user);
   }, [gate]);
 
   // Discard before painting Use here, so an immediate takeover cannot revive the query.

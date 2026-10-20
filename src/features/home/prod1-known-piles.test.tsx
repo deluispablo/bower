@@ -70,7 +70,8 @@ describe('home_shows_known_upload_without_calling_it_a_note', () => {
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     expect(await within(inbox).findByRole('link', { name: /Receipts.*1 thing/ })).toBeVisible();
     expect(within(inbox).queryByText('A note')).toBeNull();
-    expect(within(inbox).getByText('Looking…')).toBeVisible();
+    // No count until the full read answers: the line under the heading keeps its place, empty (ux-home-opening).
+    expect(inbox.querySelector('p.muted')?.textContent).toBe('');
     expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })).toBeNull();
   });
 
@@ -80,7 +81,7 @@ describe('home_shows_known_upload_without_calling_it_a_note', () => {
     show(v, () => (calls++ === 0 ? v.piles() : never()));
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     const subtitle = (): string => inbox.querySelector('p.muted')?.textContent ?? '';
-    await waitFor(() => expect(subtitle()).not.toBe('Looking…'));
+    await waitFor(() => expect(subtitle()).toMatch(/waiting/));
     const said = subtitle();
     await act(async () => {
       await v.addPile({ text: 'Receipts', items: [scan()] });

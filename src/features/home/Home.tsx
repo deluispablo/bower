@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { report, undoToast } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
 import { answered, answerToast } from './answer-words';
@@ -32,6 +32,7 @@ import { FirstTidyChecklist } from './FirstTidyChecklist';
 import { useFirstTidy } from './useFirstTidy';
 import { offersTidy } from '@/data/contracts/first-tidy';
 import { useIsDesktop } from '@/ui/media';
+import { bootHold, onCap, openedByCap } from '@/app/boot';
 import runStyles from '@/features/tidy/tidy.module.css';
 import noteStyles from '@/features/note/note.module.css';
 
@@ -90,6 +91,11 @@ export function Home() {
   // One launch on screen: the desktop top bar, or the checklist while it offers Tidy up; the phone Inbox otherwise.
   const desktop = useIsDesktop();
   const launch = !desktop && !offersTidy(progress.data) && ready && waiting > 0 && !running && !inbox.error;
+  const questions = useQuestions();
+  // The start-up screen stays until what Home shows first is known, errors included (boot.ts caps it at 8 s).
+  const opening = (!ready && !inbox.error) || runState.loading || progress.loading || questions.loading;
+  // Before paint: Home's first frame is already held beneath the screen.
+  useLayoutEffect(() => (opening ? bootHold() : undefined), [opening]);
   return (
     <div className={s.page}>
       <header className={s.top}>
@@ -103,7 +109,7 @@ export function Home() {
           <LoadError state={runState} />
           {running && run && <RunningCard run={run} />}
           <FirstTidyChecklist run={run} progress={progress.data} />
-          <Questions />
+          <QuestionList questionsState={questions} />
           <Inbox piles={inbox.piles} error={inbox} waiting={waiting} ready={ready} bird={birdOn === 'inbox'} running={running} launch={launch} />
           {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
               under the person's finger moves when it lands (progressive rendering: each part shows when its data is there). */}
@@ -212,7 +218,7 @@ function Inbox({ piles, error, waiting, ready, bird, running, launch }: { piles:
             Inbox
           </h2>
           <p className={`muted ${s.inboxSub}`}>
-            {error.error ? 'Your inbox is not showing.' : piles === undefined || !ready ? 'Looking…' : waiting ? `${plural(waiting, 'thing')} waiting${running ? '' : '. Tidy up when you have added everything.'}` : 'Nothing waiting. Add something and it stays here until the next tidy-up.'}
+            {error.error ? 'Your inbox is not showing.' : piles === undefined || !ready ? '' : waiting ? `${plural(waiting, 'thing')} waiting${running ? '' : '. Tidy up when you have added everything.'}` : 'Nothing waiting. Add something and it stays here until the next tidy-up.'}
           </p>
           {ready && arrival && <p className={`${s.arrival} ${arrival.unknown ? 'muted' : s.unfinished}`}>{arrival.text}</p>}
           {ready && arrival?.incomplete && <CheckAgain summary={arrival.summary} />}
@@ -223,7 +229,7 @@ function Inbox({ piles, error, waiting, ready, bird, running, launch }: { piles:
       {error.error ? (
         <LoadError state={error} />
       ) : piles === undefined ? (
-        <div className={s.skel} aria-hidden="true">
+        <div className={s.skel} role="status" aria-label="Opening your inbox">
           <span />
           <span />
         </div>
@@ -320,8 +326,14 @@ function SearchField() {
 
 /** One question surface and answer path, on Home and in the run's sheet. */
 export function Questions({ run }: { run?: RunState }) {
-  const questionsState = useQuestions();
+  return <QuestionList run={run} questionsState={useQuestions()} />;
+}
+
+/** Home passes its own read, so the same read tells it when its first screen is ready. */
+function QuestionList({ run, questionsState }: { run?: RunState | undefined; questionsState: Loaded<Question[]> }) {
   const sheetHeadingId = useId();
+  // Only a Home the cap opened keeps the questions' place; otherwise nothing shows until they land, as before (R2-2).
+  const capOpened = useSyncExternalStore(onCap, openedByCap);
   const headingId = run ? sheetHeadingId : 'qs';
   const { data: all } = questionsState;
   const { vault, runs } = useSources();
@@ -380,6 +392,7 @@ export function Questions({ run }: { run?: RunState }) {
     }
   };
   if (questionsState.error) return <LoadError state={questionsState} />;
+  if (!run && questionsState.loading && capOpened) return <div className={s.skelQuestions} role="status" aria-label="Opening your questions"><span /><span /></div>;
   if (!run && !shown.length) return null;
   return (
     <section ref={host} aria-labelledby={shown.length ? headingId : undefined}>
