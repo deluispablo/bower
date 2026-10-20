@@ -128,9 +128,9 @@ describe('AC1b explicit template cannot bypass the selected row', () => {
     sourceNote(r.after[NOTE]);
   });
 
-  it('(b) the thingType text is exact and the refusal kinds stay 73', () => {
+  it('(b) the thingType text is exact and the refusal kinds stay 72 (qa-prod-11-F1 removed selectionKind)', () => {
     expect(REFUSALS.thingType).toBe('a note "typeRow" other than the kind its selection gave, or a "template" other than that kind\'s row gives');
-    expect(Object.keys(REFUSALS)).toHaveLength(73);
+    expect(Object.keys(REFUSALS)).toHaveLength(72);
   });
 
   it('(c) guard: the row\'s own template is accepted first time', async () => {

@@ -143,7 +143,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   type ViewKind = 'viewKeys' | 'viewBinding' | 'viewLimit';
   type MapKind = 'mapKeys' | 'mapBinding' | 'mapLimit' | 'scope';
   type AnswerKind = 'answerKeys' | 'answerBinding' | 'answerText' | 'neverKeys';
-  type SelectionKind = 'selectionKeys' | 'selectionItem' | 'selectionKind' | 'selectionPlace' | 'selectionWants' | 'selectionBasis';
+  type SelectionKind = 'selectionKeys' | 'selectionItem' | 'selectionPlace' | 'selectionWants' | 'selectionBasis';
   type DocumentKind = 'documentKeys' | 'documentBinding' | 'documentPlace' | 'documentText';
   const bad: Record<Exclude<RefusalKind, ViewKind | MapKind | AnswerKind | SelectionKind | DocumentKind | 'noteCut'>, (ctx: Context, id: Id) => string> = {
     notJson: () => envelope('Here is my plan: file everything.'),
@@ -237,7 +237,6 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
   const selectionBad: Record<SelectionKind, (f: Frame, id: Id) => unknown> = {
     selectionKeys: (f, id) => ({ ...fits(f, id), extra: 1 }),
     selectionItem: (f, id) => first(f, id, { itemId: 'f-none' }),
-    selectionKind: (f, id) => first(f, id, { kind: 'not-a-kind' }),
     selectionPlace: (f, id) => first(f, id, { destination: 'f-none' }),
     selectionWants: (f, id) => first(f, id, { wants: ['f-none'] }),
     selectionBasis: (f, id) => first(f, id, { basis: { kind: 'source', fileId: f.sources[0]?.itemId, goal: 'words that are in no source at all' } }),

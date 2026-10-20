@@ -217,7 +217,7 @@ it('b1-selection-closed-ids', async () => {
   const good = await setup(); await seedState(good);
   const r = await run(good, [select(good, [good.id(PERSONAL)]), fileIntent(good)]); completed(r); twoSteps(r);
   const patches: Array<Partial<Item> & { extra?: string }> = [
-    { itemId: 'invented-source' }, { kind: 'invented-kind' }, { destination: 'invented-folder' },
+    { itemId: 'invented-source' }, { destination: 'invented-folder' },
     { destination: 'Projects/Remote search' }, { wants: ['invented-note'] }, { wants: [PERSONAL] }, { extra: 'unclosed' },
   ];
   for (const patch of patches) {
