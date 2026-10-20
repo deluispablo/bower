@@ -169,12 +169,15 @@ describe('who dismisses the start-up screen (App)', () => {
   it('AC3 signed_out_dismisses_now: a signed-out answer asks the screen to leave at once', async () => {
     openApp('/sign-in', Promise.resolve(null));
     await screen.findByRole('button', { name: 'Continue with Google' });
+    // bootDone runs in a passive effect (App.tsx), which may still be pending when the DOM shows: act flushes it.
+    await act(async () => undefined);
     expect(bootDone).toHaveBeenLastCalledWith(true);
   });
 
   it.each([['/files/Projects', 'ready', 'Files'], ['/', 'missing', 'Welcome']] as const)('AC3 no_home_wait: %s (%s) does not wait for Home’s reads', async (path, folder, heading) => {
     openApp(path, Promise.resolve(ALEX), folder);
     await screen.findByRole('heading', { name: heading });
+    await act(async () => undefined);
     expect(bootDone).toHaveBeenCalled();
     expect(bootHold).not.toHaveBeenCalled();
   });
