@@ -59,19 +59,19 @@ describe('how long a run takes', () => {
   it('the report says what it did with your words: requests done, rules worded', () => {
     const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
     const one = runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['Put my visa papers together'], rulesWorded: 1, yourChanges: 2 } });
-    expect(one).toContain('"Put my visa papers together" done');
+    expect(one).toContain('"Put my visa papers together" answered');
     expect(one).toContain('1 rule worded');
-    expect(runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['a', 'b'] } })).toContain('2 things you asked done');
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['a', 'b'] } })).toContain('2 things you asked answered');
   });
   it('renders the raw completed table request as its done sentence', () => {
     expect(runDetail({ ...base, scope: 'instructions', phase: 'done', report: {
       filed: [], created: [], updated: [], setAside: [], questions: [], requests: ['Show hours in the offer table.'],
-    } })).toBe('"Show hours in the offer table." done.');
+    } })).toBe('"Show hours in the offer table." answered.');
   });
   it('the report counts each change once: what it names is not counted again', () => {
     const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
     const d = runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['Put my visa papers together'], rulesWorded: 1, yourChanges: 5 } });
-    expect(d).toBe('"Put my visa papers together" done, 1 rule worded and 5 other changes of yours read.');
+    expect(d).toBe('"Put my visa papers together" answered, 1 rule worded and 5 other changes of yours read.');
   });
   it('the report says a thing already saved, by the name it is saved as', () => {
     const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };

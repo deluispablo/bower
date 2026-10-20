@@ -12,7 +12,7 @@ import s from './tidy.module.css';
 
 /**
  * The notes a finished tidy-up made and brought up to date, each a link to
- * its note, what Bower did for each request, and the answers it could not act on: each kind of row in its own
+ * its note, what Bower answered to each request, and the answers it could not act on: each kind of row in its own
  * list named by its visible label (WAI-ARIA APG link pattern; WAI tutorials,
  * content structure: lists).
  */
@@ -70,6 +70,7 @@ function AsideList({ rows }: { rows: RunReport['setAside'] }) {
 /**
  * Each distinct request's words with the newest done line of a request with those words (plan F3-F9 ruling 1, FA-R4);
  * words with no done line have no row. Loading or a load error shows no list: Tell Bower shows that error (FA-R5).
+ * Labelled with the Ask screen's heading: a reply may say why Bower could not, so it is never "done" (qa-prod-10-F1).
  */
 function DoneRows({ words, onOpen }: { words: string[]; onOpen?: () => void }) {
   const { data } = useRequests();
@@ -80,7 +81,7 @@ function DoneRows({ words, onOpen }: { words: string[]; onOpen?: () => void }) {
   });
   if (!rows.length) return null;
   return (
-    <LabelledList label="Done for you">
+    <LabelledList label="What you asked">
       {rows.map((r) => (
         <li key={r.text}>
           <span>{r.text}</span>
