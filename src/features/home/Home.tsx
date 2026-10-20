@@ -1,4 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { report, undoToast } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
@@ -229,10 +230,10 @@ function Inbox({ piles, error, waiting, ready, bird, running, launch }: { piles:
       {error.error ? (
         <LoadError state={error} />
       ) : piles === undefined ? (
-        <div className={s.skel} role="status" aria-label="Opening your inbox">
-          <span />
-          <span />
-        </div>
+        <Skeleton label="Opening your inbox" className={s.skel}>
+          <Bone />
+          <Bone />
+        </Skeleton>
       ) : piles.length > 0 ? (
         <ul className={s.piles}>
           {(open ? piles : piles.slice(0, 2)).map((p) => (
@@ -392,7 +393,7 @@ function QuestionList({ run, questionsState }: { run?: RunState | undefined; que
     }
   };
   if (questionsState.error) return <LoadError state={questionsState} />;
-  if (!run && questionsState.loading && capOpened) return <div className={s.skelQuestions} role="status" aria-label="Opening your questions"><span /><span /></div>;
+  if (!run && questionsState.loading && capOpened) return <Skeleton label="Opening your questions" className={s.skelQuestions}><Bone /><Bone /></Skeleton>;
   if (!run && !shown.length) return null;
   return (
     <section ref={host} aria-labelledby={shown.length ? headingId : undefined}>

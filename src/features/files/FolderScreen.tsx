@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NodeMenuButton } from './Explorer';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
-import { usePiles, useSources, useTree } from '@/data/provider';
+import { useLoad, usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
-import { isRoot, thingName, findNode, parentOf, sortNodes } from '@/data/tree';
+import { isRoot, thingName, findNode, nameOf, parentOf, sortNodes } from '@/data/tree';
 import type { Note, TreeNode, TypeRow } from '@/data/types';
 import { PARA_ROOTS } from '@/data/contracts/types';
 import { plainLinks } from '@/data/contracts/links';
@@ -14,6 +14,8 @@ import { useIsDesktop } from '@/ui/media';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
 import { Segmented } from '@/ui/Segmented';
+import { LoadError } from '@/ui/LoadError';
+import { Bone, Skeleton } from '@/ui/Skeleton';
 import ui from '@/ui/ui.module.css';
 import { Explorer } from './Explorer';
 import { useFileActions } from './file-actions';
@@ -88,7 +90,8 @@ type View = 'list' | 'table';
 const VIEW_KEY = 'bower:folder-view';
 
 function Folder({ path }: { path: string }) {
-  const { data: tree, loading } = useTree();
+  const treeState = useTree();
+  const { data: tree, loading } = treeState;
   const desktop = useIsDesktop();
   const nav = useNavigate();
   const sort = useUi((u) => u.sort);
@@ -105,6 +108,8 @@ function Folder({ path }: { path: string }) {
   // The table sorts its own rows; a new list on each render would make it read every note again.
   const tableItems = useMemo(() => (node?.children ?? []).filter((c) => !c.hub), [node]);
   const hub = children.find((c) => c.hub);
+  // The folder's own note is read with the folder, so its summary never pushes the list down when it lands.
+  const hubState = useLoad((s) => (hub ? s.vault.note(hub.path) : Promise.resolve(null)), (s, cb) => s.vault.subscribe(cb), [hub?.path]);
   const changeView = (v: View): void => {
     setView(v);
     try {
@@ -117,7 +122,7 @@ function Folder({ path }: { path: string }) {
   if (node?.type === 'file') return <Navigate to={routeFor(node)} replace />;
   const now = !node && !loading && tree ? useUi.getState().whereNow(path) : null;
   if (now && tree && findNode(tree, now)) return <Navigate to={folderRoute(now)} replace />;
-  if (!node && !loading)
+  if (!node && tree)
     return (
       <div className={s.page}>
         <h1 className={s.title}>Not here any more</h1>
@@ -127,16 +132,10 @@ function Folder({ path }: { path: string }) {
         </p>
       </div>
     );
-  if (!node)
-    return (
-      <div className={s.page} aria-busy="true" aria-label="Opening the folder">
-        {[40, 90, 80, 85, 70].map((w, i) => (
-          <span key={i} className={s.skel} style={{ width: `${w}%`, height: i === 0 ? 34 : 44 }} />
-        ))}
-      </div>
-    );
 
+  // While it opens, what the address already says (its name, where it is, the view) stands in its final place.
   const parent = parentOf(path);
+  const menu = !desktop && !isRoot(path) && path !== 'Inbox' && !path.startsWith('Inbox/');
   return (
     <div className={s.page}>
       {!desktop && (
@@ -156,11 +155,11 @@ function Folder({ path }: { path: string }) {
         <div>
           <h1 className={s.title}>
             <span className={s.dotBig} style={{ background: paraColor(path) }} />
-            {node.name}
-            {!desktop && !isRoot(node.path) && node.path !== 'Inbox' && !node.path.startsWith('Inbox/') && <NodeMenuButton node={node} />}
+            {node?.name ?? nameOf(path)}
+            {menu && (node ? <NodeMenuButton node={node} /> : <span className={s.menuSlot} />)}
           </h1>
           {/* What is directly here, as the list shows it: a subfolder counts once, the folder's own note not at all. */}
-          <p className="muted">{plural(folderCount(node), 'thing')}</p>
+          <p className="muted">{node ? plural(folderCount(node), 'thing') : <Bone style={{ height: '1lh', width: '5em' }} />}</p>
         </div>
         <Segmented<View>
           label="View"
@@ -172,29 +171,41 @@ function Folder({ path }: { path: string }) {
           ]}
         />
       </header>
-      {hub && <HubSummary hub={hub} />}
-      {children.length === 0 ? (
-        <div className={s.empty}>
-          <p>Nothing in here yet.</p>
-        </div>
-      ) : view === 'list' ? (
-        <ul className={s.list}>
-          {children.filter((c) => !c.hub).map((c) => (
-            <li key={c.path}>
-              <Link to={routeFor(c)} className={s.row} onClick={() => useUi.getState().select(c.path)}>
-                <span className={s.tile}>{c.type === 'folder' ? <Icon name="folder" /> : c.byBower ? <BowerHead size={20} /> : <Icon name={c.kind === 'image' ? 'image' : c.kind === 'link' ? 'link' : 'file'} />}</span>
-                <span className={s.main}>
-                  <span className={c.type === 'file' && c.kind !== 'note' ? `${s.name} ${s.mono}` : s.name}>{c.type === 'folder' ? c.name : thingName(c.name)}</span>
-                  <span className={s.sub}>{c.type === 'folder' ? plural(folderCount(c), 'thing') : `Changed ${agoInSentence(c.modified)}`}</span>
-                </span>
-                {c.isNew && <span className={`${ui.freshPill} ${s.new}`}>New</span>}
-                <Icon name="chev" size={16} />
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {!node && treeState.error ? (
+        <LoadError state={treeState} />
+      ) : !node || (hub && hubState.loading) ? (
+        <Skeleton label="Opening the folder" className={s.skel}>
+          {/* Rows of the list: 10 px padding round a 38 px tile beside a name and a line under it. */}
+          {[0, 1, 2, 3].map((i) => <Bone key={i} style={{ height: 68, padding: '6px 0', backgroundClip: 'content-box' }} />)}
+        </Skeleton>
       ) : (
-        <FolderTable items={tableItems} />
+        <>
+          {/* A failed re-read keeps the summary it had, as the note page keeps its note. */}
+          {hub && hubState.error && !hubState.data ? <LoadError state={hubState} /> : hub && hubState.data && <HubSummary hub={hub} note={hubState.data} />}
+          {children.length === 0 ? (
+            <div className={s.empty}>
+              <p>Nothing in here yet.</p>
+            </div>
+          ) : view === 'list' ? (
+            <ul className={s.list}>
+              {children.filter((c) => !c.hub).map((c) => (
+                <li key={c.path}>
+                  <Link to={routeFor(c)} className={s.row} onClick={() => useUi.getState().select(c.path)}>
+                    <span className={s.tile}>{c.type === 'folder' ? <Icon name="folder" /> : c.byBower ? <BowerHead size={20} /> : <Icon name={c.kind === 'image' ? 'image' : c.kind === 'link' ? 'link' : 'file'} />}</span>
+                    <span className={s.main}>
+                      <span className={c.type === 'file' && c.kind !== 'note' ? `${s.name} ${s.mono}` : s.name}>{c.type === 'folder' ? c.name : thingName(c.name)}</span>
+                      <span className={s.sub}>{c.type === 'folder' ? plural(folderCount(c), 'thing') : `Changed ${agoInSentence(c.modified)}`}</span>
+                    </span>
+                    {c.isNew && <span className={`${ui.freshPill} ${s.new}`}>New</span>}
+                    <Icon name="chev" size={16} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <FolderTable items={tableItems} />
+          )}
+        </>
       )}
     </div>
   );
@@ -221,17 +232,7 @@ function PhoneBookmarks() {
   );
 }
 
-function HubSummary({ hub }: { hub: TreeNode }) {
-  const { vault } = useSources();
-  const [note, setNote] = useState<Note | null>(null);
-  useEffect(() => {
-    let live = true;
-    vault.note(hub.path).then((n) => live && setNote(n), (e: unknown) => console.error(e));
-    return () => {
-      live = false;
-    };
-  }, [hub.path, hub.modified, vault]);
-  if (!note) return null;
+function HubSummary({ hub, note }: { hub: TreeNode; note: Note }) {
   return (
     <Link to={routeFor(hub)} className={s.hub}>
       <BowerHead size={22} />

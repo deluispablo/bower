@@ -39,7 +39,8 @@ describe('prod1-rules-loading: Settings', () => {
   it('AC5 pending_rules_are_loading_on_settings', async () => {
     render(<MemoryRouter><DataProvider sources={loadingSources()}><Settings /></DataProvider></MemoryRouter>);
     await settle();
-    expect(screen.getByText('Looking…')).toBeInTheDocument();
+    // ux-loading-polish: a named still shape where the count will be, never "Looking…".
+    expect(screen.getByRole('status', { name: 'Opening your rules' })).toBeInTheDocument();
     expect(screen.queryByText(COUNT)).toBeNull();
   });
 

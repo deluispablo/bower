@@ -19,6 +19,7 @@ import { nameRules } from './name-rules';
 import { openerNow, returnFocusTo } from '@/ui/focus';
 import { toast } from '@/ui/toast';
 import { useIsDesktop } from '@/ui/media';
+import { Bone } from '@/ui/Skeleton';
 import s from './explorer.module.css';
 
 const SORTS: Array<[SortOrder, string] | null> = [
@@ -791,7 +792,7 @@ function TreeSkeleton() {
   return (
     <div aria-hidden="true" style={{ padding: '6px 8px', display: 'grid', gap: 10 }}>
       {[70, 55, 62, 40, 66, 50].map((w, i) => (
-        <span key={i} style={{ display: 'block', height: 14, width: `${w}%`, borderRadius: 6, background: 'var(--surface)' }} />
+        <Bone key={i} style={{ height: 14, width: `${w}%`, borderRadius: 6 }} />
       ))}
     </div>
   );
