@@ -356,7 +356,7 @@ function promptInstructions(): string {
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
     '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>","quotes":["<a passage copied word for word>"]}}],',
     ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","summary":"<optional: what it is about, in a few words of your own>","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","quotes":["<a passage copied word for word>"]}],',
-    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<linked path>"],"quotes":["<a passage copied word for word>"]}],',
+    ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId, a pileId of words only, or the requestId of a request below that asks for this line on this note>","marker":"<contradiction|uncertain|inferred>","alsoCites":["<the line\'s own note or a file it links>"],"quotes":["<a passage copied word for word>"]}],',
     ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>","quotes":["<a passage copied word for word>"]}],',
     ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],',
     '  (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})',
@@ -410,7 +410,8 @@ function promptInstructions(): string {
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  A disagreement is two claims about the same thing, detail and period that cannot both hold: never change the note',
     '  silently and never pick one by its date. Give one line with marker "contradiction" stating both claims, citing the',
-    '  thing, the other file in "alsoCites"; ask nothing. A claim for another period, or one that says it',
+    '  thing, and in "alsoCites" the file the other claim is from (the line\'s own note when the note itself says it); ask nothing.',
+    '  A claim for another period, or one that says it',
     '  replaces the earlier claim is ordinary history, no marker. A possible change with a condition is "uncertain";',
     '  inferred has no figures. Bower writes a marker\'s label.',
     `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${STATE_WRITE.lines} lines of at most`,
@@ -1089,7 +1090,7 @@ export const REFUSALS = {
   lineCites: 'a line whose "cites" is none of these: a thing it files, a pile of words only that is not also made a note, a request that names the line\'s note',
   lineUncited: 'a news line that cites nothing: every Timeline line cites the thing or pile it is from',
   lineMarker: 'a "marker" that is not "contradiction", "uncertain" or "inferred", or a label Bower adds written in the text',
-  lineAlsoCites: 'an "alsoCites" that is not one exact path of another file the line\'s note links, given with a "marker"',
+  lineAlsoCites: 'an "alsoCites" that is not one exact path of the line\'s own note or another file it links, given with a "marker"',
   noNote: 'a thing with text and no note',
   stateKeys: 'a state with keys outside the intent',
   stateNote: 'a state for a note it was not shown',
@@ -1541,9 +1542,10 @@ const decorated = (line: AuthoredLine, seen: Seen): string => (line.marker
 
 /**
  * The one file a line's `alsoCites` names (TL-P4-50 B9 Q3; R2, R3, R3a, R21), else why not: an exact folder path (or
- * the path it had before a rename this run takes), of a file the line's own note links in its text as shown, by the one
- * link grammar (an alias, heading or block link binds to its file; a fenced one is no link), by that path or by a name
- * no other file in the folder has; never the cited thing or another thing this run takes, and a name a citation can hold.
+ * the path it had before a rename this run takes), of the line's own note (when the note itself states the other claim,
+ * qa-prod-8-F3) or a file that note links in its text as shown, by the one link grammar (an alias, heading or block link
+ * binds to its file; a fenced one is no link), by that path or by a name no other file in the folder has; never the cited
+ * thing or another thing this run takes, and a name a citation can hold.
  */
 function alsoCited(note: string, ref: unknown, seen: Seen, taken: (id: string) => boolean): string | { id: string } {
   if (!Array.isArray(ref) || ref.length !== 1 || typeof ref[0] !== 'string') return 'an "alsoCites" that is not a list of exactly one path';
@@ -1553,11 +1555,12 @@ function alsoCited(note: string, ref: unknown, seen: Seen, taken: (id: string) =
   const at = (path: string): string | undefined => files.get(path.toLowerCase()) ?? files.get(now(path));
   const id = /[[\]|#^\r\n]/.test(ref[0]) ? undefined : at(ref[0]);
   if (!id) return 'an "alsoCites" that is not the exact path of a file in the folder: give its whole path, as the note\'s link names it';
-  if (taken(id)) return 'an "alsoCites" naming the thing the line cites or another thing this tidy-up takes: give another file the note already links';
+  if (taken(id)) return 'an "alsoCites" naming the thing the line cites or another thing this tidy-up takes: give the line\'s own note or another file it already links';
   const name = nameIn(seen, id);
   let writable = false;
   try { writable = entryOk({ date: '2000-01-01', text: markerText('uncertain', 'x', name), source: null }); } catch (e) { console.error(e); }
   if (!writable) return 'an "alsoCites" naming a file whose name cannot be written as a link: leave the extra source out';
+  if (id === at(note)) return { id };
   const former = formerNames([...seen.moves ?? []]);
   const resolve = (target: string): string | undefined => {
     const exact = at(target) ?? at(`${target}.md`);
@@ -1574,7 +1577,7 @@ function alsoCited(note: string, ref: unknown, seen: Seen, taken: (id: string) =
   const unframed = shownText.replace(/^(---\r?\n[\s\S]*?)^bower_format:[^\r\n]*\r?\n/m, '$1');
   const links = (lintFacts(note, shownText) ?? lintFacts(note, unframed))?.links ?? [];
   return links.some((link) => resolve(linkTarget(link)) === id) ? { id }
-    : 'an "alsoCites" naming a file the line\'s note does not link where it is shown: give a file that note links';
+    : 'an "alsoCites" naming a file the line\'s note does not link where it is shown: give a file that note links, or the line\'s own note';
 }
 /** A note body as written, its line breaks made `\n`. */
 const bodyOf = (n: NoteIn): string => n.body.replace(/\r\n?/g, '\n');
@@ -1939,7 +1942,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     rule('lineMarker', (l) => l.marker !== 'inferred' || !/\p{Nd}/u.test(l.text) || 'an inferred line with a figure: an inference states no number'),
     rule('lineAlsoCites', (l) => l.alsoCites === undefined || l.marker !== undefined || 'an "alsoCites" with no "marker"'),
     rule('lineAlsoCites', (l) => l.marker !== 'contradiction' || (l.cites !== undefined && l.alsoCites !== undefined)
-      || 'a contradiction that does not cite its thing and one other file in "alsoCites"'),
+      || 'a contradiction that does not cite its thing and, in "alsoCites", the file the other claim is from (the line\'s own note or a file it links)'),
     rule('lineAlsoCites', (l) => {
       const got = l.alsoCites === undefined ? undefined : alsoCited(l.note, l.alsoCites, seen, (id) => id === l.cites || admitted.has(id));
       if (typeof got === 'string') return got;
