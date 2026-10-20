@@ -61,7 +61,8 @@ test('every listed phone control is at least 44 px', async ({ page, isMobile }) 
   await axeTargets(page, 'main');
 
   await open(page, '/files');
-  await atLeast('files toolbar', page.getByRole('button', { name: /^(New folder|Change sort order)$/ }), 44, true);
+  // ux-controls-polish: the phone's tree tools are one named menu.
+  await atLeast('files toolbar', page.getByRole('button', { name: 'Folder tools', exact: true }), 44, true);
   await axeTargets(page, 'main');
 
   await open(page, '/bower');

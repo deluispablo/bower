@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import s from './ui.module.css';
+import { hintCls } from './hint';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** The button element itself (React 19 passes `ref` as a prop), e.g. to move focus to it. */
@@ -26,10 +27,10 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
 }
 
-/** A square button with only an icon; `label` is its accessible name and tooltip. */
+/** A square button with only an icon; `label` is its accessible name, shown as its hint. */
 export function IconButton({ label, small, className = '', children, type = 'button', ...rest }: IconButtonProps) {
   return (
-    <button type={type} aria-label={label} title={label} className={`${s.iconBtn} ${small ? s.sm : ''} ${className}`} {...rest}>
+    <button type={type} aria-label={label} className={`${s.iconBtn} ${hintCls} ${small ? s.sm : ''} ${className}`} {...rest}>
       {children}
     </button>
   );

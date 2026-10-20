@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { hintCls } from './hint';
 
 export interface TabItem<K extends string> {
   key: K;
@@ -19,7 +20,7 @@ interface Props<K extends string> {
 }
 
 /**
- * Icon tabs as a screen reader and the keyboard expect them: one Tab stop
+ * Icon tabs as a screen reader and the keyboard expect them, each showing its name as a hint: one Tab stop
  * (the chosen tab), arrows and Home/End move between them, and each names the
  * panel it shows (`tabPanel` gives the panel its side of the link).
  */
@@ -46,8 +47,7 @@ export function Tabs<K extends string>({ label, id, items, value, onChange, clas
           aria-controls={`${id}-panel`}
           tabIndex={value === t.key ? 0 : -1}
           aria-label={t.label}
-          title={t.label}
-          className={tabClassName}
+          className={`${tabClassName} ${hintCls}`}
           onClick={() => onChange(t.key, 'click')}
           onKeyDown={(e) => move(e, i)}
         >

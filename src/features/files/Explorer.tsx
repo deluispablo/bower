@@ -9,7 +9,7 @@ import type { TreeNode } from '@/data/types';
 import { countThings, folderCount } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
 import { decodeSplat, paraColor } from '@/app/paths';
-import { IconButton } from '@/ui/Button';
+import { Button, IconButton } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { menuCls } from '@/ui/menu';
 import { Sheet } from '@/ui/Sheet';
@@ -52,11 +52,12 @@ const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('
 
 const KIND_BADGE: Record<string, string> = { pdf: 'pdf', image: 'jpg', link: 'link', doc: 'doc', sheet: 'sheet', audio: 'audio' };
 
+/** Every thing that is not a note says what it is: its extension, else its kind, else "file". */
 function badgeFor(node: TreeNode): string | null {
   if (node.type !== 'file' || node.kind === 'note') return null;
   const ext = /\.([A-Za-z0-9]{1,5})$/.exec(node.name)?.[1]?.toLowerCase();
   if (node.kind === 'link') return 'link';
-  return ext ?? (node.kind ? (KIND_BADGE[node.kind] ?? null) : null);
+  return ext ?? KIND_BADGE[node.kind ?? ''] ?? 'file';
 }
 
 /** The path a route points at, so the open note is the selected row. */
@@ -97,6 +98,8 @@ export function Explorer({ variant }: Props) {
   const nameOpener = useRef<HTMLElement | null>(null);
   const pending = desktop && ui.naming && 'folder' in ui.naming && ui.naming.inline ? ui.naming : null;
   const press = useRef<{ t: ReturnType<typeof setTimeout>; fired: boolean } | null>(null);
+  /** What a phone menu item opens, once the menu has given the keyboard back to its button (so a sheet returns there). */
+  const afterMenu = useRef<(() => void) | null>(null);
 
   // Auto-reveal: the open note's folders open and its row is selected.
   useEffect(() => {
@@ -419,12 +422,40 @@ export function Explorer({ variant }: Props) {
     );
   };
 
-  const header = (
+  const newFolder = (): void => {
+    nameOpener.current = openerNow();
+    act.askFolderName(targetFolder(), desktop);
+  };
+  const toggleAll = (): void => {
+    if (ui.open.size) ui.collapseAll();
+    else {
+      const all: string[] = [];
+      const walk = (ns: TreeNode[]): void => ns.forEach((n) => n.children && (all.push(n.path), walk(n.children)));
+      walk(roots);
+      ui.openAll(all);
+    }
+  };
+  const allLabel = ui.open.size ? 'Collapse all' : 'Expand all';
+  const sorts = (
+    <Dropdown.RadioGroup value={ui.sort} onValueChange={(v) => ui.setSort(v as SortOrder)}>
+      {SORTS.map((o, i) =>
+        o ? (
+          <Dropdown.RadioItem key={o[0]} value={o[0]} className={menuCls.item}>
+            {o[1]}
+            <Dropdown.ItemIndicator className={menuCls.check}>
+              <Icon name="check" size={16} />
+            </Dropdown.ItemIndicator>
+          </Dropdown.RadioItem>
+        ) : (
+          <Dropdown.Separator key={`s${i}`} className={menuCls.sep} />
+        ),
+      )}
+    </Dropdown.RadioGroup>
+  );
+  // The phone has no hover to name icons: its tools are one menu of named items (Radix Dropdown gives focus back to it).
+  const header = desktop ? (
     <div className={s.nav}>
-      <IconButton small label="New folder" onClick={() => {
-        nameOpener.current = openerNow();
-        act.askFolderName(targetFolder(), desktop);
-      }}>
+      <IconButton small label="New folder" onClick={newFolder}>
         <Icon name="newFolder" size={18} />
       </IconButton>
       <Dropdown.Root>
@@ -435,24 +466,10 @@ export function Explorer({ variant }: Props) {
         </Dropdown.Trigger>
         <Dropdown.Portal>
           <Dropdown.Content className={menuCls.content} sideOffset={6} align="start">
-            <Dropdown.RadioGroup value={ui.sort} onValueChange={(v) => ui.setSort(v as SortOrder)}>
-              {SORTS.map((o, i) =>
-                o ? (
-                  <Dropdown.RadioItem key={o[0]} value={o[0]} className={menuCls.item}>
-                    {o[1]}
-                    <Dropdown.ItemIndicator className={menuCls.check}>
-                      <Icon name="check" size={16} />
-                    </Dropdown.ItemIndicator>
-                  </Dropdown.RadioItem>
-                ) : (
-                  <Dropdown.Separator key={`s${i}`} className={menuCls.sep} />
-                ),
-              )}
-            </Dropdown.RadioGroup>
+            {sorts}
           </Dropdown.Content>
         </Dropdown.Portal>
       </Dropdown.Root>
-      {desktop && (
       <IconButton
         small
         label="Reveal the open note"
@@ -466,22 +483,41 @@ export function Explorer({ variant }: Props) {
       >
         <Icon name="reveal" size={18} />
       </IconButton>
-      )}
-      <IconButton
-        small
-        label={ui.open.size ? 'Collapse all' : 'Expand all'}
-        onClick={() => {
-          if (ui.open.size) ui.collapseAll();
-          else {
-            const all: string[] = [];
-            const walk = (ns: TreeNode[]): void => ns.forEach((n) => n.children && (all.push(n.path), walk(n.children)));
-            walk(roots);
-            ui.openAll(all);
-          }
-        }}
-      >
+      <IconButton small label={allLabel} onClick={toggleAll}>
         <Icon name={ui.open.size ? 'collapse' : 'expand'} size={18} />
       </IconButton>
+    </div>
+  ) : (
+    <div className={s.nav}>
+      <Dropdown.Root>
+        <Dropdown.Trigger asChild>
+          <Button variant="ghost" size="sm">Folder tools</Button>
+        </Dropdown.Trigger>
+        <Dropdown.Portal>
+          <Dropdown.Content
+            className={menuCls.content}
+            sideOffset={6}
+            align="center"
+            onCloseAutoFocus={() => {
+              const run = afterMenu.current;
+              afterMenu.current = null;
+              run?.();
+            }}
+          >
+            <Dropdown.Item className={menuCls.item} onSelect={() => { afterMenu.current = newFolder; }}>
+              <Icon name="newFolder" size={16} />
+              New folder
+            </Dropdown.Item>
+            <Dropdown.Item className={menuCls.item} onSelect={toggleAll}>
+              <Icon name={ui.open.size ? 'collapse' : 'expand'} size={16} />
+              {allLabel}
+            </Dropdown.Item>
+            <Dropdown.Separator className={menuCls.sep} />
+            <Dropdown.Label className={menuCls.label}>Change sort order</Dropdown.Label>
+            {sorts}
+          </Dropdown.Content>
+        </Dropdown.Portal>
+      </Dropdown.Root>
     </div>
   );
 

@@ -14,6 +14,12 @@ import { Tabs, tabPanel } from '@/ui/Tabs';
 import { linkReasons } from '@/data/spine/scripted';
 import { resolverFor } from './resolve';
 
+const TABS = [
+  { key: 'links', label: 'Linked notes', icon: <Icon name="graph" size={18} /> },
+  { key: 'outline', label: 'Outline', icon: <Icon name="outline" size={18} /> },
+  { key: 'bower', label: 'Activity', icon: <BowerHead size={20} /> },
+] as const;
+
 /** The changes that failed which the panel has already turned to, once each, on this page. */
 const turnedTo = new Set<string>();
 
@@ -48,19 +54,11 @@ export function RightPanel() {
   }, [tab]);
   return (
     <>
-      <Tabs
-        label="Right panel"
-        id="right"
-        className={s.tabs}
-        tabClassName={s.tab}
-        value={tab}
-        onChange={setRightTab}
-        items={[
-          { key: 'links', label: 'Linked notes', icon: <Icon name="graph" size={18} /> },
-          { key: 'outline', label: 'Outline', icon: <Icon name="outline" size={18} /> },
-          { key: 'bower', label: 'Activity', icon: <BowerHead size={20} /> },
-        ]}
-      />
+      {/* The chosen tab's name stays in sight; the tab already names the panel for a screen reader. */}
+      <div className={s.head}>
+        <Tabs label="Right panel" id="right" className={s.tabs} tabClassName={s.tab} value={tab} onChange={setRightTab} items={TABS} />
+        <span className={s.title} aria-hidden="true">{TABS.find((t) => t.key === tab)?.label}</span>
+      </div>
       <div ref={body} className={s.body} {...tabPanel('right', tab)}>
         {tab === 'bower' ? (
           <BowerPanel />
@@ -134,29 +132,36 @@ function rowReasons(note: Note): Map<string, string> {
   return out;
 }
 
+/** Each linked note once: the ones that link both ways in their own group, then the one-way links each way. */
 export function LinkedList({ note }: { note: Note }) {
-  const both = new Set(note.links.filter((p) => note.backlinks.includes(p)));
-  const from = note.backlinks.filter((p) => !both.has(p));
+  const both = note.links.filter((p) => note.backlinks.includes(p));
+  const to = note.links.filter((p) => !both.includes(p));
+  const from = note.backlinks.filter((p) => !both.includes(p));
   const reasons = rowReasons(note);
-  const row = (p: string, why?: string) => (
-    <li key={p}>
-      <Link to={noteRoute(p)} className={s.link}>
-        <span className={s.linkTitle}>{thingName(nameOf(p))}</span>
-        {why ? <span className={`${s.linkPath} muted`}>{why}</span> : <span className={s.linkPath}>{crumbs(parentOf(p))}</span>}
-        {both.has(p) && <span className={s.linkPath}>Links both ways</span>}
-      </Link>
-    </li>
-  );
+  const row = (p: string) => {
+    const why = reasons.get(p);
+    return (
+      <li key={p}>
+        <Link to={noteRoute(p)} className={s.link}>
+          <span className={s.linkTitle}>{thingName(nameOf(p))}</span>
+          {why ? <span className={`${s.linkPath} muted`}>{why}</span> : <span className={s.linkPath}>{crumbs(parentOf(p))}</span>}
+        </Link>
+      </li>
+    );
+  };
+  const onlyBoth = 'Only the notes that link both ways.';
   return (
     <>
-      <h3 className={s.h}>Links to</h3>
-      {note.links.length ? <ul className={s.list}>{note.links.map((p) => row(p, reasons.get(p)))}</ul> : <p className={s.hint}>No links yet.</p>}
-      <h3 className={s.h}>Linked from</h3>
-      {from.length ? (
-        <ul className={s.list}>{from.map((p) => row(p))}</ul>
-      ) : (
-        <p className={s.hint}>{note.backlinks.length ? 'Only the notes marked both ways link here.' : 'Nothing links here yet.'}</p>
+      {both.length > 0 && (
+        <>
+          <h3 className={s.h}>Links both ways</h3>
+          <ul className={s.list}>{both.map(row)}</ul>
+        </>
       )}
+      <h3 className={s.h}>Links to</h3>
+      {to.length ? <ul className={s.list}>{to.map(row)}</ul> : <p className={s.hint}>{both.length ? onlyBoth : 'No links yet.'}</p>}
+      <h3 className={s.h}>Linked from</h3>
+      {from.length ? <ul className={s.list}>{from.map(row)}</ul> : <p className={s.hint}>{both.length ? onlyBoth : 'Nothing links here yet.'}</p>}
     </>
   );
 }
