@@ -37,7 +37,9 @@ const proposingStates = (states: Array<{ note: string; lines: string[]; listing?
       { fileId: offer, to: 'Projects/Job hunt/Applications', basis: HUB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Start 2 November. [[Job hunt]]' } },
       { fileId: listing, to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
     ],
-    lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', ...(citing ? { cites: offer } : {}) }],
+    // brain-05: every line has evidence. By default it cites the listing, so the offer's Current-state fallback stands
+    // alone; the offer when `citing`, or when the listing already wants its five notes.
+    lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', cites: citing || states.filter((st) => st.listing).length >= 5 ? offer : listing }],
     states: states.map(({ listing: byListing, ...st }) => ({ ...st, cites: byListing ? listing : offer })),
   };
   return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
