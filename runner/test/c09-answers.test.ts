@@ -149,9 +149,10 @@ describe('c09-answers', () => {
     expect(phase(run)).toBe('done');
   });
 
-  // Figures (2026-10-16 prior-art audit): a count, total or difference computed from the linked sources is allowed; a figure
-  // stated as coming from one source must appear in it.
+  // Figures (2026-10-16 prior-art audit, brain-08): a figure stated as coming from its linked sources must appear in them; a
+  // count, total or difference computed from them is refused until code computes it (brain-09).
   const COMPUTED = '[[Cobble Row flat]] costs 130 more a month than [[Larkspur Lane flat]], 3,030 for the two together.';
+  const SOURCED = '[[Larkspur Lane flat]] is cheaper at 1,450 a month; [[Cobble Row flat]] costs 1,580 a month.';
   const bad: Array<{ name: string; kind: string; why: string; words?: string; wants?: string[]; entry: (ctx: Ctx) => Promise<unknown> | unknown; good?: string; done?: string }> = [
     { name: 'an unknown key', kind: 'answerKeys', why: KEYS, entry: (ctx) => ({ requestId: ctx.asked[COMMUTE], text: GOOD, uses: [] }) },
     { name: 'no text', kind: 'answerKeys', why: KEYS, entry: (ctx) => ({ requestId: ctx.asked[COMMUTE] }) },
@@ -170,12 +171,12 @@ describe('c09-answers', () => {
     { name: 'a name two files share', kind: 'noteLink', why: SHARED, words: VISIT, wants: [VIEWING],
       entry: (ctx) => ({ requestId: ctx.asked[VISIT], text: 'The visit is on Saturday, as [[Viewing]] says.' }), good: 'The visit is on Saturday, as [[Projects/Flat hunt/Viewing]] says.' },
     { name: 'a figure stated as from one source that is not in it', kind: 'numbers', why: numbers('1,900'), words: CHEAPER,
-      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Cobble Row flat]] says its rent is 1,900 a month.' }), good: COMPUTED },
+      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Cobble Row flat]] says its rent is 1,900 a month.' }), good: SOURCED },
     // Ruling 6, 7: a figure stated as from one named source is checked against that source, not the pooled sources.
     { name: 'a figure stated as from one source that only another source holds', kind: 'numbers', why: numbers('1,580'), words: CHEAPER,
-      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] says its rent is 1,580 a month.' }), good: COMPUTED },
+      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] says its rent is 1,580 a month.' }), good: SOURCED },
     { name: 'a mixed sentence whose computed part is right and whose quoted part is wrong', kind: 'numbers', why: numbers('1,500'), words: CHEAPER,
-      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Cobble Row flat]] costs 130 more a month than [[Larkspur Lane flat]]; [[Larkspur Lane flat]] says its rent is 1,500.' }), good: COMPUTED },
+      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Cobble Row flat]] costs 130 more a month than [[Larkspur Lane flat]]; [[Larkspur Lane flat]] says its rent is 1,500.' }), good: SOURCED },
     // Ruling 13: a malformed entry is refused answerKeys before binding and text.
     { name: 'a null entry', kind: 'answerKeys', why: KEYS, entry: () => null },
     { name: 'a requestId that is not a string', kind: 'answerKeys', why: KEYS, entry: () => ({ requestId: 7, text: GOOD }) },
@@ -188,12 +189,12 @@ describe('c09-answers', () => {
     // Ruling 18: a figure in a first, unlinked sentence is checked against the notes shown; a later unlinked sentence takes
     // the links of the nearest earlier one (here one note, so its figure must be in that note).
     { name: 'a figure in a first unlinked sentence that no note shown holds', kind: 'numbers', why: numbers('1,234'), words: CHEAPER,
-      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: 'The cheaper one costs 1,234. [[Larkspur Lane flat]] is the cheaper flat.' }), good: COMPUTED },
+      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: 'The cheaper one costs 1,234. [[Larkspur Lane flat]] is the cheaper flat.' }), good: SOURCED },
     { name: 'a figure in an unlinked sentence that only another note than the earlier link holds', kind: 'numbers', why: numbers('1,580'), words: CHEAPER,
-      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] is the cheaper one. Its rent is 1,580 a month.' }), good: COMPUTED },
+      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] is the cheaper one. Its rent is 1,580 a month.' }), good: SOURCED },
     // Ruling 21: a currency sign or a percent makes a whole number an amount, checked against the one note linked.
     { name: 'an amount with a currency sign that only another source holds', kind: 'numbers', why: numbers('1580'), words: CHEAPER,
-      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] says its rent is £1580 a month.' }), good: COMPUTED },
+      entry: (ctx) => ({ requestId: ctx.asked[CHEAPER], text: '[[Larkspur Lane flat]] says its rent is £1580 a month.' }), good: SOURCED },
     { name: 'a figure past the shown cut', kind: 'numbers', why: numbers('1,999'), words: DEPOSIT, wants: [LONG],
       entry: (ctx) => ({ requestId: ctx.asked[DEPOSIT], text: '[[Letting agent notes]] says the deposit is 1,999.' }),
       good: 'Bower found no deposit in the part of [[Letting agent notes]] it read.',
@@ -211,12 +212,13 @@ describe('c09-answers', () => {
     expect(doneFor(run, words)).toEqual([done]);
   });
 
-  // Ruling 18: a sentence with no link takes the links of the nearest earlier sentence, so a total after two links is computed.
-  it.each([COMPUTED, '[[Cobble Row flat]] costs 130 more than [[Larkspur Lane flat]]. Together they cost 3,030.'])('AC2 c09-answers-refusals: a difference and a total computed from the linked sources are no refused figure (%s)', async (text) => {
+  // Ruling 18: a sentence with no link takes the links of the nearest earlier sentence. brain-08: a difference or total the
+  // linked notes do not hold is refused once; the corrected reply, figures each from its note, applies.
+  it.each([COMPUTED, '[[Cobble Row flat]] costs 130 more than [[Larkspur Lane flat]]. Together they cost 3,030.'])('AC2 c09-answers-refusals: a difference and a total computed from the linked sources are refused until code computes them (%s)', async (text) => {
     const f = await folder();
-    const run = await press(f, [CHEAPER], SHOWN_BOTH, (ctx) => answer(ctx.asked[CHEAPER] ?? '', text));
-    expect(refusals()).toEqual([]);
-    expect(doneFor(run, CHEAPER)).toEqual([text]);
+    const run = await press(f, [CHEAPER], SHOWN_BOTH, (ctx, attempt) => answer(ctx.asked[CHEAPER] ?? '', attempt > 0 ? SOURCED : text));
+    expect(refusals().slice(0, 2)).toEqual(['numbers', numbers('130')]);
+    expect(doneFor(run, CHEAPER)).toEqual([SOURCED]);
   });
 
   // Ruling 13: "answers" that is not an array is refused answerKeys.
@@ -243,15 +245,16 @@ describe('c09-answers', () => {
     expect(doneFor(run, COMMUTE)).toEqual([GOOD]);
   });
 
-  // Ruling 21: counting questions are normal: a plain whole number is a count, never figure-checked.
-  it('AC2 c09-answers-refusals: a count as a plain whole number is no refused figure (ruling 21)', async () => {
+  // Ruling 21, superseded by brain-08: a plain whole number is checked like any figure; a count no source holds is refused
+  // once, and the corrected reply naming what the note lists applies.
+  it('AC2 c09-answers-refusals: a count as a plain whole number no source holds is refused (brain-08)', async () => {
     const LIST = `${HUNT}/List.md`;
     const HOW_MANY = 'How many people come to the viewings?';
-    const text = 'There are 3 people in [[List]].';
+    const listed = '[[List]] names the letting agent, a neighbour and a friend from work.';
     const f = await folder({ [LIST]: note('Who comes to the viewings.', '- the letting agent\n- a neighbour\n- a friend from work', '2026-10-02 · Started the list.') });
-    const run = await press(f, [HOW_MANY], [LIST], (ctx) => answer(ctx.asked[HOW_MANY] ?? '', text));
-    expect(refusals()).toEqual([]);
-    expect(doneFor(run, HOW_MANY)).toEqual([text]);
+    const run = await press(f, [HOW_MANY], [LIST], (ctx, attempt) => answer(ctx.asked[HOW_MANY] ?? '', attempt > 0 ? listed : 'There are 3 people in [[List]].'));
+    expect(refusals().slice(0, 2)).toEqual(['numbers', numbers('3')]);
+    expect(doneFor(run, HOW_MANY)).toEqual([listed]);
   });
 
   // Ruling 20: answer links name only notes shown; a thing this reply files is no exemption. Refused at the reply, never a planning failure.
@@ -283,10 +286,10 @@ describe('c09-answers', () => {
 
   it('AC2 c09-answers-refusals: nothing from a refused reply lands: a retry answering only the other request leaves the first waiting (ruling 15)', async () => {
     const f = await folder();
-    const run = await press(f, [COMMUTE, CHEAPER], SHOWN_BOTH, (ctx, attempt) => (attempt > 0 ? answer(ctx.asked[CHEAPER] ?? '', COMPUTED)
+    const run = await press(f, [COMMUTE, CHEAPER], SHOWN_BOTH, (ctx, attempt) => (attempt > 0 ? answer(ctx.asked[CHEAPER] ?? '', SOURCED)
       : { ...empty, answers: [{ requestId: ctx.asked[COMMUTE], text: GOOD }, { requestId: ctx.asked[CHEAPER], text: '[[Cobble Row flat]] says its rent is 1,900 a month.' }] }));
     expect(refusals().slice(0, 2)).toEqual(['numbers', numbers('1,900')]);
-    expect(doneFor(run, CHEAPER)).toEqual([COMPUTED]);
+    expect(doneFor(run, CHEAPER)).toEqual([SOURCED]);
     expect(doneFor(run, COMMUTE)).toEqual([]);
     expect(waiting(run, 'press-1-1')).toBe(true);
   });
