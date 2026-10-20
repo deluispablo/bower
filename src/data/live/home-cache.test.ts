@@ -115,10 +115,11 @@ describe('Home on the latency fake', () => {
       (drive as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => { calls[k] = (calls[k] ?? 0) + 1; return real(...a); };
     }
     const out = await homeLoad(s, drive);
-    // 1 listing, 3 pile notes + questions + last tidy-up + 12 changes as text, 1 declaration as bytes (the 20 earlier runs' records are about other piles: not read),
+    // No listing: the page's one listing already holds the finished run's report (qa-prod-10-F3; it was listed again
+    // for the report). 3 pile notes + questions + last tidy-up + 12 changes as text, 1 declaration as bytes (the 20 earlier runs' records are about other piles: not read),
     // no digests: the listing carries each file's checksum (inbox-read-slow; it was 7 downloads, 26 calls).
-    expect(calls).toEqual({ listAll: 1, readText: 17, readBytes: 1 });
-    expect(out.calls).toBe(19);
+    expect(calls).toEqual({ readText: 17, readBytes: 1 });
+    expect(out.calls).toBe(18);
   }, 60_000);
 
   it('a report refresh does not restart the inbox reads', async () => {
@@ -168,7 +169,7 @@ function countReads(drive: FakeDrive): Record<string, number> {
 describe('one read cache serves app and runner', () => {
   it('a refresh during a read in flight never reads one file at one modifiedTime twice (C05 findings 4)', async () => {
     // Live: Home's full read took about 6 s on the latency fake, since the report's refresh landed mid-read and its
-    // files were read again. Here the report's refresh and a second one land while the piles are being read, and the
+    // files were read again. Here a refresh lands while the piles are being read, and the
     // screens read again when told, as Home's do. Nothing in the folder changes, so every file keeps its version.
     const { drive, s } = await slowReport({ cold: true });
     const calls = countReads(drive);
@@ -185,9 +186,10 @@ describe('one read cache serves app and runner', () => {
     // Only the listing is read again; each file is read once at its one version.
     const twice = Object.entries(calls).filter(([k, n]) => n > 1 && !k.startsWith('listAll')).map(([k, n]) => `${k} x${n}`);
     expect(twice.join(', '), `read twice at one version, ${after} calls`).toBe('');
-    expect(calls['listAll Bower']).toBe(3);
-    // Before: 49 calls (questions.json x2); 48 until the pile records were read for the inbox's piles alone; 28 until the listing carried the checksums (inbox-read-slow).
-    expect(after).toBe(21);
+    // The opening's listing and the mid-read refresh; the report no longer lists again (qa-prod-10-F3).
+    expect(calls['listAll Bower']).toBe(2);
+    // Before: 49 calls (questions.json x2); 48 until the pile records were read for the inbox's piles alone; 28 until the listing carried the checksums (inbox-read-slow); 21 until the report stopped listing again (qa-prod-10-F3).
+    expect(after).toBe(20);
   }, 60_000);
 
   it('a pile note changed elsewhere after Home read it is never written over from the kept read', async () => {
