@@ -13,7 +13,7 @@ import { B_FAILURE } from '../../src/data/spine/scripted';
 import type { ClaudeExit, ClaudeSpawn } from '../src/claude';
 import { CORPUS_CAPABILITIES, loadCase, score, timelineOf, type LoadedCase } from '../src/corpus';
 import { phaseAwareClaude, reply } from './b1-planning-support';
-import { AT, caseReplies, frameOf, inboxAsSeeded, lastJson, perPress, redispatchCase, replySequence, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
+import { AT, CORPUS_SETUPS, caseReplies, inboxAsSeeded, lastJson, perPress, redispatchCase, replySequence, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 beforeEach(() => {
@@ -106,21 +106,15 @@ describe('C12 lifecycles through main (c12-corpus guards)', () => {
   it('AC12 c12-corpus-interruption: a lost answer on a filing, with Drive gone after it, stays saving; attempt 2 finishes the same plan once, with no model call', async () => {
     const { c, drive, root } = await seeded('c12-tool-interruption-recovery');
     const water = (await drive.listAll(root)).find((f) => f.name === 'Water butt notice.txt')?.id ?? '';
-    let lost = false; let moves = 0;
+    let moves = 0;
     const count = (next: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init) => {
       if (init?.method === 'PATCH' && url(input).pathname === `/drive/v3/files/${water}` && init.body && String(init.body).includes('bowerOp')) moves++;
       return next(input, init);
     };
-    const first = await runOnDrive(c, drive, root, { claude: replySequence([BOTH]), pacing, around: (next) => async (input, init) => {
-      if (lost && url(input).origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost.');
-      if (init?.method === 'PATCH' && url(input).pathname === `/drive/v3/files/${water}`) {
-        const response = await count(next)(input, init);
-        lost = response.ok;
-        throw new TypeError('Made-up lost answer after the move.');
-      }
-      return next(input, init);
-    } }, 1);
-    expect(lost, 'main reached the filing').toBe(true);
+    // The case's registered setup (corpus-live-hooks), as a live run applies it.
+    const lost = CORPUS_SETUPS['filing-answer-lost'].fault(drive, root);
+    const first = await runOnDrive(c, drive, root, { claude: replySequence([BOTH]), pacing, around: (next) => lost.around(count(next)) }, 1);
+    expect(lost.state.reached, 'main reached the filing').toBe(true);
     expect(phase(first), 'something changed: saving, never done or failed').toBe('saving');
     expect(first.code).toBe(1);
     expect(first.lastRun, 'no report claims it done').toBeNull();
@@ -159,17 +153,8 @@ describe('C12 lifecycles through main (c12-corpus guards)', () => {
 });
 
 describe('C12 group wait through main (c12-corpus AC13)', () => {
-  /** The case's replies, but the bench receipts' group gets a reply refused whole (an unknown key), twice: the first press only. */
-  const refusingBench = (id: string) => {
-    const model = caseReplies(id);
-    let refused = 0;
-    return perPress((call) => {
-      const things = frameOf<{ selection?: unknown; piles?: Array<{ things: Array<{ name: string }> }> }>(call);
-      const bench = things.selection !== undefined && things.piles?.some((p) => p.things.some((t) => t.name.startsWith('Bench receipt')));
-      if (bench && refused < 2) { refused++; return Promise.resolve(reply({ kind: 'tidy-intent', v: 1, things: [], extra: true })); }
-      return model(call);
-    });
-  };
+  /** The case's replies under its registered setup (corpus-live-hooks): the bench receipts' group is refused twice in press 1. */
+  const refusingBench = (id: string) => perPress(CORPUS_SETUPS['group-reply-refused'].model(caseReplies(id)));
 
   it('AC13 c12-corpus-group-waits: the refused group waits untouched, the other is filed; the next tidy-up files it; both presses score clean', async () => {
     const c = await loadCase(join(ROOT, 'c12-group-waits'));

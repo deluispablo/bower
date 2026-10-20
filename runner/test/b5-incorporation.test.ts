@@ -12,7 +12,7 @@ import { authoredLinks, linkReasons, planScripted, runKeys, type Decisions } fro
 import type { LastRunFile } from '../../src/data/vault/layout';
 import type { Proposal, Question, TypeRow, TypeTable } from '../../src/data/contracts/types';
 import type { QuestionAnswer } from '../../src/data/contracts/questions';
-import { promptOf, frameOf, AT, caseReplies, redispatchCase, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
+import { promptOf, frameOf, AT, CORPUS_SETUPS, caseReplies, redispatchCase, runOnDrive, runWithClaude, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { phaseAwareClaude } from './b1-planning-support';
 
@@ -435,14 +435,13 @@ it.each([
     ['Projects/Job hunt/Offers/Ferrowick offer.md', 'Bower health.md'], ['Projects/Job hunt/Job hunt.md']],
 ])('corpus-fix-b56-profile AC3: offer and CV reports and links match current effects (%s)', async (slug, lines, created, updated) => {
   const DIR = (id: string) => new URL(`../../testing/corpus/${id}/`, import.meta.url).pathname;
-  const PROPS = { 'Areas/Career/Career profile.md': { profile: 'cv' } };
   const replies = JSON.parse(readFileSync(join(DIR(slug), 'replies.json'), 'utf8')) as Array<{ things: Array<{ note: { body: string } }> }>;
   const body = replies[0]?.things[0]?.note.body ?? '';
   expect(body.split('\n').filter((l) => l.includes('[['))).toEqual(lines);
   expect(linkReasons(body).map((x) => x.target)).toEqual(authoredLinks(body).map((x) => x.target));
   expect(linkReasons(body)).toHaveLength(2);
   const c = await loadCase(resolve(DIR(slug)));
-  const run = await runWithClaude(c, caseReplies(slug), PROPS);
+  const run = await runWithClaude(c, caseReplies(slug), CORPUS_SETUPS['career-profile-property'].props);
   expect(run.code).toBe(0);
   expect(run.score).toEqual({ pass: true, unmet: [] });
   const report = (run.lastRun as LastRunFile).run.report;

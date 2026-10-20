@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCase } from '../src/corpus';
-import { AT, caseReplies, redispatchCase, replySequence, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
+import { AT, CORPUS_SETUPS, caseReplies, lostResponse, redispatchCase, replySequence, runOnDrive, runScripted, runWithClaude, scoreCase, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive, paging } from './drive-v3';
 import { manifests, observe, writes, type Observation } from './b23-hot-observe';
 import { setup as planningSetup, run as planningRun, select, fileIntent, folder, note, report as planningReport } from './b1-planning-support';
@@ -46,27 +46,8 @@ const blocked = (path: string, base: Base, status = 403) => (fetch: typeof globa
     return fetch(input, init);
   });
 };
-/** Lands the first send to `path`, then loses its response and every Drive call until disabled. */
-function loss(base: Base, path: string) {
-  const state = { reached: false, enabled: true };
-  const around = (fetch: typeof globalThis.fetch) => {
-    let seen = base.traffic.length;
-    return observe(base.drive, base.root, base.traffic)(async (input, init = {}) => {
-      const last = base.traffic.length > seen ? base.traffic.at(-1) : undefined;
-      seen = base.traffic.length;
-      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-      if (state.enabled && state.reached && url.origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost');
-      const response = await fetch(input, init);
-      if (state.enabled && last?.path === path && ['POST', 'PATCH'].includes(init.method ?? 'GET')) {
-        expect(response.ok, 'the fault lands bytes before losing the response').toBe(true);
-        state.reached = true;
-        throw new TypeError('Made-up lost response');
-      }
-      return response;
-    });
-  };
-  return { state, around };
-}
+/** Lands the first send to `path`, then loses its response and every Drive call until disabled (`lostResponse`). */
+const loss = (base: Base, path: string) => lostResponse((p) => p === path)(base.drive, base.root, base.traffic);
 const idOf = (run: CaseRun, path: string) => Object.entries(run.pathsById).find(([, p]) => p === path)?.[0];
 const healthPaths = (run: CaseRun) => Object.keys(run.after).filter((path) => /^Bower health( \(\d+\))?\.md$/.test(path)).sort();
 const supportedEdit = (base: Base) => {
@@ -722,13 +703,9 @@ describe('B8b lint and the health note through main', () => {
     const MONTH = '.bower/log/2026-10.md';
     const HUB = 'Resources/Gardening/Gardening.md';
     const base = await setup('settled-recovery');
-    const lost = loss(base, MONTH);
-    const around = (fetch: typeof globalThis.fetch) => lost.around(async (input, init = {}) => {
-      if (base.traffic.at(-1)?.path === HUB && ['POST', 'PATCH'].includes(init.method ?? 'GET')) {
-        return new Response(JSON.stringify({ error: { code: 409, message: 'Made-up target refusal', errors: [{ reason: 'conflict' }] } }), { status: 409 });
-      }
-      return fetch(input, init);
-    });
+    // The case's registered setup (corpus-live-hooks), as a live run applies it.
+    const lost = CORPUS_SETUPS['hub-edit-refused-log-lost'].fault(base.drive, base.root, base.traffic);
+    const around = lost.around;
     const first = await runOnDrive(base.c, base.drive, base.root, { around, claude: caseReplies(base.c.id), pacing }, 1);
     expect(lost.state.reached, 'main sends the month file').toBe(true);
     expect(first.wire?.statuses.some((status) => status.phase === 'done'), 'no done before the log is confirmed').toBe(false);

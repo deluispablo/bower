@@ -15,7 +15,7 @@ import * as reply from '../src/claude';
 import * as maintenance from '../src/index';
 import { RunnerDrive } from '../src/drive';
 import { loadCase, type LoadedCase } from '../src/corpus';
-import { AT, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
+import { AT, CORPUS_SETUPS, redispatchCase, replySequence, runOnDrive, seedCase, type CaseRun } from './corpus-run';
 import { fixedDrive } from './drive-v3';
 
 const CASE = resolve(import.meta.dirname, '../../testing/corpus/b1-maintenance-crash-resume');
@@ -60,7 +60,7 @@ it('B1a contract: 2: selection is closed candidate ids with five wants and exact
 
 interface Sent { path: string; text: string; stamp?: string }
 /** Observe production sends only. Seeding and snapshot reads never contribute to this trace. */
-function trace(drive: FakeDrive, root: string, sent: Sent[], lost?: { path: string; reached: boolean; enabled: boolean }) {
+function trace(drive: FakeDrive, root: string, sent: Sent[]) {
   return (fetch: typeof globalThis.fetch): typeof globalThis.fetch => async (input, init = {}) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const method = (init.method ?? 'GET').toUpperCase();
@@ -72,17 +72,9 @@ function trace(drive: FakeDrive, root: string, sent: Sent[], lost?: { path: stri
     const json = meta ? JSON.parse(meta) as { name?: string; parents?: string[]; appProperties?: { bowerOp?: string } } : undefined;
     const path = id ? drive.pathOf(decodeURIComponent(id), root) : json?.name && json.parents?.[0]
       ? [drive.pathOf(json.parents[0], root), json.name].filter(Boolean).join('/') : undefined;
-    if (lost?.enabled && lost.reached && path === lost.path) throw new TypeError('Made-up maintenance transport remains disconnected');
     if (url.origin === 'https://www.googleapis.com' && ['POST', 'PATCH', 'DELETE'].includes(method) && path) {
       const content = url.searchParams.get('uploadType') === 'media' ? body : parts[1] ?? body;
       sent.push({ path, text: content, stamp: json?.appProperties?.bowerOp });
-      // The write really lands on the existing fake; the caller loses only its reply.
-      if (lost?.enabled && path === lost.path) {
-        const response = await fetch(input, init);
-        expect(response.ok, 'fault fires after a successful stored write').toBe(true);
-        lost.reached = true;
-        throw new TypeError('Lost made-up write reply');
-      }
     }
     return fetch(input, init);
   };
@@ -298,16 +290,17 @@ it('B1a contract: 4: settled maintenance replays without rows or duplicate write
 it('B1a contract: case 6: lost maintenance reply resumes the same manifest before done', async () => {
   const { c, drive, root } = await setup();
   const sent: Sent[] = [];
-  const lost = { path: '.bower/retrieval.json', reached: false, enabled: true };
+  // The case's registered setup (corpus-live-hooks), as a live run applies it: the landed write's reply and the connection are lost.
+  const lost = CORPUS_SETUPS['maintenance-reply-lost'].fault(drive, root);
   const spawn = vi.fn(replySequence([emptyReply]));
-  const run = await runOnDrive(c, drive, root, { pacing, claude: spawn, around: trace(drive, root, sent, lost) }, 1);
+  const run = await runOnDrive(c, drive, root, { pacing, claude: spawn, around: (next) => lost.around(trace(drive, root, sent)(next)) }, 1);
   expect(manifests(run)).toHaveLength(1); // Control: main planned and persisted on the real runner path.
   expect(run.after['Resources/Gardening/Plot.md']).toBe(c.folder['Resources/Gardening/Plot.md']);
-  expect.soft(lost.reached, 'lost reply is injected into a real maintain write').toBe(true);
+  expect.soft(lost.state.reached, 'lost reply is injected into a real maintain write').toBe(true);
   expect.soft(run.code, 'the interrupted attempt remains resumable').toBe(1);
   expect.soft(run.after['.bower/last-run.json'], 'the report barrier does not land before maintenance settles').toBeUndefined();
   expect.soft(checkpoints(run).at(-1)?.phase).not.toBe('done');
-  lost.enabled = false;
+  lost.state.enabled = false;
   const first = manifests(run);
   const planCalls = spawn.mock.calls.length;
   const resumed = await redispatchCase(c, run, 2, { pacing, claude: spawn, around: trace(drive, root, sent) });
@@ -332,7 +325,7 @@ it('B1a contract: case 6: lost maintenance reply resumes the same manifest befor
   expect(chain.at(-1)?.phase).toBe('done');
   const rows = [...report(resumed).updated, ...report(resumed).created];
   expect(rows.filter((r) => derived.includes(r.path))).toEqual([]);
-  if (lost.reached) {
+  if (lost.state.reached) {
     expect(sent.filter((s) => s.path === '.bower/retrieval.json'), 'the landed state is reconciled by op id, not written again').toHaveLength(1);
     const commit = sent.findIndex((s) => s.path === '.bower/retrieval.json');
     expect(sent.findIndex((s) => s.path === '.bower/last-run.json')).toBeGreaterThan(commit);
