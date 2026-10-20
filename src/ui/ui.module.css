@@ -71,6 +71,8 @@
 /* Escape hides it (ui/hint.ts); an open menu or panel of its own covers it */
 :global(:root[data-hint-off]) .hint::after,
 .hint[aria-expanded='true']::after { visibility: hidden; }
+/* no 0.3 s hover delay on hiding: the hover rule's transition would still apply while the pointer rests on the control */
+:global(:root[data-hint-off]) .hint::after { transition: none; }
 
 /* the segmented control: one home (ui/Segmented.tsx) */
 .segmented { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); }
@@ -79,7 +81,7 @@
 
 /* phone targets: one rule, no per-screen overrides (d-v2-10, WCAG 2.5.5; desktop keeps its sizes, all at least 24, 2.5.8) */
 @media (max-width: 899px) {
-  .small, .segment, .item { min-height: 44px; }
+  .small, .segment { min-height: 44px; }
   .iconBtn, .iconBtn.sm { width: 44px; height: 44px; }
 }
 
@@ -164,6 +166,8 @@
 .item[data-disabled] { opacity: 0.45; }
 .item svg { color: var(--text-muted); flex: none; }
 .item.dangerItem, .item.dangerItem svg { color: var(--danger); }
+/* the phone target (44, WCAG 2.5.5) comes after `.item`: at equal weight the later min-height wins */
+@media (max-width: 899px) { .item { min-height: 44px; } }
 .sep { height: 1px; margin: 5px 4px; background: var(--line); }
 .check { margin-left: auto; color: var(--brand-line); }
 .label { padding: 6px 10px 4px; font-size: 13px; color: var(--text-muted); }
