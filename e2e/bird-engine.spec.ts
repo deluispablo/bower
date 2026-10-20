@@ -105,3 +105,35 @@ test("a tap goes through react('tap') on Home", async ({ page }) => {
   expect(lowest).toBeLessThan(-1);
   await expectAxeClean(page, { include: 'main' });
 });
+
+// A tap's pointer gaze holds: the click also focuses main (tabindex -1), which is not keyboard focus.
+test('a tap turns the head toward where it was tapped', async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = { now: 1000, next: 0, queue: new Map<number, FrameRequestCallback>() };
+    window.requestAnimationFrame = (cb) => { state.queue.set(++state.next, cb); return state.next; };
+    window.cancelAnimationFrame = (id) => { state.queue.delete(id); };
+    Object.assign(window, { bowerFrames: (count: number) => {
+      for (let i = 0; i < count; i++) {
+        state.now += 1000 / 60;
+        const callbacks = [...state.queue.values()]; state.queue.clear();
+        callbacks.forEach((cb) => cb(state.now));
+      }
+    } });
+  });
+  await page.goto(withSource('/?scenario=default&time=instant'));
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('heading', { level: 1, name: /Hello, Alex/ })).toBeVisible();
+  const bird = page.locator('[data-bird]:not(.posed)');
+  await expect(bird).toHaveCount(1);
+  const frames = (n: number) => page.evaluate((k) => (window as unknown as { bowerFrames(n: number): void }).bowerFrames(k), n);
+  await frames(60);
+  await bird.scrollIntoViewIfNeeded();
+  const box = await bird.boundingBox();
+  if (!box) throw new Error('Bower has no box');
+  // The centre is below and behind the eye: the head turns down toward it (+7, the perched range's end).
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await frames(90);
+  const head = await bird.locator('.b-head').getAttribute('transform');
+  expect(Number(/rotate\(([-\d.]+)/.exec(head ?? '')?.[1])).toBeGreaterThan(3);
+  await expectAxeClean(page, { include: 'main' });
+});
