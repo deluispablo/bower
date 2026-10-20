@@ -21,7 +21,7 @@ import { Button } from '@/ui/Button';
 import { FieldError, fieldBox, Textarea } from '@/ui/Field';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast, useToasts } from '@/ui/toast';
-import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, runDetail, runTitle, RUNNING_WAITS, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
+import { filedWords, hasReplay, landedSummary, notesUpdated, reportWaiting, isRunning, PHASE_POSE, replayWaiting, runDetail, runTitle, RUNNING_WAITS, stoppedUnseen, unfinishedWords } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -89,9 +89,11 @@ export function Home() {
   // Suggestions wait until the first tidy-up has been reviewed (or its progress cannot be known), so they never flash.
   const progress = useFirstTidy();
   const showSuggestions = Boolean(progress.error) || progress.data === null || progress.data?.reviewed === true;
-  // One launch on screen: the desktop top bar, or the checklist while it offers Tidy up; the phone Inbox otherwise.
+  // One launch on screen: the desktop top bar while it is a launch, or the checklist while it offers Tidy up; the Inbox
+  // otherwise, on the phone and while the top bar is an unseen report's replay (qa-prod-10-F2). An unseen stop keeps its
+  // card's Try again: the tidy-up sheet shows that stop until it is seen.
   const desktop = useIsDesktop();
-  const launch = !desktop && !offersTidy(progress.data) && ready && waiting > 0 && !running && !inbox.error;
+  const launch = (!desktop || replayWaiting(run)) && !offersTidy(progress.data) && ready && waiting > 0 && !running && !inbox.error;
   const questions = useQuestions();
   // The start-up screen stays until what Home shows first is known, errors included (boot.ts caps it at 8 s).
   const opening = (!ready && !inbox.error) || runState.loading || progress.loading || questions.loading;
