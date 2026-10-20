@@ -430,13 +430,14 @@ function promptInstructions(): string {
     '- "answers" (optional): "answers":[{"requestId":"<the request\'s fileId>","text":"<one plain line>"}], one for a request in "requests"',
     '  below that asks a question about the folder, or that you cannot do as asked (say why) (not the person\'s "answers" to Bower\'s questions). Answer from the notes and files shown only, in one',
     '  line of at most 1,000 characters with words, no web address; link each note or file you used as [[its name]], or [[its whole path]] when the',
-    '  name is shared. A figure you say a note gives must be in that note; a count, total or difference of linked notes\' figures is fine.',
+    '  name is shared. A figure you say a note gives must be in that note.',
     '  Say plainly what the notes do not say. A request you answer takes no map or view.',
     '- "never" (optional): "never":["<the request\'s fileId>"] for a request in "requests" below that asks Bower to delete anything for good, skip the Bin or change',
     '  things outside the person\'s folder, or any part of it does: the whole request is declined; it takes no answer, document, map, view, line or thing.',
     // C08: a request for a report, comparison or other document is answered by one document note.
     '- "documents" (optional): for a request below that asks for a report, a comparison or another document, "documents":[{"requestId":"<the request\'s fileId>","to":"<a folder path below>","title":"<a plain title>","summary":"<one line>","body":"<Markdown: the whole document, tables and sources included; at most 16,000 characters>"}].',
     '  Write every part the request needs; link only the notes and files shown below, by name or whole path, never a note or thing this reply files or writes; write only their figures. A request you give a document takes no answer, map or view.',
+    '  Answers, document summaries and document bodies follow the same evidence rules. Whole numbers and multiple citations are not exceptions. Every source link must resolve to supplied evidence.',
     // C09 (R15, ruling 15): originals are evidence for answers, never a note's link, line or target.
     '- "files": originals shown for a request, read-only, cut as notes are: evidence for "answers" and "documents" only. Cite one as [[its whole path]], or',
     '  [[its full name]] when no other file has it; never link it from a note, give it a line or a state, or write to it.',
@@ -2156,31 +2157,45 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
   const answered = new Map<string, string>();
   let bound: ReadonlySet<string> = new Set();
   type AnswerIn = z.output<typeof AnswerShape>;
+  /** brain-08: what an answer's or document's unlinked words and its web addresses may come from: the notes and files shown. */
+  const shownPool = (): string => [seen.shownNotes ?? '', ...[...seen.fileTexts ?? []].map(([p, text]) => `${p}\n${text}`)].join('\n');
   /**
-   * The first amount of an answer its sources do not hold, or null (review ledger rulings 2, 6, 7, 21). Each sentence part (split
-   * at sentence ends and ";") that links one note is stated as coming from it: its figures are in that note as shown, or in
-   * the request. One that links two or more notes is a count, total or difference computed from them: not arithmetic-checked
-   * (a validation limit, design for normal use). One with no link holds only figures of the request or a note shown.
+   * brain-08 R-6: what is structure, not a figure, in normal writing: an ordered list's marker ("1. "), a reference or footnote
+   * label ("[1]", "[^1]"), a "Step 3" or "## 3." heading, a date ("2026-11-02", "3/11/2026", "20 October", "October 20"), a clock
+   * time (14:30) and a year from 1900 to 2100. A year beside a currency sign, a separator or a percent stays a figure.
+   */
+  const withoutStructure = (text: string): string => {
+    const month = '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+    return text.replace(/^(\s*)\d{1,9}[.)](?=\s)/gm, '$1').replace(/(?<!\[)\[\^?\d{1,4}\](?!\])/g, '')
+      .replace(/^#{1,6}\s+\d{1,3}[.)]?(?=\s|$)/gm, '').replace(/\b(?:step|part|section|chapter)\s+\d{1,3}\b/gi, ' ')
+      .replace(/\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ')
+      .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?${month}\\b|\\b${month}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?\\b`, 'gi'), ' ')
+      .replace(/(?<![\p{Sc}\d.,]\s?)\b(?:19\d\d|20\d\d|2100)\b(?![.,]?\d|\s?%)/gu, ' ');
+  };
+  /**
+   * The first number of an answer or document its sources do not hold, or null (review ledger rulings 2, 6, 7, 21; brain-08).
+   * Each sentence part (split at sentence ends and ";") that links notes is stated as coming from them: its figures are in
+   * those notes as shown, or in the request. One with no link holds only figures of the request or a note or file shown.
+   * Whole numbers and parts that link two or more notes are no exception: a count, total or difference not written in a
+   * source is refused until code computes it (brain-09). An ordered list's marker ("1. ") and a reference or footnote label
+   * ("[1]", "[^1]") are no figures.
    */
   const figureIn = (text: string, requestId: string): string | null => {
     if (seen.words === undefined) return null;
     const request = seen.requests?.get(requestId)?.text ?? '';
     let earlier: string[] = [];
-    for (const { segment } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(text)) {
+    for (const { segment } of new Intl.Segmenter('en', { granularity: 'sentence' }).segment(withoutStructure(text))) {
       for (const part of segment.split(';')) {
         const own = [...new Set(authoredLinks(part).map((l) => l.target))];
         // Ruling 18: a part with no link speaks of the nearest earlier part's links ("Together they cost 3,030.").
         const targets = own.length ? own : earlier;
         earlier = targets;
-        if (targets.length > 1) continue;
-        const one = targets[0] === undefined ? null : linkIdentity(targets[0], seen.files?.keys() ?? []);
-        const path = one && typeof one === 'object' ? ('note' in one ? one.note : one.file) : null;
-        const source = path !== null ? `${path}\n${seen.noteTexts?.get(path) ?? seen.fileTexts?.get(path) ?? ''}`
-          : [seen.shownNotes ?? '', ...[...seen.fileTexts ?? []].map(([p, text]) => `${p}\n${text}`)].join('\n');
-        // Rulings 21 and 2: a plain whole number is a count; only an amount (a separator, decimals, a currency sign before or after, or a percent) is checked.
-        const amounts = [...part.matchAll(NUMBER)].filter((m) => /[.,]/.test(m[0]) || /\p{Sc}\s?$/u.test(part.slice(0, m.index))
-          || /^\s?[%\p{Sc}]/u.test(part.slice(m.index + m[0].length))).map((m) => m[0]).join(' ');
-        const n = ungrounded(amounts, groundsOf(`${request}\n${source}`));
+        const paths = targets.flatMap((target) => {
+          const one = linkIdentity(target, seen.files?.keys() ?? []);
+          return one && typeof one === 'object' ? ['note' in one ? one.note : one.file] : [];
+        });
+        const source = paths.length ? paths.map((path) => `${path}\n${seen.noteTexts?.get(path) ?? seen.fileTexts?.get(path) ?? ''}`).join('\n') : shownPool();
+        const n = ungrounded(part, groundsOf(`${request}\n${source}`));
         if (n) return n;
       }
     }
@@ -2242,9 +2257,15 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       }
       return null;
     },
+    // brain-08: a Markdown link, autolink, reference or bare web address is one a note or file shown (or the request) has.
+    (d) => {
+      const kind = bodyLinks(`${d.summary}\n${d.body}`, `${seen.requests?.get(d.requestId)?.text ?? ''}\n${shownPool()}`);
+      return kind && no(kind, `a link or web address in the document "${d.title.trim()}" that no note or file shown has: use only addresses from the request, the notes shown or the files shown, or leave it out`, true);
+    },
     rule('numbers', (d) => {
-      const n = figureIn(d.body, d.requestId);
-      return !n || quoting(`a number that is in none of its sources: "${n}" in the document "${d.title.trim()}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
+      const inSummary = figureIn(d.summary, d.requestId);
+      const n = inSummary ?? figureIn(d.body, d.requestId);
+      return !n || quoting(`a number that is in none of its sources: "${n}" in ${inSummary ? 'the summary of ' : ''}the document "${d.title.trim()}"; write only figures from the request, the notes shown or the files shown, or leave the figure out`);
     }),
   ], (d) => documented.set(seen.requests?.get(d.requestId)?.id ?? '', { to: d.to, title: d.title.trim(), what: summaryWithLimit(seen, d.requestId, d.summary.trim()), body: withLimit(seen, d.requestId, d.body, '\n\n') })));
   // live-refusal-wording: a request Bower will not do, once, given no answer, document, map, view, Timeline line or thing
