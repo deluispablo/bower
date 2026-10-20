@@ -1,5 +1,6 @@
 /**
- * ux-home-priorities: decisions first on Home, and one tidy-up launch on screen at every stage (rulings R4-R7, R2-1).
+ * ux-home-priorities: decisions first on Home, and one tidy-up launch on screen at every stage (rulings R4-R7, R2-1;
+ * qa-prod-10-F2: while the top bar is a run's control, the Inbox launches on the desktop too).
  * A launch control opens the tidy-up sheet to start a new tidy-up: the top bar's, the Inbox's or the checklist's.
  */
 import type { Locator, Page } from '@playwright/test';
@@ -47,6 +48,19 @@ test('AC3 returning_desktop: once the report is seen, the top bar is the one lau
   await expect(launches(page)).toHaveCount(1);
   await expect(launches(page)).toHaveAccessibleName(/^Tidy up \d+$/);
   await expect(inbox.getByRole('button', { name: /^Tidy up/ })).toHaveCount(0);
+});
+
+test('AC3 desktop_unseen_report: while the top bar is the report\'s, the Inbox is the one launch (qa-prod-10-F2)', async ({ page, allowConsole }) => {
+  test.skip(!desktop(), 'the desktop top bar');
+  test.setTimeout(90_000);
+  allowConsole(/disposition was refused/, 'the made-up leftovers are not real dispositions');
+  await open(page, '/', 'slow-report');
+  await expect(page.getByText(/Tidy-up finished/)).toBeVisible({ timeout: 60_000 });
+  const inbox = page.getByRole('region', { name: 'Inbox' });
+  await expect(inbox.getByText(/^\d+ things? waiting/)).toBeVisible({ timeout: 60_000 });
+  await expect(launches(page)).toHaveCount(1);
+  await expect(launches(page)).toHaveAccessibleName(/^Tidy up \d+ things?$/);
+  await expect(inbox.getByRole('button', { name: /^Tidy up \d+ things?$/ })).toHaveCount(1);
 });
 
 test('AC3 desktop_off_home (guard): off Home the top bar is the one launch', async ({ page }) => {
