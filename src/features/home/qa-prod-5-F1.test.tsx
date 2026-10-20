@@ -45,7 +45,7 @@ describe('home_after_leaving_add_mid_save', () => {
     vault = v;
 
     const first = show(v, Promise.resolve());
-    await waitFor(() => expect(subtitleOf(first)).not.toBe('Looking…'));
+    await waitFor(() => expect(subtitleOf(first)).toMatch(/waiting/));
     const before = countOf(subtitleOf(first));
     await waitFor(() => expect(within(first).queryByText('Looking…')).toBeNull());
     const unfinishedBefore = unfinished();
@@ -85,7 +85,7 @@ describe('home_after_leaving_add_mid_save', () => {
     const home = show(v, full);
     expect(await within(home).findByRole('link', { name: /Context from Alex/ })).toBeVisible();
     open();
-    await waitFor(() => expect(subtitleOf(home)).not.toBe('Looking…'));
+    await waitFor(() => expect(subtitleOf(home)).toMatch(/waiting/));
     expect(countOf(subtitleOf(home))).toBe(before + 1);
     await waitFor(() => expect(unfinished()).toBeLessThanOrEqual(unfinishedBefore));
     expect(unfinished()).toBe(unfinishedBefore);

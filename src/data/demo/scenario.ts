@@ -15,6 +15,7 @@ export const SCENARIOS = {
   slow: 'Everything answers slowly',
   'slow-report': 'The last tidy-up and the questions answer slowly',
   'inbox-read-fails': 'The full read of the inbox fails after the listing (heals when the page says so)',
+  'inbox-held': 'The inbox answers only when the page says so',
   'journal-refused': 'Notes of your changes wait, then Drive refuses them when the page says so',
   'withdraw-unreached': 'When the page says so, notes of changes and pile things find no network, nor do checks of them; or Drive finds none at all',
   'gone-answers': 'Answers wait whose notes or things went to the Bin since (pretend Drive)',

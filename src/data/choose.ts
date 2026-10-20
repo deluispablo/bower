@@ -74,7 +74,8 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     const place = localPlace({ world: 'demo', person: await uploadAccount(ALEX.email) });
     const fenced = fenceDoors(world.sources(), place);
     // Signing out and leaving Bower let the lease go as on every source.
-    return { sources: { ...fenced, session: leavingLetsGo(fenced.session, place) }, world };
+    const sources = { ...fenced, session: leavingLetsGo(fenced.session, place) };
+    return { sources: scenario === 'inbox-held' ? holdInbox(sources) : sources, world };
   }
   if (kind === 'real') {
     const worker = new WorkerHttp(apiBase());
@@ -155,5 +156,17 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     };
     return { sources: { ...sources, vault } };
   }
-  return { sources };
+  return { sources: scenario === 'inbox-held' ? holdInbox(sources) : sources };
+}
+
+/** The inbox's reads (the listing and the full read) wait until the page lets them go (the test's hook, `__releaseInbox`). */
+function holdInbox(sources: Sources): Sources {
+  let release!: () => void;
+  const held = new Promise<void>((r) => { release = r; });
+  (window as unknown as { __releaseInbox: () => void }).__releaseInbox = release;
+  const vault = Object.create(sources.vault) as typeof sources.vault;
+  vault.piles = async () => { await held; return sources.vault.piles(); };
+  const listed = sources.vault.pilesListed?.bind(sources.vault);
+  if (listed) vault.pilesListed = async () => { await held; return listed(); };
+  return { ...sources, vault };
 }

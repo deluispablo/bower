@@ -30,6 +30,10 @@
 .sep { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.6; }
 .skel { display: grid; gap: 10px; margin-top: 14px; }
 .skel span { display: block; height: 52px; border-radius: 12px; background: var(--surface); }
+/* Still shapes in the place of the questions' heading and first card, while they are read. */
+.skelQuestions { display: grid; gap: 10px; }
+.skelQuestions span { display: block; height: 24px; width: 40%; border-radius: 8px; background: var(--surface); }
+.skelQuestions span + span { height: 132px; width: auto; border-radius: 16px; }
 .search { width: 100%; cursor: pointer; }
 .search span { flex: 1; }
 .search kbd { font: 13px var(--font-body); padding: 2px 7px; border-radius: 6px; background: var(--surface-strong); }

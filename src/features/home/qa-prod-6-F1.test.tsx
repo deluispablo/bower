@@ -100,7 +100,7 @@ describe('listed_pile_counts_while_full_read_lags', () => {
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     const subtitle = (): string => inbox.querySelector('p.muted')?.textContent ?? '';
     // Home's, the sheet's and the button's first full reads have answered.
-    await waitFor(() => expect(subtitle()).not.toBe('Looking…'));
+    await waitFor(() => expect(subtitle()).toMatch(/waiting/));
     await waitFor(() => expect(answered).toBeGreaterThanOrEqual(3));
     const said = subtitle();
     const n = said.startsWith('Nothing waiting') ? 0 : Number(/^(\d+) things? waiting/.exec(said)?.[1]);
@@ -145,7 +145,8 @@ describe('no_count_before_first_full_read', () => {
     show(v, never);
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     expect(await within(inbox).findByRole('link', { name: /Receipts.*1 thing/ })).toBeVisible();
-    expect(within(inbox).getByText('Looking…')).toBeVisible();
+    // No count until the full read answers: the line under the heading keeps its place, empty (ux-home-opening).
+    expect(inbox.querySelector('p.muted')?.textContent).toBe('');
     expect(within(inbox).queryByText(/\d+ things? waiting/)).toBeNull();
     expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })).toBeNull();
     expect(topButton()).toHaveTextContent(/^Tidy up$/);
