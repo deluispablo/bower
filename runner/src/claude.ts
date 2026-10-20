@@ -1144,11 +1144,14 @@ export type RefusalKind = keyof typeof REFUSALS;
  * The kinds that refuse one row of a reply, so after the retry only the source the row names (a pile or a request) waits for
  * the next tidy-up and the rest goes on (partial-success batch APIs, the dead-letter pattern). An allow-list: a new kind is
  * reply-level until it is listed, and so is any kind that cannot be traced to an admitted source.
+ * `askNotAdmitted` is item-level only when located: a question that names a request of the run holds that request; one about
+ * an id the run does not know stays reply-level (qa-prod-8-F1).
+ * shortcut: an unlocated row stays reply-level; if live logs show "names no pile or request", locate it by the one selection source whose allowedTargets hold its note
  */
 const ITEM_LEVEL: ReadonlySet<RefusalKind> = new Set<RefusalKind>([
   'nameChangesKind', 'rawName', 'numbers', 'quote', 'newFolder', 'noteForNote', 'noteName', 'noteSummary', 'noteBody', 'noteSections', 'noteLink',
   'noteMdLink', 'noteWeb', 'noNote', 'lineNote', 'lineText', 'lineCites', 'lineUncited', 'lineMarker', 'lineAlsoCites', 'stateNote',
-  'stateText', 'stateCites', 'askNotes', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'documentText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget', 'scope']);
+  'stateText', 'stateCites', 'askNotes', 'askNotAdmitted', 'askAlsoFiles', 'askText', 'askOptions', 'answerText', 'documentText', 'thingPlace', 'thingType', 'noteCut', 'lineTarget', 'scope']);
 /**
  * `quoted`: the reason quotes the reply or a note, so it is told to the model and never logged (sec-hardening L4).
  * `source`: the pile (`pileId`) or request (journal file id) the refused row names, when it names one.
@@ -2912,6 +2915,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       drop?: (value: unknown, refused: Refused) => Promise<unknown>): Promise<T> => {
       let why = '';
       let said = '';
+      let final: Refused | undefined;
       let last: { value: unknown; refused: Refused } | undefined;
       for (let attempt = 0; attempt < 2; attempt++) {
         const reply = await call(attempt ? withRetryNote(input, why) : input, kind, model, systemFile);
@@ -2920,6 +2924,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         if (value.kind === null) return refuse(value.why, undefined, value.invalidReply);
         why = value.why;
         said = logged(value);
+        final = value;
         last = reply.ok ? { value: reply.value, refused: value } : undefined;
         if (!attempt) console.error(hidden(`The Claude provider's plan for run ${run.runId} was refused (${value.kind}): ${said}; asking once more.`, token));
       }
@@ -2930,9 +2935,13 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         const again = await check(pruned);
         if (again.ok) return again;
         said = logged(again);
+        final = again;
         last = { value: pruned, refused: again };
       }
-      return refuse(said, undefined, true);
+      // Why no source could take it, in the kind and fixed words only (sec-hardening L4).
+      const end = !final ? '' : !drop || !ITEM_LEVEL.has(final.kind) ? 'refuses the whole reply' : final.source === undefined ? 'names no pile or request'
+        : 'nothing is left once its piles and requests are set aside, or its pile cannot wait';
+      return refuse(final ? `${said} (${final.kind}; ${end})` : said, undefined, true);
     };
     /** One memory call: its JSON, or why none; a failed, cut, exhausted or throwing call never stops the run (R25). */
     const ask = async (input: string, on: string, kind: CallKind): Promise<{ ok: true; value: unknown } | { ok: false; why: string }> => {
