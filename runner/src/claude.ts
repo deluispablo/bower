@@ -56,7 +56,7 @@ import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { answersAsking, checkedAnswer, journalAnswer, proposalOk, requestAskOk, requestQuestionId, type QuestionAnswer, subjectKey, subjectOf } from '../../src/data/contracts/questions';
 import type { ChangeEntry, Proposal, Question, RequestPart, TypeRow } from '../../src/data/contracts/types';
-import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, authoredLinks, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, isResultNote, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
+import { B_FAILURE, SHORTEN_SKIPPED, assignedTags, authoredLinks, effectiveRules, hasEmptyLink,linkIdentity, growTags, mapLines, modelDecisions, namedNotes, personalAppendHistory, planScripted, recentKey, requestTargets, isResultNote, resultNoteKey, runKeys, type Ask, type Consolidated, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type PairAsk, type Placement, type ScriptedRun, type ViewInstall, type ViewSuggestion, type MapOp, type MapRequest } from '../../src/data/spine/scripted';
 import { MAX_NAME, NAME_BREAKERS, nameOf } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { RECENT, RUNNER_WRITES, SYSTEM, isHidden, isRunnerFile, recentRows } from '../../src/data/vault/layout';
@@ -220,9 +220,10 @@ const PictureReply = z.strictObject({ text: z.string().min(1).max(PICTURE_TEXT -
 /**
  * How much text the model is shown, in characters (about four to a token): each thing's text and all things' text in
  * one run; each note's text and all notes' text (the selection bounds how many). A text past its bound is cut and ends
- * with `CUT`, saying how much was left out; one past the run's budget is not shown, and says so.
+ * with `CUT`, saying how much was left out; one past the run's budget is not shown, and says so. The effective rules have
+ * their own bound (brain-10): past it they are cut, and the run's routing waits.
  */
-export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notesPerRun: 24_000 } as const;
+export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notesPerRun: 24_000, rules: 12_000 } as const;
 /**
  * What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. A Current
  * state's limits have one home, the manifest contract's write bound (`STATE_WRITE` in note-edit.ts).
@@ -263,8 +264,10 @@ interface Shown {
   presentLines?: ReadonlySet<string>;
   /** The renames and moves this run takes, for a line's extra source named by its former path or name; not shown. */
   moves?: ChangeEntry[];
-  /** The person's `Rules.md`, bounded, when the folder has one. */
+  /** The effective rules (brain-10): `Rules.md` as this run's admitted rule lines leave it, bounded, when there are any. */
   rules?: string;
+  /** brain-10: routing waits when the effective rules are cut, or when they hold changes the plan does not write; not shown. */
+  rulesHold?: { cut: boolean; changed: boolean };
   aboutMe?: ReturnType<typeof aboutContext>;
   learnedFacts?: ReturnType<typeof parseObservations>['live'];
   /** Your answers this run took, each with its question and what it is about (TL-P4-08 addendum 8). */
@@ -367,6 +370,7 @@ function promptInstructions(): string {
     'For each note, summary, Timeline line or Current state, give in "quotes" up to 5 passages copied word for word from its own source, its pile\'s words or the note it updates, that its facts rest on. Write only facts those passages support, including names, dates, conditions and negation; leave out a fact you cannot quote.',
     `Every key but "things" is optional. A folder path starts with one of ${MAIN_FOLDERS.join(', ')}. A thing keeps its extension`,
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
+    'The effective rules include the admitted additions and removals for this run. Apply this complete set when selecting and filing. If the set is incomplete, do not infer that no rule applies.',
     // F5 (ruling 8): the bounds the selection checks enforce, said before the first reply.
     'A "to" is its selected destination\'s path; a line or state goes only on a note selected for what it cites; ask as selected,',
     'with its options, or ask once about a thing or pile whose supplied evidence shows a doubt selection could not settle:',
@@ -648,19 +652,15 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     const path = f.folder ? undefined : ix.pathOf(f.id);
     return path === undefined ? [] : [path, f.name];
   }));
-  const rulesFile = listing.find((f) => !f.folder && f.name === 'Rules.md' && f.parents.includes(run.rootId));
-  // A cut list says so in words about the rules, so the model never takes part of the list for all of it (TL-P4-07 addendum 3).
-  const rules = rulesFile
-    ? bounded(modelRules(await read.readText(rulesFile.id)), CONTEXT_BOUNDS.perNote,
-      (left) => `\n[cut here: ${left} more characters of the rules not shown; the list may go on]`).text ?? null
-    : null;
   const named = new Set<string>();
   const suppressed = new Set<string>();
   const waiting: Array<{ rec: JournalRecord; files: DriveFile[] }> = [];
   const requestNotes: Record<string, string[]> = {};
   const moves: ChangeEntry[] = [];
+  const records: JournalRecord[] = [];
   for (const line of took.taken.journal) {
     const rec = jsonOf(await read.readText(line.fileId));
+    if (isJournalRecord(rec)) records.push(rec);
     if (isJournalRecord(rec) && (rec.kind === 'rename' || rec.kind === 'move') && rec.from && rec.path) moves.push({ id: rec.id, at: rec.at, kind: rec.kind, what: rec.what, from: rec.from, path: rec.path });
     if (!isJournalRecord(rec) || rec.kind !== 'request') continue;
     const file = listing.find((f) => f.id === line.fileId);
@@ -688,6 +688,17 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
     }
   }
   const retrySources = new Set(history.map((h) => h.consent.sourceFileId));
+  // brain-10: the effective rules, the admitted rule lines worded in by the planner's own projection. Two Rules.md, or a
+  // folder of that name, take no wording (the plan's rule): the first file is shown as read, as before.
+  const rulesAt = listing.filter((f) => f.name === 'Rules.md' && f.parents.includes(run.rootId));
+  const rulesFile = rulesAt.find((f) => !f.folder);
+  const asRead = rulesFile ? await read.readText(rulesFile.id) : null;
+  const effective = rulesAt.length > 1 || rulesAt[0]?.folder ? asRead : effectiveRules(asRead, records);
+  // A cut list says so in words about the rules, so the model never takes part of the list for all of it (TL-P4-07 addendum 3).
+  const cutRules = effective === null ? null : bounded(modelRules(effective), CONTEXT_BOUNDS.rules,
+    (left) => `\n[cut here: ${left} more characters of the rules not shown; the list may go on]`);
+  const rules = cutRules?.text ?? null;
+  const rulesHold = { cut: !!cutRules?.cut, changed: effective !== asRead };
   const notes = await notesShown(read, listing, ix, first, named, new Set([...selected].filter((id) => !suppressed.has(ix.pathOf(id) ?? ''))));
   // Repeating a line already shown is valid input, but grants no fresh consent or source evidence.
   // The planner's existing Timeline check still decides whether anything may be written.
@@ -695,7 +706,13 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, fir
   return { ...(aboutMe ? { aboutMe, learnedFacts } : {}), own: ix.file(SYSTEM.dir)?.id, piles, long, pictures, notes, folders, names, suppressed, retrySources, requestNotes, presentLines, moves, personalNotes: new Set(listing.flatMap((f) => {
     const path = ix.pathOf(f.id);
     return !f.folder && f.appProperties?.by !== 'bower' && path?.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
-  })), ...(rules ? { rules } : {}) };
+  })), ...(rules ? { rules } : {}), ...(rulesHold.cut || rulesHold.changed ? { rulesHold } : {}) };
+}
+
+/** brain-10: whether a plan writes the rules: Rules.md's rules-wording edit, or Rules.md made with them. */
+function rulesWritten(manifest: RunManifest, rootId: string): boolean {
+  return manifest.operations.some(({ effect: e }) => (e.kind === 'edit-text' && e.changes.some((c) => c.kind === 'rules-wording'))
+    || (e.kind === 'create-text' && e.name === 'Rules.md' && 'fileId' in e.parent && e.parent.fileId === rootId));
 }
 
 /** Existing cited lines are evidence of repetition, never fresh consent or a new target. */
@@ -2786,8 +2803,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     let tagList: ReturnType<typeof readTagList> | undefined;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     // The sources (a pile's id, a request's journal file id) a refusal of the reply's second try left for the next tidy-up, by that refusal's kind;
-    // 'group': its group got no valid reply or no model time and waits whole (c12-fanout-wait).
-    const dropped = new Map<string, RefusalKind | 'group'>();
+    // 'group': its group got no valid reply or no model time and waits whole (c12-fanout-wait); 'rules': routing waits (brain-10).
+    const dropped = new Map<string, RefusalKind | 'group' | 'rules'>();
+    /** brain-10: the effective rules' hold, set once they are shown (a run with no model shows none). */
+    const rulesShown: { hold?: Shown['rulesHold'] } = {};
     const cut = (name: string): string => {
       if (name.length <= MAX_NAME) return name;
       let out = '';
@@ -2806,6 +2825,14 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string, t = took.taken): Promise<RunManifest> => {
       const waiting = dropped.size ? new Set([...held ?? [], ...took.taken.piles.filter((p) => dropped.has(p.pileId)).map((p) => p.pileId)]) : held;
       const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions({ ...filing, unread }), context: run.context, tagList }, undefined, waiting);
+      // brain-10: routing decided under rules the run does not keep (cut past their bound, or changes this plan does not
+      // write, as when Rules.md changed while the run read it) waits for the next tidy-up, each pile in a waiting row.
+      const hold = rulesShown.hold;
+      if (hold && (hold.cut || !rulesWritten(plan.manifest, run.rootId)) && took.taken.piles.some((p) => !dropped.has(p.pileId))) {
+        for (const p of took.taken.piles) dropped.set(p.pileId, 'rules');
+        console.error(`Routing waits for the next tidy-up: ${hold.cut ? 'the rules are past their bound' : 'the rule changes are not written this run'}.`);
+        return plannedWith(filing, held, own, by, t);
+      }
       // WS7, WS11: a pile the selection gave no item (a new folder in a cut map), that no question or hold accounts for,
       // is left in the inbox with no row: it is counted, never "nothing was ready".
       const asked = new Set(plan.manifest.operations.flatMap(({ effect: e }) => {
@@ -2846,6 +2873,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const answerPins = (a: TakenAnswer): string[] => !a.yes ? [] : [...(a.note ? [a.note.fileId] : []), ...(a.pair?.fileIds ?? [])];
     const pinned = new Set(answers.flatMap(answerPins));
     const shown = await shownOf(read, run, shownTook, pinned, new Set());
+    rulesShown.hold = shown.rulesHold;
     const work = await mkdtemp(join(tmpdir(), 'bower-claude-'));
     const cwd = join(work, 'run');
     await mkdir(cwd);
@@ -3634,7 +3662,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       }
       // Told once the run goes on without them, never for a run the dropping could not save.
       for (const [source, why] of dropped) {
-        if (why !== 'group') console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
+        if (why !== 'group' && why !== 'rules') console.error(hidden(`The Claude provider's plan for run ${run.runId} drops a ${requests.has(source) ? 'request' : 'pile'} (${why}): ${REFUSALS[why]}; it waits for the next tidy-up.`, token));
       }
       // W3: one line for every group that waited, counting its things (a pile at least one, a request one).
       const waiting = [...dropped].filter(([, why]) => why === 'group').reduce((n, [source]) => {

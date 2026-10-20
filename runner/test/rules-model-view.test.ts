@@ -3,7 +3,7 @@ import { empty, folder, run, select, setup } from './b1-planning-support';
 import { applyChanges } from '../../src/data/contracts/note-edit';
 
 // rules-added-region-model (TL-P4-53 Q7): the model sees the person's rules prose first, then the rules added in
-// Bower, as one projection bounded at today's 4,000 units with the rules' marked cut. No region: today's input.
+// Bower, as one projection bounded at 12,000 units with the rules' marked cut (4,000 until brain-10). No region: today's input.
 beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -102,19 +102,19 @@ it('AC4 rules-model-trailing-prose: words the person typed after the region are 
   expect((await shown(withRegion(PROSE, RULE, '\n', after))).rules).toBe(shownAs(`${PROSE}${after}`, RULE));
 });
 
-it('AC5 rules-model-bound-exact: a projection of exactly 4,000 units is shown whole; 4,001 is cut within 4,000', async () => {
+it('AC5 rules-model-bound-exact: a projection of exactly 12,000 units is shown whole; 12,001 is cut within 12,000', async () => {
   const fill = (projected: number) => {
     const head = shownAs('', RULE).length + 1; // the prose's eol before the heading
     return `${'r'.repeat(projected - head - 1)}\n`;
   };
-  for (const size of [4_000, 4_001]) {
+  for (const size of [12_000, 12_001]) {
     const prose = fill(size);
     const want = shownAs(prose, RULE);
     expect(want).toHaveLength(size);
     const { rules } = await shown(withRegion(prose, RULE));
-    if (size === 4_000) expect(rules, 'exactly 4,000 units: whole, no cut (the raw file is longer)').toBe(want);
+    if (size === 12_000) expect(rules, 'exactly 12,000 units: whole, no cut (the raw file is longer)').toBe(want);
     else {
-      expect(rules?.length).toBeLessThanOrEqual(4_000);
+      expect(rules?.length).toBeLessThanOrEqual(12_000);
       const shownPart = rules?.slice(0, rules.indexOf('\n[cut here:')) ?? '';
       expect(want.startsWith(shownPart)).toBe(true);
       expect(rules?.endsWith(`\n${CUT(size - shownPart.length)}`), 'the rules-specific marker counts what the projection left out').toBe(true);
@@ -122,34 +122,34 @@ it('AC5 rules-model-bound-exact: a projection of exactly 4,000 units is shown wh
   }
 });
 
-it('AC5 rules-model-cut-within-bound: the rules-specific marker fits inside the 4,000 units; exactly 4,000 is whole', async () => {
-  expect((await shown('r'.repeat(4_000))).rules, 'exactly 4,000 units with no region: whole, as today').toBe('r'.repeat(4_000));
-  for (const size of [4_001, 4_100, 12_000]) {
+it('AC5 rules-model-cut-within-bound: the rules-specific marker fits inside the 12,000 units; exactly 12,000 is whole', async () => {
+  expect((await shown('r'.repeat(12_000))).rules, 'exactly 12,000 units with no region: whole, as today').toBe('r'.repeat(12_000));
+  for (const size of [12_001, 12_100, 36_000]) {
     const { rules } = await shown('r'.repeat(size));
-    expect(rules?.length, `${size} units: the shown value, marker included, is within 4,000`).toBeLessThanOrEqual(4_000);
+    expect(rules?.length, `${size} units: the shown value, marker included, is within 12,000`).toBeLessThanOrEqual(12_000);
     const kept = rules?.indexOf('\n[cut here:') ?? -1;
     expect(rules?.slice(kept + 1)).toBe(CUT(size - kept));
   }
 });
 
 it('AC5 rules-model-original-first: a long original keeps its place; the region is cut, never the original\'s start', async () => {
-  const prose = `${'- Keep garden notes together under Resources / Garden.\n'.repeat(80)}`;
+  const prose = `${'- Keep garden notes together under Resources / Garden.\n'.repeat(230)}`;
   const { rules } = await shown(withRegion(prose, RULE));
-  expect(rules?.startsWith(prose.slice(0, 3_000))).toBe(true);
+  expect(rules?.startsWith(prose.slice(0, 11_000))).toBe(true);
   expect(rules).not.toContain('Receipts go to Areas');
   expect(rules).not.toContain('bower:ownership');
   expect(rules).toMatch(/\[cut here: \d+ more characters of the rules not shown; the list may go on\]$/);
 });
 
-it('AC6 guard rules-model-units: 4,000 two-byte characters are 4,000 units, shown whole', async () => {
-  const prose = '\u00e9'.repeat(4_000);
+it('AC6 guard rules-model-units: 12,000 two-byte characters are 12,000 units, shown whole', async () => {
+  const prose = '\u00e9'.repeat(12_000);
   expect((await shown(prose)).rules).toBe(prose);
 });
 
 const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const SPROUT = '\u{1F331}';
 /**
- * One two-unit character at every offset across the window where a 4,000- or 12,000-unit cut can fall, both parities:
+ * One two-unit character at every offset across the window where a 12,000-unit cut (the rules' or a thing's) can fall, both parities:
  * whatever slack the marker leaves, one offset puts the cut between its two units (R12).
  */
 async function sweep(window: [number, number], shownPart: (lead: number) => Promise<string | undefined>) {
@@ -165,7 +165,7 @@ async function sweep(window: [number, number], shownPart: (lead: number) => Prom
 }
 
 it('AC6 rules-model-code-point-cut: the rules cut never splits a character made of two units (R5, R12)', async () => {
-  await sweep([3_880, 3_960], async (lead) => (await shown(`${'a'.repeat(lead)}${SPROUT}${'b'.repeat(400)}\n`)).rules);
+  await sweep([11_880, 11_960], async (lead) => (await shown(`${'a'.repeat(lead)}${SPROUT}${'b'.repeat(400)}\n`)).rules);
 }, 60_000);
 
 it('AC6 rules-model-code-point-cut-default-marker: a field with the generic marker never splits one either (R5, R12)', async () => {
@@ -196,6 +196,6 @@ it('AC7 rules-model-basis: a whole region rule is a basis; its heading, a mark l
   expect(await basisCalls(rules, '## Rules added in Bower'), 'the generated heading is no rule').toBe(3);
   expect(await basisCalls(rules, 'Rules added in Bower'), 'nor its words').toBe(3);
   expect(await basisCalls(rules, '<!-- bower:ownership/2 begin rules-added -->'), 'a mark is not shown').toBe(3);
-  const long = withRegion('- Keep garden notes together under Resources / Garden.\n'.repeat(80), RULE);
+  const long = withRegion('- Keep garden notes together under Resources / Garden.\n'.repeat(230), RULE);
   expect(await basisCalls(long, 'Receipts go to Areas / Money / Receipts.'), 'a region rule the cut hid is no basis').toBe(3);
 });

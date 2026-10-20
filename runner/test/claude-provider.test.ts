@@ -269,7 +269,7 @@ describe('the Claude provider', () => {
 
   it('a cut Rules.md is marked as cut in the model input', async () => {
     const { wire, root } = await wired();
-    const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(200)}`;
+    const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(400)}`;
     await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
     const claude = recordedClaude({ stdout: recorded('reply-ok.json') }, { drive: wire.drive, root: wire.folderId, admission: wire.manifest });
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
@@ -302,7 +302,7 @@ describe('the Claude provider', () => {
   });
 
   it('a rule basis is a whole rules line, never part of one or the cut marker', async () => {
-    const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(200)}`;
+    const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(400)}`;
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // A refused basis now holds its pile and the run goes on, so each ask gets a fresh folder.
     const asks = async (basis: string): Promise<number> => {
