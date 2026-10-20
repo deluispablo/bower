@@ -1587,7 +1587,8 @@ describe('foreground discovery', () => {
     });
     const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
     status.mockResolvedValue(st(wire));
-    vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } });
+    // The page's listing does not hold the run's report yet, so the completion lists (qa-prod-10-F3).
+    vi.spyOn(a.vault, 'lastRun').mockResolvedValueOnce(null).mockResolvedValue({ v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } });
     const old = a.runs.current();
     await captured.promise;
     const version = await b.drive.get(file.id);

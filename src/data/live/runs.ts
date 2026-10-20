@@ -48,6 +48,8 @@ export class LiveRuns implements RunSource {
   private reports = new Map<string, RunReport | null>();
   private loading = new Map<string, Promise<void>>();
   private retired = new Set<string>();
+  /** The last run this page saw going: it ended after this page's listing, so its report is read after a new one. */
+  private going: string | null = null;
   private generation = 0;
   /** Request tickets: only to tell a refusal that is still current (the 4xx logic); the order of answers is the revision's. */
   private issued = 0;
@@ -294,6 +296,7 @@ export class LiveRuns implements RunSource {
     }
     if (this.retired.has(wire.id)) return;
     this.announceIdle = false;
+    if (!finished(wire)) this.going = wire.id;
     if (before?.id === wire.id) {
       if (finished(before) && wire.phase !== before.phase) {
         if (finished(wire)) console.error(new Error(`Conflicting terminal status for run ${wire.id}`));
@@ -330,15 +333,21 @@ export class LiveRuns implements RunSource {
 
   private async loadReport(wire: RunWire, generation: number): Promise<void> {
     const current = () => !this.disposed && generation === this.generation && this.last?.id === wire.id;
-    try { await this.refreshFolder(); }
-    catch (e) {
-      // Expected: disposal stops the listing; current() can still return its last no-effect state.
-      if (this.disposed) return;
-      throw e;
+    // A run that ended before this page saw it may already be in the page's listing, its report included: the run id
+    // validates it (RFC 9111 §4.3), and only a miss lists again. A run seen going ended after the listing: list first.
+    let file = this.going === wire.id ? null : await this.vault.lastRun();
+    if (!current()) return;
+    if (file?.run.id !== wire.id) {
+      try { await this.refreshFolder(); }
+      catch (e) {
+        // Expected: disposal stops the listing; current() can still return its last no-effect state.
+        if (this.disposed) return;
+        throw e;
+      }
+      if (!current()) return;
+      file = await this.vault.lastRun();
+      if (!current()) return;
     }
-    if (!current()) return;
-    const file = await this.vault.lastRun();
-    if (!current()) return;
     const report = file?.run.id === wire.id ? file.run.report : undefined;
     this.reports.set(wire.id, report ?? null);
     this.emit();
