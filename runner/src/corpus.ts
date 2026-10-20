@@ -92,7 +92,8 @@ export interface CorpusCase {
  * `consumer` is the runner test (under `runner/test`) that runs the case through main; `setup` names the fault or extra
  * Drive state that test supplies beyond the case's files. `replies` runs the case's `replies.json` at the Claude
  * boundary, `provider` runs it through the scripted provider, `inline` through replies its consumer writes. A case is
- * live-ready when a run from its own files alone can execute it: not excluded and needing no setup.
+ * live-ready when a live run can execute it: not excluded, and needing no setup or one the test driver registers
+ * (`CORPUS_SETUPS` in `runner/test/corpus-run.ts`, corpus-live-hooks).
  */
 export type CaseExecution =
   | { consumer: string; setup: string | null; mode: 'replies' | 'provider' | 'inline'; live: boolean }
@@ -100,6 +101,8 @@ export type CaseExecution =
   | { consumer: string; setup: null; mode: 'excluded'; live: false; reason: string };
 
 const replies = (consumer: string, setup: string | null = null): CaseExecution => ({ consumer, setup, mode: 'replies', live: setup === null });
+/** A setup the test driver registers, so a live run applies it as the consumer does: live-ready. */
+const registered = (consumer: string, setup: string): CaseExecution => ({ consumer, setup, mode: 'replies', live: true });
 const provider = (consumer: string): CaseExecution => ({ consumer, setup: null, mode: 'provider', live: true });
 const inline = (consumer: string): CaseExecution => ({ consumer, setup: null, mode: 'inline', live: true });
 const excluded = (reason: string): CaseExecution => ({ consumer: 'corpus-requirements.test.ts', setup: null, mode: 'excluded', live: false, reason });
@@ -111,7 +114,7 @@ export const CORPUS_EXECUTION: Readonly<Record<string, CaseExecution>> = {
   'b1-changes-person-edit': replies('b1-index.test.ts'),
   'b1-index-job-offer': replies('b1-planning.test.ts'),
   'b1-index-no-change': replies('b1-index.test.ts'),
-  'b1-maintenance-crash-resume': replies('b1a-contract.test.ts', 'maintenance-reply-lost'),
+  'b1-maintenance-crash-resume': registered('b1a-contract.test.ts', 'maintenance-reply-lost'),
   'b1-moc-over-40': replies('b1-index.test.ts'),
   'b23-hot-evidence-only': replies('b23-hot-recovery.test.ts'),
   'b23-hot-question-answer': replies('b23-hot-context.test.ts'),
@@ -158,10 +161,10 @@ export const CORPUS_EXECUTION: Readonly<Record<string, CaseExecution>> = {
   'c11-source-cannot-answer': inline('c11-corpus.test.ts'),
   'c11-source-cannot-override-rule': inline('c11-corpus.test.ts'),
   'c12-admission-waits': replies('c12-corpus-admit.test.ts', 'admission-estimate-2'),
-  'c12-group-waits': replies('c12-corpus.test.ts', 'group-reply-refused'),
+  'c12-group-waits': registered('c12-corpus.test.ts', 'group-reply-refused'),
   'c12-model-failure-retry': replies('c12-corpus.test.ts', 'model-call-fails'),
   'c12-text-budget-truthful': replies('c12-corpus.test.ts'),
-  'c12-tool-interruption-recovery': replies('c12-corpus.test.ts', 'filing-answer-lost'),
+  'c12-tool-interruption-recovery': registered('c12-corpus.test.ts', 'filing-answer-lost'),
   'c13-manifest-move-and-create': excluded(NO_UNDO),
   'c13-manifest-partial-edited-note': excluded(NO_UNDO),
   'c13-manifest-state-with-personal-edit': excluded(NO_UNDO),
@@ -185,8 +188,8 @@ export const CORPUS_EXECUTION: Readonly<Record<string, CaseExecution>> = {
   'c17-b4-gate-archive-first': replies('b4c-fixtures.test.ts'),
   'c17-b4-origin-not-authority': replies('b4c-fixtures.test.ts'),
   'c17-b56-clear-topic-templates': replies('b56-corpus.test.ts'),
-  'c17-b56-cv-profile': replies('b5c-profile.test.ts', 'career-profile-property'),
-  'c17-b56-offer-job-search': replies('b5-incorporation.test.ts', 'career-profile-property'),
+  'c17-b56-cv-profile': registered('b5c-profile.test.ts', 'career-profile-property'),
+  'c17-b56-offer-job-search': registered('b5-incorporation.test.ts', 'career-profile-property'),
   'c17-b56-personal-sale-project': replies('b56-corpus.test.ts'),
   'c17-b7-authority-full-cap': replies('b7-incorporation.test.ts'),
   'c17-b7-automatic-capacity-order': replies('b7-incorporation.test.ts'),
@@ -195,7 +198,7 @@ export const CORPUS_EXECUTION: Readonly<Record<string, CaseExecution>> = {
   'c17-b8-bounded-encoding': replies('b8-log.test.ts'),
   'c17-b8-findings-refresh': replies('b8-health.test.ts'),
   'c17-b8-report-only-grammar': replies('b8-health.test.ts'),
-  'c17-b8-settled-recovery': replies('b8-health.test.ts', 'hub-edit-refused-log-lost'),
+  'c17-b8-settled-recovery': registered('b8-health.test.ts', 'hub-edit-refused-log-lost'),
   'c17-b9-person-list-kept': replies('b9-corpus.test.ts'),
   'c17-b9-uncertain-and-inferred': replies('b9-corpus.test.ts'),
 };

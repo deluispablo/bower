@@ -38,8 +38,7 @@ it('corpus-registry AC1: every retained case has exactly one execution descripto
     expect({ id: c.id, consumer: d.consumer, runs: /runScripted|runWithClaude|runOnDrive|caseReplies/.test(text) }).toEqual({ id: c.id, consumer: d.consumer, runs: true });
     const loop = d.consumer === 'corpus.test.ts' && c.covers === 'scripted';
     expect({ id: c.id, consumer: d.consumer, names: names(text, c.id) || loop }).toEqual({ id: c.id, consumer: d.consumer, names: true });
-    // Live readiness: not excluded, and no setup that a run from the case's files cannot reproduce.
-    expect({ id: c.id, live: d.live }).toEqual({ id: c.id, live: d.mode !== 'excluded' && d.setup === null });
+    // Live readiness is ruled with the registered setups (corpus-hooks.test.ts, corpus-live-hooks AC4).
   }
   const modes = Object.values(registry).reduce<Record<string, number>>((n, d) => ({ ...n, [d.mode]: (n[d.mode] ?? 0) + 1 }), {});
   expect(modes).toEqual({ replies: 69, provider: 7, inline: 6, excluded: 8 });
@@ -56,7 +55,7 @@ it('corpus-registry AC1: every retained case has exactly one execution descripto
     'c17-b8-bounded-encoding': { consumer: 'b8-log.test.ts', setup: null, mode: 'replies', live: true },
     'c17-b8-findings-refresh': { consumer: 'b8-health.test.ts', setup: null, mode: 'replies', live: true },
     'c17-b8-report-only-grammar': { consumer: 'b8-health.test.ts', setup: null, mode: 'replies', live: true },
-    'c17-b8-settled-recovery': { consumer: 'b8-health.test.ts', setup: 'hub-edit-refused-log-lost', mode: 'replies', live: false },
+    'c17-b8-settled-recovery': { consumer: 'b8-health.test.ts', setup: 'hub-edit-refused-log-lost', mode: 'replies', live: true },
   });
   // Negative controls: a consumer that never names the case, or names only another slug, is not its consumer.
   expect(names("fixture('bounded-encoding')", 'c17-b8-findings-refresh')).toBe(false);

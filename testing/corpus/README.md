@@ -85,12 +85,13 @@ document: asking again makes a new note); c13-manifest-move-and-create, c13-mani
 c13-manifest-state-with-personal-edit (the owner dropped Undo of a whole tidy-up on 2026-10-16).
 
 The registry, `CORPUS_EXECUTION` in `runner/src/corpus.ts`, records each case's consumer test, setup, execution mode
-and live readiness apart from `covers`. Of the 90 retained cases, the eight above are excluded and 82 can execute; 74 of
-them are live-ready. Eight need a setup that only their consumer test supplies, so they are not live-ready:
-b1-maintenance-crash-resume (maintenance-reply-lost), c12-admission-waits (admission-estimate-2),
-c12-group-waits (group-reply-refused), c12-model-failure-retry (model-call-fails), c12-tool-interruption-recovery
-(filing-answer-lost), c17-b56-cv-profile and c17-b56-offer-job-search (career-profile-property), and
-c17-b8-settled-recovery (hub-edit-refused-log-lost).
+and live readiness apart from `covers`. Of the 90 retained cases, the eight above are excluded and 82 can execute; 80 of
+them are live-ready. Eight need a setup beyond their own files. The test driver registers the setups of six of them
+(`CORPUS_SETUPS` in `runner/test/corpus-run.ts`), and a live run applies them as the consumer test does:
+b1-maintenance-crash-resume (maintenance-reply-lost), c12-group-waits (group-reply-refused),
+c12-tool-interruption-recovery (filing-answer-lost), c17-b56-cv-profile and c17-b56-offer-job-search
+(career-profile-property), and c17-b8-settled-recovery (hub-edit-refused-log-lost). Two are not live-ready, and a
+live run refuses them: c12-admission-waits (admission-estimate-2) and c12-model-failure-retry (model-call-fails).
 
 `replies.json` supplies deterministic intent replies at the existing Claude provider boundary. `$file:NAME` binds an exact admitted name to its id. `between` edits or moves run on the same fake Drive between two production runner calls; an empty array runs twice without a personal edit. Existing cases keep their demo-provider path.
 

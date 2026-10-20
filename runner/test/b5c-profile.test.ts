@@ -3,7 +3,7 @@ import { applyChanges } from '../../src/data/contracts/note-edit';
 import type { Change } from '../../src/data/contracts/run-manifest';
 import { parseOwnership } from '../../src/data/contracts/ownership-format';
 import { note, run, select, setup } from './b1-planning-support';
-import { AT } from './corpus-run';
+import { AT, CORPUS_SETUPS } from './corpus-run';
 
 const PROFILE = 'Areas/Career/Career profile.md';
 const SOURCE = 'Alex CV.txt';
@@ -183,7 +183,7 @@ async function rejectedProfile(b: Base, sentences: number[], reason: RegExp) {
 }
 
 type ProfileRef = { source: string; sentence: number };
-const PROPS = { [PROFILE]: { profile: 'cv' } };
+const PROPS = CORPUS_SETUPS['career-profile-property'].props;
 async function corpusProfile(slug: string, control = false) {
   const c = await loadCase(resolve(import.meta.dirname, '../../testing/corpus', slug));
   const replies = JSON.parse(readFileSync(join(c.dir, 'replies.json'), 'utf8')) as

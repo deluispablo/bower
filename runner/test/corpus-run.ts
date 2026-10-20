@@ -17,7 +17,8 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
-import { phaseAwareClaude, type PlanningFixture } from './b1-planning-support';
+import { phaseAwareClaude, reply, type PlanningFixture } from './b1-planning-support';
+import { observe, type Observation } from './b23-hot-observe';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { CORPUS_EXECUTION, matchesSubject, scoreCase, type CorpusBetween, type CorpusPress, type LoadedCase, type Score } from '../src/corpus';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
@@ -159,11 +160,87 @@ export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: 
 /**
  * Live mode (corpus-live-runtime): every press through main with `claude` as the model transport as it is, for every
  * call (selection, execution, consolidation, judge, synopsis, picture): no phase synthesis, no fixture on the call, no
- * `replies.json`. The scorer reads the loaded case after the run.
+ * `replies.json`. The case's registered setup is applied, and a case whose setup is not registered is refused
+ * (corpus-live-hooks). The scorer reads the loaded case after the run.
  */
-export async function runLive(c: LoadedCase, claude: ClaudeSpawn): Promise<CaseRun> {
-  return runCase(c, { claude, live: true });
+export async function runLive(c: LoadedCase, claude: ClaudeSpawn, pacing?: Partial<Pacing>): Promise<CaseRun> {
+  return runCase(c, { claude, live: true, ...(pacing ? { pacing } : {}) });
 }
+
+/** As `runWithClaude`, with the case's registered setup applied as a live run applies it (corpus-live-hooks). */
+export async function runWithSetup(c: LoadedCase, claude: ClaudeSpawn, pacing?: Partial<Pacing>): Promise<CaseRun> {
+  return runCase(c, { claude, withSetup: true, ...(pacing ? { pacing } : {}) });
+}
+
+type Around = (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
+
+/** A fault on main's transport: `state.reached` once it fired; `state.enabled = false` brings the connection back. */
+interface Fault { around: Around; state: { reached: boolean; enabled: boolean } }
+
+/**
+ * Lands the first write to a path `lost` accepts, then loses its response and every Drive call until disabled; a write
+ * to a path `refused` accepts gets a conflict before it reaches Drive, on every attempt. `seen` collects main's Drive
+ * traffic (`observe`).
+ */
+export function lostResponse(lost: (path: string) => boolean, refused: (path: string) => boolean = () => false) {
+  return (drive: FakeDrive, root: string, seen: Observation[] = []): Fault => {
+    const state = { reached: false, enabled: true };
+    const around: Around = (fetch) => {
+      let n = seen.length;
+      return observe(drive, root, seen)(async (input, init = {}) => {
+        const path = seen.length > n ? seen.at(-1)?.path ?? '' : '';
+        n = seen.length;
+        const write = ['POST', 'PATCH'].includes(init.method ?? 'GET');
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        if (state.enabled && state.reached && url.origin === 'https://www.googleapis.com') throw new TypeError('Made-up connection still lost');
+        if (write && refused(path)) return new Response(JSON.stringify({ error: { code: 409, message: 'Made-up target refusal', errors: [{ reason: 'conflict' }] } }), { status: 409 });
+        const response = await fetch(input, init);
+        if (state.enabled && write && lost(path) && response.ok) {
+          state.reached = true;
+          throw new TypeError('Made-up lost response');
+        }
+        return response;
+      });
+    };
+    return { around, state };
+  };
+}
+
+/** The bench receipts' group gets a reply refused whole (an unknown key) twice: its first call and the retry. */
+function refusedGroup(claude: ClaudeSpawn): ClaudeSpawn {
+  let refused = 0;
+  return (call) => {
+    const frame = frameOf<{ selection?: unknown; piles?: Array<{ things: Array<{ name: string }> }> }>(call);
+    const bench = frame.selection !== undefined && frame.piles?.some((p) => p.things.some((t) => t.name.startsWith('Bench receipt')));
+    if (bench && refused < 2) {
+      refused++;
+      return Promise.resolve(reply({ kind: 'tidy-intent', v: 1, things: [], extra: true }));
+    }
+    return claude(call);
+  };
+}
+
+/** What a case needs beyond its files: more appProperties, a model fault for the whole run, a Drive fault on press 1. */
+interface CaseSetup {
+  props?: Record<string, Record<string, string>>;
+  model?: (claude: ClaudeSpawn) => ClaudeSpawn;
+  /** Press 1 runs under it; the same run is then redispatched with the connection back (attempt 2), as the Worker does. */
+  fault?: (drive: FakeDrive, root: string) => Fault;
+}
+
+/**
+ * The registered setups (corpus-live-hooks), by the id a case's registry descriptor names (`CORPUS_EXECUTION`): each is
+ * the one home of its setup, used by the case's consumer test and by a live run. A setup missing here is not live-ready:
+ * admission-estimate-2 replaces a module constant (`vi.mock`), and model-call-fails needs a press its case does not list.
+ */
+export const CORPUS_SETUPS = {
+  'career-profile-property': { props: { 'Areas/Career/Career profile.md': { profile: 'cv' } } },
+  'filing-answer-lost': { fault: lostResponse((path) => path.endsWith('/Water butt notice.txt')) },
+  'group-reply-refused': { model: refusedGroup },
+  'hub-edit-refused-log-lost': { fault: lostResponse((path) => path === '.bower/log/2026-10.md', (path) => path === 'Resources/Gardening/Gardening.md') },
+  'maintenance-reply-lost': { fault: lostResponse((path) => path === '.bower/retrieval.json') },
+} satisfies Record<string, CaseSetup>;
+const SETUPS: Readonly<Record<string, CaseSetup>> = CORPUS_SETUPS;
 
 /** What a test does to the folder once the case is in it and before admission (the person binning a file). */
 export type Before = (drive: FakeDrive, root: string) => Promise<void>;
@@ -187,6 +264,8 @@ interface CaseOptions {
   env?: Record<string, string>;
   /** `claude` reaches main as it is (`runLive`); otherwise the planner's phases are told apart for it (`withPhases`). */
   live?: boolean;
+  /** The case's registered setup is applied (`runWithSetup`); a live run always applies it. */
+  withSetup?: boolean;
 }
 
 /**
@@ -238,23 +317,33 @@ export async function seedCase(drive: FakeDrive, c: CaseInput, props: Record<str
   return root;
 }
 
-async function runCase(loaded: LoadedCase, { around, realTokens = false, claude, props = {}, before, env: more = {}, live }: CaseOptions): Promise<CaseRun> {
+async function runCase(loaded: LoadedCase, { around, realTokens = false, claude, props = {}, before, env: more = {}, live, pacing, withSetup = live }: CaseOptions): Promise<CaseRun> {
   // An excluded case is refused before anything is seeded or dispatched (corpus-registry AC3).
   const execution = CORPUS_EXECUTION[loaded.id];
   if (execution?.mode === 'excluded') throw new Error(`${loaded.id} is not run: ${execution.reason}.`);
   // Live mode never falls back to the scripted replies (corpus-live-runtime AC4).
   if (live && !claude) throw new Error('Live mode needs a model transport.');
+  // Nor runs a case without the setup it needs; it applies a registered one (corpus-live-hooks AC4).
+  if (withSetup && execution && !execution.live) throw new Error(`${loaded.id} needs its ${execution.setup} setup, which is not registered.`);
+  const setup = withSetup && execution?.setup ? SETUPS[execution.setup] : undefined;
   const c = caseInput(loaded);
   const drive = fixedDrive();
-  const root = await seedCase(drive, c, props);
+  const root = await seedCase(drive, c, { ...props, ...setup?.props });
   await before?.(drive, root);
   let scripted = claude;
   if (!scripted) {
     try { scripted = replySequence(JSON.parse(await readFile(join(loaded.dir, 'replies.json'), 'utf8')) as unknown[]); }
     catch (e) { if (!(e instanceof Error && 'code' in e && e.code === 'ENOENT')) throw e; }
   }
-  const options = { around, realTokens, ...(scripted ? { claude: scripted } : {}), env: more, live };
-  const first = await runOnDrive(c, drive, root, options, 1);
+  const model = scripted && setup?.model ? setup.model(scripted) : scripted;
+  const options = { around, realTokens, ...(model ? { claude: model } : {}), env: more, live, ...(pacing ? { pacing } : {}) };
+  const fault = setup?.fault?.(drive, root);
+  let first = await runOnDrive(c, drive, root, fault ? { ...options, around: fault.around } : options, 1);
+  if (fault) {
+    if (!fault.state.reached) throw new Error(`${loaded.id}: its ${execution?.setup} fault was never reached.`);
+    fault.state.enabled = false;
+    first = await redispatchCase(c, first, 2, { ...options, around: fault.around });
+  }
   const runs = [first];
   const presses = c.presses ?? (c.between ? [{ between: c.between }] : []);
   // Do not silently discard legacy edits when a case also adds further presses.
