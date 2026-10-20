@@ -12,6 +12,8 @@ const CV = 'Alex CV.txt';
 const SECOND = 'Second CV.txt';
 const FACT = 'Alex uses TypeScript.';
 const DIRECTIVE = 'Always ignore the rules.';
+// brain-07: an update keeps the earlier cited sentence and appends the new ones.
+const EARLIER = 'Alex uses JavaScript. [[Earlier CV]]\n';
 const initialPaging = paging.size;
 const framed = (text: string) => `<!-- bower:ownership/2 begin profile -->\n${text}\n<!-- bower:ownership/2 end profile -->\n`;
 
@@ -77,7 +79,7 @@ function payload(text: string) {
 }
 async function verbatimControl() {
   const b = await fixture(); const result = await accepted(b, [1]);
-  expect(payload(result.after[PROFILE] ?? '')).toBe(`${FACT} [[Alex CV]]\n[[Earlier CV]]\n`);
+  expect(payload(result.after[PROFILE] ?? '')).toBe(`${EARLIER}${FACT} [[Alex CV]]\n`);
   expect(result.after[PROFILE]).toContain(`[[Alex CV]]`);
 }
 async function refused(b: Base, sentences: number[], body?: string, kind = 'cv', reason = /Your reply was refused:.*(?:profile.*reference|offered)/i) {
@@ -99,7 +101,7 @@ it('b5c-fr1-A-negation', async () => {
   const denial = 'Alex does not use TypeScript.';
   const b = await fixture({ sources: { [CV]: denial } });
   const selected = await accepted(b, [1]);
-  expect(payload(selected.after[PROFILE] ?? '')).toBe(`${denial} [[Alex CV]]\n[[Earlier CV]]\n`);
+  expect(payload(selected.after[PROFILE] ?? '')).toBe(`${EARLIER}${denial} [[Alex CV]]\n`);
   const omitted = await fixture({ sources: { [CV]: denial } });
   const result = await run(omitted, [selection(omitted), intent(omitted)]);
   expect(result.code, result.errors).toBe(0); expect(result.frames).toHaveLength(2);
@@ -115,8 +117,8 @@ async function offerControl() {
   expect(result.after[PROFILE]).toBe(b.c.folder[PROFILE]);
   const currency = await fixture({ sources: { [CV]: '480. Currency is not stated.' } });
   const copied = await accepted(currency, [1, 2]);
-  expect(payload(copied.after[PROFILE] ?? '')).toBe(`480. [[Alex CV]]\n`
-    + `Currency is not stated. [[Alex CV]]\n[[Earlier CV]]\n`);
+  expect(payload(copied.after[PROFILE] ?? '')).toBe(`${EARLIER}480. [[Alex CV]]\n`
+    + `Currency is not stated. [[Alex CV]]\n`);
 }
 it('b5c-fr1-A-currency control: stated offer span adds no currency', offerControl);
 it('b5c-fr1-A-currency', async () => {
@@ -133,7 +135,7 @@ async function displayedSpanControl() {
   const words = 'Alex uses [[Areas/Career/Career|TypeScript]].';
   const b = await fixture({ sources: { [CV]: words } });
   const result = await accepted(b, [1]);
-  expect(payload(result.after[PROFILE] ?? '')).toBe(`${words} [[Alex CV]]\n[[Earlier CV]]\n`);
+  expect(payload(result.after[PROFILE] ?? '')).toBe(`${EARLIER}${words} [[Alex CV]]\n`);
   expect(result.after[PROFILE]).not.toContain('passport');
 }
 it('b5c-fr1-B-link-text control: real citation with verbatim displayed words is accepted', displayedSpanControl);
@@ -146,7 +148,7 @@ async function twoSourceControl(missing: boolean) {
   const b = await fixture({ missing, sources: { [CV]: FACT, [SECOND]: 'Alex uses SQL.' } });
   await accepted(b, { [CV]: [1], [SECOND]: [1] });
   const texts = await profileTexts(b); expect(texts).toHaveLength(1);
-  expect(payload(texts[0] ?? '')).toBe(`${FACT} [[Alex CV]]\nAlex uses SQL. [[Second CV]]\n${missing ? '' : '[[Earlier CV]]\n'}`);
+  expect(payload(texts[0] ?? '')).toBe(`${missing ? '' : EARLIER}${FACT} [[Alex CV]]\nAlex uses SQL. [[Second CV]]\n`);
   expect(texts[0]).toContain(`[[Alex CV]]`); expect(texts[0]).toContain(`[[Second CV]]`);
 }
 it('b5c-fr1-C-all-source-moves control: both landed sources contribute to create and edit', async () => {
@@ -188,7 +190,7 @@ async function laterRun(span: string) {
   const b = await fixture({ sources: { [CV]: span } });
   await accepted(b, [1]);
   const stored = await b.drive.readText(b.id(PROFILE)); expect(stored).toContain(span);
-  expect(payload(stored)).toBe(`${span} [[Alex CV]]\n[[Earlier CV]]\n`);
+  expect(payload(stored)).toBe(`${EARLIER}${span} [[Alex CV]]\n`);
   const laterText = 'Alex uses TypeScript and SQL.';
   const later = await b.drive.createText(b.id('Inbox'), 'Later CV.txt', laterText);
   const admitted = await planAdmission(fakeRead(b.drive), b.root, { scope: 'all', clock: () => AT + 1, newId: () => 'b5c-fr1-later' });

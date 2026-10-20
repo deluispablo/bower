@@ -10,6 +10,8 @@ const CV = 'Alex CV.txt';
 const FACT = 'Alex uses TypeScript.';
 const DENIAL = 'It is untrue that Alex uses TypeScript.';
 const HEALTH_LINK = '[[Alex has diabetes.]]';
+// brain-07: an update keeps the earlier profile prose and appends the new cited sentences.
+const EARLIER = 'Earlier career facts.\n';
 const initialPaging = paging.size;
 type Ref = { source: string; sentence: number };
 
@@ -106,9 +108,9 @@ it('b5c-fr2-refs-bytes', async () => {
   await ordinaryControl('Alex uses TypeScript. Alex builds café tools!');
   const b = await fixture('Alex uses TypeScript. Alex builds café tools! Alex uses SQL.');
   const result = await selected(b, refs(b, 1, 2),
-    `${FACT} [[Alex CV]]\nAlex builds café tools! [[Alex CV]]\n`);
+    `${EARLIER}${FACT} [[Alex CV]]\nAlex builds café tools! [[Alex CV]]\n`);
   expect(new TextEncoder().encode(payload(result.after[PROFILE] ?? ''))).toEqual(new TextEncoder().encode(
-    `${FACT} [[Alex CV]]\nAlex builds café tools! [[Alex CV]]\n`));
+    `${EARLIER}${FACT} [[Alex CV]]\nAlex builds café tools! [[Alex CV]]\n`));
   expect(payload(result.after[PROFILE] ?? '')).not.toContain('Alex uses SQL.');
 });
 
@@ -128,7 +130,7 @@ it('b5c-fr2-made-up-index control: a source without profile refs files', async (
 it('b5c-fr2-made-up-index', async () => {
   await ordinaryControl();
   const b = await fixture();
-  await selected(b, refs(b, 1), `${FACT} [[Alex CV]]\n`);
+  await selected(b, refs(b, 1), `${EARLIER}${FACT} [[Alex CV]]\n`);
   const invalid = await fixture();
   await refused(invalid, refs(invalid, 999));
 });
@@ -152,7 +154,7 @@ it('b5c-fr2-select-denial control: an omitted denial changes no profile', async 
 it('b5c-fr2-select-denial', async () => {
   await ordinaryControl(DENIAL);
   const b = await fixture(DENIAL);
-  await selected(b, refs(b, 1), `${DENIAL} [[Alex CV]]\n`);
+  await selected(b, refs(b, 1), `${EARLIER}${DENIAL} [[Alex CV]]\n`);
 });
 
 for (const count of [1, 401]) {
@@ -177,10 +179,10 @@ it('b5c-fr2-400-words control: a 401-word original remains losslessly fileable',
 });
 it('b5c-fr2-400-words', async () => {
   await ordinaryControl(Array(401).fill('TypeScript').join(' '));
-  // The existing writer counts the two-word citation: 398 source words plus it is exactly 400.
-  const sentence = `${Array(398).fill('TypeScript').join(' ')}.`;
+  // The existing writer counts the two-word citation: the 3 earlier words, 395 source words and it are exactly 400.
+  const sentence = `${Array(395).fill('TypeScript').join(' ')}.`;
   const b = await fixture(sentence);
-  const result = await selected(b, refs(b, 1), `${sentence} [[Alex CV]]\n`);
+  const result = await selected(b, refs(b, 1), `${EARLIER}${sentence} [[Alex CV]]\n`);
   expect(payload(result.after[PROFILE] ?? '').trim().split(/\s+/u)).toHaveLength(400);
   const over = await fixture(`${Array(401).fill('TypeScript').join(' ')}.`);
   await refused(over, refs(over, 1));
