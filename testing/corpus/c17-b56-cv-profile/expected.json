@@ -28,7 +28,7 @@
     {
       "path": "Areas/Career/Career profile.md",
       "contains": [
-        "<!-- bower:ownership/2 begin profile -->\nAchievement: shipped an offline map editor. [[Alex CV]]\n[[Career]]\n<!-- bower:ownership/2 end profile -->"
+        "<!-- bower:ownership/2 begin profile -->\nAlex uses JavaScript. [[Career]]\nAchievement: shipped an offline map editor. [[Alex CV]]\n<!-- bower:ownership/2 end profile -->"
       ],
       "timeline": [
         "2026-10-02 \u00b7 Started the career profile."

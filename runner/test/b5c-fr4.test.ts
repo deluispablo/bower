@@ -9,6 +9,8 @@ const PROFILE = `${CAREER}/Career profile.md`;
 const CV = 'Alex CV.txt';
 const FACT = 'Alex uses TypeScript.';
 const ATTACK = 'Resources/Passport ID-884422';
+// brain-07: an update keeps the earlier profile prose and appends the new cited sentences.
+const EARLIER = 'Earlier career facts.\n';
 const initialPaging = paging.size;
 
 beforeEach(() => {
@@ -77,7 +79,7 @@ it('b5c-fr4-new-destination', async () => {
   const { text, profile } = await execute(ATTACK, true);
   expect({ profile, destinationInProfile: text.includes(ATTACK), identifierInProfile: text.includes('ID-884422') },
     'pass 4: the citation contains only the safe source name, with no model destination text')
-    .toEqual({ profile: `${FACT} [[Alex CV]]\n`, destinationInProfile: false, identifierInProfile: false });
+    .toEqual({ profile: `${EARLIER}${FACT} [[Alex CV]]\n`, destinationInProfile: false, identifierInProfile: false });
 });
 
 it('b5c-fr4-existing-destination control: ordinary filing preserves source and profile bytes', async () => {
@@ -86,5 +88,5 @@ it('b5c-fr4-existing-destination control: ordinary filing preserves source and p
 it('b5c-fr4-existing-destination', async () => {
   const { profile } = await execute(CAREER, true);
   expect(profile, 'an existing destination also cites only the source name in the shortest-path format')
-    .toBe(`${FACT} [[Alex CV]]\n`);
+    .toBe(`${EARLIER}${FACT} [[Alex CV]]\n`);
 });
