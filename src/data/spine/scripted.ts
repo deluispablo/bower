@@ -3994,7 +3994,7 @@ type RulesWording = Extract<Change, { kind: 'rules-wording' }>;
  * Your rule lines as one `rules-wording` change (TL-P2-20, TL-P2-26), removals and adds alike; a line whose words
  * cannot be worded is `left` pending, uncaptured, with one BowerError.
  */
-function ruleChangesOf(lines: readonly JournalLine[], wordRule: (words: string) => string): { change: RulesWording | null; left: ReadonlySet<string> } {
+function ruleChangesOf(lines: ReadonlyArray<Pick<JournalLine, 'rec'>>, wordRule: (words: string) => string): { change: RulesWording | null; left: ReadonlySet<string> } {
   const left = new Set<string>();
   const add: RuleAdd[] = [];
   const remove: RuleRemove[] = [];
@@ -4015,6 +4015,19 @@ function ruleChangesOf(lines: readonly JournalLine[], wordRule: (words: string) 
   }
   if (left.size) console.error(`${left.size} rule lines cannot be worded`);
   return { change: add.length || remove.length ? { kind: 'rules-wording', add, remove } : null, left };
+}
+
+/**
+ * brain-10: Rules.md as this run's admitted rule lines leave it, worded and ordered as the run writes them (`ruleChangesOf`,
+ * with its undo pairs and removals) by the one author (`applyChanges`), so both model calls read the rules the run keeps.
+ * A missing Rules.md is the template's empty one; a text the change cannot be written into is returned as read, as the
+ * run then leaves those lines pending. Null: no Rules.md and no rule to add.
+ */
+export function effectiveRules(text: string | null, records: readonly JournalRecord[]): string | null {
+  const { change } = ruleChangesOf(records.map((rec) => ({ rec })), tidiedRule);
+  if (!change || (text === null && !change.add.length)) return text;
+  const result = applyChanges(new TextEncoder().encode(text ?? serializeRules([])), [change]);
+  return result.ok ? result.text : text;
 }
 
 /**
