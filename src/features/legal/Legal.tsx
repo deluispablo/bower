@@ -8,7 +8,7 @@ export function Privacy() {
     <main className={s.page}>
       <Top />
       <h1>Privacy</h1>
-      <p>Bower files what you save into a folder of your own Google Drive. Your notes and files stay there; Bower does not keep a copy anywhere else.</p>
+      <p>Bower files what you save into a folder of your own Google Drive. Your notes and files stay there; Bower does not keep a copy anywhere else. Bower does not look things up on the web yet.</p>
       <h2>What Bower keeps</h2>
       <ul>
         <li>Your name and email, to know who you are.</li>
@@ -20,7 +20,6 @@ export function Privacy() {
         <li>Read anything in your Drive outside its own folder.</li>
         <li>Keep your notes or files on its servers.</li>
         <li>Write passport, ID or account numbers into your notes.</li>
-        <li>Look things up on the web, unless you turn that on in Settings.</li>
       </ul>
       <h2>Leaving</h2>
       <p>Delete the app in Settings and Bower forgets you. Your folder stays in your Drive, with everything in it.</p>

@@ -114,10 +114,10 @@ test('the main journeys work by keyboard alone, and every screen passes axe', as
   await press(page, nav(page, 'Home', 'Home', isMobile));
   await press(page, main.getByRole('link', { name: 'Your account and settings' }));
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  const web = main.getByRole('switch', { name: 'Look things up on the web' });
-  const was = await web.getAttribute('aria-checked');
-  await press(page, web, 'Space');
-  await expect(web).not.toHaveAttribute('aria-checked', was ?? '');
+  const moves = main.getByRole('switch', { name: 'Bower moves' });
+  const was = await moves.getAttribute('aria-checked');
+  await press(page, moves, 'Space');
+  await expect(moves).not.toHaveAttribute('aria-checked', was ?? '');
   await scan(page);
 
   expect(await page.evaluate(() => (window as unknown as { __pointers: number }).__pointers)).toBe(0);

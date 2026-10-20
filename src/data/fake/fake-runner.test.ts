@@ -291,7 +291,7 @@ describe('the fake runner', () => {
     await vault.addRequest(LOOKUP);
     const out = await tidyUp(drive, root, 'instructions');
     if (out.phase !== 'done') throw new Error('failed');
-    expect((await fresh().requests())[0]?.done).toBe('Bower did not look anything up. Web lookups are off in Settings.');
+    expect((await fresh().requests())[0]?.done).toBe('Bower did not look anything up. Looking things up on the web is still to come.');
     expect(out.manifest.operations.some((o) => o.effect.kind === 'edit-text')).toBe(false);
     expect(out.report.updated).toEqual([]);
     expect(drive.dump(root).get(FLAT_3)).toBe(before);

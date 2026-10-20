@@ -250,7 +250,7 @@ describe('what the testers found', () => {
     const done = new Map((await vault.requests()).map((r) => [r.text, r.done]));
     // qa7-refused-words: a comparison it did not write is not done.
     expect(done.get('Compare the flats on the shortlist')).toBe("Bower didn't change anything for this request.");
-    expect(done.get('Look up the council tax band for Flat 3')).toBe(allowWeb ? 'Bower did not look anything up.' : 'Bower did not look anything up. Web lookups are off in Settings.');
+    expect(done.get('Look up the council tax band for Flat 3')).toBe(allowWeb ? 'Bower did not look anything up.' : 'Bower did not look anything up. Looking things up on the web is still to come.');
     expect(done.get('Which flat is closest to Ferrowick?')).toContain('[[Flat 7, Cobble Row]] has the shortest commute');
     expect(findNode(await vault.tree(), 'Projects/Flat hunt/Flats on the shortlist, compared.md')).toBeNull();
     w.dispose();

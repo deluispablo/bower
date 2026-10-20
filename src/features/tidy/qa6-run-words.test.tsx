@@ -57,7 +57,7 @@ describe('AC1 a request that did nothing is not called done', () => {
     await vault().addRequest(LOOKUP);
     const out = await tidyUp(drive, root, 'instructions');
     if (out.phase !== 'done') throw new Error('the run failed');
-    expect((await vault().requests())[0]?.done).toBe('Bower did not look anything up. Web lookups are off in Settings.');
+    expect((await vault().requests())[0]?.done).toBe('Bower did not look anything up. Looking things up on the web is still to come.');
     expect(out.report.requests ?? []).not.toContain(LOOKUP);
     expect(runDetail(done('instructions', out.report))).not.toMatch(/\bdone\b/);
   });

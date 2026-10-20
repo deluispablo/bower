@@ -1,5 +1,6 @@
 .wrap { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
-@media (min-width: 900px) { .wrap { grid-template-columns: 1fr minmax(460px, 560px); grid-template-rows: none; } }
+/* desktop: the art takes 45%, and the text column sits in the middle of the rest */
+@media (min-width: 900px) { .wrap { grid-template-columns: 45% 1fr; grid-template-rows: none; } }
 .art { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 70px 20px 10px; }
 @media (min-width: 900px) { .art { background: var(--bg-alt); } }
 .brand { position: absolute; left: 22px; top: 20px; display: flex; align-items: center; gap: 10px; font: 700 24px var(--font-display); letter-spacing: -0.025em; color: var(--heading); }
@@ -7,7 +8,7 @@
 .bird { margin-bottom: -18px; }
 @media (max-width: 899px) { .bird { width: 130px !important; height: 130px !important; } }
 .panel { display: flex; flex-direction: column; justify-content: center; padding: 10px 24px 34px; max-width: 560px; }
-@media (min-width: 900px) { .panel { padding: 0 64px; } }
+@media (min-width: 900px) { .panel { justify-self: center; width: 100%; padding: 0 64px; } }
 .hero { font-size: clamp(38px, 5vw, 54px); font-weight: 800; line-height: 1.02; }
 .lead { margin: 14px 0 28px; font-size: 19px; line-height: 1.5; }
 .google { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; max-width: 400px; min-height: 52px; border: 0; border-radius: 999px; background: #fff; color: #1f1f1f; font: 600 17px var(--font-body); cursor: pointer; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }

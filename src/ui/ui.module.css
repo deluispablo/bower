@@ -229,13 +229,13 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   height: 30px;
   border: 0;
   border-radius: 999px;
-  background: var(--surface-strong);
-  box-shadow: inset 0 0 0 1.5px var(--control-line);
+  /* off: a filled track in the control line (3:1 on every ground) under a surface knob */
+  background: var(--control-line);
   cursor: pointer;
   transition: background 0.2s;
 }
-.switch span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--heading); transition: transform 0.2s var(--ease-out); }
-.switch[aria-checked='true'] { background: var(--brand); box-shadow: none; }
+.switch span { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); transition: transform 0.2s var(--ease-out); }
+.switch[aria-checked='true'] { background: var(--brand); }
 .switch[aria-checked='true'] span { transform: translateX(20px); background: #fff; }
 
 /* a native checkbox, drawn by us so its unticked edge can be an inset ring; keyboard, name and state stay the browser's */

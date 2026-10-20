@@ -146,7 +146,8 @@ test('fields and switches draw their edge with the control line', async ({ page 
     await theme(page, t);
     const line = await resolved(page, '--control-line');
     const off = page.getByRole('switch', { checked: false }).first();
-    expect((await edge(off)).ring, 'switch, off: inset ring').toContain(line);
+    // The track's colour eases in after the theme switch.
+    await expect.poll(() => off.evaluate((n) => getComputedStyle(n).backgroundColor), { message: 'switch, off: a control-line track' }).toBe(line);
     await axeClean(page);
 
     // A task box, unticked: custom drawn, 24 x 24, and still a checkbox with a name.
