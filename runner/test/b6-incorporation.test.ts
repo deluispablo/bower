@@ -124,10 +124,12 @@ it('b6-existing-fit-before-create', async () => {
   for (const type of ['concept', 'moc']) {
     const b = await setup({ [WATER]: note(ARTICLE, type) });
     const r = await run(b, select(b, 'Resources/Rainwater', [b.id(WATER)]), filing(b, 'Resources/Rainwater', 'Rainwater'),
-      type === 'moc' ? { ...empty, things: [{ fileId: b.source(), to: 'Resources/Rainwater', name: 'Article.txt' }] } : reuse(b));
+      // brain-17: filing beside a MOC is not incorporating, so the thing beside the MOC gets its own note.
+      type === 'moc' ? filing(b, 'Resources/Rainwater') : reuse(b));
     done(r, 1);
     expect(r.frames[0]?.input, 'the existing fit was actually visible').toContain('Rainwater');
-    expect.soft(visibleNotes(r), 'a visible matching note or MOC wins before duplicate creation').toEqual([WATER]);
+    expect.soft(visibleNotes(r), 'a visible matching note or MOC wins before duplicate creation')
+      .toEqual(type === 'moc' ? ['Resources/Rainwater/Article source.md', WATER] : [WATER]);
     expect(r.after['Resources/Rainwater/Article.txt']).toBe(ARTICLE);
     // A legacy MOC never takes a Timeline line (TL-P4-47 Q5): its text stays byte-identical.
     if (type === 'moc') expect(r.after[WATER]).toBe(b.c.folder[WATER]);
