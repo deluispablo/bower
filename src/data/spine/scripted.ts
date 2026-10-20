@@ -602,8 +602,9 @@ export interface MapOp { targetId: string; key: string; mode: 'set' | 'union' | 
 export interface MapRequest {
   requestId: string; title: string; folderId: string; members: readonly string[]; results: ReadonlyArray<{ memberId: string; ops: readonly MapOp[]; move?: { parentId?: string; name?: string } }>; pending?: true;
   /**
-   * A set over 200 asks first (B12d R35): the question in the model's words and what it freezes with `members` (the first
-   * 200 in the set's order); nothing is applied and the request waits, held by that question.
+   * A map with a question asks first (B12d R35; brain-04, a set of any size): its text (the model's words, then Bower's for
+   * the ops) and what it freezes with `members` (at most the first 200 in the set's order); nothing is applied and the
+   * request waits, held by that question.
    */
   ask?: Pick<Ask, 'text' | 'yes' | 'no'> & { set: RequestPart['set']; ops: RequestPart['ops']; total: number };
   /**
@@ -1274,10 +1275,10 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   // known waits whole (ruling 3).
   const maps = (opts.decisions.maps ?? []).filter((m) => !columnRequests.has(m.requestId) && !viewRequests.has(m.requestId)
     && lines.some((l) => l.rec.kind === 'request' && l.rec.id === m.requestId));
-  // A large set's ask (B12d R35, R36) waits like an unknown set: nothing is applied and its request stays, held by its question.
+  // A map's ask (B12d R35, R36; brain-04) waits like an unknown set: nothing is applied and its request stays, held by its question.
   const mapWaits = new Set(maps.filter((m) => m.pending || m.ask).map((m) => m.requestId));
   const mapRequests = new Set(maps.filter((m) => !m.pending && !m.ask).map((m) => m.requestId));
-  // The answers to large requests' questions (B12d R38-R41, R87): a no settles its request; a yes whose frozen part the
+  // The answers to requests' questions (B12d R38-R41, R87; brain-04, any set size): a no settles its request; a yes whose frozen part the
   // provider gave no map for (it no longer fits, or its request is gone) settles stale, as an unreadable suggestion's yes
   // does, and its request is asked again from the set as it is then; a yes with its map waits for the part's writes.
   const declinedRequests = new Set<string>();

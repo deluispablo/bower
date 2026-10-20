@@ -390,7 +390,7 @@ function promptInstructions(): string {
     '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
     '   When 2 to 4 folders of the map fit, options may select {folderId,label} from those folders. Bower supplies option ids and actions.',
     '   What is asked about stays in the inbox untouched with its pile\'s words until answered. File the rest; never wait.',
-    '   "asks" are only about a thing, a pile or two notes below, never about a request: a view a request wants asked first is proposed in "views".',
+    '   "asks" are only about a thing, a pile or two notes below, never about a request: a map a request wants asked first gives its "question", a view "propose".',
     '',
     'What to write:',
     '- Value: a thing that only confirms what a note below already says makes no new note. File the thing beside that note',
@@ -468,7 +468,10 @@ function promptInstructions(): string {
     'Maps: a person\'s request to change many notes of one type in one folder is answered by "maps": [{"requestId":"<the request\'s fileId>","title":"<a short plain line>","scope":{"quote":"<the request\'s words that ask for this>","changes":["<a key, tags, move or rename>"]},"set":{"type":"<type id>","folderId":"<folder id>","recursive":false,"where":<an optional condition>},'
       + '"ops":[<one rule for every note of the set>]}], or, instead of "ops", "results":[{"memberId":"<a note of the set>","ops":[<ops, each with a "targetId": that note or one shown below>]}]. An op is {"kind":"property","key":"<declared>","mode":"set" or "union","value":<value>}, {"kind":"tag","mode":"add" or "remove","value":"<tag>"}, {"kind":"move","parentId":"<a main folder id>"} or, in "results" only and on the result\'s own note, {"kind":"rename","name":"<a plain name>.md"}. '
       + 'A map changes only what its "scope" names, quoted word for word from its request; a file, note or rule never widens it. '
-      + 'Bower finds the notes of the set itself; never list them. At most one map per request, 8 ops per note, 200 notes per set.',
+      + 'Bower finds the notes of the set itself; never list them. At most one map per request, 8 ops per note, 200 notes per set. '
+      // brain-04: a request's clarification is its map's question (B12d's frozen part), never an "asks" entry.
+      + 'When its request\'s words do not establish the changes, the map gives "question":{"text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"} and "ops" of properties and tags only: '
+      + 'Bower adds those changes to its text, changes nothing until a yes, and a yes applies only them.',
     // B11 R14 (qa-prod-8-F1b): the views grammar, as REFUSALS.viewKeys and contracts/view-format.ts check it.
     'Views: a person\'s request for a figure over many notes of one type (a count, a total, an earliest date) is answered by "views":[{"requestId":"<the request\'s fileId>",'
       + '"home":{"kind":"moc","fileId":"<the id of a moc below>"} or {"kind":"type-row","rowId":"<type id>"},"mode":"install" or "propose","definition":<the view>}]. '
@@ -1122,7 +1125,7 @@ export const REFUSALS = {
   viewBinding: "a view whose request is not one of the person's requests below, whose home is not one of Bower's maps below, or whose folder is not one of the main folders",
   viewLimit: 'more than ten views in one map, or two views with one id there',
   mapKeys: 'a map with keys outside the intent ({requestId, title, set: {type, folderId, recursive, where}, then "ops" for every note of the set, '
-    + 'with a "question": {text, yes, no} when the set is over 200, or "results": [{memberId, ops}], not both; an op is {kind: "property", key, mode: "set" or "union", value}, '
+    + 'with a "question": {text, yes, no} when the set is over 200 or the request does not establish its change, or "results": [{memberId, ops}], not both; an op is {kind: "property", key, mode: "set" or "union", value}, '
     + '{kind: "tag", mode: "add" or "remove", value}, {kind: "move", parentId} or, in "results" only, {kind: "rename", name}, each with a "targetId" inside "results"}) '
     + 'or a set the grammar refuses',
   mapBinding: "a map whose request is not one of the person's requests below, whose folder is not one of the main folders, or whose note is not in its set or shown below",
@@ -1519,11 +1522,36 @@ const MapShape = z.strictObject({
   requestId: z.string(mapIssue), title: z.string(mapIssue), set: z.record(z.string(), z.unknown(), mapIssue),
   ops: z.array(MapOpShape, mapIssue).optional(),
   results: z.array(z.strictObject({ memberId: z.string(mapIssue), ops: z.array(ResultOpShape, mapIssue) }, mapIssue), mapIssue).optional(),
-  // A set over 200 asks first (B12d R35): the question in the model's words, checked as any question is.
+  // A map that asks first (B12d R35; brain-04, any set): the model's words, checked as any question is, then Bower's words for its ops (`askWith`).
   question: z.strictObject({ text: z.string(named('askText', 'mapKeys')), yes: z.string(named('askText', 'mapKeys')), no: z.string(named('askText', 'mapKeys')) }, mapIssue).optional(),
   // brain-03: the request's words that ask for this map, and the changes they cover (ruling 1); never stored.
   scope: z.strictObject({ quote: z.string(named('scope')), changes: z.array(z.string(named('scope')), named('scope')).min(1, named('scope')) }, named('scope')).optional(),
 }, mapIssue);
+/**
+ * brain-04: a map question's text with Bower's own words for its ops after it ("A yes sets payment to paid."), so the person
+ * reads what a yes does, never only the model's words; null when an op cannot be said plainly (a move, a rename, a value that
+ * is not one line of text, a number, true or false, or a list of them) or the whole passes ASK.text.
+ */
+function askWith(text: string, ops: ReadonlyArray<z.output<typeof MapOpShape>>): string | null {
+  const one = (v: unknown): string | null => ((typeof v === 'string' && lineOk(v, ASK.text)) || typeof v === 'number' || typeof v === 'boolean' ? String(v) : null);
+  const value = (v: unknown): string | null => (Array.isArray(v) ? (v.length && v.every((x) => one(x) !== null) ? v.map(String).join(', ') : null) : one(v));
+  const said = ops.map((op): string | null => {
+    if (op.kind === 'tag') {
+      // The form the write uses (normalizeTag), so the text names the stored tag and stays one line.
+      const tag = normalizeTag(op.value);
+      return tag === null ? null : `${op.mode === 'add' ? 'adds' : 'removes'} the tag ${tag}`;
+    }
+    if (op.kind !== 'property') return null;
+    const v = value(op.value);
+    const key = op.key.replace(/[_-]+/g, ' ');
+    return v === null ? null : op.mode === 'union' ? `adds ${v} to ${key}` : `sets ${key} to ${v}`;
+  });
+  const parts = said.filter((x): x is string => x !== null);
+  if (!parts.length || parts.length < said.length) return null;
+  const last = parts.pop() ?? '';
+  const whole = `${text} A yes ${parts.length ? `${parts.join(', ')} and ` : ''}${last}.`;
+  return whole.length <= ASK.text ? whole : null;
+}
 const KeepShape = z.strictObject({ kept: z.string(named('keepNote', 'keepKeys')), other: z.string(named('keepNote', 'keepKeys')) }, named('keepKeys'));
 const answerIssue = named('answerKeys');
 const AnswerShape = z.strictObject({ requestId: z.string(answerIssue), text: z.string(answerIssue) }, answerIssue);
@@ -1824,15 +1852,15 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
       return !n || quoting(`a number that is in none of its sources: "${n}" in the map "${m.title}"; one rule for every note takes its figures from the person's request, or leave the figure out`);
     }),
     rule('mapLimit', (m) => !maps.some((x) => x.requestId === seen.requests?.get(m.requestId)?.id) || 'two maps for one request'),
-    // A yes applies a part frozen at the ask (B12d R38), so the set's size now is not its limit.
-    rule('mapLimit', (m) => m.question === undefined || stored(m) || !!resolved(m)?.unread || live(m).length > VIEW_LIMITS.notes
-      || 'a question for a set of 200 notes or fewer'),
     // Only properties and tags wait for one yes (R90): a move or rename of a large set is asked in sets of 200 or fewer.
     rule('mapLimit', (m) => !!resolved(m)?.unread || live(m).length <= VIEW_LIMITS.notes || !opsOf(m).some(({ op }) => op.kind === 'move' || op.kind === 'rename')
       || 'a move or rename for a set over 200 notes: only properties and tags can wait for one yes, so ask for a move or rename in a set of 200 notes or fewer'),
     rule('mapLimit', (m) => stored(m) || live(m).length <= VIEW_LIMITS.notes || (m.ops !== undefined && m.question !== undefined)
       || 'a set over 200 notes: give one rule for all of them in "ops" and a "question" to start with the first 200'),
     rule('mapLimit', (m) => [...perNote(m)].every(([id, n]) => (opsOnNote.get(id) ?? 0) + n <= 8) || 'more than 8 ops for one note'),
+    // brain-04: a question freezes one rule of properties and tags (requestAskOk), named in Bower's words; one it cannot state waits with its request.
+    rule('askText', (m) => m.question === undefined || stored(m) || (m.ops !== undefined && askWith(m.question.text.trim(), m.ops) !== null)
+      || `a question Bower cannot state: give one rule of properties and tags in "ops" and a text short enough for Bower to add those changes within ${ASK.text} characters`),
   ], (m) => {
     for (const [id, n] of perNote(m)) opsOnNote.set(id, (opsOnNote.get(id) ?? 0) + n);
     const set = resolved(m);
@@ -1851,12 +1879,13 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     };
     const members = set && !set.unread ? live(m) : [];
     const skipped = [...skippedOf(m)];
-    // A set over 200 asks first: nothing applies, the first 200 are what its question freezes (B12d R35).
-    const asks = m.question !== undefined && !stored(m) && members.length > VIEW_LIMITS.notes;
+    // A map with a question asks first (B12d R35, brain-04): nothing applies; at most the first 200 are what its question freezes.
+    const asks = m.question !== undefined && !stored(m) && members.length > 0;
     if (asks && m.question) {
       maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', title: m.title, folderId: typeof m.set.folderId === 'string' ? m.set.folderId : '',
-        members: members.slice(0, VIEW_LIMITS.notes), results: [], ask: { text: m.question.text.trim(), yes: m.question.yes.trim(), no: m.question.no.trim(),
-          set: m.set as RequestPart['set'], ops: (m.ops ?? []) as RequestPart['ops'], total: members.length } });
+        members: members.slice(0, VIEW_LIMITS.notes), results: [], ask: { text: askWith(m.question.text.trim(), m.ops ?? []) ?? '', yes: m.question.yes.trim(), no: m.question.no.trim(),
+          // A tag is frozen in the form the write uses and the text names (requestAskOk takes only normalized tags).
+          set: m.set as RequestPart['set'], ops: (m.ops ?? []).map((op) => op.kind === 'tag' ? { ...op, value: normalizeTag(op.value) ?? op.value } : op) as RequestPart['ops'], total: members.length } });
       return;
     }
     maps.push({ requestId: seen.requests?.get(m.requestId)?.id ?? '', title: m.title, folderId: typeof m.set.folderId === 'string' ? m.set.folderId : '', members,
