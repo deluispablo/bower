@@ -113,7 +113,8 @@ describe('the made-up large-folder benchmark (c12-measure)', () => {
   it.each([
     // things, things filed at least, calls, the selection call's characters at most, the largest writing call's at most
     // The cards carry up to 12 candidates a source, so the selection is larger than with the old index (nothing is cut now).
-    [25, 25, 5, 114_000, 63_000], // measured 25 filed, 4 groups, 108,251 and 59,698 characters (c12-fanout; one call of 121,199 before)
+    [25, 25, 5, 114_000, 67_000], // measured 25 filed, 4 groups, 108,251 and 59,698 characters (c12-fanout; one call of 121,199 before);
+    // 111,554 and 63,001 with qa-prod-8-F1b's views clause in the fixed text
     // The 100 unselected things count 0 (c12-fanout S20) and ride in the first group, the largest writing call.
     [150, 50, 8, 217_000, 199_000], // measured 50 filed, 7 groups, 206,863 and 189,255 characters (c12-fanout; one call of 232,991 before); 14 filed before c12-map
   ])('AC3 c12-measure-benchmark: 800 notes in 60 folders and %i things', async (things, filedMin, calls, selectionMax, executionMax) => {
