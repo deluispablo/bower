@@ -351,7 +351,7 @@ it('b5-offer-factual-comparison', async () => {
 
 it('b5-profile-current-state-edit control: C05 mark, person edit, yes, no and undo retain their bounds', async () => {
   const b = await profileBase();
-  const proposed = { ...itemReply(b), states: [{ note: PROFILE, lines: [FACT], cites: b.sources[0]?.itemId }],
+  const proposed = { ...itemReply(b), states: [{ note: PROFILE, lines: [FACT], replaces: ['Alex uses JavaScript.'], because: FACT, cites: b.sources[0]?.itemId }],
     lines: [{ note: PROFILE, text: FACT, cites: b.sources[0]?.itemId }] };
   const actual = await run(b, [select(b, [b.id(PROFILE)], 'Areas/Career'), proposed]);
   expect(actual.code, actual.errors).toBe(0);
@@ -371,7 +371,7 @@ it('b5-profile-current-state-edit control: C05 mark, person edit, yes, no and un
   expect(STATE_WRITE).toEqual({ lines: 8, line: 200 }); expect(STATE_READ).toEqual({ lines: 20, line: 400 });
 });
 it('b5-profile-current-state-edit', async () => {
-  const b = await profileBase(); const intent = { ...itemReply(b, [1]), states: [{ note: PROFILE, lines: [FACT], cites: b.sources[0]?.itemId }] };
+  const b = await profileBase(); const intent = { ...itemReply(b, [1]), states: [{ note: PROFILE, lines: [FACT], replaces: ['Alex uses JavaScript.'], because: FACT, cites: b.sources[0]?.itemId }] };
   const first = await run(b, [select(b, [b.id(PROFILE)], 'Areas/Career'), intent]);
   expect(first.code, 'profile and C05 share ordinary note effects').toBe(0);
   copied(first, `${FACT} [[Alex CV]]\n[[Earlier CV]]\n`);

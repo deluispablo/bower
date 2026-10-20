@@ -253,7 +253,7 @@ describe('C05 person notes through runner main', () => {
     const c = await fixture();
     c.folder[PATH] = (c.folder[PATH] ?? '').replace(`- ${OLD_STATE}`, `- ${OLD_STATE}\n- ${OTHER}  `);
     const first = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source), lines: [{ note: PATH, text: NEWS, cites: source }],
-      states: [{ note: PATH, lines: [NEW_STATE, OTHER], cites: source }] })));
+      states: [{ note: PATH, lines: [NEW_STATE, OTHER], replaces: [OLD_STATE], because: NEWS, cites: source }] })));
     const question = questionsOf(first).find((q) => subjectOf(q).kind === 'state');
     expect.soft(first.after[PATH]).toContain(NEWS);
     expect.soft(question).toEqual(expect.objectContaining({ text: 'Water butt update also changes the current state of Garden plot. Should Bower write its update there?',
@@ -265,8 +265,8 @@ describe('C05 person notes through runner main', () => {
     const spawn: ClaudeSpawn = async (call) => {
       if (cwd !== call.cwd) { cwd = call.cwd; turn++; }
       return reply((_ctx, source) => turn === 1 ? { ...filing(source), lines: [{ note: PATH, text: NEWS, cites: source }],
-        states: [{ note: PATH, lines: [NEW_STATE, OTHER], cites: source }] }
-        : { kind: 'tidy-intent', v: 1, things: [], states: [{ note: PATH, lines: [NEW_STATE, OTHER] }] })(call);
+        states: [{ note: PATH, lines: [NEW_STATE, OTHER], replaces: [OLD_STATE], because: NEWS, cites: source }] }
+        : { kind: 'tidy-intent', v: 1, things: [], states: [{ note: PATH, lines: [NEW_STATE, OTHER], replaces: [OLD_STATE] }] })(call);
     };
     const final = await runWithClaude(lifecycle, spawn);
     const runs = [...final.runs ?? [], final];
@@ -660,7 +660,7 @@ describe('C05 person notes through runner main', () => {
         : 'Update Garden plot and Shed roof from this letter.' }];
       const r = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
         lines: [...paths, hub].map((note) => ({ note, text: NEWS, cites: source })),
-        states: [{ note: hub, lines: [NEW_STATE], cites: source }] })));
+        states: [{ note: hub, lines: [NEW_STATE], replaces: [OLD_STATE], because: NEWS, cites: source }] })));
       expect(r.code).toBe(0); expect(reportOf(r).filed).toHaveLength(1);
       expect.soft(r.after[hub]).toBe(c.folder[hub]);
       for (const path of paths) expect(r.after[path]).toBe(c.folder[path]);
@@ -676,14 +676,14 @@ describe('C05 person notes through runner main', () => {
       await positiveControl();
       const c = await fixture();
       const control = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
-        lines: [{ note: PATH, text: NEWS, cites: source }], states: [{ note: PATH, lines: [NEW_STATE], cites: source }] })));
+        lines: [{ note: PATH, text: NEWS, cites: source }], states: [{ note: PATH, lines: [NEW_STATE], replaces: [OLD_STATE], because: NEWS, cites: source }] })));
       expect(control.after[PATH]).toContain(` · ${NEWS} · [[${SOURCE}]]`);
       expect(questionsOf(control)).toHaveLength(1);
       if (shape === 'plain note') c.folder[PATH] = (c.folder[PATH] ?? '').slice((c.folder[PATH] ?? '').indexOf('## Current state'));
       const before = c.folder[PATH] ?? '';
       const r = await runWithClaude(c, reply((_ctx, source) => ({ ...filing(source),
         lines: [{ note: PATH, text: NEWS, cites: source }],
-        states: [{ note: PATH, lines: shape === 'plain note' ? [NEW_STATE] : [NEW_STATE, OTHER], cites: source }] })));
+        states: [{ note: PATH, lines: shape === 'plain note' ? [NEW_STATE] : [NEW_STATE, OTHER], ...(shape === 'plain note' ? {} : { replaces: [OLD_STATE], because: NEWS }), cites: source }] })));
       expect(r.code).toBe(0); expect(reportOf(r).filed).toHaveLength(1);
       expect.soft(r.after[PATH]).toBe(before.replace('- 2026-10-07 · The committee will replace the shared water butt.',
         `- 2026-10-07 · The committee will replace the shared water butt.\n- 2026-10-07 · ${NEWS} · [[${SOURCE}]]`));

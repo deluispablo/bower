@@ -22,6 +22,10 @@
         "lines": [
           "The replacement water butt has arrived. The committee asks Alex to return the shared water butt."
         ],
+        "replaces": [
+          "Alex will keep the shared water butt until the replacement arrives."
+        ],
+        "because": "The replacement water butt has arrived.",
         "cites": "$file:Water butt update.txt"
       }
     ]
