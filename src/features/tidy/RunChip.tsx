@@ -18,8 +18,8 @@ export function RunChip() {
   const running = isRunning(run);
   const unseen = replayWaiting(run);
   const stopped = stoppedUnseen(run);
-  // On Home the result card already offers the replay (qa6).
-  if (!running && !stopped && (!unseen || pathname === '/')) return null;
+  // On Home its card already offers what the chip would: the replay (qa6), or the stop's Try again and Got it.
+  if (!running && (!(unseen || stopped) || pathname === '/')) return null;
   return (
     <button type="button" className={`${s.chip} ${stopped ? s.chipStopped : ''}`} onClick={() => (unseen ? startReplay(run.id) : setTidy(true))}>
       <PoseBower pose={PHASE_POSE[run.phase]} size={34} minor />

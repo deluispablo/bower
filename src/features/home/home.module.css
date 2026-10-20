@@ -38,7 +38,7 @@
 .search span { flex: 1; }
 .search kbd { font: 13px var(--font-body); padding: 2px 7px; border-radius: 6px; background: var(--surface-strong); }
 @media (max-width: 899px) { .search kbd { display: none; } }
-.h2 { font-size: 20px; margin-bottom: 8px; }
+.h2 { font-size: 21px; margin-bottom: 8px; }
 .questions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .question { padding: 14px 16px; border-radius: 16px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
 .question > p { color: var(--heading); }

@@ -3,8 +3,9 @@ import { rootOf } from '@/data/tree';
 
 /** Routes for things in the folder; each path segment is encoded. */
 const enc = (path: string): string => path.split('/').map(encodeURIComponent).join('/');
+/** The Inbox folder is shown on Home (its piles), so it links there, not to an address that redirects. */
 export const routeFor = (node: Pick<TreeNode, 'path' | 'type'>): string =>
-  node.type === 'folder' ? `/files/${enc(node.path)}` : `/note/${enc(node.path)}`;
+  node.type === 'file' ? `/note/${enc(node.path)}` : node.path === 'Inbox' ? '/' : `/files/${enc(node.path)}`;
 export const noteRoute = (path: string): string => `/note/${enc(path)}`;
 export const folderRoute = (path: string): string => (path ? `/files/${enc(path)}` : '/files');
 const safeDecode = (part: string): string => {

@@ -32,7 +32,7 @@ export function TidyButton() {
       </button>
     );
   return (
-    <button type="button" className={s.tidyBtn} disabled={!waiting} onClick={() => setTidy(true)} title={waiting ? undefined : 'Nothing waiting in the inbox'}>
+    <button type="button" className={s.tidyBtn} disabled={!waiting} onClick={() => setTidy(true)} title={waiting === 0 ? 'Nothing waiting in the inbox' : undefined}>
       Tidy up{waiting ? ` ${waiting}` : ''}
     </button>
   );

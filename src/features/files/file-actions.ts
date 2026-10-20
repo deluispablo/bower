@@ -48,7 +48,8 @@ export function useFileActions() {
     const route = routeFor(node);
     if (newTab) useTabs.getState().open(route);
     useUi.getState().select(node.path);
-    nav(route);
+    // As React Router's Link does: the address already shown is replaced, so it leaves no dead history entry.
+    nav(route, { replace: route === loc.pathname });
     if (node.type === 'file') void vault.markSeen(node.path);
   };
   return useMemo(
