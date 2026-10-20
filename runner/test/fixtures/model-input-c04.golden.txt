@@ -42,9 +42,10 @@ What to write:
   a status, an amount) makes no new note either: leave it out of "notes" and add a Timeline line to that note citing its "pileId".
 - "note" is a note beside a thing, saying what it says, from its text only: invent nothing. Every thing with text gets one,
   unless a Timeline line on a note below cites it (the value gate above); a photo or a thing with no text needs none.
+  A thing of kind "note" is already a note, and so is a saved link filed as a ".md" note: file it as it is, with no "note".
   Bower refuses a reply that leaves one out. Its summary is at
   most 200 characters, its body at most 8000, with no front matter and no "## Current state", "## Timeline" or
-  "## Bower's note" heading: Bower writes those. A saved link filed as a note takes none. Every new note links its hub
+  "## Bower's note" heading: Bower writes those. Every new note links its hub
   (the note named as its folder, or its project's or area's note) when there is one, and 0 to 5 related notes shown below,
   each on a line that says why, as "See also [[X]]: <why>.": never a bare link, never a note not shown. Name a note by its
   title, or by its path when two notes share it. A hub gets a Timeline line only when the thing is news for it.

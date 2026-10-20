@@ -397,9 +397,10 @@ function promptInstructions(): string {
     '  a status, an amount) makes no new note either: leave it out of "notes" and add a Timeline line to that note citing its "pileId".',
     `- "note" is a note beside a thing, saying what it says, from its text only: invent nothing. Every thing with text gets one,`,
     '  unless a Timeline line on a note below cites it (the value gate above); a photo or a thing with no text needs none.',
+    '  A thing of kind "note" is already a note, and so is a saved link filed as a ".md" note: file it as it is, with no "note".',
     `  Bower refuses a reply that leaves one out. Its summary is at`,
     `  most ${AUTHORED.summary} characters, its body at most ${AUTHORED.body}, with no front matter and no "## Current state", "## Timeline" or`,
-    '  "## Bower\'s note" heading: Bower writes those. A saved link filed as a note takes none. Every new note links its hub',
+    '  "## Bower\'s note" heading: Bower writes those. Every new note links its hub',
     '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 0 to 5 related notes shown below,',
     '  each on a line that says why, as "See also [[X]]: <why>.": never a bare link, never a note not shown. Name a note by its',
     '  title, or by its path when two notes share it. A hub gets a Timeline line only when the thing is news for it.',
@@ -1070,7 +1071,7 @@ export const REFUSALS = {
   numbers: 'a number that is in none of its sources',
   quote: 'a quote that is not word for word in the source its item names',
   newFolder: 'a new folder under Areas or Projects with no rule line or note cited',
-  noteForNote: 'a note for a thing filed as a note',
+  noteForNote: 'a "note" for a thing that is already a note (kind "note", or a saved link filed as ".md"): file it as it is, with no "note"',
   noteKeys: 'a note with keys outside the intent',
   noteName: 'a note name that is not a note',
   noteSummary: 'a note summary that is not one short line',
@@ -1870,7 +1871,7 @@ function replySchema(piles: Admitted['taken']['piles'], seen: Seen): { schema: z
     }),
     rule('rawName', (t) => !RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) || quoting(`a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`)),
     rule('newFolder', (t) => newPlace(t.to, t.basis, t.responsibility, seen, areas, t.fileId) ?? true),
-    // A saved link filed as a note is that note: it takes no second one.
+    // A thing already a note (kind "note", or a saved link filed as .md) takes no second one.
     rule('noteForNote', (t) => t.note === undefined || extensionOf(t.name) !== '.md'),
     // Its own note: a plain note name, a one-line summary, a body within its bound with none of Bower's sections.
     rule('noteName', (t) => t.note === undefined || (nameOk(t.note.name) && extensionOf(t.note.name) === '.md')),
